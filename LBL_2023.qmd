@@ -1,0 +1,129 @@
+---
+title: "Velogames Liège-Bastogne-Liège 2023 solver"
+date: "23/04/2023"
+format:
+  html:
+    code-fold: true
+jupyter: julia-1.8
+---
+
+# Velogames solver: Liège-Bastogne-Liège 2023
+
+A script to calculate the optimal team that could have been chosen for a given race in [Velogames fantasy cycling](https://www.velogames.com/)
+
+This Julia script uses the [Gumbo](https://github.com/JuliaWeb/Gumbo.jl) and [Cascadia](https://github.com/Algocircle/Cascadia.jl) libraries to scrape rider data, and the [JuMP](https://jump.dev/JuMP.jl/stable/) optimisation library / [HiGHS](https://highs.dev/) solver to construct and solve a mixed-integer program (MIP) described below
+
+In Velogames fantasy cycling, you must select a team of 9 riders, each with a specific cost based on their expected performance, spending no more than 100 points.
+
+At the end of the race, each rider will have accumulated a score based on their performance, and the aim is to pick a team with the highest combined score at the end of the race.
+
+The optimisation problem can be stated as:
+
+$\max_{x_j \in [0,1]} \sum_{j=1}^{n} x_j y_j$
+
+$s.t.$
+
+$\sum_{j=1}^{n} x_j = 9$
+
+$\sum_{j=1}^{n} x_j z_j \leq 100$
+
+where $j=1...n$ is the set of all riders and $t_j$ is the team identifier.
+
+$x_j\in[0,1]$ is a binary decision variable denoting if rider $j$ is chosen (1 for chosen, 0 for not chosen)
+
+$z_j\in Z^+$ and $y_j\in Z^+$ are the cost and score parameters of rider $j$ respectively
+
+## Load libraries
+
+```{julia}
+#| output: false
+using Gadfly
+
+
+# include all files in src directory
+source_files = readdir("src")
+for file in source_files
+    include("src/$file")
+end
+```
+
+## Retrieve data
+
+Data is scraped from the [Velogames website](https://www.velogames.com/). Rider scores are the number of points they have accumulated in the current season.
+
+```{julia}
+#| output: false
+rider_vg = getvelogamesriders("https://www.velogames.com/spring-classics/2023/riders.php")
+
+# keep only riders in the startlist for LBL.
+rider_vg = rider_vg[rider_vg.startlist.=="#LiegeBastogneLiege", :]
+
+rider_oneday = getpcsranking(:oneday)
+```
+
+Combine datasets and calculate rider value.
+
+```{julia}
+rider_df = leftjoin(rider_vg, rider_oneday, on = :riderkey, makeunique=true)
+# fill in missing values in rank and points with 0
+rider_df[ismissing.(rider_df.rank), :rank] .= 0
+rider_df[ismissing.(rider_df.points), :points] .= 0
+# calculate rider calc_score as the mean of the velogames score and the PCS ranking
+rider_df[!, :calc_score] = (rider_df.score .+ rider_df.rank) ./ 2
+# calculate rider value as the ratio of rider score to rider cost
+rider_df[!, :calc_value] = rider_df.calc_score ./ rider_df.cost
+
+describe(rider_df)
+```
+
+## Inspect the data
+
+### Top 10 riders by points
+
+```{julia}
+sort(rider_df, :calc_score, rev=true)[1:10, :]
+```
+
+### Top 10 riders by value
+
+```{julia}
+sort(rider_df, :calc_value, rev=true)[1:10, :]
+```
+
+```{julia}
+plot(
+    rider_df,
+    x=:calc_score,
+    y=:cost,
+    Guide.xlabel("Score"),
+    Guide.ylabel("Cost"),
+    Guide.title("Rider value")
+)
+```
+
+## Build the model
+
+```{julia}
+#| output: false
+model_results = build_model(rider_df)
+```
+
+## Results
+
+### Total cost of team
+
+Must be no more than 100.
+
+```{julia}
+# total cost
+rider_df.cost .* model_results.data |> sum
+```
+
+### Selected riders
+
+```{julia}
+# selected riders
+rider_df[!, :chosen] = model_results.data .|> !iszero
+chosen_team = filter(:chosen => ==(true), rider_df)
+chosen_team[:, [:name, :team, :cost, :score, :rank, :calc_score, :calc_value]]
+```
