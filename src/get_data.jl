@@ -18,7 +18,7 @@ create_key(arr) =
         join(
             sort(
                 collect(
-                    Unicode.normalize(s, stripmark = true, stripcc = true, casefold = true),
+                    Unicode.normalize(s, stripmark=true, stripcc=true, casefold=true),
                 ),
             ),
         )
@@ -41,12 +41,14 @@ function gettable(pageurl::AbstractString)
     if hasproperty(rider_df, :score)
         rename!(rider_df, :score => :points)
     end
-    # cast the cost and vgpoints columns to Int64 if they exist
-    for col in [:cost, :points, :rank]
+    # cast the cost and rank columns to Int64 if they exist
+    for col in [:cost, :rank]
         if hasproperty(rider_df, col)
             rider_df[!, col] = parse.(Int64, rider_df[!, col])
         end
     end
+    # cast points column to number
+    rider_df[!, :points] = parse.(Float64, rider_df[!, :points])
 
     # add a riderkey column based on the name
     rider_df.riderkey = create_key(rider_df.rider)
@@ -83,10 +85,11 @@ This function downloads and parses the rider rankings for a specific category fr
 
 The function returns a DataFrame with the following columns:
 
-    * `name` - the name of the rider
+    * `rider` - the name of the rider
     * `team` - the team the rider rides for
     * `rank` - the rank of the rider in the category
-    * `score` - the number of points scored by the rider
+    * `points` - the number of PCS points scored by the rider
+    * `riderkey` - a unique key for each rider based on their name
 """
 function getpcsranking(category::Symbol)
     # check that the category is valid
@@ -120,6 +123,9 @@ function getvgriders(pageurl::String)
 
     # normalise class data, if it exists
     if hasproperty(rider_df, :class)
+        # lowercase the class column and remove spaces
+        rename!(rider_df, :class => :class_raw)
+        rider_df.class = lowercase.(replace.(rider_df.class_raw, " " => ""))
         for class in unique(rider_df.class)
             rider_df[!, class] = rider_df.class .== class
         end
