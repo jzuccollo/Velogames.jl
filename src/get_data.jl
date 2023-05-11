@@ -1,12 +1,18 @@
 using HTTP, DataFrames, TableScraper, Cascadia, Gumbo, CategoricalArrays, Unicode
 
 const PCS_RANKING_URLS = Dict(
-    :overall => "https://www.procyclingstats.com/rankings.php",
-    :oneday => "https://www.procyclingstats.com/rankings/me/one-day-races",
-    :gc => "https://www.procyclingstats.com/rankings/me/gc-ranking",
-    :sprint => "https://www.procyclingstats.com/rankings/me/sprinters",
-    :mountain => "https://www.procyclingstats.com/rankings/me/climbers",
-    :tt => "https://www.procyclingstats.com/rankings/me/time-trial",
+    :overall_me => "https://www.procyclingstats.com/me/individual.php",
+    :oneday_me => "https://www.procyclingstats.com/rankings/me/one-day-races",
+    :gc_me => "https://www.procyclingstats.com/rankings/me/gc-ranking",
+    :sprint_me => "https://www.procyclingstats.com/rankings/me/sprinters",
+    :mountain_me => "https://www.procyclingstats.com/rankings/me/climbers",
+    :tt_me => "https://www.procyclingstats.com/rankings/me/time-trial",
+    :overall_we => "https://www.procyclingstats.com/we/individual.php",
+    :oneday_we => "https://www.procyclingstats.com/rankings/we/one-day-races",
+    :gc_we => "https://www.procyclingstats.com/rankings/we/gc-ranking",
+    :sprint_we => "https://www.procyclingstats.com/rankings/we/sprinters",
+    :mountain_we => "https://www.procyclingstats.com/rankings/we/climbers",
+    :tt_we => "https://www.procyclingstats.com/rankings/we/time-trial",
 )
 
 """
@@ -162,7 +168,7 @@ function getpcsriderpts(rider_name::String)
     rider_table = eachmatch(sel".pnt", page.root)
     raw_pts = map(x -> parse(Int, x[1].text), rider_table)
     rider_pts = Dict(zip(["oneday", "gc", "tt", "sprint", "climber"], raw_pts))
-    return rider_pts
+    return Dict(rider_name => rider_pts)
 end
 
 
