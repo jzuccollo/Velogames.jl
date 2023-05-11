@@ -136,3 +136,55 @@ function getvgriders(pageurl::String)
 
     return rider_df
 end
+
+
+"""
+## `getpcsriderpts`
+
+This function downloads and parses the rider points for a specific rider from the PCS website.
+
+It returns a Dict with the following values:
+
+    * `oneday` - the points for one day races
+    * `gc` - the points for general classification
+    * `tt` - the points for time trials
+    * `sprint` - the points for sprints
+    * `climber` - the points for climbers
+"""
+function getpcsriderpts(rider_name::String)
+    regularised_name = replace(
+        Unicode.normalize(rider_name, stripmark=true, stripcc=true, casefold=true),
+        " " => "-"
+    )
+    pageurl = "https://www.procyclingstats.com/rider/" * regularised_name
+
+    page = parsehtml(read(download(pageurl), String))
+    rider_table = eachmatch(sel".pnt", page.root)
+    raw_pts = map(x -> parse(Int, x[1].text), rider_table)
+    rider_pts = Dict(zip(["oneday", "gc", "tt", "sprint", "climber"], raw_pts))
+    return rider_pts
+end
+
+
+"""
+## `getpcsriderhistory`
+
+This function downloads and parses the rider points for a specific rider for each year they are active on the PCS website.
+
+It returns a DataFrame with a row for each year the rider is active on the PCS website and the following columns:
+
+    * `year` - the year the points are for
+    * `points` - the total points scored by the rider in that year
+    * `rank` - the rank of the rider in that year
+"""
+function getpcsriderhistory(rider_name::String)
+    regularised_name = replace(
+        Unicode.normalize(rider_name, stripmark=true, stripcc=true, casefold=true),
+        " " => "-"
+    )
+    pageurl = "https://www.procyclingstats.com/rider/" * regularised_name
+
+    rider_pts = DataFrame(scrape_tables(pageurl)[2])
+    rename!(rider_pts, [:year, :points, :rank])
+    return rider_pts
+end
