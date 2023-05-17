@@ -16,21 +16,6 @@ const PCS_RANKING_URLS = Dict(
 )
 
 """
-`create_key` creates a unique key for each rider based on their name.
-"""
-create_key(arr) =
-    map(arr) do x
-        s = replace(x, r"[^a-zA-Z0-9_]" => "")
-        join(
-            sort(
-                collect(
-                    Unicode.normalize(s, stripmark=true, stripcc=true, casefold=true),
-                ),
-            ),
-        )
-    end
-
-"""
 ## `gettable`
 
 This function downloads and parses the rider data from the Velogames and PCS websites.
@@ -66,7 +51,7 @@ end
 
 
 """
-## `getpcsriders`
+## `getpcsraceriders`
 
 This function downloads and parses the rider data from the PCS website for a specified race.
 
@@ -77,7 +62,7 @@ The function returns a DataFrame with the following columns:
     * `placing` - the placing of the rider on the race
     * `score` - the number of points scored by the rider
 """
-function getpcsriders(pageurl::String)
+function getpcsraceriders(pageurl::String)
     rider_df = scrape_tables(pageurl)
 
     return rider_df
@@ -158,10 +143,7 @@ It returns a Dict with the following values:
     * `climber` - the points for climbers
 """
 function getpcsriderpts(rider_name::String)
-    regularised_name = replace(
-        Unicode.normalize(rider_name, stripmark=true, stripcc=true, casefold=true),
-        " " => "-"
-    )
+    regularised_name = normalise_name(rider_name)
     pageurl = "https://www.procyclingstats.com/rider/" * regularised_name
 
     page = parsehtml(read(download(pageurl), String))
@@ -184,10 +166,7 @@ It returns a DataFrame with a row for each year the rider is active on the PCS w
     * `rank` - the rank of the rider in that year
 """
 function getpcsriderhistory(rider_name::String)
-    regularised_name = replace(
-        Unicode.normalize(rider_name, stripmark=true, stripcc=true, casefold=true),
-        " " => "-"
-    )
+    regularised_name = normalise_name(rider_name)
     pageurl = "https://www.procyclingstats.com/rider/" * regularised_name
 
     rider_pts = DataFrame(scrape_tables(pageurl)[2])
