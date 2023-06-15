@@ -10,13 +10,18 @@ Build the optimisation model for the velogames game.
 - `rider_df::DataFrame`: the rider data
 
 """
-function build_model_oneday(input_df::DataFrame)
+function build_model_oneday(input_df::DataFrame, n::Int64)
     model = Model(HiGHS.Optimizer)
     @variable(model, x[input_df.rider], Bin)
     @objective(model, Max, input_df.calc_score' * x) # maximise the total score
     @constraint(model, input_df.vgcost' * x <= 100) # cost must be <= 100
-    @constraint(model, sum(x) == 9) # exactly 9 riders must be chosen
+    @constraint(model, sum(x) == n) # exactly n riders must be chosen
+    # @constraint(model, ) # exactly n teams must be chosen
     optimize!(model)
+    if termination_status(model) != OPTIMAL
+        @warn("The model was not solved correctly.")
+        return
+    end
     return value.(x)
 end
 
@@ -39,5 +44,9 @@ function build_model_stage(input_df::DataFrame)
     @constraint(model, input_df[!, "climber"]' * x >= 2) # at least 2 must be climbers
     @constraint(model, input_df[!, "unclassed"]' * x >= 3) # at least 3 must be unclassed
     optimize!(model)
+    if termination_status(model) != OPTIMAL
+        @warn("The model was not solved correctly.")
+        return
+    end
     return value.(x)
 end
