@@ -1,7 +1,3 @@
-using DataFrames
-using JuMP
-using HiGHS
-
 """
     build_model_oneday(rider_df::DataFrame)
 
@@ -10,7 +6,7 @@ Build the optimisation model for the velogames game.
 - `rider_df::DataFrame`: the rider data
 
 """
-function build_model_oneday(input_df::DataFrame, n::Int64)
+function build_model_oneday(input_df::DataFrame, n::Integer)
     model = Model(HiGHS.Optimizer)
     @variable(model, x[input_df.rider], Bin)
     @objective(model, Max, input_df.calc_score' * x) # maximise the total score

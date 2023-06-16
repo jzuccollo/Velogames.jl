@@ -1,4 +1,4 @@
-# velogames
+# Velogames.jl
 
 Pick a Velogames team.
 

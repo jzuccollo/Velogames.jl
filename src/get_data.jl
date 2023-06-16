@@ -1,5 +1,3 @@
-using HTTP, DataFrames, TableScraper, Cascadia, Gumbo, CategoricalArrays, Unicode
-
 const PCS_RANKING_URLS = Dict(
     :overall_me => "https://www.procyclingstats.com/me/individual.php",
     :oneday_me => "https://www.procyclingstats.com/rankings/me/one-day-races",
@@ -22,7 +20,7 @@ This function downloads and parses the rider data from the Velogames and PCS web
 
 The function returns a DataFrame with the columns of the first table on the page. It also adds a (hopefully) unique key for each rider based on their name.
 """
-function gettable(pageurl::AbstractString)
+function gettable(pageurl::String)
     page = scrape_tables(pageurl)
     rider_df = DataFrame(page[1])
 

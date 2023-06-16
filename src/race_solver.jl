@@ -15,7 +15,7 @@ The function returns a DataFrame with the following columns:
     * `name` - the name of the rider
     * `team` - the team the rider rides for
 """
-function solve_race(rider_url::AbstractString, race_type::Symbol, race_hash::AbstractString="", form_weight::Float64=0.5)
+function solve_race(rider_url::String, race_type::Symbol, race_hash::String="", form_weight::Number=0.5)
     # get vg rider data
     rider_df = getvgriders(rider_url)
     # filter to riders where startlist == race_hash
