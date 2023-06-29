@@ -6,5 +6,6 @@ export solve_race, getvgriders, getpcsriderpts, getpcsriderhistory, getpcsrankin
 include("build_model.jl")
 include("get_data.jl")
 include("race_solver.jl")
+include("utilities.jl")
 
 end

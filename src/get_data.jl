@@ -40,7 +40,7 @@ function gettable(pageurl::String)
     rider_df[!, :points] = parse.(Float64, rider_df[!, :points])
 
     # add a riderkey column based on the name
-    rider_df.riderkey = create_key(rider_df.rider)
+    rider_df.riderkey = map(x -> create_key(x), rider_df.rider)
     # check that the riderkey is unique
     @assert length(unique(rider_df.riderkey)) == length(rider_df.riderkey) "Rider keys are not unique"
 

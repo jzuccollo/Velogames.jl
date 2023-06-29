@@ -17,14 +17,14 @@ end
 """
 `create_key` creates a unique key for each rider based on their name.
 """
-create_key(arr) =
-    map(arr) do x
-        s = replace(x, r"[^a-zA-Z0-9_]" => "")
-        join(
-            sort(
-                collect(
-                    Unicode.normalize(s, stripmark=true, stripcc=true, casefold=true),
-                ),
+function create_key(rider_name::String)
+    s = replace(rider_name, r"[^a-zA-Z0-9_]" => "")
+    newkey = join(
+        sort(
+            collect(
+                Unicode.normalize(s, stripmark=true, stripcc=true, casefold=true),
             ),
-        )
-    end
+        ),
+    )
+    return newkey
+end
