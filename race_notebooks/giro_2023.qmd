@@ -1,0 +1,155 @@
+---
+title: 'Velogames solver: Giro d''Italia 2023'
+jupyter: julia-1.9
+---
+
+
+## Load libraries
+
+
+```{julia}
+using Velogames
+```
+
+## Load data
+
+```{julia}
+FORM_WEIGHT = 0
+
+rider_df = getvgriders("https://www.velogames.com/italy/2023/riders.php")
+
+mycols = [:mountain_me, :gc_me, :sprint_me, :overall_me]
+# getpcsranking for each col, filter the dataframe to only the points and riderkey columns, and rename the points column to the col name.
+pcs_dfs = map(mycols) do col
+    rename(getpcsranking(col), :points => col)[:, [col, :riderkey]]
+end
+
+# use reduce to join all dataframes in pcs_dfs on the riderkey column
+pcs_df = reduce((x, y) -> outerjoin(x, y, on=:riderkey), pcs_dfs)
+
+# join the velogames and pcs dataframes on the riderkey column
+rider_df = leftjoin(rider_df, pcs_df, on=:riderkey)
+rider_df = coalesce.(rider_df, 0)
+
+# create calcpcsscore column which is the sum of All Rounder * gc, Sprinter * sprint, Climber * mountain, and Unclassed * overall
+rider_df.calcpcsscore = rider_df.allrounder .* rider_df.gc_me .+ rider_df.sprinter .* rider_df.sprint_me .+ rider_df.climber .* rider_df.mountain_me .+ rider_df.unclassed .* rider_df.overall_me
+
+# create calc_score column which is a weighted average of the calcpcsscore and points columns, adjusted for the difference in magnitude
+ADJ_FACTOR = mean(rider_df.points) / mean(rider_df.calcpcsscore)
+rider_df.calc_score = (1 - FORM_WEIGHT) .* ADJ_FACTOR .* rider_df.calcpcsscore .+ FORM_WEIGHT .* rider_df.points
+```
+
+```{julia}
+rider_df = getvgriders("https://www.velogames.com/italy/2023/riders.php")
+```
+
+```{julia}
+# for each rider, get pcsriderpts for that rider
+pcsriderpts = map(x -> getpcsriderpts(x), rider_df.rider)
+```
+
+```{julia}
+df_pcsriderpts = vcat(DataFrame.(rider_df.pcsriderpts)...)
+rename!(
+    df_pcsriderpts, 
+    [x => "pts_" * string(x) for x in names(df_pcsriderpts)]
+    )
+# hcat(rider_df, df_pcsriderpts)
+```
+
+```{julia}
+show(rider_df)
+```
+
+
+## Build model
+
+```{julia}
+model_results = build_model_stage(rider_df);
+```
+
+```{julia}
+model_results.data |> sum
+```
+
+```{julia}
+# total cost
+rider_df.cost .* model_results.data |> sum
+```
+
+## Results
+
+```{julia}
+# selected riders
+rider_df[!, :chosen] = model_results.data .> 0.5
+chosen_team = filter(:chosen => ==(true), rider_df)
+chosen_team[:, [:rider, :team, :class_raw, :selected, :points, :calcpcsscore, :cost]]
+```
+
+## Post-Giro analysis
+
+Looking back on the Giro, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
+
+### Best team you could have picked
+
+```{julia}
+rider_vg_post = getvgriders("https://www.velogames.com/italy/2023/riders.php")
+model_post = Model(HiGHS.Optimizer)
+@variable(model_post, x[rider_vg_post.rider], Bin)
+@objective(model_post, Max, rider_vg_post.points' * x) # maximise the total score
+@constraint(model_post, rider_vg_post.cost' * x <= 100) # cost must be <= 100
+@constraint(model_post, sum(x) == 9) # exactly 9 riders must be chosen
+@constraint(model_post, rider_vg_post[!, "allrounder"]' * x >= 2) # at least 2 must be all rounders
+@constraint(model_post, rider_vg_post[!, "sprinter"]' * x >= 1) # at least 1 must be a sprinter
+@constraint(model_post, rider_vg_post[!, "climber"]' * x >= 2) # at least 2 must be climbers
+@constraint(model_post, rider_vg_post[!, "unclassed"]' * x >= 3) # at least 3 must be unclassed
+optimize!(model_post)
+model_post_results = value.(x)
+
+rider_vg_post[!, :chosen] = model_post_results.data .> 0.5
+chosen_team_post = filter(:chosen => ==(true), rider_vg_post)
+chosen_team_post[:, [:rider, :team, :cost, :points, :class_raw]]
+chosen_team_post.points |> sum
+```
+
+### Cheapest team that would have beaten the best team
+
+```{julia}
+model_post2 = Model(HiGHS.Optimizer)
+@variable(model_post2, x[rider_vg_post.rider], Bin)
+@objective(model_post2, Min, rider_vg_post.cost' * x) # maximise the total score
+@constraint(model_post2, rider_vg_post.points' * x >= 11672) # cost must be <= 100
+@constraint(model_post2, sum(x) == 9) # exactly 9 riders must be chosen
+@constraint(model_post2, rider_vg_post[!, "allrounder"]' * x >= 2) # at least 2 must be all rounders
+@constraint(model_post2, rider_vg_post[!, "sprinter"]' * x >= 1) # at least 1 must be a sprinter
+@constraint(model_post2, rider_vg_post[!, "climber"]' * x >= 2) # at least 2 must be climbers
+@constraint(model_post2, rider_vg_post[!, "unclassed"]' * x >= 3) # at least 3 must be unclassed
+optimize!(model_post2)
+model_post2_results = value.(x)
+
+rider_vg_post[!, :chosen2] = model_post2_results.data .> 0.5
+chosen2_team_post = filter(:chosen2 => ==(true), rider_vg_post)
+chosen2_team_post[:, [:rider, :team, :cost, :points, :class_raw]]
+chosen2_team_post.points |> sum
+```
+
+### Highest value riders
+
+```{julia}
+# calculate points per cost
+rider_vg_post[!, :value] = rider_vg_post.points ./ rider_vg_post.cost
+# sort by ppc
+sort!(rider_vg_post, :value, rev=true)
+# select the top 10 riders,
+rider_vg_post[1:10, [:rider, :team, :cost, :points, :value, :class_raw]]
+```
+
+### How would my best team have done?
+
+If I'd picked a team based on PCS scores alone, how would it have done?
+
+```{julia}
+chosen_team[:, [:rider, :team, :class_raw, :selected, :points, :calcpcsscore, :cost]]
+chosen_team.points |> sum
+```
+

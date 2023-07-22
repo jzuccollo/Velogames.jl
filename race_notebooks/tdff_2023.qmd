@@ -1,0 +1,53 @@
+---
+title: 'Velogames solver: Tour de France 2023'
+jupyter: julia-1.9
+---
+
+## Load libraries
+
+```{julia}
+using Velogames
+```
+
+## Load data
+
+```{julia}
+rider_df = getvgriders("https://www.velogames.com/velogame-femmes/2023/riders.php")
+
+pcs_df = getpcsranking("we", "individual")
+rename!(pcs_df, :points => :pcs_pts)
+select!(pcs_df, Not([:rider, :team]))
+
+# join the velogames and pcs dataframes on the riderkey column
+rider_df = leftjoin(rider_df, pcs_df, on=:riderkey)
+rider_df = coalesce.(rider_df, 0)
+```
+
+```{julia}
+show(rider_df)
+```
+
+## Build model
+
+```{julia}
+model_results = build_model_oneday(rider_df);
+```
+
+```{julia}
+model_results.data |> sum
+```
+
+```{julia}
+# total cost
+rider_df.cost .* model_results.data |> sum
+```
+
+## Results
+
+```{julia}
+# selected riders
+rider_df[!, :chosen] = model_results.data .> 0.5
+chosen_team = filter(:chosen => ==(true), rider_df)
+chosen_team[:, [:rider, :team, :chosen, :pcs_pts, :cost]]
+```
+
