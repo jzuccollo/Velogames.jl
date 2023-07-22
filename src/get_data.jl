@@ -1,18 +1,3 @@
-const PCS_RANKING_URLS = Dict(
-    :overall_me => "https://www.procyclingstats.com/me/individual.php",
-    :oneday_me => "https://www.procyclingstats.com/rankings/me/one-day-races",
-    :gc_me => "https://www.procyclingstats.com/rankings/me/gc-ranking",
-    :sprint_me => "https://www.procyclingstats.com/rankings/me/sprinters",
-    :mountain_me => "https://www.procyclingstats.com/rankings/me/climbers",
-    :tt_me => "https://www.procyclingstats.com/rankings/me/time-trial",
-    :overall_we => "https://www.procyclingstats.com/we/individual.php",
-    :oneday_we => "https://www.procyclingstats.com/rankings/we/one-day-races",
-    :gc_we => "https://www.procyclingstats.com/rankings/we/gc-ranking",
-    :sprint_we => "https://www.procyclingstats.com/rankings/we/sprinters",
-    :mountain_we => "https://www.procyclingstats.com/rankings/we/climbers",
-    :tt_we => "https://www.procyclingstats.com/rankings/we/time-trial",
-)
-
 """
 ## `gettable`
 
@@ -80,12 +65,18 @@ The function returns a DataFrame with the following columns:
     * `points` - the number of PCS points scored by the rider
     * `riderkey` - a unique key for each rider based on their name
 """
-function getpcsranking(category::Symbol)
-    # check that the category is valid
-    haskey(PCS_RANKING_URLS, category) || error("Invalid category: $category")
+function getpcsranking(gender::String, category::String)
+    # check gender in me/we
+    @assert gender in ["we", "me"] "Invalid argument: $gender. Must be one of 'we or 'me'."
+    # check category
+    @assert category in ["individual", "one-day-races", "gc-ranking", "sprinters", "climbers", "time-trial"] "Invalid argument: $category. Must be one of 'individual', 'one-day-races', 'gc-ranking', 'sprinters', 'climbers', 'time-trial'."
+
+    # build the ranking url
+    base_url = "https://www.procyclingstats.com/rankings/"
+    ranking_url = joinpath(base_url, gender, category)
 
     # download the page and parse the table
-    page = gettable(PCS_RANKING_URLS[category])
+    page = gettable(ranking_url)
 
     # filter to rank, rider, team, and points
     rider_df = page[:, [:rank, :rider, :team, :points, :riderkey]]
