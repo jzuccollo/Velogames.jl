@@ -1,5 +1,5 @@
 ---
-title: 'Historical analysis'
+title: "Historical analysis"
 jupyter: julia-1.9
 ---
 

@@ -1,63 +1,17 @@
 # Velogames.jl
 
-Pick a Velogames team.
+Hacky, personal Julia package to pick a Velogames team. Always in progress, always a bit broken, no guarantees it'll work anywhere else!
 
-Building on the work of [GraemeHawker](https://github.com/GraemeHawker/velogames_solver), this is a simple set of scripts to pick a team for the [Velogames Fantasy Cycling](https://www.velogames.com/) competition.
+## Approach
 
-## Outline
+Solve a linear programme to maximise expected points, constrained by budget and rider limits. Rider points are hacked together from a combination of PCS points and current Velogames standings and presently need manual attention for every race. This is probably the biggest thing that needs fixing before predictions can be trusted and automated.
 
-A script to calculate the optimal team that could have been chosen for a given race in [Velogames fantasy cycling](https://www.velogames.com/)
+## Usage
 
-This Julia script uses the [Gumbo](https://github.com/JuliaWeb/Gumbo.jl) and [Cascadia](https://github.com/Algocircle/Cascadia.jl) libraries to scrape rider data, and the [JuMP](https://jump.dev/JuMP.jl/stable/) optimisation library / [HiGHS](https://highs.dev/) solver to construct and solve a mixed-integer program (MIP) described below
+Outputs calculated in the Quarto files in the `race_notebooks/` directory. Quarto files are locally rendered to `docs/` with `quarto render` and [served with Pages](https:://jzuccollo.github.io/Velogames.jl). 
 
-In Velogames fantasy cycling, you must select a team of 9 riders, each with a specific cost based on their expected performance, spending no more than 100 points.
+No guarantee they'll re-render because they pull from the moving target of velogames.com rider pages, so URLs typically need to be updated for every render.
 
-At the end of the race, each rider will have accumulated a score based on their performance, and the aim is to pick a team with the highest combined score at the end of the race.
+## Testing
 
-### One-day races and short tours
-
-The optimisation problem can be stated as:
-
-$maximise \sum_{j=1}^{n} x_j y_j$
-
-$s.t.$
-
-$\sum_{j=1}^{n} x_j=9$
-
-$\sum_{j=1}^{n} x_j z_j \leq 100$
-
-where $j=1...n$ is the set of all riders
-
-$x_j\in[0,1]$ is a binary decision variable denoting if rider $j$ is chosen (1 for chosen, 0 for not chosen)
-
-$z_j\in Z^+$ and $y_j\in Z^+$ are the cost and score parameters of rider $j$ respectively
-
-### Grand tours
-
-For grand tours each rider is classed as either an All-Rounder, a Climber, a Sprinter or is Unclassed. A team must contain 2 All-Rounders, 2 Climbers, 1 Sprinter and 3 Unclassed riders. The 9th selection can be from any of these categories.
-
-The optimisation problem then becomes:
-
-$maximise \sum_{j=1}^{n} x_j y_j$
-
-$s.t.$
-
-$\sum_{j=1}^{n} x_j=9$
-
-$\sum_{j=1}^{n} x_j z_j \leq 100$
-
-$\sum_{j=1}^{n} x_j a_j \geq 2$
-
-$\sum_{j=1}^{n} x_j c_j \geq 2$
-
-$\sum_{j=1}^{n} x_j s_j \geq 1$
-
-$\sum_{j=1}^{n} x_j u_j \geq 3$
-
-where $j=1...n$ is the set of all riders
-
-$x_j\in[0,1]$ is a binary decision variable denoting if rider $j$ is chosen (1 for chosen, 0 for not chosen)
-
-$z_j\in Z^+$ and $y_j\in Z^+$ are the cost and score parameters of rider $j$ respectively
-
-$a_j\in[0,1]$, $c_j\in[0,1]$, $s_j\in[0,1]$ and $u_j\in[0,1]$ are binary parameters denoting if rider $j$ is an All-Rounder, Climber, Sprinter or Unclassed respectively, with the further parameter constraint that $a_i+c_i+s_i+u_i=1$ $\forall i=1...n$ (i.e. each rider is allocated to one and only one of the 4 categories) and by implication $\sum_{j=1}^{n} a_j+\sum_{j=1}^{n} c_j+\sum_{j=1}^{n} s_j+\sum_{j=1}^{n} u_j=n$ (i.e. the sum of the number of riders in each category is equal to the total number of riders)
+Errr, not much. `Pkg.test()` should run the few tests that exist.

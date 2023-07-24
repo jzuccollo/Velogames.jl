@@ -1,5 +1,5 @@
 ---
-title: Stage race
+title: "Stage race"
 jupyter: julia-1.9
 ---
 

@@ -1,5 +1,5 @@
 ---
-title: One-day
+title: "One-day"
 jupyter: julia-1.9
 ---
 

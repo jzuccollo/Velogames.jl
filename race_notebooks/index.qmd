@@ -1,7 +1,61 @@
 ---
-title: "race_notebooks"
+title: "Velogames solver"
 ---
 
-This is a Quarto website.
+Building on the work of [GraemeHawker](https://github.com/GraemeHawker/velogames_solver), this is a simple set of functions to pick a team for the [Velogames Fantasy Cycling](https://www.velogames.com/) competition.
 
-To learn more about Quarto websites visit <https://quarto.org/docs/websites>.
+# Outline
+
+The Julia package uses the [Gumbo](https://github.com/JuliaWeb/Gumbo.jl) and [Cascadia](https://github.com/Algocircle/Cascadia.jl) libraries to scrape rider data, and the [JuMP](https://jump.dev/JuMP.jl/stable/) optimisation library / [HiGHS](https://highs.dev/) solver to construct and solve a mixed-integer program described below.
+
+At the end of the race, each rider will have accumulated a score based on their performance, and the aim is to pick a team with the highest combined score at the end of the race. The rules are slightly difference for each type of race.
+
+# One-day races and short tours
+
+For short races, riders are all unclassed and teams are 6-9 riders, depending upon the competition.
+
+The optimisation problem can be stated as:
+
+$maximise \sum_{j=1}^{n} x_j y_j$
+
+$s.t.$
+
+$\sum_{j=1}^{n} x_j= maxriders$
+
+$\sum_{j=1}^{n} x_j z_j \leq 100$
+
+where $j=1...n$ is the set of all riders
+
+$x_j\in[0,1]$ is a binary decision variable denoting if rider $j$ is chosen (1 for chosen, 0 for not chosen)
+
+$z_j\in Z^+$ and $y_j\in Z^+$ are the cost and score parameters of rider $j$ respectively
+
+# Grand tours
+
+For grand tours each rider is classed as either an All-Rounder, a Climber, a Sprinter or is Unclassed. A team must contain 2 All-Rounders, 2 Climbers, 1 Sprinter and 3 Unclassed riders. The 9th selection can be from any of these categories.
+
+The optimisation problem then becomes:
+
+$maximise \sum_{j=1}^{n} x_j y_j$
+
+$s.t.$
+
+$\sum_{j=1}^{n} x_j=9$
+
+$\sum_{j=1}^{n} x_j z_j \leq 100$
+
+$\sum_{j=1}^{n} x_j a_j \geq 2$
+
+$\sum_{j=1}^{n} x_j c_j \geq 2$
+
+$\sum_{j=1}^{n} x_j s_j \geq 1$
+
+$\sum_{j=1}^{n} x_j u_j \geq 3$
+
+where $j=1...n$ is the set of all riders
+
+$x_j\in[0,1]$ is a binary decision variable denoting if rider $j$ is chosen (1 for chosen, 0 for not chosen)
+
+$z_j\in Z^+$ and $y_j\in Z^+$ are the cost and score parameters of rider $j$ respectively
+
+$a_j\in[0,1]$, $c_j\in[0,1]$, $s_j\in[0,1]$ and $u_j\in[0,1]$ are binary parameters denoting if rider $j$ is an All-Rounder, Climber, Sprinter or Unclassed respectively, with the further parameter constraint that $a_i+c_i+s_i+u_i=1$ $\forall i=1...n$ (i.e. each rider is allocated to one and only one of the 4 categories) and by implication $\sum_{j=1}^{n} a_j+\sum_{j=1}^{n} c_j+\sum_{j=1}^{n} s_j+\sum_{j=1}^{n} u_j=n$ (i.e. the sum of the number of riders in each category is equal to the total number of riders)

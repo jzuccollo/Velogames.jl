@@ -7,11 +7,11 @@ project:
     - "!ignored-dir/"
 
 website:
-  title: "race_notebooks"
+  title: "Velogames solver"
   sidebar:
     style: "docked"
-    search: true
     contents:
+      - index.qmd
       - oneday.qmd
       - stagerace.qmd
       - historical_analysis.qmd
@@ -19,7 +19,6 @@ website:
 format:
   html:
     theme: cosmo
-    css: styles.css
     toc: true
     toc_float: true
 
