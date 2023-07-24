@@ -28,9 +28,6 @@ Manifest.toml
 /env/
 _output/
 *_files/
-*.html
 _freeze/
 _site/
 *_cache/
-
-/.quarto/
