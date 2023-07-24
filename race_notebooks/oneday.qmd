@@ -1,5 +1,5 @@
 ---
-title: Velogames Liège-Bastogne-Liège 2023 solver
+title: Velogames one-day race solver
 date: 23/04/2023
 format:
   html:
@@ -7,25 +7,26 @@ format:
 jupyter: julia-1.8
 ---
 
-# Velogames solver: Liège-Bastogne-Liège 2023
-
-## Load libraries
-
 ```{julia}
-using Gadfly, Velogames
+using Velogames, DataFrames, Statistics
+
+race_url = "https://www.velogames.com/sixes-superclasico/2023/riders.php"
+race_hash = "#Donostia"
+race_sex = "me"
+race_category = "one-day-races"
+FORM_WEIGHT = 0
 ```
 
-## Retrieve data
+# Retrieve data
 
 Data is scraped from the [Velogames website](https://www.velogames.com/). Rider scores are the number of points they have accumulated in the current season.
 
 ```{julia}
-rider_vg = getvgriders("https://www.velogames.com/spring-classics/2023/riders.php")
+rider_vg = getvgriders(race_url)
 
-# keep only riders in the startlist for LBL.
-rider_vg = rider_vg[rider_vg.startlist.=="#LiegeBastogneLiege", :]
-
-rider_oneday = getpcsranking(:oneday)
+# keep only riders in the startlist for for the race
+rider_vg = rider_vg[rider_vg.startlist.==race_hash, :]
+rider_oneday = pcs_df = getpcsranking(race_sex, race_category)
 ```
 
 Combine datasets and calculate rider value.
@@ -48,47 +49,37 @@ select!(rider_df, Not([:rider_1, :team_1]))
 rider_df[ismissing.(rider_df.pcsrank), :pcsrank] .= 0
 rider_df[ismissing.(rider_df.pcspoints), :pcspoints] .= 0
 # calculate rider calc_score as the mean of the velogames score and the PCS score
-rider_df[!, :calc_score] = (rider_df.pcspoints .+ rider_df.vgpoints) ./ 2
+ADJ_FACTOR = mean(rider_df.vgpoints) / mean(rider_df.pcspoints)
+rider_df[!, :calc_score] = (1 - FORM_WEIGHT) .* ADJ_FACTOR .* rider_df.pcspoints .+ FORM_WEIGHT .* rider_df.vgpoints
 # # calculate rider value as the ratio of rider score to rider cost
 rider_df[!, :calc_value] = rider_df.calc_score ./ rider_df.vgcost
 
 rider_df
 ```
 
-## Inspect the data
+# Inspect the data
 
-### Top 10 riders by points
+## Top 10 riders by points
 
 ```{julia}
 sort(rider_df, :calc_score, rev=true)[1:10, :]
 ```
 
-### Top 10 riders by value
+## Top 10 riders by value
 
 ```{julia}
 sort(rider_df, :calc_value, rev=true)[1:10, :]
 ```
 
-```{julia}
-plot(
-    rider_df,
-    x=:calc_score,
-    y=:cost,
-    Guide.xlabel("Score"),
-    Guide.ylabel("Cost"),
-    Guide.title("Rider value")
-)
-```
-
-## Build the model
+# Build the model
 
 ```{julia}
-model_results = build_model_oneday(rider_df)
+model_results = build_model_oneday(rider_df, 6, :calc_score, :vgcost)
 ```
 
-## Results
+# Results
 
-### Total cost of team
+## Total cost of team
 
 Must be no more than 100.
 
@@ -97,7 +88,7 @@ Must be no more than 100.
 rider_df.vgcost .* model_results.data |> sum
 ```
 
-### Selected riders
+## Selected riders
 
 ```{julia}
 # selected riders

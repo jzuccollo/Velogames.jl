@@ -27,3 +27,5 @@ Manifest.toml
 /.quarto/
 /env/
 _output/
+*_files/
+*.html
