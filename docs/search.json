@@ -1,0 +1,107 @@
+[
+  {
+    "objectID": "race_notebooks/stagerace.html",
+    "href": "race_notebooks/stagerace.html",
+    "title": "Stage race",
+    "section": "",
+    "text": "\"individual\""
+  },
+  {
+    "objectID": "race_notebooks/stagerace.html#load-libraries",
+    "href": "race_notebooks/stagerace.html#load-libraries",
+    "title": "Stage race",
+    "section": "",
+    "text": "\"individual\""
+  },
+  {
+    "objectID": "race_notebooks/stagerace.html#load-data",
+    "href": "race_notebooks/stagerace.html#load-data",
+    "title": "Stage race",
+    "section": "2 Load data",
+    "text": "2 Load data\nUsing only PCS ranking at the moment and assuming 0pts for all riders not in the top 100 of the PCS ranking for that category.\n\n\n154×10 DataFrame129 rows omitted\n\n\n\nRow\n\nrider\nteam\ncost\nselected\npoints\nriderkey\nvalue\nrank\npcs_pts\n\n\n\nString\nString\nString\nInt64\nString\nFloat64\nString\nFloat64\nInt64\nFloat64\n\n\n\n\n1\n\nDemi Vollering\nTeam SD Worx\n26\n61.3%\n208.0\ndeegiillmnorv\n8.0\n1\n2880.0\n\n\n2\n\nAnnemiek Van Vleuten\nMovistar Team\n22\n56.4%\n88.0\naaeeeeiklmnnnntuvv\n4.0\n2\n2300.0\n\n\n3\n\nLorena Wiebes\nTeam SD Worx\n20\n30.6%\n179.0\nabeeeilnorsw\n8.95\n3\n2093.0\n\n\n4\n\nElisa Longo Borghini\nLidl - Trek\n16\n27.4%\n80.0\nabegghiiillnnooors\n5.0\n6\n1567.0\n\n\n5\n\nAshleigh Moolman\nAG Insurance - Soudal Quick-Step\n14\n10.4%\n227.0\naaeghhillmmnoos\n16.2143\n11\n1124.0\n\n\n6\n\nKatarzyna Niewiadoma\nCanyon//SRAM Racing\n14\n17.0%\n86.0\naaaaadeiikmnnortwyz\n6.14286\n12\n1097.0\n\n\n7\n\nCecilie Uttrup Ludwig\nFDJ - SUEZ\n14\n12.8%\n153.0\nccdeegiiillprttuuuw\n10.9286\n9\n1201.0\n\n\n8\n\nCharlotte Kool\nTeam DSM\n14\n21.3%\n121.0\nacehkllooortt\n8.64286\n23\n838.0\n\n\n9\n\nJuliette Labous\nTeam DSM\n14\n21.1%\n4.0\nabeeijllosttuu\n0.285714\n14\n1023.0\n\n\n10\n\nMarianne Vos\nTeam Jumbo-Visma\n14\n33.0%\n114.0\naaeimnnorsv\n8.14286\n25\n811.0\n\n\n11\n\nLotte Kopecky\nTeam SD Worx\n14\n23.2%\n373.0\nceekklooptty\n26.6429\n4\n1753.0\n\n\n12\n\nMarlen Reusser\nTeam SD Worx\n14\n13.7%\n67.0\naeeelmnrrrssu\n4.78571\n5\n1715.0\n\n\n13\n\nElise Chabbey\nCanyon//SRAM Racing\n12\n4.9%\n21.0\nabbceeehilsy\n1.75\n18\n902.0\n\n\n⋮\n⋮\n⋮\n⋮\n⋮\n⋮\n⋮\n⋮\n⋮\n⋮\n⋮\n\n\n143\n\nSigrid Haugset\nTeam Coop - Hitec Products\n4\n0.9%\n0.0\nadegghiirsstu\n0.0\n0\n0.0\n\n\n144\n\nLucie Jounier\nTeam Coop - Hitec Products\n4\n1.4%\n0.0\nceeiijlnoruu\n0.0\n0\n0.0\n\n\n145\n\nTiril Jørgensen\nTeam Coop - Hitec Products\n4\n1.8%\n0.0\neegiijlnnrrst\n0.0\n0\n0.0\n\n\n146\n\nJosie Nelson\nTeam Coop - Hitec Products\n4\n3.4%\n0.0\neeijlnnooss\n0.0\n0\n0.0\n\n\n147\n\nJessica Allen\nTeam Jayco AlUla\n4\n9.5%\n0.0\naaceeijllnss\n0.0\n0\n0.0\n\n\n148\n\nTeniel Campbell\nTeam Jayco AlUla\n4\n5.6%\n0.0\nabceeeilllmnpt\n0.0\n0\n0.0\n\n\n149\n\nGeorgie Howe\nTeam Jayco AlUla\n4\n6.7%\n0.0\neeegghioorw\n0.0\n0\n0.0\n\n\n150\n\nNina Kessler\nTeam Jayco AlUla\n4\n7.2%\n0.0\naeeiklnnrss\n0.0\n0\n0.0\n\n\n151\n\nAmber Pate\nTeam Jayco AlUla\n4\n3.8%\n0.0\naabeemprt\n0.0\n0\n0.0\n\n\n152\n\nMarte Berg Edseth\nUno-X Pro Cycling Team\n4\n3.7%\n0.0\nabdeeeeghmrrstt\n0.0\n0\n0.0\n\n\n153\n\nHannah Ludwig\nUno-X Pro Cycling Team\n4\n9.2%\n10.0\naadghhilnnuw\n2.5\n0\n0.0\n\n\n154\n\nWilma Olausson\nUno-X Pro Cycling Team\n4\n1.8%\n0.0\naaillmnoossuw\n0.0\n0\n0.0\n\n\n\n\n\n\n\n\n154×10 DataFrame\n Row │         rider                  team                              cost   ⋯\n     │ String  String                 String                            Int64  ⋯\n─────┼──────────────────────────────────────────────────────────────────────────\n   1 │         Demi Vollering         Team SD Worx                         26  ⋯\n   2 │         Annemiek Van Vleuten   Movistar Team                        22\n   3 │         Lorena Wiebes          Team SD Worx                         20\n   4 │         Elisa Longo Borghini   Lidl - Trek                          16\n   5 │         Ashleigh Moolman       AG Insurance - Soudal Quick-Step     14  ⋯\n   6 │         Katarzyna Niewiadoma   Canyon//SRAM Racing                  14\n   7 │         Cecilie Uttrup Ludwig  FDJ - SUEZ                           14\n   8 │         Charlotte Kool         Team DSM                             14\n   9 │         Juliette Labous        Team DSM                             14  ⋯\n  10 │         Marianne Vos           Team Jumbo-Visma                     14\n  11 │         Lotte Kopecky          Team SD Worx                         14\n  ⋮  │   ⋮               ⋮                           ⋮                    ⋮    ⋱\n 145 │         Tiril Jørgensen        Team Coop - Hitec Products            4\n 146 │         Josie Nelson           Team Coop - Hitec Products            4  ⋯\n 147 │         Jessica Allen          Team Jayco AlUla                      4\n 148 │         Teniel Campbell        Team Jayco AlUla                      4\n 149 │         Georgie Howe           Team Jayco AlUla                      4\n 150 │         Nina Kessler           Team Jayco AlUla                      4  ⋯\n 151 │         Amber Pate             Team Jayco AlUla                      4\n 152 │         Marte Berg Edseth      Uno-X Pro Cycling Team                4\n 153 │         Hannah Ludwig          Uno-X Pro Cycling Team                4\n 154 │         Wilma Olausson         Uno-X Pro Cycling Team                4  ⋯\n                                                  6 columns and 133 rows omitted"
+  },
+  {
+    "objectID": "race_notebooks/stagerace.html#build-model",
+    "href": "race_notebooks/stagerace.html#build-model",
+    "title": "Stage race",
+    "section": "3 Build model",
+    "text": "3 Build model\nUses the one-day model because women’s races don’t have the rider types that men’s stage races do. Need to split these.\n\n\nRunning HiGHS 1.5.3 [date: 1970-01-01, git hash: 45a127b78]\nCopyright (c) 2023 HiGHS under MIT licence terms\nPresolving model\n2 rows, 154 cols, 308 nonzeros\n2 rows, 70 cols, 139 nonzeros\n2 rows, 68 cols, 135 nonzeros\nObjective function is integral with scale 2\n\nSolving MIP model with:\n   2 rows\n   68 cols (66 binary, 2 integer, 0 implied int., 0 continuous)\n   135 nonzeros\n\n        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      \n     Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time\n\n         0       0         0   0.00%   49142.5         -inf                 inf        0      0      0         0     0.0s\n R       0       0         0   0.00%   11956.888889    11052              8.19%        0      0      0         4     0.0s\n\nSolving report\n  Status            Optimal\n  Primal bound      11775\n  Dual bound        11775\n  Gap               0% (tolerance: 0.01%)\n  Solution status   feasible\n                    11775 (objective)\n                    0 (bound viol.)\n                    0 (int. viol.)\n                    0 (row viol.)\n  Timing            0.01 (total)\n                    0.00 (presolve)\n                    0.00 (postsolve)\n  Nodes             1\n  LP iterations     15 (total)\n                    0 (strong br.)\n                    11 (separation)\n                    0 (heuristics)\n\n\n\n\n9.0\n\n\n\n\n100.0"
+  },
+  {
+    "objectID": "race_notebooks/stagerace.html#results",
+    "href": "race_notebooks/stagerace.html#results",
+    "title": "Stage race",
+    "section": "4 Results",
+    "text": "4 Results\n\n\n9×5 DataFrame\n\n\n\nRow\nrider\nteam\nchosen\npcs_pts\ncost\n\n\n\nString\nString\nBool\nFloat64\nInt64\n\n\n\n\n1\nElisa Longo Borghini\nLidl - Trek\ntrue\n1567.0\n16\n\n\n2\nLotte Kopecky\nTeam SD Worx\ntrue\n1753.0\n14\n\n\n3\nMarlen Reusser\nTeam SD Worx\ntrue\n1715.0\n14\n\n\n4\nLiane Lippert\nMovistar Team\ntrue\n1405.0\n12\n\n\n5\nSilvia Persico\nUAE Team ADQ\ntrue\n1395.0\n12\n\n\n6\nGrace Brown\nFDJ - SUEZ\ntrue\n1124.0\n8\n\n\n7\nAudrey Cordon-Ragot\nHuman Powered Health\ntrue\n905.0\n8\n\n\n8\nTamara Dronova-Balabolina\nIsrael Premier Tech Roland\ntrue\n861.0\n8\n\n\n9\nPfeiffer Georgi\nTeam DSM\ntrue\n1050.0\n8"
+  },
+  {
+    "objectID": "race_notebooks/index.html",
+    "href": "race_notebooks/index.html",
+    "title": "race_notebooks",
+    "section": "",
+    "text": "This is a Quarto website.\nTo learn more about Quarto websites visit https://quarto.org/docs/websites."
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis.html",
+    "href": "race_notebooks/historical_analysis.html",
+    "title": "Historical analysis",
+    "section": "",
+    "text": "Looking back on the stage race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best team?\n12231"
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis.html#highest-value-riders",
+    "href": "race_notebooks/historical_analysis.html#highest-value-riders",
+    "title": "Historical analysis",
+    "section": "3.1 Highest value riders",
+    "text": "3.1 Highest value riders\n\n\n15×6 DataFrame\n\n\n\nRow\nrider\nteam\ncost\npoints\nvalue\nclass_raw\n\n\n\nString\nString\nInt64\nFloat64\nFloat64\nString\n\n\n\n\n1\nPello Bilbao\nBahrain - Victorious\n8\n1434.0\n179.25\nAll Rounder\n\n\n2\nFelix Gall\nAG2R Citroën Team\n8\n1390.0\n173.75\nClimber\n\n\n3\nSimon Yates\nTeam Jayco AlUla\n10\n1704.0\n170.4\nClimber\n\n\n4\nBryan Coquard\nCofidis\n6\n938.0\n156.333\nSprinter\n\n\n5\nAdam Yates\nUAE Team Emirates\n12\n1868.0\n155.667\nAll Rounder\n\n\n6\nJasper Philipsen\nAlpecin-Deceuninck\n14\n1935.0\n138.214\nSprinter\n\n\n7\nCarlos Rodríguez\nINEOS Grenadiers\n10\n1375.0\n137.5\nClimber\n\n\n8\nTadej Pogačar\nUAE Team Emirates\n24\n2979.0\n124.125\nAll Rounder\n\n\n9\nSepp Kuss\nJumbo-Visma\n8\n938.0\n117.25\nClimber\n\n\n10\nJonas Vingegaard\nJumbo-Visma\n26\n2946.0\n113.308\nAll Rounder\n\n\n11\nTobias Halland Johannessen\nUno-X Pro Cycling Team\n6\n658.0\n109.667\nAll Rounder\n\n\n12\nMatej Mohorič\nBahrain - Victorious\n6\n601.0\n100.167\nUnclassed\n\n\n13\nTiesj Benoot\nJumbo-Visma\n6\n593.0\n98.8333\nUnclassed\n\n\n14\nMads Pedersen\nLidl - Trek\n14\n1349.0\n96.3571\nSprinter\n\n\n15\nThomas Pidcock\nINEOS Grenadiers\n10\n940.0\n94.0\nUnclassed"
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis.html#lowest-value-riders",
+    "href": "race_notebooks/historical_analysis.html#lowest-value-riders",
+    "title": "Historical analysis",
+    "section": "3.2 Lowest value riders",
+    "text": "3.2 Lowest value riders\n\n\n15×6 DataFrame\n\n\n\nRow\nrider\nteam\ncost\npoints\nvalue\nclass_raw\n\n\n\nString\nString\nInt64\nFloat64\nFloat64\nString\n\n\n\n\n1\nJacopo Guarnieri\nLotto Dstny\n4\n6.0\n1.5\nUnclassed\n\n\n2\nSimon Clarke\nIsrael - Premier Tech\n6\n8.0\n1.33333\nUnclassed\n\n\n3\nTorstein Træen\nUno-X Pro Cycling Team\n6\n7.0\n1.16667\nUnclassed\n\n\n4\nDion Smith\nIntermarché - Circus - Wanty\n6\n6.0\n1.0\nUnclassed\n\n\n5\nKevin Vermaerke\nTeam DSM - Firmenich\n6\n5.0\n0.833333\nClimber\n\n\n6\nGianni Moscon\nAstana Qazaqstan Team\n6\n4.0\n0.666667\nUnclassed\n\n\n7\nJenthe Biermans\nTeam Arkéa Samsic\n4\n1.0\n0.25\nUnclassed\n\n\n8\nEnric Mas\nMovistar Team\n14\n0.0\n0.0\nAll Rounder\n\n\n9\nRichard Carapaz\nEF Education-EasyPost\n12\n0.0\n0.0\nAll Rounder\n\n\n10\nLuis León Sánchez\nAstana Qazaqstan Team\n6\n0.0\n0.0\nUnclassed\n\n\n11\nClément Champoussin\nTeam Arkéa Samsic\n6\n0.0\n0.0\nUnclassed\n\n\n12\nJohn Degenkolb\nTeam DSM - Firmenich\n6\n0.0\n0.0\nSprinter\n\n\n13\nChris Hamilton\nTeam DSM - Firmenich\n6\n0.0\n0.0\nUnclassed\n\n\n14\nMatthew Dinham\nTeam DSM - Firmenich\n4\n0.0\n0.0\nUnclassed\n\n\n15\nAlex Edmondson\nTeam DSM - Firmenich\n4\n0.0\n0.0\nUnclassed"
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis.html#lowest-value-riders-who-cost-more-than-7pts",
+    "href": "race_notebooks/historical_analysis.html#lowest-value-riders-who-cost-more-than-7pts",
+    "title": "Historical analysis",
+    "section": "3.3 Lowest value riders who cost more than 7pts",
+    "text": "3.3 Lowest value riders who cost more than 7pts\nDon’t think this works.\n\n\n15×6 DataFrame\n\n\n\nRow\nrider\nteam\ncost\npoints\nvalue\nclass_raw\n\n\n\nString\nString\nInt64\nFloat64\nFloat64\nString\n\n\n\n\n1\nAlexey Lutsenko\nAstana Qazaqstan Team\n8\n218.0\n27.25\nAll Rounder\n\n\n2\nMarc Soler\nUAE Team Emirates\n8\n218.0\n27.25\nAll Rounder\n\n\n3\nRomain Bardet\nTeam DSM - Firmenich\n12\n317.0\n26.4167\nClimber\n\n\n4\nFred Wright\nBahrain - Victorious\n8\n206.0\n25.75\nUnclassed\n\n\n5\nDaniel Felipe Martínez\nINEOS Grenadiers\n10\n222.0\n22.2\nAll Rounder\n\n\n6\nJulian Alaphilippe\nSoudal - Quick Step\n10\n222.0\n22.2\nClimber\n\n\n7\nSam Welsford\nTeam DSM - Firmenich\n8\n170.0\n21.25\nSprinter\n\n\n8\nValentin Madouas\nGroupama - FDJ\n8\n154.0\n19.25\nUnclassed\n\n\n9\nMathieu Van Der Poel\nAlpecin-Deceuninck\n10\n165.0\n16.5\nUnclassed\n\n\n10\nFabio Jakobsen\nSoudal - Quick Step\n12\n189.0\n15.75\nSprinter\n\n\n11\nLouis Meintjes\nIntermarché - Circus - Wanty\n8\n109.0\n13.625\nClimber\n\n\n12\nEgan Bernal\nINEOS Grenadiers\n10\n126.0\n12.6\nAll Rounder\n\n\n13\nMagnus Cort\nEF Education-EasyPost\n8\n20.0\n2.5\nUnclassed\n\n\n14\nEnric Mas\nMovistar Team\n14\n0.0\n0.0\nAll Rounder\n\n\n15\nRichard Carapaz\nEF Education-EasyPost\n12\n0.0\n0.0\nAll Rounder"
+  },
+  {
+    "objectID": "race_notebooks/oneday.html",
+    "href": "race_notebooks/oneday.html",
+    "title": "One-day",
+    "section": "",
+    "text": "0"
+  },
+  {
+    "objectID": "race_notebooks/oneday.html#top-10-riders-by-points",
+    "href": "race_notebooks/oneday.html#top-10-riders-by-points",
+    "title": "One-day",
+    "section": "2.1 Top 10 riders by points",
+    "text": "2.1 Top 10 riders by points\n\n\n10×12 DataFrame\n\n\n\nRow\n\nrider\nteam\nstartlist\nvgpoints\nvgcost\nriderkey\nvalue\npcsrank\npcspoints\ncalc_score\ncalc_value\n\n\n\nString\nString\nString\nString\nFloat64\nInt64\nString\nFloat64\nInt64?\nFloat64?\nFloat64\nFloat64\n\n\n\n\n1\n\nRemco Evenepoel\nSoudal - Quick Step\n#Donostia\n720.0\n30\nceeeeelmnooprv\n24.0\n7\n865.0\n1981.18\n66.0394\n\n\n2\n\nNeilson Powless\nEF Education-EasyPost\n#Donostia\n1120.0\n16\neeillnnoopsssw\n70.0\n11\n622.0\n1424.62\n89.0387\n\n\n3\n\nMarc Hirschi\nUAE Team Emirates\n#Donostia\n852.0\n18\nacchhiimrrs\n47.3333\n15\n582.0\n1333.0\n74.0558\n\n\n4\n\nTiesj Benoot\nJumbo-Visma\n#Donostia\n1413.0\n22\nbeeijnoostt\n64.2273\n16\n580.0\n1328.42\n60.3829\n\n\n5\n\nMattias Skjelmose\nTrek - Segafredo\n#Donostia\n891.0\n14\naaeeijklmmossstt\n63.6429\n19\n555.0\n1271.16\n90.7974\n\n\n6\n\nGuillaume Martin\nCofidis\n#Donostia\n330.0\n14\naaegiillmmnrtuu\n23.5714\n21\n542.0\n1241.39\n88.6706\n\n\n7\n\nBen Healy\nEF Education-EasyPost\n#Donostia\n1230.0\n6\nabeehlny\n205.0\n22\n540.0\n1236.81\n206.135\n\n\n8\n\nMichael Matthews\nTeam Jayco AlUla\n#Donostia\n252.0\n22\naaceehhilmmsttw\n11.4545\n23\n519.0\n1188.71\n54.0323\n\n\n9\n\nBenoît Cosnefroy\nAG2R Citroën Team\n#Donostia\n723.0\n22\nbceefnnooorsty\n32.8636\n26\n512.0\n1172.68\n53.3035\n\n\n10\n\nLorenzo Rota\nIntermarché - Circus - Wanty\n#Donostia\n492.0\n16\naelnooorrtz\n30.75\n28\n501.0\n1147.48\n71.7177"
+  },
+  {
+    "objectID": "race_notebooks/oneday.html#top-10-riders-by-value",
+    "href": "race_notebooks/oneday.html#top-10-riders-by-value",
+    "title": "One-day",
+    "section": "2.2 Top 10 riders by value",
+    "text": "2.2 Top 10 riders by value\n\n\n10×12 DataFrame\n\n\n\nRow\n\nrider\nteam\nstartlist\nvgpoints\nvgcost\nriderkey\nvalue\npcsrank\npcspoints\ncalc_score\ncalc_value\n\n\n\nString\nString\nString\nString\nFloat64\nInt64\nString\nFloat64\nInt64?\nFloat64?\nFloat64\nFloat64\n\n\n\n\n1\n\nBen Healy\nEF Education-EasyPost\n#Donostia\n1230.0\n6\nabeehlny\n205.0\n22\n540.0\n1236.81\n206.135\n\n\n2\n\nRoger Adrià\nEquipo Kern Pharma\n#Donostia\n171.0\n6\nadegiorrr\n28.5\n71\n273.0\n625.275\n104.212\n\n\n3\n\nRomain Grégoire\nGroupama - FDJ\n#Donostia\n526.0\n6\naeggiimnoorrr\n87.6667\n82\n251.0\n574.887\n95.8144\n\n\n4\n\nMaxim Van Gils\nLotto Dstny\n#Donostia\n756.0\n8\naagiilmmnsvx\n94.5\n59\n319.0\n730.633\n91.3291\n\n\n5\n\nAnthony Perez\nCofidis\n#Donostia\n0.0\n6\naeehnnoprtyz\n0.0\n93\n238.0\n545.112\n90.8519\n\n\n6\n\nMattias Skjelmose\nTrek - Segafredo\n#Donostia\n891.0\n14\naaeeijklmmossstt\n63.6429\n19\n555.0\n1271.16\n90.7974\n\n\n7\n\nVictor Lafay\nCofidis\n#Donostia\n246.0\n6\naacfilortvy\n41.0\n94\n236.0\n540.531\n90.0885\n\n\n8\n\nNeilson Powless\nEF Education-EasyPost\n#Donostia\n1120.0\n16\neeillnnoopsssw\n70.0\n11\n622.0\n1424.62\n89.0387\n\n\n9\n\nGuillaume Martin\nCofidis\n#Donostia\n330.0\n14\naaegiillmmnrtuu\n23.5714\n21\n542.0\n1241.39\n88.6706\n\n\n10\n\nMarc Hirschi\nUAE Team Emirates\n#Donostia\n852.0\n18\nacchhiimrrs\n47.3333\n15\n582.0\n1333.0\n74.0558"
+  },
+  {
+    "objectID": "race_notebooks/oneday.html#total-cost-of-team",
+    "href": "race_notebooks/oneday.html#total-cost-of-team",
+    "title": "One-day",
+    "section": "4.1 Total cost of team",
+    "text": "4.1 Total cost of team\nMust be no more than 100.\n\n\n98.0"
+  },
+  {
+    "objectID": "race_notebooks/oneday.html#selected-riders",
+    "href": "race_notebooks/oneday.html#selected-riders",
+    "title": "One-day",
+    "section": "4.2 Selected riders",
+    "text": "4.2 Selected riders\n\n\n6×8 DataFrame\n\n\n\nRow\nrider\nteam\nvgcost\nvgpoints\npcspoints\npcsrank\ncalc_score\ncalc_value\n\n\n\nString\nString\nInt64\nFloat64\nFloat64?\nInt64?\nFloat64\nFloat64\n\n\n\n\n1\nRemco Evenepoel\nSoudal - Quick Step\n30\n720.0\n865.0\n7\n1981.18\n66.0394\n\n\n2\nMarc Hirschi\nUAE Team Emirates\n18\n852.0\n582.0\n15\n1333.0\n74.0558\n\n\n3\nNeilson Powless\nEF Education-EasyPost\n16\n1120.0\n622.0\n11\n1424.62\n89.0387\n\n\n4\nMattias Skjelmose\nTrek - Segafredo\n14\n891.0\n555.0\n19\n1271.16\n90.7974\n\n\n5\nGuillaume Martin\nCofidis\n14\n330.0\n542.0\n21\n1241.39\n88.6706\n\n\n6\nBen Healy\nEF Education-EasyPost\n6\n1230.0\n540.0\n22\n1236.81\n206.135"
+  }
+]

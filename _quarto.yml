@@ -1,0 +1,39 @@
+project:
+  type: website
+  output-dir: docs
+  render:
+    - "*.qmd"
+    - "!giro_2023.qmd"
+    - "!ignored-dir/"
+
+website:
+  title: "race_notebooks"
+  sidebar:
+    style: "docked"
+    search: true
+    contents:
+      - oneday.qmd
+      - stagerace.qmd
+      - historical_analysis.qmd
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+    toc_float: true
+
+number-sections: true 
+fig-cap-location: top
+tbl-cap-location: top
+fig-format: svg
+link-external-icon: true
+
+execute:
+  echo: false
+  warning: false
+  message: false
+  cache: true
+  freeze: auto
+
+date-format: long

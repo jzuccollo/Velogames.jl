@@ -1,14 +1,14 @@
 ---
-title: 'Velogames solver: Tour de France 2023'
+title: Stage race
 jupyter: julia-1.9
 ---
 
 ## Load libraries
 
 ```{julia}
-using Velogames
+using Velogames, DataFrames
 
-race_url = "https://www.velogames.com/tour-de-france/2023/riders.php"
+race_url = "https://www.velogames.com/velogame-femmes/2023/riders.php"
 race_sex = "we"
 race_category = "individual"
 ```
@@ -34,8 +34,10 @@ show(rider_df)
 
 ## Build model
 
+Uses the one-day model because women's races don't have the rider types that men's stage races do. Need to split these.
+
 ```{julia}
-model_results = build_model_oneday(rider_df);
+model_results = build_model_oneday(rider_df, 9, :pcs_pts, :cost);
 ```
 
 ```{julia}
