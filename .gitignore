@@ -31,3 +31,5 @@ _output/
 _freeze/
 _site/
 *_cache/
+
+/.quarto/

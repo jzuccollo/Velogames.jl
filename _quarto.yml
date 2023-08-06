@@ -2,9 +2,10 @@ project:
   type: website
   output-dir: docs
   render:
-    - "*.qmd"
-    - "!giro_2023.qmd"
-    - "!ignored-dir/"
+    - "race_notebooks/*.qmd"
+    - "!race_notebooks/giro_2023.qmd"
+
+jupyter: julia-1.9
 
 website:
   title: "Velogames solver"
@@ -18,7 +19,7 @@ website:
 
 format:
   html:
-    theme: cosmo
+    # theme: cosmo
     toc: true
     toc_float: true
 
@@ -29,10 +30,6 @@ fig-format: svg
 link-external-icon: true
 
 execute:
-  echo: false
-  warning: false
-  message: false
   cache: true
-  freeze: auto
 
 date-format: long
