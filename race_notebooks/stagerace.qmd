@@ -1,6 +1,5 @@
 ---
 title: "Stage race"
-jupyter: julia-1.9
 ---
 
 ## Load libraries
@@ -53,8 +52,8 @@ rider_df.cost .* model_results.data |> sum
 
 ```{julia}
 # selected riders
-rider_df[!, :chosen] = model_results.data .> 0.5
-chosen_team = filter(:chosen => ==(true), rider_df)
+rider_df.chosen = model_results.data .> 0.5
+chosen_team = filter(row -> row.chosen, rider_df)
 chosen_team[:, [:rider, :team, :chosen, :pcs_pts, :cost]]
 ```
 

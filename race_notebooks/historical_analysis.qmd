@@ -1,6 +1,5 @@
 ---
 title: "Historical analysis"
-jupyter: julia-1.9
 ---
 
 Looking back on the stage race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
@@ -23,15 +22,15 @@ model_post = Model(HiGHS.Optimizer)
 @objective(model_post, Max, rider_vg_post.points' * x) # maximise the total score
 @constraint(model_post, rider_vg_post.cost' * x <= 100) # cost must be <= 100
 @constraint(model_post, sum(x) == 9) # exactly 9 riders must be chosen
-@constraint(model_post, rider_vg_post[!, "allrounder"]' * x >= 2) # at least 2 must be all rounders
-@constraint(model_post, rider_vg_post[!, "sprinter"]' * x >= 1) # at least 1 must be a sprinter
-@constraint(model_post, rider_vg_post[!, "climber"]' * x >= 2) # at least 2 must be climbers
-@constraint(model_post, rider_vg_post[!, "unclassed"]' * x >= 3) # at least 3 must be unclassed
+@constraint(model_post, rider_vg_post.allrounder' * x >= 2) # at least 2 must be all rounders
+@constraint(model_post, rider_vg_post.sprinter' * x >= 1) # at least 1 must be a sprinter
+@constraint(model_post, rider_vg_post.climber' * x >= 2) # at least 2 must be climbers
+@constraint(model_post, rider_vg_post.unclassed' * x >= 3) # at least 3 must be unclassed
 optimize!(model_post)
 model_post_results = value.(x)
 
-rider_vg_post[!, :chosen] = model_post_results.data .> 0.5
-chosen_team_post = filter(:chosen => ==(true), rider_vg_post)
+rider_vg_post.chosen = model_post_results.data .> 0.5
+chosen_team_post = filter(row -> row.chosen, rider_vg_post)
 println(chosen_team_post.points |> sum)
 println(chosen_team_post.cost |> sum)
 chosen_team_post[:, [:rider, :team, :cost, :points, :class_raw]]
@@ -45,15 +44,15 @@ model_post2 = Model(HiGHS.Optimizer)
 @objective(model_post2, Min, rider_vg_post.cost' * x) # maximise the total score
 @constraint(model_post2, rider_vg_post.points' * x >= best_team_score) # cost must be <= 100
 @constraint(model_post2, sum(x) == 9) # exactly 9 riders must be chosen
-@constraint(model_post2, rider_vg_post[!, "allrounder"]' * x >= 2) # at least 2 must be all rounders
-@constraint(model_post2, rider_vg_post[!, "sprinter"]' * x >= 1) # at least 1 must be a sprinter
-@constraint(model_post2, rider_vg_post[!, "climber"]' * x >= 2) # at least 2 must be climbers
-@constraint(model_post2, rider_vg_post[!, "unclassed"]' * x >= 3) # at least 3 must be unclassed
+@constraint(model_post2, rider_vg_post.allrounder' * x >= 2) # at least 2 must be all rounders
+@constraint(model_post2, rider_vg_post.sprinter' * x >= 1) # at least 1 must be a sprinter
+@constraint(model_post2, rider_vg_post.climber' * x >= 2) # at least 2 must be climbers
+@constraint(model_post2, rider_vg_post.unclassed' * x >= 3) # at least 3 must be unclassed
 optimize!(model_post2)
 model_post2_results = value.(x)
 
-rider_vg_post[!, :chosen2] = model_post2_results.data .> 0.5
-chosen2_team_post = filter(:chosen2 => ==(true), rider_vg_post)
+rider_vg_post.chosen = model_post2_results.data .> 0.5
+chosen2_team_post = filter(row -> row.chosen2, rider_vg_post)
 println(chosen2_team_post.points |> sum)
 println(chosen2_team_post.cost |> sum)
 chosen2_team_post[:, [:rider, :team, :cost, :points, :class_raw]]
@@ -65,7 +64,7 @@ chosen2_team_post[:, [:rider, :team, :cost, :points, :class_raw]]
 
 ```{julia}
 # calculate points per cost
-rider_vg_post[!, :value] = rider_vg_post.points ./ rider_vg_post.cost
+rider_vg_post.value = rider_vg_post.points ./ rider_vg_post.cost
 # sort by ppc
 sort!(rider_vg_post, :value, rev=true)
 # select the top 15 riders,
