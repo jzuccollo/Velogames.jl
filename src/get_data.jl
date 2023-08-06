@@ -162,3 +162,41 @@ function getpcsriderhistory(rider_name::String)
     rename!(rider_pts, [:year, :points, :rank])
     return rider_pts
 end
+
+"""
+## `getodds`
+
+This function retrieves the odds listings from the Betfair website.
+
+It returns a DataFrame with the following columns:
+
+    * `name` - the name of the rider
+    * `odds` - the odds for the rider
+"""
+function getodds(pageurl::String)
+    # download the page and parse the table
+    oddspage = HTTP.get(pageurl)
+    oddshtml = Gumbo.parsehtml(String(oddspage.body))
+
+    selectors = [".runner-info", ".ui-display-fraction-price"]
+    ridertable = [eachmatch(
+        Selector(s),
+        oddshtml.root
+    ) for s in selectors]
+    ridernames = [Cascadia.nodeText(r) for r in ridertable[1]]
+    riderodds = [Cascadia.nodeText(r) for r in ridertable[2]]
+
+    # strip newlines from fractional odds strings
+    riderodds = replace.(riderodds, "\n" => "")
+    # calculate decimal odds from strings of the form "1/2"
+    riderodds = map(x -> parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
+
+    betfair_odds = DataFrame(rider=ridernames, odds=riderodds)
+
+    # add a riderkey column based on the name
+    betfair_odds.riderkey = map(x -> create_key(x), betfair_odds.rider)
+    # check that the riderkey is unique
+    @assert length(unique(betfair_odds.riderkey)) == length(betfair_odds.riderkey) "Rider keys are not unique"
+
+    return betfair_odds
+end

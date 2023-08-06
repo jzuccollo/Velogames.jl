@@ -1,16 +1,15 @@
 ---
 title: "One-day"
-jupyter: julia-1.9
 ---
 
 ```{julia}
-using Velogames, DataFrames, Statistics
+using Velogames, DataFrames, Statistics, StatsBase
 
-race_url = "https://www.velogames.com/sixes-superclasico/2023/riders.php"
-race_hash = "#Donostia"
-race_sex = "me"
-race_category = "one-day-races"
-FORM_WEIGHT = 0
+raceurl = "https://www.velogames.com/sixes-superclasico/2023/riders.php"
+betfairurl = "https://www.betfair.com/sport/cycling/world-championships/12064071/mens-road-race-winner/924.369154252"
+racehash = "#WorldChamps"
+racesex = "me"
+racecategory = "one-day-races"
 ```
 
 # Retrieve data
@@ -18,39 +17,66 @@ FORM_WEIGHT = 0
 Data is scraped from the [Velogames website](https://www.velogames.com/). Rider scores are the number of points they have accumulated in the current season.
 
 ```{julia}
-rider_vg = getvgriders(race_url)
+ridervg = getvgriders(raceurl)
 
 # keep only riders in the startlist for for the race
-rider_vg = rider_vg[rider_vg.startlist.==race_hash, :]
-rider_oneday = pcs_df = getpcsranking(race_sex, race_category)
+ridervg = ridervg[ridervg.startlist.==racehash, :]
+
+# get PCS rankings
+rideroneday = getpcsranking(race_sex, racecategory)
+
+# get Betfair odds
+riderodds = getodds(betfairurl)
 ```
 
-Combine datasets and calculate rider value.
+## Combine datasets
 
 ```{julia}
-rider_df = leftjoin(rider_vg, rider_oneday, on=:riderkey, makeunique=true)
+# join all three datasets on riderkey
+riderdf = leftjoin(ridervg, rideroneday, on=:riderkey, makeunique=true)
+riderdf = leftjoin(riderdf, riderodds, on=:riderkey, makeunique=true)
 
 # rename points to vgpoints
 rename!(
-    rider_df,
+    riderdf,
     :points => :vgpoints,
     :cost => :vgcost,
     :rank => :pcsrank,
     :points_1 => :pcspoints
 )
 # drop columns ending in _1
-select!(rider_df, Not([:rider_1, :team_1]))
+select!(riderdf, Not([:rider_1, :rider_2, :team_1]))
 
 # fill in missing values in rank and points with 0
-rider_df[ismissing.(rider_df.pcsrank), :pcsrank] .= 0
-rider_df[ismissing.(rider_df.pcspoints), :pcspoints] .= 0
-# calculate rider calc_score as the mean of the velogames score and the PCS score
-ADJ_FACTOR = mean(rider_df.vgpoints) / mean(rider_df.pcspoints)
-rider_df[!, :calc_score] = (1 - FORM_WEIGHT) .* ADJ_FACTOR .* rider_df.pcspoints .+ FORM_WEIGHT .* rider_df.vgpoints
-# # calculate rider value as the ratio of rider score to rider cost
-rider_df[!, :calc_value] = rider_df.calc_score ./ rider_df.vgcost
+riderdf[ismissing.(riderdf.pcsrank), :pcsrank] .= 0
+riderdf[ismissing.(riderdf.pcspoints), :pcspoints] .= 0
+riderdf[ismissing.(riderdf.odds), :odds] .= 500
 
-rider_df
+# convert odds to probability of win
+riderdf.invodds = 1 ./ riderdf.odds
+
+disallowmissing!(riderdf)
+
+# normalise odds, vgpoints, pcspoints
+riderdf.zinvodds = StatsBase.zscore(riderdf.invodds)
+riderdf.zvgpoints = StatsBase.zscore(riderdf.vgpoints)
+riderdf.zpcspoints = StatsBase.zscore(riderdf.pcspoints)
+```
+
+## Calculate rider score and value
+
+```{julia}
+# weights for inv odds, vgpoints, pcspoints
+WEIGHTS = [1, 1, 1]
+
+# calculate rider calc_score as the mean of the velogames score and the PCS score
+zweights = WEIGHTS ./ sum(WEIGHTS)
+riderdf.calcscore = zweights[1] .* riderdf.zinvodds .+ zweights[2] .* riderdf.zvgpoints .+ zweights[3] .* riderdf.zpcspoints
+
+# calculate rider value as the ratio of rider score to rider cost
+riderdf.calcvalue = riderdf.calcscore ./ riderdf.vgcost
+
+riderdf
 ```
 
 # Inspect the data
@@ -58,19 +84,13 @@ rider_df
 ## Top 10 riders by points
 
 ```{julia}
-sort(rider_df, :calc_score, rev=true)[1:10, :]
+sort(riderdf, :calcscore, rev=true)[1:10, :]
 ```
 
 ## Top 10 riders by value
 
 ```{julia}
-sort(rider_df, :calc_value, rev=true)[1:10, :]
-```
-
-# Build the model
-
-```{julia}
-model_results = build_model_oneday(rider_df, 6, :calc_score, :vgcost)
+sort(riderdf, :calcvalue, rev=true)[1:10, :]
 ```
 
 # Results
@@ -80,16 +100,17 @@ model_results = build_model_oneday(rider_df, 6, :calc_score, :vgcost)
 Must be no more than 100.
 
 ```{julia}
+modelresults = build_model_oneday(riderdf, 6, :calcscore, :vgcost)
+
 # total cost
-rider_df.vgcost .* model_results.data |> sum
+riderdf.vgcost .* modelresults.data |> sum
 ```
 
 ## Selected riders
 
 ```{julia}
 # selected riders
-rider_df[!, :chosen] = model_results.data .|> !iszero
-chosen_team = filter(:chosen => ==(true), rider_df)
-chosen_team[:, [:rider, :team, :vgcost, :vgpoints, :pcspoints, :pcsrank, :calc_score, :calc_value]]
+riderdf[!, :chosen] = modelresults.data .|> !iszero
+chosenteam = filter(row -> row.chosen, riderdf)
+chosenteam[:, [:rider, :team, :vgcost, :vgpoints, :pcspoints, :pcsrank, :odds, :calcscore, :calcvalue]]
 ```
-
