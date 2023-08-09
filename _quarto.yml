@@ -12,24 +12,29 @@ website:
   sidebar:
     style: "docked"
     contents:
-      - index.qmd
-      - oneday.qmd
-      - stagerace.qmd
-      - historical_analysis.qmd
+      - href: race_notebooks/index.qmd
+        text: "Overview"
+      - href: race_notebooks/oneday.qmd
+        text: "One day races"
+      - href: race_notebooks/stagerace.qmd
+        text: "Stage races"
+      - href: race_notebooks/historical_analysis.qmd
+        text: "Historical analysis"
 
 format:
   html:
-    # theme: cosmo
+    theme: flatly
     toc: true
     toc_float: true
 
-number-sections: true 
 fig-cap-location: top
 tbl-cap-location: top
 fig-format: svg
 link-external-icon: true
 
 execute:
+  echo: false
+  warning: false
   cache: true
 
 date-format: long
