@@ -75,9 +75,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">
-      Velogames solver
-      </li></ol></nav>
+      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../race_notebooks/oneday.html">One day races</a></li></ol></nav>
       <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
       </a>
       <button type="button" class="btn quarto-search-button" aria-label="" onclick="window.quartoOpenSearch();">
@@ -103,17 +101,29 @@ ul.task-list li input[type="checkbox"] {
     <div class="sidebar-menu-container"> 
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
- <span class="menu-text">index.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">oneday.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/oneday.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">One day races</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">stagerace.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/stagerace.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Stage races</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">historical_analysis.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/historical_analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Historical analysis</span></a>
+  </div>
+</li>
     </ul>
     </div>
 </nav>
@@ -124,17 +134,20 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#retrieve-data" id="toc-retrieve-data" class="nav-link active" data-scroll-target="#retrieve-data"><span class="header-section-number">1</span> Retrieve data</a></li>
-  <li><a href="#inspect-the-data" id="toc-inspect-the-data" class="nav-link" data-scroll-target="#inspect-the-data"><span class="header-section-number">2</span> Inspect the data</a>
+  <li><a href="#retrieve-data" id="toc-retrieve-data" class="nav-link active" data-scroll-target="#retrieve-data">Retrieve data</a>
   <ul class="collapse">
-  <li><a href="#top-10-riders-by-points" id="toc-top-10-riders-by-points" class="nav-link" data-scroll-target="#top-10-riders-by-points"><span class="header-section-number">2.1</span> Top 10 riders by points</a></li>
-  <li><a href="#top-10-riders-by-value" id="toc-top-10-riders-by-value" class="nav-link" data-scroll-target="#top-10-riders-by-value"><span class="header-section-number">2.2</span> Top 10 riders by value</a></li>
+  <li><a href="#combine-datasets" id="toc-combine-datasets" class="nav-link" data-scroll-target="#combine-datasets">Combine datasets</a></li>
+  <li><a href="#calculate-rider-score-and-value" id="toc-calculate-rider-score-and-value" class="nav-link" data-scroll-target="#calculate-rider-score-and-value">Calculate rider score and value</a></li>
   </ul></li>
-  <li><a href="#build-the-model" id="toc-build-the-model" class="nav-link" data-scroll-target="#build-the-model"><span class="header-section-number">3</span> Build the model</a></li>
-  <li><a href="#results" id="toc-results" class="nav-link" data-scroll-target="#results"><span class="header-section-number">4</span> Results</a>
+  <li><a href="#inspect-the-data" id="toc-inspect-the-data" class="nav-link" data-scroll-target="#inspect-the-data">Inspect the data</a>
   <ul class="collapse">
-  <li><a href="#total-cost-of-team" id="toc-total-cost-of-team" class="nav-link" data-scroll-target="#total-cost-of-team"><span class="header-section-number">4.1</span> Total cost of team</a></li>
-  <li><a href="#selected-riders" id="toc-selected-riders" class="nav-link" data-scroll-target="#selected-riders"><span class="header-section-number">4.2</span> Selected riders</a></li>
+  <li><a href="#top-10-riders-by-points" id="toc-top-10-riders-by-points" class="nav-link" data-scroll-target="#top-10-riders-by-points">Top 10 riders by points</a></li>
+  <li><a href="#top-10-riders-by-value" id="toc-top-10-riders-by-value" class="nav-link" data-scroll-target="#top-10-riders-by-value">Top 10 riders by value</a></li>
+  </ul></li>
+  <li><a href="#results" id="toc-results" class="nav-link" data-scroll-target="#results">Results</a>
+  <ul class="collapse">
+  <li><a href="#total-cost-of-team" id="toc-total-cost-of-team" class="nav-link" data-scroll-target="#total-cost-of-team">Total cost of team</a></li>
+  <li><a href="#selected-riders" id="toc-selected-riders" class="nav-link" data-scroll-target="#selected-riders">Selected riders</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -161,29 +174,25 @@ ul.task-list li input[type="checkbox"] {
 
 <div class="cell" data-execution_count="2">
 <div class="cell-output cell-output-display" data-execution_count="2">
-<pre><code>0</code></pre>
+<pre><code>"one-day-races"</code></pre>
 </div>
 </div>
-<section id="retrieve-data" class="level1" data-number="1">
-<h1 data-number="1"><span class="header-section-number">1</span> Retrieve data</h1>
+<section id="retrieve-data" class="level1">
+<h1>Retrieve data</h1>
 <p>Data is scraped from the <a href="https://www.velogames.com/">Velogames website</a>. Rider scores are the number of points they have accumulated in the current season.</p>
 <div class="cell" data-execution_count="3">
 <div class="cell-output cell-output-display" data-execution_count="3">
-<div><div style="float: left;"><span>100×5 DataFrame</span></div><div style="float: right;"><span style="font-style: italic;">75 rows omitted</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<div><div style="float: left;"><span>106×3 DataFrame</span></div><div style="float: right;"><span style="font-style: italic;">81 rows omitted</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header header">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">rank</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">points</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">odds</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">riderkey</th>
 </tr>
 <tr class="odd subheader headerLastRow">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
@@ -192,221 +201,204 @@ ul.task-list li input[type="checkbox"] {
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: right;">1</td>
-<td style="text-align: left;">Pogačar Tadej</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">1803.0</td>
-<td style="text-align: left;">aaadegjoprt</td>
+<td style="text-align: left;">Lotte Kopecky</td>
+<td style="text-align: right;">2.0</td>
+<td style="text-align: left;">ceekklooptty</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: right;">2</td>
-<td style="text-align: left;">van Aert Wout</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">1560.0</td>
-<td style="text-align: left;">aaenorttuvw</td>
+<td style="text-align: left;">Lorena Wiebes</td>
+<td style="text-align: right;">3.2</td>
+<td style="text-align: left;">abeeeilnorsw</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: right;">3</td>
-<td style="text-align: left;">Philipsen Jasper</td>
-<td style="text-align: left;">Alpecin-Deceuninck</td>
-<td style="text-align: right;">1194.0</td>
-<td style="text-align: left;">aeehiijlnppprss</td>
+<td style="text-align: left;">Demi Vollering</td>
+<td style="text-align: right;">3.5</td>
+<td style="text-align: left;">deegiillmnorv</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">De Lie Arnaud</td>
-<td style="text-align: left;">Lotto Dstny</td>
-<td style="text-align: right;">1163.0</td>
-<td style="text-align: left;">aaddeeilnru</td>
+<td style="text-align: left;">Annemiek Van Vleuten</td>
+<td style="text-align: right;">8.0</td>
+<td style="text-align: left;">aaeeeeiklmnnnntuvv</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: right;">5</td>
-<td style="text-align: left;">Laporte Christophe</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">1079.0</td>
-<td style="text-align: left;">aceehhiloopprrstt</td>
+<td style="text-align: left;">Marianne Vos</td>
+<td style="text-align: right;">14.0</td>
+<td style="text-align: left;">aaeimnnorsv</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: left;">van der Poel Mathieu</td>
-<td style="text-align: left;">Alpecin-Deceuninck</td>
-<td style="text-align: right;">1070.0</td>
-<td style="text-align: left;">aadeeehilmnoprtuv</td>
+<td style="text-align: left;">Marlen Reusser</td>
+<td style="text-align: right;">20.0</td>
+<td style="text-align: left;">aeeelmnrrrssu</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: right;">7</td>
-<td style="text-align: left;">Evenepoel Remco</td>
-<td style="text-align: left;">Soudal - Quick Step</td>
-<td style="text-align: right;">865.0</td>
-<td style="text-align: left;">ceeeeelmnooprv</td>
+<td style="text-align: left;">Chloe Dygert</td>
+<td style="text-align: right;">20.0</td>
+<td style="text-align: left;">cdeeghlorty</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: left;">Démare Arnaud</td>
-<td style="text-align: left;">Groupama - FDJ</td>
-<td style="text-align: right;">746.0</td>
-<td style="text-align: left;">aaaddemnrru</td>
+<td style="text-align: left;">Shirin Van Anrooij</td>
+<td style="text-align: right;">25.0</td>
+<td style="text-align: left;">aahiiijnnnoorrsv</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: right;">9</td>
-<td style="text-align: left;">Kristoff Alexander</td>
-<td style="text-align: left;">Uno-X Pro Cycling Team</td>
-<td style="text-align: right;">683.0</td>
-<td style="text-align: left;">aadeeffiklnorrstx</td>
+<td style="text-align: left;">Elisa Balsamo</td>
+<td style="text-align: right;">25.0</td>
+<td style="text-align: left;">aaabeillmoss</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: left;">Pidcock Thomas</td>
-<td style="text-align: left;">INEOS Grenadiers</td>
-<td style="text-align: right;">675.0</td>
-<td style="text-align: left;">accdhikmoopst</td>
+<td style="text-align: left;">Emma Norsgaard</td>
+<td style="text-align: right;">25.0</td>
+<td style="text-align: left;">aaadegmmnorrs</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
-<td style="text-align: right;">11</td>
-<td style="text-align: left;">Powless Neilson</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">622.0</td>
-<td style="text-align: left;">eeillnnoopsssw</td>
+<td style="text-align: left;">Liane Lippert</td>
+<td style="text-align: right;">30.0</td>
+<td style="text-align: left;">aeeiillnpprt</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
-<td style="text-align: right;">12</td>
-<td style="text-align: left;">Zingle Axel</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: right;">608.0</td>
-<td style="text-align: left;">aeegillnxz</td>
+<td style="text-align: left;">Riejanne Markus</td>
+<td style="text-align: right;">40.0</td>
+<td style="text-align: left;">aaeeijkmnnrrsu</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
-<td style="text-align: right;">13</td>
-<td style="text-align: left;">Thijssen Gerben</td>
-<td style="text-align: left;">Intermarché - Circus - Wanty</td>
-<td style="text-align: right;">605.0</td>
-<td style="text-align: left;">beeeghijnnrsst</td>
+<td style="text-align: left;">Katarzyna Niewiadoma</td>
+<td style="text-align: right;">50.0</td>
+<td style="text-align: left;">aaaaadeiikmnnortwyz</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">⋮</td>
 <td style="text-align: right;">⋮</td>
 <td style="text-align: right;">⋮</td>
 <td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">89</td>
-<td style="text-align: right;">89</td>
-<td style="text-align: left;">Herrada Jesús</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: right;">240.0</td>
-<td style="text-align: left;">aadeehjrrss</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">90</td>
-<td style="text-align: right;">90</td>
-<td style="text-align: left;">Yates Adam</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">240.0</td>
-<td style="text-align: left;">aaademsty</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">91</td>
-<td style="text-align: right;">91</td>
-<td style="text-align: left;">Bettiol Alberto</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">240.0</td>
-<td style="text-align: left;">abbeeilloorttt</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">92</td>
-<td style="text-align: right;">92</td>
-<td style="text-align: left;">Consonni Simone</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: right;">239.0</td>
-<td style="text-align: left;">ceiimnnnnoooss</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">93</td>
-<td style="text-align: right;">93</td>
-<td style="text-align: left;">Perez Anthony</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: right;">238.0</td>
-<td style="text-align: left;">aeehnnoprtyz</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">94</td>
-<td style="text-align: right;">94</td>
-<td style="text-align: left;">Lafay Victor</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: right;">236.0</td>
-<td style="text-align: left;">aacfilortvy</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">95</td>
-<td style="text-align: right;">95</td>
-<td style="text-align: left;">Politt Nils</td>
-<td style="text-align: left;">BORA - hansgrohe</td>
-<td style="text-align: right;">235.0</td>
-<td style="text-align: left;">iillnopstt</td>
+<td style="text-align: left;">Sara Martin</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aaaimnrrst</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">96</td>
-<td style="text-align: right;">96</td>
-<td style="text-align: left;">Kielich Timo</td>
-<td style="text-align: left;">Alpecin-Deceuninck Development Team</td>
-<td style="text-align: right;">232.0</td>
-<td style="text-align: left;">cehiiiklmot</td>
+<td style="text-align: left;">Rachele Barbieri</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aabbceeehiilrrr</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">97</td>
-<td style="text-align: right;">97</td>
-<td style="text-align: left;">de Kleijn Arvid</td>
-<td style="text-align: left;">Tudor Pro Cycling Team</td>
-<td style="text-align: right;">232.0</td>
-<td style="text-align: left;">addeeiijklnrv</td>
+<td style="text-align: left;">Amalie Dideriksen</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aaddeeeiiiklmnrs</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">98</td>
-<td style="text-align: right;">98</td>
-<td style="text-align: left;">Woods Michael</td>
-<td style="text-align: left;">Israel - Premier Tech</td>
-<td style="text-align: right;">231.0</td>
-<td style="text-align: left;">acdehilmoosw</td>
+<td style="text-align: left;">Anna Shackley</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aaacehklnnsy</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">99</td>
-<td style="text-align: right;">99</td>
-<td style="text-align: left;">Mayrhofer Marius</td>
-<td style="text-align: left;">Team dsm - firmenich</td>
-<td style="text-align: right;">230.0</td>
-<td style="text-align: left;">aaefhimmorrrsuy</td>
+<td style="text-align: left;">Carina Schrempf</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aaccefhimnprrs</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">100</td>
-<td style="text-align: right;">100</td>
-<td style="text-align: left;">Goossens Kobe</td>
-<td style="text-align: left;">Intermarché - Circus - Wanty</td>
-<td style="text-align: right;">229.0</td>
-<td style="text-align: left;">beegknooosss</td>
+<td style="text-align: left;">Susanne Andersen</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aadeeennnnrsssu</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">101</td>
+<td style="text-align: left;">Lone Meertens</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">eeeelmnnorst</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">102</td>
+<td style="text-align: left;">Vittoria Guazzini</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aagiiiinorttuvzz</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">103</td>
+<td style="text-align: left;">Katrine Aalerud</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aaadeeiklnrrtu</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">104</td>
+<td style="text-align: left;">Erica Magnaldi</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">aaacdegiilmnr</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">105</td>
+<td style="text-align: left;">Coryn Labecki</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">abcceiklnory</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">106</td>
+<td style="text-align: left;">Kathrin Schweinberger</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: left;">abceeeghhiiknnrrrstw</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 </div>
-<p>Combine datasets and calculate rider value.</p>
+<section id="combine-datasets" class="level2">
+<h2 class="anchored" data-anchor-id="combine-datasets">Combine datasets</h2>
 <div class="cell" data-execution_count="4">
 <div class="cell-output cell-output-display" data-execution_count="4">
-<div><div style="float: left;"><span>170×12 DataFrame</span></div><div style="float: right;"><span style="font-style: italic;">145 rows omitted</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<pre><code>159-element Vector{Float64}:
+  5.698990711187268
+  3.923230954681829
+  5.162853821352293
+  2.265235370510083
+  0.2694425551706367
+  3.222844035013017
+  1.7229003663417555
+  1.5152635361744526
+  0.5080699570047009
+  0.3593152130042453
+  0.9915228750061817
+  0.47088127100458704
+  1.1557729048400183
+  ⋮
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775
+ -0.47743022199831775</code></pre>
+</div>
+</div>
+</section>
+<section id="calculate-rider-score-and-value" class="level2">
+<h2 class="anchored" data-anchor-id="calculate-rider-score-and-value">Calculate rider score and value</h2>
+<div class="cell" data-execution_count="5">
+<div class="cell-output cell-output-display" data-execution_count="5">
+<div><div style="float: left;"><span>159×17 DataFrame</span></div><div style="float: right;"><span style="font-style: italic;">134 rows omitted</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header header">
@@ -421,8 +413,13 @@ ul.task-list li input[type="checkbox"] {
 <th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">pcsrank</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">pcspoints</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">calc_score</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">calc_value</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">odds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">invodds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zinvodds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zvgpoints</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zpcspoints</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">calcscore</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">calcvalue</th>
 </tr>
 <tr class="odd subheader headerLastRow">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
@@ -434,8 +431,13 @@ ul.task-list li input[type="checkbox"] {
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Union{Missing, Int64}">Int64?</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Union{Missing, Float64}">Float64?</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 </tr>
@@ -444,589 +446,522 @@ ul.task-list li input[type="checkbox"] {
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Remco Evenepoel</td>
-<td style="text-align: left;">Soudal - Quick Step</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">720.0</td>
-<td style="text-align: right;">30</td>
-<td style="text-align: left;">ceeeeelmnooprv</td>
-<td style="text-align: right;">24.0</td>
-<td style="text-align: right;">7</td>
-<td style="text-align: right;">865.0</td>
-<td style="text-align: right;">1981.18</td>
-<td style="text-align: right;">66.0394</td>
+<td style="text-align: left;">Tadej Pogačar</td>
+<td style="text-align: left;">UAE Team Emirates</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3090.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aaadegjoprt</td>
+<td style="text-align: right;">96.5625</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1993.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.25203</td>
+<td style="text-align: right;">5.69899</td>
+<td style="text-align: right;">2.98472</td>
+<td style="text-align: right;">0.0932726</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Julian Alaphilippe</td>
-<td style="text-align: left;">Soudal - Quick Step</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">348.0</td>
-<td style="text-align: right;">28</td>
-<td style="text-align: left;">aaaehiiijlllnpppu</td>
-<td style="text-align: right;">12.4286</td>
-<td style="text-align: right;">87</td>
-<td style="text-align: right;">241.0</td>
-<td style="text-align: right;">551.983</td>
-<td style="text-align: right;">19.7137</td>
+<td style="text-align: left;">Mathieu Van Der Poel</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3537.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aadeeehilmnoprtuv</td>
+<td style="text-align: right;">110.531</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1420.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.95814</td>
+<td style="text-align: right;">3.92323</td>
+<td style="text-align: right;">2.62817</td>
+<td style="text-align: right;">0.0821305</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Warren Barguil</td>
-<td style="text-align: left;">Team Arkéa Samsic</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">375.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: left;">aabegilnrrruw</td>
-<td style="text-align: right;">17.0455</td>
-<td style="text-align: right;">69</td>
-<td style="text-align: right;">275.0</td>
-<td style="text-align: right;">629.856</td>
-<td style="text-align: right;">28.6298</td>
+<td style="text-align: left;">Wout Van Aert</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3225.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aaenorttuvw</td>
+<td style="text-align: right;">100.781</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1820.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.46529</td>
+<td style="text-align: right;">5.16285</td>
+<td style="text-align: right;">2.8771</td>
+<td style="text-align: right;">0.0899093</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Biniam Girmay</td>
-<td style="text-align: left;">Intermarché - Circus - Wanty</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">324.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: left;">aabgiiimmnry</td>
-<td style="text-align: right;">14.7273</td>
+<td style="text-align: left;">Remco Evenepoel</td>
+<td style="text-align: left;">Soudal - Quick Step</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1437.0</td>
 <td style="text-align: right;">30</td>
-<td style="text-align: right;">488.0</td>
-<td style="text-align: right;">1117.71</td>
-<td style="text-align: right;">50.8049</td>
+<td style="text-align: left;">ceeeeelmnooprv</td>
+<td style="text-align: right;">47.9</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">885.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">1.64083</td>
+<td style="text-align: right;">2.26524</td>
+<td style="text-align: right;">0.969739</td>
+<td style="text-align: right;">0.0323246</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Benoît Cosnefroy</td>
-<td style="text-align: left;">AG2R Citroën Team</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">723.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: left;">bceefnnooorsty</td>
-<td style="text-align: right;">32.8636</td>
-<td style="text-align: right;">26</td>
-<td style="text-align: right;">512.0</td>
-<td style="text-align: right;">1172.68</td>
-<td style="text-align: right;">53.3035</td>
+<td style="text-align: left;">Julian Alaphilippe</td>
+<td style="text-align: left;">Soudal - Quick Step</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">408.0</td>
+<td style="text-align: right;">28</td>
+<td style="text-align: left;">aaaehiiijlllnpppu</td>
+<td style="text-align: right;">14.5714</td>
+<td style="text-align: right;">93</td>
+<td style="text-align: right;">241.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">0.0153496</td>
+<td style="text-align: right;">0.269443</td>
+<td style="text-align: right;">-0.237353</td>
+<td style="text-align: right;">-0.00847688</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Tiesj Benoot</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">1413.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: left;">beeijnoostt</td>
-<td style="text-align: right;">64.2273</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">580.0</td>
-<td style="text-align: right;">1328.42</td>
-<td style="text-align: right;">60.3829</td>
+<td style="text-align: left;">Jasper Philipsen</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">2352.0</td>
+<td style="text-align: right;">26</td>
+<td style="text-align: left;">aeehiijlnppprss</td>
+<td style="text-align: right;">90.4615</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">1194.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">3.08623</td>
+<td style="text-align: right;">3.22284</td>
+<td style="text-align: right;">1.77074</td>
+<td style="text-align: right;">0.0681055</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Michael Matthews</td>
-<td style="text-align: left;">Team Jayco AlUla</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">252.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: left;">aaceehhilmmsttw</td>
-<td style="text-align: right;">11.4545</td>
-<td style="text-align: right;">23</td>
-<td style="text-align: right;">519.0</td>
-<td style="text-align: right;">1188.71</td>
-<td style="text-align: right;">54.0323</td>
+<td style="text-align: left;">Mads Pedersen</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">2583.0</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: left;">addeeemnprss</td>
+<td style="text-align: right;">107.625</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">710.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">3.45114</td>
+<td style="text-align: right;">1.7229</td>
+<td style="text-align: right;">1.3924</td>
+<td style="text-align: right;">0.0580165</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Bauke Mollema</td>
-<td style="text-align: left;">Trek - Segafredo</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">82.0</td>
-<td style="text-align: right;">20</td>
-<td style="text-align: left;">aabeekllmmou</td>
-<td style="text-align: right;">4.1</td>
-<td style="text-align: right;">81</td>
-<td style="text-align: right;">252.0</td>
-<td style="text-align: right;">577.177</td>
-<td style="text-align: right;">28.8588</td>
+<td style="text-align: left;">Alexander Kristoff</td>
+<td style="text-align: left;">Uno-X Pro Cycling Team</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1059.0</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: left;">aadeeffiklnorrstx</td>
+<td style="text-align: right;">44.125</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">643.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">1.04372</td>
+<td style="text-align: right;">1.51526</td>
+<td style="text-align: right;">0.52071</td>
+<td style="text-align: right;">0.0216962</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Diego Ulissi</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">213.0</td>
-<td style="text-align: right;">20</td>
-<td style="text-align: left;">degiiilossu</td>
-<td style="text-align: right;">10.65</td>
-<td style="text-align: right;">62</td>
-<td style="text-align: right;">310.0</td>
-<td style="text-align: right;">710.019</td>
-<td style="text-align: right;">35.501</td>
+<td style="text-align: left;">Dylan Van Baarle</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">408.0</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: left;">aaaabdellnnrvy</td>
+<td style="text-align: right;">17.0</td>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">318.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">0.0153496</td>
+<td style="text-align: right;">0.50807</td>
+<td style="text-align: right;">-0.15781</td>
+<td style="text-align: right;">-0.00657543</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Alex Aranburu</td>
-<td style="text-align: left;">Movistar Team</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">357.0</td>
-<td style="text-align: right;">20</td>
-<td style="text-align: left;">aaabelnrruux</td>
-<td style="text-align: right;">17.85</td>
-<td style="text-align: right;">88</td>
-<td style="text-align: right;">240.0</td>
-<td style="text-align: right;">549.692</td>
-<td style="text-align: right;">27.4846</td>
+<td style="text-align: left;">Jasper Stuyven</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">867.0</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: left;">aeejnprsstuvy</td>
+<td style="text-align: right;">39.4091</td>
+<td style="text-align: right;">78</td>
+<td style="text-align: right;">270.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">0.740419</td>
+<td style="text-align: right;">0.359315</td>
+<td style="text-align: right;">0.0342947</td>
+<td style="text-align: right;">0.00155885</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Marc Hirschi</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">852.0</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: left;">acchhiimrrs</td>
-<td style="text-align: right;">47.3333</td>
-<td style="text-align: right;">15</td>
-<td style="text-align: right;">582.0</td>
-<td style="text-align: right;">1333.0</td>
-<td style="text-align: right;">74.0558</td>
+<td style="text-align: left;">Stefan Küng</td>
+<td style="text-align: left;">Groupama - FDJ</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1548.0</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: left;">aefgknnst</td>
+<td style="text-align: right;">70.3636</td>
+<td style="text-align: right;">31</td>
+<td style="text-align: right;">474.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">1.81618</td>
+<td style="text-align: right;">0.991523</td>
+<td style="text-align: right;">0.603616</td>
+<td style="text-align: right;">0.0274371</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Romain Bardet</td>
-<td style="text-align: left;">Team DSM</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">396.0</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: left;">aabdeimnorrt</td>
-<td style="text-align: right;">22.0</td>
-<td style="text-align: right;">68</td>
-<td style="text-align: right;">277.0</td>
-<td style="text-align: right;">634.437</td>
-<td style="text-align: right;">35.2465</td>
+<td style="text-align: left;">Yves Lampaert</td>
+<td style="text-align: left;">Soudal - Quick Step</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1206.0</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: left;">aaeelmprstvy</td>
+<td style="text-align: right;">54.8182</td>
+<td style="text-align: right;">67</td>
+<td style="text-align: right;">306.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">1.27593</td>
+<td style="text-align: right;">0.470881</td>
+<td style="text-align: right;">0.249986</td>
+<td style="text-align: right;">0.011363</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Mikkel Frølich Honoré</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">231.0</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: left;">cefhhiikkllmnoorr</td>
-<td style="text-align: right;">12.8333</td>
-<td style="text-align: right;">84</td>
-<td style="text-align: right;">247.0</td>
-<td style="text-align: right;">565.725</td>
-<td style="text-align: right;">31.4292</td>
-</tr>
-<tr class="even">
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-<td style="text-align: right;">⋮</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">159</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Johannes Adamietz</td>
-<td style="text-align: left;">Lotto Dstny</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">aaadeehijmnnostz</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">160</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Javier Romo</td>
-<td style="text-align: left;">Astana Qazaqstan Team</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">aeijmoorrv</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">161</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Pablo Castrillo</td>
-<td style="text-align: left;">Equipo Kern Pharma</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">120.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">aabcilllooprst</td>
-<td style="text-align: right;">30.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">162</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Iñigo Elosegui</td>
-<td style="text-align: left;">Equipo Kern Pharma</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">eeggiiiloosu</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">163</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Jordi López</td>
-<td style="text-align: left;">Equipo Kern Pharma</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">deijloprz</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">164</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Liam Slock</td>
-<td style="text-align: left;">Lotto Dstny</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">33.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">acikllmos</td>
-<td style="text-align: right;">8.25</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">165</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Ibon Ruiz</td>
-<td style="text-align: left;">Equipo Kern Pharma</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">biinoruz</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">166</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Ibai Azurmendi</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">30.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">aabdeiiimnruz</td>
-<td style="text-align: right;">7.5</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">167</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Xabier Berasategi</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">aaabbeeegiirrstx</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">168</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Xabier Isasa</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">aaabeiirssx</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">169</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Mikel Iturria</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">aeiiiklmrrtu</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">170</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Johan Price-Pejtersen</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: left;">aceeeehijjnnopprrst</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-</section>
-<section id="inspect-the-data" class="level1" data-number="2">
-<h1 data-number="2"><span class="header-section-number">2</span> Inspect the data</h1>
-<section id="top-10-riders-by-points" class="level2" data-number="2.1">
-<h2 data-number="2.1" class="anchored" data-anchor-id="top-10-riders-by-points"><span class="header-section-number">2.1</span> Top 10 riders by points</h2>
-<div class="cell" data-execution_count="5">
-<div class="cell-output cell-output-display" data-execution_count="5">
-<div><div style="float: left;"><span>10×12 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
-<table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
-<thead>
-<tr class="header header">
-<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th"></th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">startlist</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">vgpoints</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">vgcost</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">riderkey</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">pcsrank</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">pcspoints</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">calc_score</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">calc_value</th>
-</tr>
-<tr class="odd subheader headerLastRow">
-<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Union{Missing, Int64}">Int64?</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Union{Missing, Float64}">Float64?</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Remco Evenepoel</td>
-<td style="text-align: left;">Soudal - Quick Step</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">720.0</td>
-<td style="text-align: right;">30</td>
-<td style="text-align: left;">ceeeeelmnooprv</td>
-<td style="text-align: right;">24.0</td>
-<td style="text-align: right;">7</td>
-<td style="text-align: right;">865.0</td>
-<td style="text-align: right;">1981.18</td>
-<td style="text-align: right;">66.0394</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Neilson Powless</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">1120.0</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: left;">eeillnnoopsssw</td>
-<td style="text-align: right;">70.0</td>
-<td style="text-align: right;">11</td>
-<td style="text-align: right;">622.0</td>
-<td style="text-align: right;">1424.62</td>
-<td style="text-align: right;">89.0387</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Marc Hirschi</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">852.0</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: left;">acchhiimrrs</td>
-<td style="text-align: right;">47.3333</td>
-<td style="text-align: right;">15</td>
-<td style="text-align: right;">582.0</td>
-<td style="text-align: right;">1333.0</td>
-<td style="text-align: right;">74.0558</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Tiesj Benoot</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">1413.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: left;">beeijnoostt</td>
-<td style="text-align: right;">64.2273</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: right;">580.0</td>
-<td style="text-align: right;">1328.42</td>
-<td style="text-align: right;">60.3829</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Mattias Skjelmose</td>
-<td style="text-align: left;">Trek - Segafredo</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">891.0</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: left;">aaeeijklmmossstt</td>
-<td style="text-align: right;">63.6429</td>
-<td style="text-align: right;">19</td>
-<td style="text-align: right;">555.0</td>
-<td style="text-align: right;">1271.16</td>
-<td style="text-align: right;">90.7974</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Guillaume Martin</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">330.0</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: left;">aaegiillmmnrtuu</td>
-<td style="text-align: right;">23.5714</td>
-<td style="text-align: right;">21</td>
-<td style="text-align: right;">542.0</td>
-<td style="text-align: right;">1241.39</td>
-<td style="text-align: right;">88.6706</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Ben Healy</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">1230.0</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: left;">abeehlny</td>
-<td style="text-align: right;">205.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: right;">540.0</td>
-<td style="text-align: right;">1236.81</td>
-<td style="text-align: right;">206.135</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;">Michael Matthews</td>
-<td style="text-align: left;">Team Jayco AlUla</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">252.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: left;">aaceehhilmmsttw</td>
-<td style="text-align: right;">11.4545</td>
-<td style="text-align: right;">23</td>
-<td style="text-align: right;">519.0</td>
-<td style="text-align: right;">1188.71</td>
-<td style="text-align: right;">54.0323</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;"></td>
 <td style="text-align: left;">Benoît Cosnefroy</td>
 <td style="text-align: left;">AG2R Citroën Team</td>
-<td style="text-align: left;">#Donostia</td>
+<td style="text-align: left;">#WorldChamps</td>
 <td style="text-align: right;">723.0</td>
 <td style="text-align: right;">22</td>
 <td style="text-align: left;">bceefnnooorsty</td>
 <td style="text-align: right;">32.8636</td>
-<td style="text-align: right;">26</td>
-<td style="text-align: right;">512.0</td>
-<td style="text-align: right;">1172.68</td>
-<td style="text-align: right;">53.3035</td>
+<td style="text-align: right;">25</td>
+<td style="text-align: right;">527.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">0.512946</td>
+<td style="text-align: right;">1.15577</td>
+<td style="text-align: right;">0.223956</td>
+<td style="text-align: right;">0.0101798</td>
 </tr>
 <tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+<td style="text-align: right;">⋮</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">148</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Lorenzo Rota</td>
-<td style="text-align: left;">Intermarché - Circus - Wanty</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">492.0</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: left;">aelnooorrtz</td>
-<td style="text-align: right;">30.75</td>
-<td style="text-align: right;">28</td>
-<td style="text-align: right;">501.0</td>
-<td style="text-align: right;">1147.48</td>
-<td style="text-align: right;">71.7177</td>
+<td style="text-align: left;">Charles-Étienne Chrétien</td>
+<td style="text-align: left;">Human Powered Health</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">acceeeehhiilnnnrrstt</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">149</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Eric Antonio Fagundez</td>
+<td style="text-align: left;">Burgos-BH</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">aacdeefgiinnnoortuz</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">150</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Victor Langellotti</td>
+<td style="text-align: left;">Burgos-BH</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">acegiilllnoortttv</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">151</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Andre Carvalho</td>
+<td style="text-align: left;">Cofidis</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">48.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">aaacdehlnorrv</td>
+<td style="text-align: right;">12.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.553332</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.675871</td>
+<td style="text-align: right;">-0.168968</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">152</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Derek Gee</td>
+<td style="text-align: left;">Israel - Premier Tech</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">209.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">deeeegkr</td>
+<td style="text-align: right;">52.25</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.299005</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.591095</td>
+<td style="text-align: right;">-0.147774</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">153</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Mārtiņš Pluto</td>
+<td style="text-align: left;">ABLOC CT</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">ilmoprttu</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">154</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Gleb Brussenskiy</td>
+<td style="text-align: left;">Astana Qazaqstan Team</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">bbeegiklnrsssuy</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">155</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Nícolas Sessler</td>
+<td style="text-align: left;">Global 6 Cycling</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">aceellnorssss</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">156</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Christopher Rougier-Lagane</td>
+<td style="text-align: left;">Mauritius</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">aaceeegghhiilnooprrrrstu</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">157</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Jesús David Peña</td>
+<td style="text-align: left;">Team Jayco AlUla</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">aaddeeijpssv</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">158</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Frederik Frison</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1017.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">deeffiiknorrrs</td>
+<td style="text-align: right;">254.25</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">0.97737</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.165637</td>
+<td style="text-align: right;">-0.0414092</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">159</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Youcef Reguigui</td>
+<td style="text-align: left;">Terengganu Polygon</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: left;">ceefggiioruuuy</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">-0.629157</td>
+<td style="text-align: right;">-0.47743</td>
+<td style="text-align: right;">-0.701146</td>
+<td style="text-align: right;">-0.175286</td>
 </tr>
 </tbody>
 </table>
@@ -1034,11 +969,14 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </section>
-<section id="top-10-riders-by-value" class="level2" data-number="2.2">
-<h2 data-number="2.2" class="anchored" data-anchor-id="top-10-riders-by-value"><span class="header-section-number">2.2</span> Top 10 riders by value</h2>
+</section>
+<section id="inspect-the-data" class="level1">
+<h1>Inspect the data</h1>
+<section id="top-10-riders-by-points" class="level2">
+<h2 class="anchored" data-anchor-id="top-10-riders-by-points">Top 10 riders by points</h2>
 <div class="cell" data-execution_count="6">
 <div class="cell-output cell-output-display" data-execution_count="6">
-<div><div style="float: left;"><span>10×12 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<div><div style="float: left;"><span>10×17 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header header">
@@ -1053,8 +991,13 @@ ul.task-list li input[type="checkbox"] {
 <th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">pcsrank</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">pcspoints</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">calc_score</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">calc_value</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">odds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">invodds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zinvodds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zvgpoints</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zpcspoints</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">calcscore</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">calcvalue</th>
 </tr>
 <tr class="odd subheader headerLastRow">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
@@ -1066,8 +1009,268 @@ ul.task-list li input[type="checkbox"] {
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Union{Missing, Int64}">Int64?</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Union{Missing, Float64}">Float64?</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Tadej Pogačar</td>
+<td style="text-align: left;">UAE Team Emirates</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3090.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aaadegjoprt</td>
+<td style="text-align: right;">96.5625</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1993.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.25203</td>
+<td style="text-align: right;">5.69899</td>
+<td style="text-align: right;">2.98472</td>
+<td style="text-align: right;">0.0932726</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Wout Van Aert</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3225.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aaenorttuvw</td>
+<td style="text-align: right;">100.781</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1820.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.46529</td>
+<td style="text-align: right;">5.16285</td>
+<td style="text-align: right;">2.8771</td>
+<td style="text-align: right;">0.0899093</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Mathieu Van Der Poel</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3537.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aadeeehilmnoprtuv</td>
+<td style="text-align: right;">110.531</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1420.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.95814</td>
+<td style="text-align: right;">3.92323</td>
+<td style="text-align: right;">2.62817</td>
+<td style="text-align: right;">0.0821305</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Jasper Philipsen</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">2352.0</td>
+<td style="text-align: right;">26</td>
+<td style="text-align: left;">aeehiijlnppprss</td>
+<td style="text-align: right;">90.4615</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">1194.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">3.08623</td>
+<td style="text-align: right;">3.22284</td>
+<td style="text-align: right;">1.77074</td>
+<td style="text-align: right;">0.0681055</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Christophe Laporte</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1942.0</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: left;">aceehhiloopprrstt</td>
+<td style="text-align: right;">88.2727</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">1079.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">2.43857</td>
+<td style="text-align: right;">2.86645</td>
+<td style="text-align: right;">1.43606</td>
+<td style="text-align: right;">0.0652753</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Mads Pedersen</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">2583.0</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: left;">addeeemnprss</td>
+<td style="text-align: right;">107.625</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">710.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">3.45114</td>
+<td style="text-align: right;">1.7229</td>
+<td style="text-align: right;">1.3924</td>
+<td style="text-align: right;">0.0580165</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Neilson Powless</td>
+<td style="text-align: left;">EF Education-EasyPost</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1675.0</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: left;">eeillnnoopsssw</td>
+<td style="text-align: right;">104.688</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">777.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">2.01679</td>
+<td style="text-align: right;">1.93054</td>
+<td style="text-align: right;">0.983494</td>
+<td style="text-align: right;">0.0614684</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Remco Evenepoel</td>
+<td style="text-align: left;">Soudal - Quick Step</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1437.0</td>
+<td style="text-align: right;">30</td>
+<td style="text-align: left;">ceeeeelmnooprv</td>
+<td style="text-align: right;">47.9</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">885.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">1.64083</td>
+<td style="text-align: right;">2.26524</td>
+<td style="text-align: right;">0.969739</td>
+<td style="text-align: right;">0.0323246</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Tiesj Benoot</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1935.0</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: left;">beeijnoostt</td>
+<td style="text-align: right;">87.9545</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">592.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">2.42751</td>
+<td style="text-align: right;">1.35721</td>
+<td style="text-align: right;">0.92929</td>
+<td style="text-align: right;">0.0422405</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Valentin Madouas</td>
+<td style="text-align: left;">Groupama - FDJ</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1443.0</td>
+<td style="text-align: right;">20</td>
+<td style="text-align: left;">aaadeilmnnostuv</td>
+<td style="text-align: right;">72.15</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">594.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">1.65031</td>
+<td style="text-align: right;">1.36341</td>
+<td style="text-align: right;">0.67229</td>
+<td style="text-align: right;">0.0336145</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<section id="top-10-riders-by-value" class="level2">
+<h2 class="anchored" data-anchor-id="top-10-riders-by-value">Top 10 riders by value</h2>
+<div class="cell" data-execution_count="7">
+<div class="cell-output cell-output-display" data-execution_count="7">
+<div><div style="float: left;"><span>10×17 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
+<thead>
+<tr class="header header">
+<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th"></th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">startlist</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">vgpoints</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">vgcost</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">riderkey</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">pcsrank</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">pcspoints</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">odds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">invodds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zinvodds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zvgpoints</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">zpcspoints</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">calcscore</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">calcvalue</th>
+</tr>
+<tr class="odd subheader headerLastRow">
+<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 </tr>
@@ -1078,150 +1281,200 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;"></td>
 <td style="text-align: left;">Ben Healy</td>
 <td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: left;">#Donostia</td>
+<td style="text-align: left;">#WorldChamps</td>
 <td style="text-align: right;">1230.0</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: left;">abeehlny</td>
 <td style="text-align: right;">205.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: right;">540.0</td>
-<td style="text-align: right;">1236.81</td>
-<td style="text-align: right;">206.135</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">600.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">1.31384</td>
+<td style="text-align: right;">1.382</td>
+<td style="text-align: right;">0.566331</td>
+<td style="text-align: right;">0.0943885</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Roger Adrià</td>
-<td style="text-align: left;">Equipo Kern Pharma</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">171.0</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: left;">adegiorrr</td>
-<td style="text-align: right;">28.5</td>
-<td style="text-align: right;">71</td>
-<td style="text-align: right;">273.0</td>
-<td style="text-align: right;">625.275</td>
-<td style="text-align: right;">104.212</td>
+<td style="text-align: left;">Tadej Pogačar</td>
+<td style="text-align: left;">UAE Team Emirates</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3090.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aaadegjoprt</td>
+<td style="text-align: right;">96.5625</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1993.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.25203</td>
+<td style="text-align: right;">5.69899</td>
+<td style="text-align: right;">2.98472</td>
+<td style="text-align: right;">0.0932726</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Romain Grégoire</td>
-<td style="text-align: left;">Groupama - FDJ</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">526.0</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: left;">aeggiimnoorrr</td>
-<td style="text-align: right;">87.6667</td>
-<td style="text-align: right;">82</td>
-<td style="text-align: right;">251.0</td>
-<td style="text-align: right;">574.887</td>
-<td style="text-align: right;">95.8144</td>
+<td style="text-align: left;">Wout Van Aert</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3225.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aaenorttuvw</td>
+<td style="text-align: right;">100.781</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1820.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.46529</td>
+<td style="text-align: right;">5.16285</td>
+<td style="text-align: right;">2.8771</td>
+<td style="text-align: right;">0.0899093</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Maxim Van Gils</td>
-<td style="text-align: left;">Lotto Dstny</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">756.0</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: left;">aagiilmmnsvx</td>
-<td style="text-align: right;">94.5</td>
-<td style="text-align: right;">59</td>
-<td style="text-align: right;">319.0</td>
-<td style="text-align: right;">730.633</td>
-<td style="text-align: right;">91.3291</td>
+<td style="text-align: left;">Mathieu Van Der Poel</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">3537.0</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: left;">aadeeehilmnoprtuv</td>
+<td style="text-align: right;">110.531</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1420.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">4.95814</td>
+<td style="text-align: right;">3.92323</td>
+<td style="text-align: right;">2.62817</td>
+<td style="text-align: right;">0.0821305</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Anthony Perez</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: left;">aeehnnoprtyz</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">93</td>
-<td style="text-align: right;">238.0</td>
-<td style="text-align: right;">545.112</td>
-<td style="text-align: right;">90.8519</td>
+<td style="text-align: left;">Jasper Philipsen</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">2352.0</td>
+<td style="text-align: right;">26</td>
+<td style="text-align: left;">aeehiijlnppprss</td>
+<td style="text-align: right;">90.4615</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">1194.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">3.08623</td>
+<td style="text-align: right;">3.22284</td>
+<td style="text-align: right;">1.77074</td>
+<td style="text-align: right;">0.0681055</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Mattias Skjelmose</td>
-<td style="text-align: left;">Trek - Segafredo</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">891.0</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: left;">aaeeijklmmossstt</td>
-<td style="text-align: right;">63.6429</td>
-<td style="text-align: right;">19</td>
-<td style="text-align: right;">555.0</td>
-<td style="text-align: right;">1271.16</td>
-<td style="text-align: right;">90.7974</td>
+<td style="text-align: left;">Christophe Laporte</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1942.0</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: left;">aceehhiloopprrstt</td>
+<td style="text-align: right;">88.2727</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">1079.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">2.43857</td>
+<td style="text-align: right;">2.86645</td>
+<td style="text-align: right;">1.43606</td>
+<td style="text-align: right;">0.0652753</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Victor Lafay</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">246.0</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: left;">aacfilortvy</td>
-<td style="text-align: right;">41.0</td>
-<td style="text-align: right;">94</td>
-<td style="text-align: right;">236.0</td>
-<td style="text-align: right;">540.531</td>
-<td style="text-align: right;">90.0885</td>
+<td style="text-align: left;">Neilson Powless</td>
+<td style="text-align: left;">EF Education-EasyPost</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1675.0</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: left;">eeillnnoopsssw</td>
+<td style="text-align: right;">104.688</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">777.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">2.01679</td>
+<td style="text-align: right;">1.93054</td>
+<td style="text-align: right;">0.983494</td>
+<td style="text-align: right;">0.0614684</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Neilson Powless</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">1120.0</td>
-<td style="text-align: right;">16</td>
-<td style="text-align: left;">eeillnnoopsssw</td>
-<td style="text-align: right;">70.0</td>
-<td style="text-align: right;">11</td>
-<td style="text-align: right;">622.0</td>
-<td style="text-align: right;">1424.62</td>
-<td style="text-align: right;">89.0387</td>
+<td style="text-align: left;">Mads Pedersen</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">2583.0</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: left;">addeeemnprss</td>
+<td style="text-align: right;">107.625</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">710.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">3.45114</td>
+<td style="text-align: right;">1.7229</td>
+<td style="text-align: right;">1.3924</td>
+<td style="text-align: right;">0.0580165</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Guillaume Martin</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">330.0</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: left;">aaegiillmmnrtuu</td>
-<td style="text-align: right;">23.5714</td>
-<td style="text-align: right;">21</td>
-<td style="text-align: right;">542.0</td>
-<td style="text-align: right;">1241.39</td>
-<td style="text-align: right;">88.6706</td>
+<td style="text-align: left;">Tiesj Benoot</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1935.0</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: left;">beeijnoostt</td>
+<td style="text-align: right;">87.9545</td>
+<td style="text-align: right;">19</td>
+<td style="text-align: right;">592.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">2.42751</td>
+<td style="text-align: right;">1.35721</td>
+<td style="text-align: right;">0.92929</td>
+<td style="text-align: right;">0.0422405</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
 <td style="text-align: left;"></td>
-<td style="text-align: left;">Marc Hirschi</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: left;">#Donostia</td>
-<td style="text-align: right;">852.0</td>
+<td style="text-align: left;">Valentin Madouas</td>
+<td style="text-align: left;">Groupama - FDJ</td>
+<td style="text-align: left;">#WorldChamps</td>
+<td style="text-align: right;">1443.0</td>
+<td style="text-align: right;">20</td>
+<td style="text-align: left;">aaadeilmnnostuv</td>
+<td style="text-align: right;">72.15</td>
 <td style="text-align: right;">18</td>
-<td style="text-align: left;">acchhiimrrs</td>
-<td style="text-align: right;">47.3333</td>
-<td style="text-align: right;">15</td>
-<td style="text-align: right;">582.0</td>
-<td style="text-align: right;">1333.0</td>
-<td style="text-align: right;">74.0558</td>
+<td style="text-align: right;">594.0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.002</td>
+<td style="text-align: right;">-0.99685</td>
+<td style="text-align: right;">1.65031</td>
+<td style="text-align: right;">1.36341</td>
+<td style="text-align: right;">0.67229</td>
+<td style="text-align: right;">0.0336145</td>
 </tr>
 </tbody>
 </table>
@@ -1230,34 +1483,38 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </section>
 </section>
-<section id="build-the-model" class="level1" data-number="3">
-<h1 data-number="3"><span class="header-section-number">3</span> Build the model</h1>
-<div class="cell" data-execution_count="7">
+<section id="results" class="level1">
+<h1>Results</h1>
+<section id="total-cost-of-team" class="level2">
+<h2 class="anchored" data-anchor-id="total-cost-of-team">Total cost of team</h2>
+<p>Must be no more than 100.</p>
+<div class="cell" data-execution_count="8">
 <div class="cell-output cell-output-stdout">
 <pre><code>Running HiGHS 1.5.3 [date: 1970-01-01, git hash: 45a127b78]
 Copyright (c) 2023 HiGHS under MIT licence terms
 Presolving model
-2 rows, 170 cols, 340 nonzeros
-2 rows, 41 cols, 76 nonzeros
-2 rows, 32 cols, 59 nonzeros
+2 rows, 159 cols, 318 nonzeros
+2 rows, 122 cols, 216 nonzeros
+2 rows, 117 cols, 207 nonzeros
 
 Solving MIP model with:
    2 rows
-   32 cols (31 binary, 1 integer, 0 implied int., 0 continuous)
-   59 nonzeros
+   117 cols (108 binary, 9 integer, 0 implied int., 0 continuous)
+   207 nonzeros
 
         Nodes      |    B&amp;B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
      Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
 
-         0       0         0   0.00%   27393           -inf                 inf        0      0      0         0     0.0s
+         0       0         0   0.00%   22.35493118     -inf                 inf        0      0      0         0     0.0s
+ T       0       0         0   0.00%   22.35493118     7.505082579      197.86%        0      0      0         5     0.0s
 
 Solving report
   Status            Optimal
-  Primal bound      8488.16538462
-  Dual bound        8488.16538462
+  Primal bound      7.50508257933
+  Dual bound        7.50508257933
   Gap               0% (tolerance: 0.01%)
   Solution status   feasible
-                    8488.16538462 (objective)
+                    7.50508257933 (objective)
                     0 (bound viol.)
                     0 (int. viol.)
                     0 (row viol.)
@@ -1265,60 +1522,21 @@ Solving report
                     0.00 (presolve)
                     0.00 (postsolve)
   Nodes             1
-  LP iterations     6 (total)
+  LP iterations     5 (total)
                     0 (strong br.)
                     0 (separation)
                     0 (heuristics)</code></pre>
 </div>
-<div class="cell-output cell-output-display" data-execution_count="7">
-<pre><code>1-dimensional DenseAxisArray{Float64,1,...} with index sets:
-    Dimension 1, ["Remco Evenepoel", "Julian Alaphilippe", "Warren Barguil", "Biniam Girmay", "Benoît Cosnefroy", "Tiesj Benoot", "Michael Matthews", "Bauke Mollema", "Diego Ulissi", "Alex Aranburu"  …  "Pablo Castrillo", "Iñigo Elosegui", "Jordi López", "Liam Slock", "Ibon Ruiz", "Ibai Azurmendi", "Xabier Berasategi", "Xabier Isasa", "Mikel Iturria", "Johan Price-Pejtersen"]
-And data, a 170-element Vector{Float64}:
- 1.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 1.0
- 0.0
- 0.0
- ⋮
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0</code></pre>
-</div>
-</div>
-</section>
-<section id="results" class="level1" data-number="4">
-<h1 data-number="4"><span class="header-section-number">4</span> Results</h1>
-<section id="total-cost-of-team" class="level2" data-number="4.1">
-<h2 data-number="4.1" class="anchored" data-anchor-id="total-cost-of-team"><span class="header-section-number">4.1</span> Total cost of team</h2>
-<p>Must be no more than 100.</p>
-<div class="cell" data-execution_count="8">
 <div class="cell-output cell-output-display" data-execution_count="8">
-<pre><code>98.0</code></pre>
+<pre><code>100.0</code></pre>
 </div>
 </div>
 </section>
-<section id="selected-riders" class="level2" data-number="4.2">
-<h2 data-number="4.2" class="anchored" data-anchor-id="selected-riders"><span class="header-section-number">4.2</span> Selected riders</h2>
+<section id="selected-riders" class="level2">
+<h2 class="anchored" data-anchor-id="selected-riders">Selected riders</h2>
 <div class="cell" data-execution_count="9">
 <div class="cell-output cell-output-display" data-execution_count="9">
-<div><div style="float: left;"><span>6×8 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<div><div style="float: left;"><span>6×9 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header header">
@@ -1329,8 +1547,9 @@ And data, a 170-element Vector{Float64}:
 <th style="text-align: left;" data-quarto-table-cell-role="th">vgpoints</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">pcspoints</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">pcsrank</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">calc_score</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">calc_value</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">odds</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">calcscore</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">calcvalue</th>
 </tr>
 <tr class="odd subheader headerLastRow">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
@@ -1338,8 +1557,9 @@ And data, a 170-element Vector{Float64}:
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Union{Missing, Float64}">Float64?</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Union{Missing, Int64}">Int64?</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
 </tr>
@@ -1347,69 +1567,75 @@ And data, a 170-element Vector{Float64}:
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Remco Evenepoel</td>
-<td style="text-align: left;">Soudal - Quick Step</td>
-<td style="text-align: right;">30</td>
-<td style="text-align: right;">720.0</td>
-<td style="text-align: right;">865.0</td>
-<td style="text-align: right;">7</td>
-<td style="text-align: right;">1981.18</td>
-<td style="text-align: right;">66.0394</td>
+<td style="text-align: left;">Tadej Pogačar</td>
+<td style="text-align: left;">UAE Team Emirates</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">3090.0</td>
+<td style="text-align: right;">1993.0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">2.98472</td>
+<td style="text-align: right;">0.0932726</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Marc Hirschi</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: right;">852.0</td>
-<td style="text-align: right;">582.0</td>
-<td style="text-align: right;">15</td>
-<td style="text-align: right;">1333.0</td>
-<td style="text-align: right;">74.0558</td>
+<td style="text-align: left;">Wout Van Aert</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">3225.0</td>
+<td style="text-align: right;">1820.0</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">2.8771</td>
+<td style="text-align: right;">0.0899093</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
 <td style="text-align: left;">Neilson Powless</td>
 <td style="text-align: left;">EF Education-EasyPost</td>
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">1120.0</td>
-<td style="text-align: right;">622.0</td>
-<td style="text-align: right;">11</td>
-<td style="text-align: right;">1424.62</td>
-<td style="text-align: right;">89.0387</td>
+<td style="text-align: right;">1675.0</td>
+<td style="text-align: right;">777.0</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.983494</td>
+<td style="text-align: right;">0.0614684</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Mattias Skjelmose</td>
-<td style="text-align: left;">Trek - Segafredo</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">891.0</td>
-<td style="text-align: right;">555.0</td>
-<td style="text-align: right;">19</td>
-<td style="text-align: right;">1271.16</td>
-<td style="text-align: right;">90.7974</td>
+<td style="text-align: left;">Nathan Van Hooydonck</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">1288.0</td>
+<td style="text-align: right;">273.0</td>
+<td style="text-align: right;">77</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.259074</td>
+<td style="text-align: right;">0.0259074</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Guillaume Martin</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">330.0</td>
-<td style="text-align: right;">542.0</td>
-<td style="text-align: right;">21</td>
-<td style="text-align: right;">1241.39</td>
-<td style="text-align: right;">88.6706</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
 <td style="text-align: left;">Ben Healy</td>
 <td style="text-align: left;">EF Education-EasyPost</td>
 <td style="text-align: right;">6</td>
 <td style="text-align: right;">1230.0</td>
-<td style="text-align: right;">540.0</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: right;">1236.81</td>
-<td style="text-align: right;">206.135</td>
+<td style="text-align: right;">600.0</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">0.566331</td>
+<td style="text-align: right;">0.0943885</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
+<td style="text-align: left;">Frederik Frison</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">1017.0</td>
+<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">500.0</td>
+<td style="text-align: right;">-0.165637</td>
+<td style="text-align: right;">-0.0414092</td>
 </tr>
 </tbody>
 </table>

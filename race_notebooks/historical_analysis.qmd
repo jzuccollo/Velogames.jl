@@ -1,88 +1,107 @@
 ---
 title: "Historical analysis"
+subtitle: "Men's elite world championship road race 2023"
 ---
 
-Looking back on the stage race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
+Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
 
 ```{julia}
-using Velogames
-using HiGHS
-using JuMP
+using Velogames, DataFrames, HiGHS, JuMP
 
-race_url = "https://www.velogames.com/velogame/2023/riders.php"
-best_team_score = 12231
+riderseriesurl = "https://www.velogames.com/sixes-superclasico/2023/riders.php"
+riderraceurl = "https://www.velogames.com/sixes-superclasico/2023/ridescore.php?ga=13&st=24"
+bestteamscore = 1884;
 ```
 
 # Best team you could have picked
 
-```{julia}
-rider_vg_post = getvgriders(race_url)
-model_post = Model(HiGHS.Optimizer)
-@variable(model_post, x[rider_vg_post.rider], Bin)
-@objective(model_post, Max, rider_vg_post.points' * x) # maximise the total score
-@constraint(model_post, rider_vg_post.cost' * x <= 100) # cost must be <= 100
-@constraint(model_post, sum(x) == 9) # exactly 9 riders must be chosen
-@constraint(model_post, rider_vg_post.allrounder' * x >= 2) # at least 2 must be all rounders
-@constraint(model_post, rider_vg_post.sprinter' * x >= 1) # at least 1 must be a sprinter
-@constraint(model_post, rider_vg_post.climber' * x >= 2) # at least 2 must be climbers
-@constraint(model_post, rider_vg_post.unclassed' * x >= 3) # at least 3 must be unclassed
-optimize!(model_post)
-model_post_results = value.(x)
+With the benefit of hindsight, what's the best team you could have picked?
 
-rider_vg_post.chosen = model_post_results.data .> 0.5
-chosen_team_post = filter(row -> row.chosen, rider_vg_post)
-println(chosen_team_post.points |> sum)
-println(chosen_team_post.cost |> sum)
-chosen_team_post[:, [:rider, :team, :cost, :points, :class_raw]]
+```{julia}
+# get the rider data
+ridervgpost = getvgriders(riderseriesurl)
+
+# this will only be needed for individual rounds of a longer series
+riderracepoints = getvgracepoints(riderraceurl)
+
+# join the datasets on riderkey
+allriderdata = leftjoin(ridervgpost, riderracepoints, on=:riderkey, makeunique=true)
+allriderdata = coalesce.(allriderdata, 0)
+allriderdata.scoreperpoint = allriderdata.score ./ allriderdata.cost
+
+modelpost = JuMP.Model(HiGHS.Optimizer)
+JuMP.set_silent(modelpost)
+JuMP.@variable(modelpost, x[allriderdata.rider], Bin)
+# this will variously be points or scores depending whether it's a race or series
+JuMP.@objective(modelpost, Max, allriderdata.score' * x) # maximise the total score. 
+JuMP.@constraint(modelpost, allriderdata.cost' * x <= 100) # cost must be <= 100
+JuMP.@constraint(modelpost, sum(x) == 6) # exactly 6 riders must be chosen
+# @constraint(modelpost, ridervgpost.allrounder' * x >= 2) # at least 2 must be all rounders
+# @constraint(modelpost, ridervgpost.sprinter' * x >= 1) # at least 1 must be a sprinter
+# @constraint(modelpost, ridervgpost.climber' * x >= 2) # at least 2 must be climbers
+# @constraint(modelpost, ridervgpost.unclassed' * x >= 3) # at least 3 must be unclassed
+JuMP.optimize!(modelpost)
+modelpostresults = JuMP.value.(x)
+
+allriderdata.chosen = modelpostresults.data .> 0.5
+chosenteampost = filter(row -> row.chosen, allriderdata)
+println("Score of the team: ", chosenteampost.score |> sum)
+println("Cost of the team: ", chosenteampost.cost |> sum)
+chosenteampost[:, [:rider, :team, :cost, :score, :scoreperpoint]]
 ```
 
 # Cheapest team that would have beaten the best team
 
-```{julia}
-model_post2 = Model(HiGHS.Optimizer)
-@variable(model_post2, x[rider_vg_post.rider], Bin)
-@objective(model_post2, Min, rider_vg_post.cost' * x) # maximise the total score
-@constraint(model_post2, rider_vg_post.points' * x >= best_team_score) # cost must be <= 100
-@constraint(model_post2, sum(x) == 9) # exactly 9 riders must be chosen
-@constraint(model_post2, rider_vg_post.allrounder' * x >= 2) # at least 2 must be all rounders
-@constraint(model_post2, rider_vg_post.sprinter' * x >= 1) # at least 1 must be a sprinter
-@constraint(model_post2, rider_vg_post.climber' * x >= 2) # at least 2 must be climbers
-@constraint(model_post2, rider_vg_post.unclassed' * x >= 3) # at least 3 must be unclassed
-optimize!(model_post2)
-model_post2_results = value.(x)
+The actual winning team in the Velogames competition scored `{julia} bestteamscore` **[NB. this syntax will work once Quarto 1.4 is released]** points. What's the cheapest team you could have picked that would have beaten that team?
 
-rider_vg_post.chosen = model_post2_results.data .> 0.5
-chosen2_team_post = filter(row -> row.chosen2, rider_vg_post)
-println(chosen2_team_post.points |> sum)
-println(chosen2_team_post.cost |> sum)
-chosen2_team_post[:, [:rider, :team, :cost, :points, :class_raw]]
+```{julia}
+modelpost2 = JuMP.Model(HiGHS.Optimizer)
+JuMP.set_silent(modelpost2)
+JuMP.@variable(modelpost2, x[allriderdata.rider], Bin)
+JuMP.@objective(modelpost2, Min, allriderdata.cost' * x) # maximise the total score
+JuMP.@constraint(modelpost2, allriderdata.score' * x >= bestteamscore) # cost must be <= 100
+JuMP.@constraint(modelpost2, sum(x) == 6) # exactly 9 riders must be chosen
+# @constraint(modelpost2, allriderdata.allrounder' * x >= 2) # at least 2 must be all rounders
+# @constraint(modelpost2, allriderdata.sprinter' * x >= 1) # at least 1 must be a sprinter
+# @constraint(modelpost2, allriderdata.climber' * x >= 2) # at least 2 must be climbers
+# @constraint(modelpost2, allriderdata.unclassed' * x >= 3) # at least 3 must be unclassed
+JuMP.optimize!(modelpost2)
+modelpost2results = JuMP.value.(x)
+
+allriderdata.chosen2 = modelpost2results.data .> 0.5
+chosen2teampost = filter(row -> row.chosen2, allriderdata)
+println("Score of the team: ", chosen2teampost.score |> sum)
+println("Cost of the team: ", chosen2teampost.cost |> sum)
+chosen2teampost[:, [:rider, :team, :cost, :score]]
 ```
 
 # Rider value
 
 ## Highest value riders
 
+The rider with the highest value is the rider who scored the most points for the least cost. Who are the top 15 riders by value?
+
 ```{julia}
 # calculate points per cost
-rider_vg_post.value = rider_vg_post.points ./ rider_vg_post.cost
+allriderdata.value = allriderdata.score ./ allriderdata.cost
 # sort by ppc
-sort!(rider_vg_post, :value, rev=true)
+sort!(allriderdata, :value, rev=true)
 # select the top 15 riders,
-rider_vg_post[1:15, [:rider, :team, :cost, :points, :value, :class_raw]]
+allriderdata[1:15, [:rider, :team, :cost, :score, :value]]
 ```
 
 ## Lowest value riders
 
 ```{julia}
 # select the bottom 15 riders,
-rider_vg_post[end-14:end, [:rider, :team, :cost, :points, :value, :class_raw]]
+allriderdata[end-14:end, [:rider, :team, :cost, :score, :value]]
 ```
 
 ## Lowest value riders who cost more than 7pts
 
-Don't think this works.
+Riders costing more than 7pts might have been expected to do something in the race so who of them performed the worst?
 
 ```{julia}
 # select the bottom 15 riders who cost more than 7pts,
-rider_vg_post[findall(rider_vg_post.cost .> 7)[end-14:end], [:rider, :team, :cost, :points, :value, :class_raw]]
+allriderdata[findall(allriderdata.cost .> 7)[end-14:end], [:rider, :team, :cost, :score, :value]]
 ```

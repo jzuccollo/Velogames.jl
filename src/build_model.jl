@@ -1,48 +1,50 @@
 """
-    build_model_oneday(rider_df::DataFrame)
+    buildmodeloneday(riderdf::DataFrame)
 
 Build the optimisation model for the velogames game.
 
-- `rider_df::DataFrame`: the rider data
+- `riderdf::DataFrame`: the rider data
 
 """
-function build_model_oneday(input_df::DataFrame, n::Integer, points::Symbol, cost::Symbol)
-    model = Model(HiGHS.Optimizer)
-    @variable(model, x[input_df.rider], Bin)
-    @objective(model, Max, input_df[!, points]' * x) # maximise the total score
-    @constraint(model, input_df[!, cost]' * x <= 100) # cost must be <= 100
-    @constraint(model, sum(x) == n) # exactly n riders must be chosen
+function buildmodeloneday(inputdf::DataFrame, n::Integer, points::Symbol, cost::Symbol)
+    model = JuMP.Model(HiGHS.Optimizer)
+    JuMP.set_silent(model)
+    JuMP.@variable(model, x[inputdf.rider], Bin)
+    JuMP.@objective(model, Max, inputdf[!, points]' * x) # maximise the total score
+    JuMP.@constraint(model, inputdf[!, cost]' * x <= 100) # cost must be <= 100
+    JuMP.@constraint(model, sum(x) == n) # exactly n riders must be chosen
     # @constraint(model, ) # exactly n teams must be chosen
     optimize!(model)
     if termination_status(model) != OPTIMAL
         @warn("The model was not solved correctly.")
         return
     end
-    return value.(x)
+    return JuMP.value.(x)
 end
 
 """
-    build_model_stage(rider_df::DataFrame)
+    buildmodelstage(riderdf::DataFrame)
 
 Build the optimisation model for the velogames game.
 
-- `rider_df::DataFrame`: the rider data
+- `riderdf::DataFrame`: the rider data
 
 """
-function build_model_stage(input_df::DataFrame)
-    model = Model(HiGHS.Optimizer)
-    @variable(model, x[input_df.rider], Bin)
-    @objective(model, Max, input_df.calc_score' * x) # maximise the total score
-    @constraint(model, input_df.cost' * x <= 100) # cost must be <= 100
-    @constraint(model, sum(x) == 9) # exactly 9 riders must be chosen
-    @constraint(model, input_df[!, "allrounder"]' * x >= 2) # at least 2 must be all rounders
-    @constraint(model, input_df[!, "sprinter"]' * x >= 1) # at least 1 must be a sprinter
-    @constraint(model, input_df[!, "climber"]' * x >= 2) # at least 2 must be climbers
-    @constraint(model, input_df[!, "unclassed"]' * x >= 3) # at least 3 must be unclassed
-    optimize!(model)
+function buildmodelstage(inputdf::DataFrame)
+    model = JuMP.Model(HiGHS.Optimizer)
+    JuMP.set_silent(model)
+    JuMP.@variable(model, x[inputdf.rider], Bin)
+    JuMP.@objective(model, Max, inputdf.calcscore' * x) # maximise the total score
+    JuMP.@constraint(model, inputdf.cost' * x <= 100) # cost must be <= 100
+    JuMP.@constraint(model, sum(x) == 9) # exactly 9 riders must be chosen
+    JuMP.@constraint(model, inputdf[!, "allrounder"]' * x >= 2) # at least 2 must be all rounders
+    JuMP.@constraint(model, inputdf[!, "sprinter"]' * x >= 1) # at least 1 must be a sprinter
+    JuMP.@constraint(model, inputdf[!, "climber"]' * x >= 2) # at least 2 must be climbers
+    JuMP.@constraint(model, inputdf[!, "unclassed"]' * x >= 3) # at least 3 must be unclassed
+    JuMP.optimize!(model)
     if termination_status(model) != OPTIMAL
         @warn("The model was not solved correctly.")
         return
     end
-    return value.(x)
+    return JuMP.value.(x)
 end

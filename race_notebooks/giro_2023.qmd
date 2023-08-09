@@ -14,76 +14,76 @@ using Velogames
 ## Load data
 
 ```{julia}
-FORM_WEIGHT = 0
+FORMWEIGHT = 0
 
-rider_df = getvgriders("https://www.velogames.com/italy/2023/riders.php")
+riderdf = getvgriders("https://www.velogames.com/italy/2023/riders.php")
 
-mycols = [:mountain_me, :gc_me, :sprint_me, :overall_me]
+mycols = [:mountainme, :gcme, :sprintme, :overallme]
 # getpcsranking for each col, filter the dataframe to only the points and riderkey columns, and rename the points column to the col name.
-pcs_dfs = map(mycols) do col
+pcsdfs = map(mycols) do col
     rename(getpcsranking(col), :points => col)[:, [col, :riderkey]]
 end
 
-# use reduce to join all dataframes in pcs_dfs on the riderkey column
-pcs_df = reduce((x, y) -> outerjoin(x, y, on=:riderkey), pcs_dfs)
+# use reduce to join all dataframes in pcsdfs on the riderkey column
+pcsdf = reduce((x, y) -> outerjoin(x, y, on=:riderkey), pcsdfs)
 
 # join the velogames and pcs dataframes on the riderkey column
-rider_df = leftjoin(rider_df, pcs_df, on=:riderkey)
-rider_df = coalesce.(rider_df, 0)
+riderdf = leftjoin(riderdf, pcsdf, on=:riderkey)
+riderdf = coalesce.(riderdf, 0)
 
 # create calcpcsscore column which is the sum of All Rounder * gc, Sprinter * sprint, Climber * mountain, and Unclassed * overall
-rider_df.calcpcsscore = rider_df.allrounder .* rider_df.gc_me .+ rider_df.sprinter .* rider_df.sprint_me .+ rider_df.climber .* rider_df.mountain_me .+ rider_df.unclassed .* rider_df.overall_me
+riderdf.calcpcsscore = riderdf.allrounder .* riderdf.gcme .+ riderdf.sprinter .* riderdf.sprintme .+ riderdf.climber .* riderdf.mountainme .+ riderdf.unclassed .* riderdf.overallme
 
-# create calc_score column which is a weighted average of the calcpcsscore and points columns, adjusted for the difference in magnitude
-ADJ_FACTOR = mean(rider_df.points) / mean(rider_df.calcpcsscore)
-rider_df.calc_score = (1 - FORM_WEIGHT) .* ADJ_FACTOR .* rider_df.calcpcsscore .+ FORM_WEIGHT .* rider_df.points
+# create calcscore column which is a weighted average of the calcpcsscore and points columns, adjusted for the difference in magnitude
+ADJFACTOR = mean(riderdf.points) / mean(riderdf.calcpcsscore)
+riderdf.calcscore = (1 - FORMWEIGHT) .* ADJFACTOR .* riderdf.calcpcsscore .+ FORMWEIGHT .* riderdf.points
 ```
 
 ```{julia}
-rider_df = getvgriders("https://www.velogames.com/italy/2023/riders.php")
+riderdf = getvgriders("https://www.velogames.com/italy/2023/riders.php")
 ```
 
 ```{julia}
 # for each rider, get pcsriderpts for that rider
-pcsriderpts = map(x -> getpcsriderpts(x), rider_df.rider)
+pcsriderpts = map(x -> getpcsriderpts(x), riderdf.rider)
 ```
 
 ```{julia}
-df_pcsriderpts = vcat(DataFrame.(rider_df.pcsriderpts)...)
+dfpcsriderpts = vcat(DataFrame.(riderdf.pcsriderpts)...)
 rename!(
-    df_pcsriderpts, 
-    [x => "pts_" * string(x) for x in names(df_pcsriderpts)]
+    dfpcsriderpts, 
+    [x => "pts" * string(x) for x in names(dfpcsriderpts)]
     )
-# hcat(rider_df, df_pcsriderpts)
+# hcat(riderdf, dfpcsriderpts)
 ```
 
 ```{julia}
-show(rider_df)
+show(riderdf)
 ```
 
 
 ## Build model
 
 ```{julia}
-model_results = build_model_stage(rider_df);
+modelresults = buildmodelstage(riderdf);
 ```
 
 ```{julia}
-model_results.data |> sum
+modelresults.data |> sum
 ```
 
 ```{julia}
 # total cost
-rider_df.cost .* model_results.data |> sum
+riderdf.cost .* modelresults.data |> sum
 ```
 
 ## Results
 
 ```{julia}
 # selected riders
-rider_df[!, :chosen] = model_results.data .> 0.5
-chosen_team = filter(:chosen => ==(true), rider_df)
-chosen_team[:, [:rider, :team, :class_raw, :selected, :points, :calcpcsscore, :cost]]
+riderdf[!, :chosen] = modelresults.data .> 0.5
+chosenteam = filter(:chosen => ==(true), riderdf)
+chosenteam[:, [:rider, :team, :classraw, :selected, :points, :calcpcsscore, :cost]]
 ```
 
 

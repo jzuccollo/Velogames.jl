@@ -7,9 +7,9 @@ title: "Stage race"
 ```{julia}
 using Velogames, DataFrames
 
-race_url = "https://www.velogames.com/velogame-femmes/2023/riders.php"
-race_sex = "we"
-race_category = "individual"
+raceurl = "https://www.velogames.com/velogame-femmes/2023/riders.php"
+racesex = "we"
+racecategory = "individual"
 ```
 
 ## Load data
@@ -17,18 +17,18 @@ race_category = "individual"
 Using only PCS ranking at the moment and assuming 0pts for all riders not in the top 100 of the PCS ranking for that category.
 
 ```{julia}
-rider_df = getvgriders(race_url)
-pcs_df = getpcsranking(race_sex, race_category)
-rename!(pcs_df, :points => :pcs_pts)
-select!(pcs_df, Not([:rider, :team]))
+riderdf = getvgriders(raceurl)
+pcsdf = getpcsranking(racesex, racecategory)
+rename!(pcsdf, :points => :pcspts)
+select!(pcsdf, Not([:rider, :team]))
 
 # join the velogames and pcs dataframes on the riderkey column
-rider_df = leftjoin(rider_df, pcs_df, on=:riderkey)
-rider_df = coalesce.(rider_df, 0)
+riderdf = leftjoin(riderdf, pcsdf, on=:riderkey)
+riderdf = coalesce.(riderdf, 0)
 ```
 
 ```{julia}
-show(rider_df)
+show(riderdf)
 ```
 
 ## Build model
@@ -36,24 +36,24 @@ show(rider_df)
 Uses the one-day model because women's races don't have the rider types that men's stage races do. Need to split these.
 
 ```{julia}
-model_results = build_model_oneday(rider_df, 9, :pcs_pts, :cost);
+modelresults = buildmodeloneday(riderdf, 9, :pcspts, :cost);
 ```
 
 ```{julia}
-model_results.data |> sum
+modelresults.data |> sum
 ```
 
 ```{julia}
 # total cost
-rider_df.cost .* model_results.data |> sum
+riderdf.cost .* modelresults.data |> sum
 ```
 
 ## Results
 
 ```{julia}
 # selected riders
-rider_df.chosen = model_results.data .> 0.5
-chosen_team = filter(row -> row.chosen, rider_df)
-chosen_team[:, [:rider, :team, :chosen, :pcs_pts, :cost]]
+riderdf.chosen = modelresults.data .> 0.5
+chosenteam = filter(row -> row.chosen, riderdf)
+chosenteam[:, [:rider, :team, :chosen, :pcspts, :cost]]
 ```
 

@@ -75,9 +75,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">
-      Velogames solver
-      </li></ol></nav>
+      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../race_notebooks/stagerace.html">Stage races</a></li></ol></nav>
       <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
       </a>
       <button type="button" class="btn quarto-search-button" aria-label="" onclick="window.quartoOpenSearch();">
@@ -103,17 +101,29 @@ ul.task-list li input[type="checkbox"] {
     <div class="sidebar-menu-container"> 
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
- <span class="menu-text">index.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">oneday.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/oneday.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">One day races</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">stagerace.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/stagerace.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Stage races</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">historical_analysis.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/historical_analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Historical analysis</span></a>
+  </div>
+</li>
     </ul>
     </div>
 </nav>
@@ -124,10 +134,10 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#load-libraries" id="toc-load-libraries" class="nav-link active" data-scroll-target="#load-libraries"><span class="header-section-number">1</span> Load libraries</a></li>
-  <li><a href="#load-data" id="toc-load-data" class="nav-link" data-scroll-target="#load-data"><span class="header-section-number">2</span> Load data</a></li>
-  <li><a href="#build-model" id="toc-build-model" class="nav-link" data-scroll-target="#build-model"><span class="header-section-number">3</span> Build model</a></li>
-  <li><a href="#results" id="toc-results" class="nav-link" data-scroll-target="#results"><span class="header-section-number">4</span> Results</a></li>
+  <li><a href="#load-libraries" id="toc-load-libraries" class="nav-link active" data-scroll-target="#load-libraries">Load libraries</a></li>
+  <li><a href="#load-data" id="toc-load-data" class="nav-link" data-scroll-target="#load-data">Load data</a></li>
+  <li><a href="#build-model" id="toc-build-model" class="nav-link" data-scroll-target="#build-model">Build model</a></li>
+  <li><a href="#results" id="toc-results" class="nav-link" data-scroll-target="#results">Results</a></li>
   </ul>
 </nav>
     </div>
@@ -151,16 +161,16 @@ ul.task-list li input[type="checkbox"] {
 
 </header>
 
-<section id="load-libraries" class="level2" data-number="1">
-<h2 data-number="1" class="anchored" data-anchor-id="load-libraries"><span class="header-section-number">1</span> Load libraries</h2>
+<section id="load-libraries" class="level2">
+<h2 class="anchored" data-anchor-id="load-libraries">Load libraries</h2>
 <div class="cell" data-execution_count="2">
 <div class="cell-output cell-output-display" data-execution_count="2">
 <pre><code>"individual"</code></pre>
 </div>
 </div>
 </section>
-<section id="load-data" class="level2" data-number="2">
-<h2 data-number="2" class="anchored" data-anchor-id="load-data"><span class="header-section-number">2</span> Load data</h2>
+<section id="load-data" class="level2">
+<h2 class="anchored" data-anchor-id="load-data">Load data</h2>
 <p>Using only PCS ranking at the moment and assuming 0pts for all riders not in the top 100 of the PCS ranking for that category.</p>
 <div class="cell" data-execution_count="3">
 <div class="cell-output cell-output-display" data-execution_count="3">
@@ -178,7 +188,7 @@ ul.task-list li input[type="checkbox"] {
 <th style="text-align: left;" data-quarto-table-cell-role="th">riderkey</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">rank</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">pcs_pts</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">pcspts</th>
 </tr>
 <tr class="odd subheader headerLastRow">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
@@ -202,11 +212,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Team SD Worx</td>
 <td style="text-align: right;">26</td>
 <td style="text-align: left;">61.3%</td>
-<td style="text-align: right;">208.0</td>
+<td style="text-align: right;">1216.0</td>
 <td style="text-align: left;">deegiillmnorv</td>
-<td style="text-align: right;">8.0</td>
+<td style="text-align: right;">46.7692</td>
 <td style="text-align: right;">1</td>
-<td style="text-align: right;">2880.0</td>
+<td style="text-align: right;">2986.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
@@ -215,11 +225,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Movistar Team</td>
 <td style="text-align: right;">22</td>
 <td style="text-align: left;">56.4%</td>
-<td style="text-align: right;">88.0</td>
+<td style="text-align: right;">638.0</td>
 <td style="text-align: left;">aaeeeeiklmnnnntuvv</td>
-<td style="text-align: right;">4.0</td>
+<td style="text-align: right;">29.0</td>
 <td style="text-align: right;">2</td>
-<td style="text-align: right;">2300.0</td>
+<td style="text-align: right;">2120.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
@@ -228,9 +238,9 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Team SD Worx</td>
 <td style="text-align: right;">20</td>
 <td style="text-align: left;">30.6%</td>
-<td style="text-align: right;">179.0</td>
+<td style="text-align: right;">380.0</td>
 <td style="text-align: left;">abeeeilnorsw</td>
-<td style="text-align: right;">8.95</td>
+<td style="text-align: right;">19.0</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">2093.0</td>
 </tr>
@@ -241,11 +251,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Lidl - Trek</td>
 <td style="text-align: right;">16</td>
 <td style="text-align: left;">27.4%</td>
-<td style="text-align: right;">80.0</td>
+<td style="text-align: right;">270.0</td>
 <td style="text-align: left;">abegghiiillnnooors</td>
-<td style="text-align: right;">5.0</td>
+<td style="text-align: right;">16.875</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">1567.0</td>
+<td style="text-align: right;">1444.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
@@ -254,11 +264,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">AG Insurance - Soudal Quick-Step</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">10.4%</td>
-<td style="text-align: right;">227.0</td>
+<td style="text-align: right;">792.0</td>
 <td style="text-align: left;">aaeghhillmmnoos</td>
-<td style="text-align: right;">16.2143</td>
-<td style="text-align: right;">11</td>
-<td style="text-align: right;">1124.0</td>
+<td style="text-align: right;">56.5714</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">1236.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
@@ -267,11 +277,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Canyon//SRAM Racing</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">17.0%</td>
-<td style="text-align: right;">86.0</td>
+<td style="text-align: right;">773.0</td>
 <td style="text-align: left;">aaaaadeiikmnnortwyz</td>
-<td style="text-align: right;">6.14286</td>
+<td style="text-align: right;">55.2143</td>
 <td style="text-align: right;">12</td>
-<td style="text-align: right;">1097.0</td>
+<td style="text-align: right;">1102.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
@@ -280,11 +290,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">FDJ - SUEZ</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">12.8%</td>
-<td style="text-align: right;">153.0</td>
+<td style="text-align: right;">403.0</td>
 <td style="text-align: left;">ccdeegiiillprttuuuw</td>
-<td style="text-align: right;">10.9286</td>
-<td style="text-align: right;">9</td>
-<td style="text-align: right;">1201.0</td>
+<td style="text-align: right;">28.7857</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">1132.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
@@ -293,11 +303,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Team DSM</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">21.3%</td>
-<td style="text-align: right;">121.0</td>
+<td style="text-align: right;">303.0</td>
 <td style="text-align: left;">acehkllooortt</td>
-<td style="text-align: right;">8.64286</td>
-<td style="text-align: right;">23</td>
-<td style="text-align: right;">838.0</td>
+<td style="text-align: right;">21.6429</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">872.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
@@ -306,11 +316,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Team DSM</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">21.1%</td>
-<td style="text-align: right;">4.0</td>
+<td style="text-align: right;">411.0</td>
 <td style="text-align: left;">abeeijllosttuu</td>
-<td style="text-align: right;">0.285714</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">1023.0</td>
+<td style="text-align: right;">29.3571</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: right;">995.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
@@ -319,11 +329,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Team Jumbo-Visma</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">33.0%</td>
-<td style="text-align: right;">114.0</td>
+<td style="text-align: right;">336.0</td>
 <td style="text-align: left;">aaeimnnorsv</td>
-<td style="text-align: right;">8.14286</td>
-<td style="text-align: right;">25</td>
-<td style="text-align: right;">811.0</td>
+<td style="text-align: right;">24.0</td>
+<td style="text-align: right;">27</td>
+<td style="text-align: right;">737.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
@@ -332,11 +342,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Team SD Worx</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">23.2%</td>
-<td style="text-align: right;">373.0</td>
+<td style="text-align: right;">1422.0</td>
 <td style="text-align: left;">ceekklooptty</td>
-<td style="text-align: right;">26.6429</td>
+<td style="text-align: right;">101.571</td>
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">1753.0</td>
+<td style="text-align: right;">1987.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
@@ -345,11 +355,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Team SD Worx</td>
 <td style="text-align: right;">14</td>
 <td style="text-align: left;">13.7%</td>
-<td style="text-align: right;">67.0</td>
+<td style="text-align: right;">488.0</td>
 <td style="text-align: left;">aeeelmnrrrssu</td>
-<td style="text-align: right;">4.78571</td>
+<td style="text-align: right;">34.8571</td>
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">1715.0</td>
+<td style="text-align: right;">1752.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
@@ -358,11 +368,11 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Canyon//SRAM Racing</td>
 <td style="text-align: right;">12</td>
 <td style="text-align: left;">4.9%</td>
-<td style="text-align: right;">21.0</td>
+<td style="text-align: right;">93.0</td>
 <td style="text-align: left;">abbceeehilsy</td>
-<td style="text-align: right;">1.75</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: right;">902.0</td>
+<td style="text-align: right;">7.75</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: right;">829.0</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">⋮</td>
@@ -462,9 +472,9 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Team Jayco AlUla</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">6.7%</td>
-<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">5.0</td>
 <td style="text-align: left;">eeegghioorw</td>
-<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">1.25</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
@@ -514,9 +524,9 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Uno-X Pro Cycling Team</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">9.2%</td>
-<td style="text-align: right;">10.0</td>
+<td style="text-align: right;">37.0</td>
 <td style="text-align: left;">aadghhilnnuw</td>
-<td style="text-align: right;">2.5</td>
+<td style="text-align: right;">9.25</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
@@ -527,9 +537,9 @@ ul.task-list li input[type="checkbox"] {
 <td style="text-align: left;">Uno-X Pro Cycling Team</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: left;">1.8%</td>
-<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">2.0</td>
 <td style="text-align: left;">aaillmnoossuw</td>
-<td style="text-align: right;">0.0</td>
+<td style="text-align: right;">0.5</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
@@ -570,8 +580,8 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </section>
-<section id="build-model" class="level2" data-number="3">
-<h2 data-number="3" class="anchored" data-anchor-id="build-model"><span class="header-section-number">3</span> Build model</h2>
+<section id="build-model" class="level2">
+<h2 class="anchored" data-anchor-id="build-model">Build model</h2>
 <p>Uses the one-day model because women’s races don’t have the rider types that men’s stage races do. Need to split these.</p>
 <div class="cell" data-execution_count="5">
 <div class="cell-output cell-output-stdout">
@@ -591,27 +601,28 @@ Solving MIP model with:
         Nodes      |    B&amp;B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
      Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
 
-         0       0         0   0.00%   49142.5         -inf                 inf        0      0      0         0     0.0s
- R       0       0         0   0.00%   11956.888889    11052              8.19%        0      0      0         4     0.0s
+         0       0         0   0.00%   49143           -inf                 inf        0      0      0         0     0.0s
+ R       0       0         0   0.00%   12192.875       10996             10.88%        0      0      0         4     0.0s
+ C       0       0         0   0.00%   12089.986486    11159              8.34%       54      5      0        12     0.0s
 
 Solving report
   Status            Optimal
-  Primal bound      11775
-  Dual bound        11775
+  Primal bound      12018
+  Dual bound        12018
   Gap               0% (tolerance: 0.01%)
   Solution status   feasible
-                    11775 (objective)
+                    12018 (objective)
                     0 (bound viol.)
                     0 (int. viol.)
                     0 (row viol.)
-  Timing            0.01 (total)
+  Timing            0.02 (total)
                     0.00 (presolve)
                     0.00 (postsolve)
   Nodes             1
-  LP iterations     15 (total)
+  LP iterations     31 (total)
                     0 (strong br.)
-                    11 (separation)
-                    0 (heuristics)</code></pre>
+                    20 (separation)
+                    7 (heuristics)</code></pre>
 </div>
 </div>
 <div class="cell" data-execution_count="6">
@@ -625,8 +636,8 @@ Solving report
 </div>
 </div>
 </section>
-<section id="results" class="level2" data-number="4">
-<h2 data-number="4" class="anchored" data-anchor-id="results"><span class="header-section-number">4</span> Results</h2>
+<section id="results" class="level2">
+<h2 class="anchored" data-anchor-id="results">Results</h2>
 <div class="cell" data-execution_count="8">
 <div class="cell-output cell-output-display" data-execution_count="8">
 <div><div style="float: left;"><span>9×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
@@ -637,7 +648,7 @@ Solving report
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">chosen</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">pcs_pts</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">pcspts</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
 </tr>
 <tr class="odd subheader headerLastRow">
@@ -652,18 +663,18 @@ Solving report
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Elisa Longo Borghini</td>
-<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: left;">Lorena Wiebes</td>
+<td style="text-align: left;">Team SD Worx</td>
 <td style="text-align: right;">true</td>
-<td style="text-align: right;">1567.0</td>
-<td style="text-align: right;">16</td>
+<td style="text-align: right;">2093.0</td>
+<td style="text-align: right;">20</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
 <td style="text-align: left;">Lotte Kopecky</td>
 <td style="text-align: left;">Team SD Worx</td>
 <td style="text-align: right;">true</td>
-<td style="text-align: right;">1753.0</td>
+<td style="text-align: right;">1987.0</td>
 <td style="text-align: right;">14</td>
 </tr>
 <tr class="odd">
@@ -671,7 +682,7 @@ Solving report
 <td style="text-align: left;">Marlen Reusser</td>
 <td style="text-align: left;">Team SD Worx</td>
 <td style="text-align: right;">true</td>
-<td style="text-align: right;">1715.0</td>
+<td style="text-align: right;">1752.0</td>
 <td style="text-align: right;">14</td>
 </tr>
 <tr class="even">
@@ -679,23 +690,23 @@ Solving report
 <td style="text-align: left;">Liane Lippert</td>
 <td style="text-align: left;">Movistar Team</td>
 <td style="text-align: right;">true</td>
-<td style="text-align: right;">1405.0</td>
+<td style="text-align: right;">1406.0</td>
 <td style="text-align: right;">12</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Silvia Persico</td>
-<td style="text-align: left;">UAE Team ADQ</td>
+<td style="text-align: left;">Soraya Paladin</td>
+<td style="text-align: left;">Canyon//SRAM Racing</td>
 <td style="text-align: right;">true</td>
-<td style="text-align: right;">1395.0</td>
-<td style="text-align: right;">12</td>
+<td style="text-align: right;">866.0</td>
+<td style="text-align: right;">8</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
 <td style="text-align: left;">Grace Brown</td>
 <td style="text-align: left;">FDJ - SUEZ</td>
 <td style="text-align: right;">true</td>
-<td style="text-align: right;">1124.0</td>
+<td style="text-align: right;">1122.0</td>
 <td style="text-align: right;">8</td>
 </tr>
 <tr class="odd">
@@ -711,7 +722,7 @@ Solving report
 <td style="text-align: left;">Tamara Dronova-Balabolina</td>
 <td style="text-align: left;">Israel Premier Tech Roland</td>
 <td style="text-align: right;">true</td>
-<td style="text-align: right;">861.0</td>
+<td style="text-align: right;">837.0</td>
 <td style="text-align: right;">8</td>
 </tr>
 <tr class="odd">

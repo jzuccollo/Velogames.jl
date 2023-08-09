@@ -8,8 +8,8 @@ using Test
     @test isdefined(Velogames, :getpcsriderpts)
     @test isdefined(Velogames, :getpcsriderhistory)
     @test isdefined(Velogames, :getpcsranking)
-    @test isdefined(Velogames, :build_model_oneday)
-    @test isdefined(Velogames, :build_model_stage)
+    @test isdefined(Velogames, :buildmodeloneday)
+    @test isdefined(Velogames, :buildmodelstage)
 end
 
 @testset "getvgriders" begin
@@ -19,7 +19,7 @@ end
     @test typeof(df) == DataFrame
 
     # Test that the DataFrame has the expected columns:  rider, team, class_raw, cost, selected, points, riderkey, class, allrounder, sprinter, climber, unclassed, value
-    expected_cols = ["rider", "team", "class_raw", "cost", "selected", "points", "riderkey", "class", "allrounder", "sprinter", "climber", "unclassed", "value"]
+    expected_cols = ["rider", "team", "classraw", "cost", "selected", "points", "riderkey", "class", "allrounder", "sprinter", "climber", "unclassed", "value"]
     @test all(col in names(df) for col in expected_cols)
 
     # Test that the cost and rank columns are Int64
@@ -42,6 +42,6 @@ end
     # Test that the class column is lowercase and has no spaces
     if hasproperty(df, :class)
         @test all(typeof.(df[!, :class]) .== String)
-        @test all(df.class .== lowercase.(replace.(df.class_raw, " " => "")))
+        @test all(df.class .== lowercase.(replace.(df.classraw, " " => "")))
     end
 end

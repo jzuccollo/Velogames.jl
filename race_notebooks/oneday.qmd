@@ -23,7 +23,7 @@ ridervg = getvgriders(raceurl)
 ridervg = ridervg[ridervg.startlist.==racehash, :]
 
 # get PCS rankings
-rideroneday = getpcsranking(race_sex, racecategory)
+rideroneday = getpcsranking(racesex, racecategory)
 
 # get Betfair odds
 riderodds = getodds(betfairurl)
@@ -69,7 +69,7 @@ riderdf.zpcspoints = StatsBase.zscore(riderdf.pcspoints)
 # weights for inv odds, vgpoints, pcspoints
 WEIGHTS = [1, 1, 1]
 
-# calculate rider calc_score as the mean of the velogames score and the PCS score
+# calculate rider calcscore as the mean of the velogames score and the PCS score
 zweights = WEIGHTS ./ sum(WEIGHTS)
 riderdf.calcscore = zweights[1] .* riderdf.zinvodds .+ zweights[2] .* riderdf.zvgpoints .+ zweights[3] .* riderdf.zpcspoints
 
@@ -100,7 +100,7 @@ sort(riderdf, :calcvalue, rev=true)[1:10, :]
 Must be no more than 100.
 
 ```{julia}
-modelresults = build_model_oneday(riderdf, 6, :calcscore, :vgcost)
+modelresults = buildmodeloneday(riderdf, 6, :calcscore, :vgcost)
 
 # total cost
 riderdf.vgcost .* modelresults.data |> sum

@@ -75,9 +75,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item">
-      Velogames solver
-      </li></ol></nav>
+      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../race_notebooks/historical_analysis.html">Historical analysis</a></li></ol></nav>
       <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
       </a>
       <button type="button" class="btn quarto-search-button" aria-label="" onclick="window.quartoOpenSearch();">
@@ -103,17 +101,29 @@ ul.task-list li input[type="checkbox"] {
     <div class="sidebar-menu-container"> 
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
- <span class="menu-text">index.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Overview</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">oneday.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/oneday.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">One day races</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">stagerace.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/stagerace.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Stage races</span></a>
+  </div>
+</li>
         <li class="sidebar-item">
- <span class="menu-text">historical_analysis.qmd</span>
-  </li>
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/historical_analysis.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Historical analysis</span></a>
+  </div>
+</li>
     </ul>
     </div>
 </nav>
@@ -124,13 +134,13 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#best-team-you-could-have-picked" id="toc-best-team-you-could-have-picked" class="nav-link active" data-scroll-target="#best-team-you-could-have-picked"><span class="header-section-number">1</span> Best team you could have picked</a></li>
-  <li><a href="#cheapest-team-that-would-have-beaten-the-best-team" id="toc-cheapest-team-that-would-have-beaten-the-best-team" class="nav-link" data-scroll-target="#cheapest-team-that-would-have-beaten-the-best-team"><span class="header-section-number">2</span> Cheapest team that would have beaten the best team</a></li>
-  <li><a href="#rider-value" id="toc-rider-value" class="nav-link" data-scroll-target="#rider-value"><span class="header-section-number">3</span> Rider value</a>
+  <li><a href="#best-team-you-could-have-picked" id="toc-best-team-you-could-have-picked" class="nav-link active" data-scroll-target="#best-team-you-could-have-picked">Best team you could have picked</a></li>
+  <li><a href="#cheapest-team-that-would-have-beaten-the-best-team" id="toc-cheapest-team-that-would-have-beaten-the-best-team" class="nav-link" data-scroll-target="#cheapest-team-that-would-have-beaten-the-best-team">Cheapest team that would have beaten the best team</a></li>
+  <li><a href="#rider-value" id="toc-rider-value" class="nav-link" data-scroll-target="#rider-value">Rider value</a>
   <ul class="collapse">
-  <li><a href="#highest-value-riders" id="toc-highest-value-riders" class="nav-link" data-scroll-target="#highest-value-riders"><span class="header-section-number">3.1</span> Highest value riders</a></li>
-  <li><a href="#lowest-value-riders" id="toc-lowest-value-riders" class="nav-link" data-scroll-target="#lowest-value-riders"><span class="header-section-number">3.2</span> Lowest value riders</a></li>
-  <li><a href="#lowest-value-riders-who-cost-more-than-7pts" id="toc-lowest-value-riders-who-cost-more-than-7pts" class="nav-link" data-scroll-target="#lowest-value-riders-who-cost-more-than-7pts"><span class="header-section-number">3.3</span> Lowest value riders who cost more than 7pts</a></li>
+  <li><a href="#highest-value-riders" id="toc-highest-value-riders" class="nav-link" data-scroll-target="#highest-value-riders">Highest value riders</a></li>
+  <li><a href="#lowest-value-riders" id="toc-lowest-value-riders" class="nav-link" data-scroll-target="#lowest-value-riders">Lowest value riders</a></li>
+  <li><a href="#lowest-value-riders-who-cost-more-than-7pts" id="toc-lowest-value-riders-who-cost-more-than-7pts" class="nav-link" data-scroll-target="#lowest-value-riders-who-cost-more-than-7pts">Lowest value riders who cost more than 7pts</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -141,6 +151,7 @@ ul.task-list li input[type="checkbox"] {
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
 <h1 class="title">Historical analysis</h1>
+<p class="subtitle lead">Men’s elite world championship road race 2023</p>
 </div>
 
 
@@ -155,57 +166,17 @@ ul.task-list li input[type="checkbox"] {
 
 </header>
 
-<p>Looking back on the stage race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best team?</p>
-<div class="cell" data-execution_count="2">
-<div class="cell-output cell-output-display" data-execution_count="2">
-<pre><code>12231</code></pre>
-</div>
-</div>
-<section id="best-team-you-could-have-picked" class="level1" data-number="1">
-<h1 data-number="1"><span class="header-section-number">1</span> Best team you could have picked</h1>
+<p>Looking back on the race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best team?</p>
+<section id="best-team-you-could-have-picked" class="level1">
+<h1>Best team you could have picked</h1>
+<p>With the benefit of hindsight, what’s the best team you could have picked?</p>
 <div class="cell" data-execution_count="3">
 <div class="cell-output cell-output-stdout">
-<pre><code>Running HiGHS 1.5.3 [date: 1970-01-01, git hash: 45a127b78]
-Copyright (c) 2023 HiGHS under MIT licence terms
-Presolving model
-6 rows, 176 cols, 528 nonzeros
-6 rows, 154 cols, 388 nonzeros
-Objective function is integral with scale 1
-
-Solving MIP model with:
-   6 rows
-   154 cols (139 binary, 15 integer, 0 implied int., 0 continuous)
-   388 nonzeros
-
-        Nodes      |    B&amp;B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
-     Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
-
-         0       0         0   0.00%   54590           -inf                 inf        0      0      0         0     0.0s
- R       0       0         0   0.00%   13612           13444              1.25%        0      0      0         7     0.0s
-
-Solving report
-  Status            Optimal
-  Primal bound      13444
-  Dual bound        13444
-  Gap               0% (tolerance: 0.01%)
-  Solution status   feasible
-                    13444 (objective)
-                    0 (bound viol.)
-                    0 (int. viol.)
-                    0 (row viol.)
-  Timing            0.01 (total)
-                    0.01 (presolve)
-                    0.00 (postsolve)
-  Nodes             1
-  LP iterations     9 (total)
-                    0 (strong br.)
-                    0 (separation)
-                    0 (heuristics)
-13444.0
-98</code></pre>
+<pre><code>Score of the team: 2343
+Cost of the team: 100</code></pre>
 </div>
 <div class="cell-output cell-output-display" data-execution_count="3">
-<div><div style="float: left;"><span>9×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<div><div style="float: left;"><span>6×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header header">
@@ -213,574 +184,66 @@ Solving report
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">points</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">class_raw</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">score</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">scoreperpoint</th>
 </tr>
 <tr class="odd subheader headerLastRow">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Tadej Pogačar</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">24</td>
-<td style="text-align: right;">2979.0</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Jasper Philipsen</td>
+<td style="text-align: left;">Mathieu Van Der Poel</td>
 <td style="text-align: left;">Alpecin-Deceuninck</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">1935.0</td>
-<td style="text-align: left;">Sprinter</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Adam Yates</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">1868.0</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Thomas Pidcock</td>
-<td style="text-align: left;">INEOS Grenadiers</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">940.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Simon Yates</td>
-<td style="text-align: left;">Team Jayco AlUla</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">1704.0</td>
-<td style="text-align: left;">Climber</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Felix Gall</td>
-<td style="text-align: left;">AG2R Citroën Team</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">1390.0</td>
-<td style="text-align: left;">Climber</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;">Pello Bilbao</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">1434.0</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;">Matej Mohorič</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">601.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;">Tiesj Benoot</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">593.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-</section>
-<section id="cheapest-team-that-would-have-beaten-the-best-team" class="level1" data-number="2">
-<h1 data-number="2"><span class="header-section-number">2</span> Cheapest team that would have beaten the best team</h1>
-<div class="cell" data-execution_count="4">
-<div class="cell-output cell-output-stdout">
-<pre><code>Running HiGHS 1.5.3 [date: 1970-01-01, git hash: 45a127b78]
-Copyright (c) 2023 HiGHS under MIT licence terms
-Presolving model
-6 rows, 176 cols, 520 nonzeros
-6 rows, 154 cols, 457 nonzeros
-Objective function is integral with scale 0.5
-
-Solving MIP model with:
-   6 rows
-   154 cols (139 binary, 15 integer, 0 implied int., 0 continuous)
-   457 nonzeros
-
-        Nodes      |    B&amp;B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
-     Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
-
-         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s
-         0       0         0   0.00%   86.76825086     inf                  inf        0      0      2         4     0.0s
- R       0       0         0   0.00%   88.13267072     96                 8.20%       20      4      6        12     0.0s
- C       0       0         0   0.00%   88.13267072     94                 6.24%       20      4      6        12     0.0s
- L       0       0         0   0.00%   88.45813291     90                 1.71%       45      5      6        14     0.0s
-
-Solving report
-  Status            Optimal
-  Primal bound      90
-  Dual bound        90
-  Gap               0% (tolerance: 0.01%)
-  Solution status   feasible
-                    90 (objective)
-                    0 (bound viol.)
-                    0 (int. viol.)
-                    0 (row viol.)
-  Timing            0.02 (total)
-                    0.00 (presolve)
-                    0.00 (postsolve)
-  Nodes             1
-  LP iterations     27 (total)
-                    0 (strong br.)
-                    10 (separation)
-                    10 (heuristics)
-12447.0
-90</code></pre>
-</div>
-<div class="cell-output cell-output-display" data-execution_count="4">
-<div><div style="float: left;"><span>9×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
-<table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
-<thead>
-<tr class="header header">
-<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">points</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">class_raw</th>
-</tr>
-<tr class="odd subheader headerLastRow">
-<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Tadej Pogačar</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">24</td>
-<td style="text-align: right;">2979.0</td>
-<td style="text-align: left;">All Rounder</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">720</td>
+<td style="text-align: right;">22.5</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Adam Yates</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">1868.0</td>
-<td style="text-align: left;">All Rounder</td>
+<td style="text-align: left;">Wout Van Aert</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">540</td>
+<td style="text-align: right;">16.875</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Thomas Pidcock</td>
-<td style="text-align: left;">INEOS Grenadiers</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">940.0</td>
-<td style="text-align: left;">Unclassed</td>
+<td style="text-align: left;">Alberto Bettiol</td>
+<td style="text-align: left;">EF Education-EasyPost</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">315</td>
+<td style="text-align: right;">17.5</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Simon Yates</td>
-<td style="text-align: left;">Team Jayco AlUla</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">1704.0</td>
-<td style="text-align: left;">Climber</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Felix Gall</td>
-<td style="text-align: left;">AG2R Citroën Team</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">1390.0</td>
-<td style="text-align: left;">Climber</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Pello Bilbao</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">1434.0</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;">Matej Mohorič</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: left;">Matthew Dinham</td>
+<td style="text-align: left;">Team DSM</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">601.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;">Bryan Coquard</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">938.0</td>
-<td style="text-align: left;">Sprinter</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;">Tiesj Benoot</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">593.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-</section>
-<section id="rider-value" class="level1" data-number="3">
-<h1 data-number="3"><span class="header-section-number">3</span> Rider value</h1>
-<section id="highest-value-riders" class="level2" data-number="3.1">
-<h2 data-number="3.1" class="anchored" data-anchor-id="highest-value-riders"><span class="header-section-number">3.1</span> Highest value riders</h2>
-<div class="cell" data-execution_count="5">
-<div class="cell-output cell-output-display" data-execution_count="5">
-<div><div style="float: left;"><span>15×6 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
-<table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
-<thead>
-<tr class="header header">
-<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">points</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">class_raw</th>
-</tr>
-<tr class="odd subheader headerLastRow">
-<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Pello Bilbao</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">1434.0</td>
-<td style="text-align: right;">179.25</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Felix Gall</td>
-<td style="text-align: left;">AG2R Citroën Team</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">1390.0</td>
-<td style="text-align: right;">173.75</td>
-<td style="text-align: left;">Climber</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Simon Yates</td>
-<td style="text-align: left;">Team Jayco AlUla</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">1704.0</td>
-<td style="text-align: right;">170.4</td>
-<td style="text-align: left;">Climber</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Bryan Coquard</td>
-<td style="text-align: left;">Cofidis</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">938.0</td>
-<td style="text-align: right;">156.333</td>
-<td style="text-align: left;">Sprinter</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Adam Yates</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">1868.0</td>
-<td style="text-align: right;">155.667</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Jasper Philipsen</td>
-<td style="text-align: left;">Alpecin-Deceuninck</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">1935.0</td>
-<td style="text-align: right;">138.214</td>
-<td style="text-align: left;">Sprinter</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;">Carlos Rodríguez</td>
-<td style="text-align: left;">INEOS Grenadiers</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">1375.0</td>
-<td style="text-align: right;">137.5</td>
-<td style="text-align: left;">Climber</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;">Tadej Pogačar</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">24</td>
-<td style="text-align: right;">2979.0</td>
-<td style="text-align: right;">124.125</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;">Sepp Kuss</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">938.0</td>
-<td style="text-align: right;">117.25</td>
-<td style="text-align: left;">Climber</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
-<td style="text-align: left;">Jonas Vingegaard</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">26</td>
-<td style="text-align: right;">2946.0</td>
-<td style="text-align: right;">113.308</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
-<td style="text-align: left;">Tobias Halland Johannessen</td>
-<td style="text-align: left;">Uno-X Pro Cycling Team</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">658.0</td>
-<td style="text-align: right;">109.667</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
-<td style="text-align: left;">Matej Mohorič</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">601.0</td>
-<td style="text-align: right;">100.167</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
-<td style="text-align: left;">Tiesj Benoot</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">593.0</td>
-<td style="text-align: right;">98.8333</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
-<td style="text-align: left;">Mads Pedersen</td>
-<td style="text-align: left;">Lidl - Trek</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">1349.0</td>
-<td style="text-align: right;">96.3571</td>
-<td style="text-align: left;">Sprinter</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
-<td style="text-align: left;">Thomas Pidcock</td>
-<td style="text-align: left;">INEOS Grenadiers</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">940.0</td>
-<td style="text-align: right;">94.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-</section>
-<section id="lowest-value-riders" class="level2" data-number="3.2">
-<h2 data-number="3.2" class="anchored" data-anchor-id="lowest-value-riders"><span class="header-section-number">3.2</span> Lowest value riders</h2>
-<div class="cell" data-execution_count="6">
-<div class="cell-output cell-output-display" data-execution_count="6">
-<div><div style="float: left;"><span>15×6 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
-<table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
-<thead>
-<tr class="header header">
-<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">points</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">class_raw</th>
-</tr>
-<tr class="odd subheader headerLastRow">
-<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Jacopo Guarnieri</td>
-<td style="text-align: left;">Lotto Dstny</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">6.0</td>
-<td style="text-align: right;">1.5</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Simon Clarke</td>
-<td style="text-align: left;">Israel - Premier Tech</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">8.0</td>
-<td style="text-align: right;">1.33333</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Torstein Træen</td>
-<td style="text-align: left;">Uno-X Pro Cycling Team</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">7.0</td>
-<td style="text-align: right;">1.16667</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Dion Smith</td>
-<td style="text-align: left;">Intermarché - Circus - Wanty</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">6.0</td>
-<td style="text-align: right;">1.0</td>
-<td style="text-align: left;">Unclassed</td>
+<td style="text-align: right;">360</td>
+<td style="text-align: right;">60.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
 <td style="text-align: left;">Kevin Vermaerke</td>
-<td style="text-align: left;">Team DSM - Firmenich</td>
+<td style="text-align: left;">Team DSM</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">5.0</td>
-<td style="text-align: right;">0.833333</td>
-<td style="text-align: left;">Climber</td>
+<td style="text-align: right;">192</td>
+<td style="text-align: right;">32.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Gianni Moscon</td>
-<td style="text-align: left;">Astana Qazaqstan Team</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">4.0</td>
-<td style="text-align: right;">0.666667</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;">Jenthe Biermans</td>
-<td style="text-align: left;">Team Arkéa Samsic</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">1.0</td>
-<td style="text-align: right;">0.25</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;">Enric Mas</td>
-<td style="text-align: left;">Movistar Team</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;">Richard Carapaz</td>
+<td style="text-align: left;">Owain Doull</td>
 <td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">All Rounder</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
-<td style="text-align: left;">Luis León Sánchez</td>
-<td style="text-align: left;">Astana Qazaqstan Team</td>
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
-<td style="text-align: left;">Clément Champoussin</td>
-<td style="text-align: left;">Team Arkéa Samsic</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
-<td style="text-align: left;">John Degenkolb</td>
-<td style="text-align: left;">Team DSM - Firmenich</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">Sprinter</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
-<td style="text-align: left;">Chris Hamilton</td>
-<td style="text-align: left;">Team DSM - Firmenich</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
-<td style="text-align: left;">Matthew Dinham</td>
-<td style="text-align: left;">Team DSM - Firmenich</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">Unclassed</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
-<td style="text-align: left;">Alex Edmondson</td>
-<td style="text-align: left;">Team DSM - Firmenich</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">Unclassed</td>
+<td style="text-align: right;">216</td>
+<td style="text-align: right;">36.0</td>
 </tr>
 </tbody>
 </table>
@@ -788,12 +251,16 @@ Solving report
 </div>
 </div>
 </section>
-<section id="lowest-value-riders-who-cost-more-than-7pts" class="level2" data-number="3.3">
-<h2 data-number="3.3" class="anchored" data-anchor-id="lowest-value-riders-who-cost-more-than-7pts"><span class="header-section-number">3.3</span> Lowest value riders who cost more than 7pts</h2>
-<p>Don’t think this works.</p>
-<div class="cell" data-execution_count="7">
-<div class="cell-output cell-output-display" data-execution_count="7">
-<div><div style="float: left;"><span>15×6 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<section id="cheapest-team-that-would-have-beaten-the-best-team" class="level1">
+<h1>Cheapest team that would have beaten the best team</h1>
+<p>The actual winning team in the Velogames competition scored <code>{julia} bestteamscore</code> <strong>[NB. this syntax will work once Quarto 1.4 is released]</strong> points. What’s the cheapest team you could have picked that would have beaten that team?</p>
+<div class="cell" data-execution_count="4">
+<div class="cell-output cell-output-stdout">
+<pre><code>Score of the team: 1917
+Cost of the team: 68</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="4">
+<div><div style="float: left;"><span>6×4 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header header">
@@ -801,155 +268,515 @@ Solving report
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">points</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th">class_raw</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">score</th>
 </tr>
 <tr class="odd subheader headerLastRow">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
-<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Alexey Lutsenko</td>
-<td style="text-align: left;">Astana Qazaqstan Team</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">218.0</td>
-<td style="text-align: right;">27.25</td>
-<td style="text-align: left;">All Rounder</td>
+<td style="text-align: left;">Mathieu Van Der Poel</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">720</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Marc Soler</td>
-<td style="text-align: left;">UAE Team Emirates</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">218.0</td>
-<td style="text-align: right;">27.25</td>
-<td style="text-align: left;">All Rounder</td>
+<td style="text-align: left;">Toms Skujiņš</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: right;">285</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Romain Bardet</td>
-<td style="text-align: left;">Team DSM - Firmenich</td>
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">317.0</td>
-<td style="text-align: right;">26.4167</td>
-<td style="text-align: left;">Climber</td>
+<td style="text-align: left;">Matthew Dinham</td>
+<td style="text-align: left;">Team DSM</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">360</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Fred Wright</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">206.0</td>
-<td style="text-align: right;">25.75</td>
-<td style="text-align: left;">Unclassed</td>
+<td style="text-align: left;">Kevin Vermaerke</td>
+<td style="text-align: left;">Team DSM</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">192</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Daniel Felipe Martínez</td>
-<td style="text-align: left;">INEOS Grenadiers</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">222.0</td>
-<td style="text-align: right;">22.2</td>
-<td style="text-align: left;">All Rounder</td>
+<td style="text-align: left;">Owain Doull</td>
+<td style="text-align: left;">EF Education-EasyPost</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">216</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Julian Alaphilippe</td>
-<td style="text-align: left;">Soudal - Quick Step</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">222.0</td>
-<td style="text-align: right;">22.2</td>
-<td style="text-align: left;">Climber</td>
+<td style="text-align: left;">Petr Kelemen</td>
+<td style="text-align: left;">Tudor Pro Cycling Team</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">144</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<section id="rider-value" class="level1">
+<h1>Rider value</h1>
+<section id="highest-value-riders" class="level2">
+<h2 class="anchored" data-anchor-id="highest-value-riders">Highest value riders</h2>
+<p>The rider with the highest value is the rider who scored the most points for the least cost. Who are the top 15 riders by value?</p>
+<div class="cell" data-execution_count="5">
+<div class="cell-output cell-output-display" data-execution_count="5">
+<div><div style="float: left;"><span>15×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
+<thead>
+<tr class="header header">
+<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">score</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
+</tr>
+<tr class="odd subheader headerLastRow">
+<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
+<td style="text-align: left;">Matthew Dinham</td>
+<td style="text-align: left;">Team DSM</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">360</td>
+<td style="text-align: right;">60.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
+<td style="text-align: left;">Owain Doull</td>
+<td style="text-align: left;">EF Education-EasyPost</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">216</td>
+<td style="text-align: right;">36.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
+<td style="text-align: left;">Petr Kelemen</td>
+<td style="text-align: left;">Tudor Pro Cycling Team</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">144</td>
+<td style="text-align: right;">36.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
+<td style="text-align: left;">Kevin Vermaerke</td>
+<td style="text-align: left;">Team DSM</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">192</td>
+<td style="text-align: right;">32.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
+<td style="text-align: left;">Patrick Gamper</td>
+<td style="text-align: left;">BORA - hansgrohe</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">168</td>
+<td style="text-align: right;">28.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
+<td style="text-align: left;">Mathieu Van Der Poel</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">720</td>
+<td style="text-align: right;">22.5</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;">Sam Welsford</td>
-<td style="text-align: left;">Team DSM - Firmenich</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">170.0</td>
-<td style="text-align: right;">21.25</td>
-<td style="text-align: left;">Sprinter</td>
+<td style="text-align: left;">Toms Skujiņš</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: right;">285</td>
+<td style="text-align: right;">20.3571</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;">Valentin Madouas</td>
-<td style="text-align: left;">Groupama - FDJ</td>
+<td style="text-align: left;">Krists Neilands</td>
+<td style="text-align: left;">Israel - Premier Tech</td>
 <td style="text-align: right;">8</td>
-<td style="text-align: right;">154.0</td>
-<td style="text-align: right;">19.25</td>
-<td style="text-align: left;">Unclassed</td>
+<td style="text-align: right;">156</td>
+<td style="text-align: right;">19.5</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;">Mathieu Van Der Poel</td>
-<td style="text-align: left;">Alpecin-Deceuninck</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">165.0</td>
-<td style="text-align: right;">16.5</td>
-<td style="text-align: left;">Unclassed</td>
+<td style="text-align: left;">Jasper Stuyven</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: right;">390</td>
+<td style="text-align: right;">17.7273</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
-<td style="text-align: left;">Fabio Jakobsen</td>
-<td style="text-align: left;">Soudal - Quick Step</td>
-<td style="text-align: right;">12</td>
-<td style="text-align: right;">189.0</td>
-<td style="text-align: right;">15.75</td>
-<td style="text-align: left;">Sprinter</td>
+<td style="text-align: left;">Mads Pedersen</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">420</td>
+<td style="text-align: right;">17.5</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
-<td style="text-align: left;">Louis Meintjes</td>
-<td style="text-align: left;">Intermarché - Circus - Wanty</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">109.0</td>
-<td style="text-align: right;">13.625</td>
-<td style="text-align: left;">Climber</td>
+<td style="text-align: left;">Alberto Bettiol</td>
+<td style="text-align: left;">EF Education-EasyPost</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">315</td>
+<td style="text-align: right;">17.5</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
-<td style="text-align: left;">Egan Bernal</td>
-<td style="text-align: left;">INEOS Grenadiers</td>
-<td style="text-align: right;">10</td>
-<td style="text-align: right;">126.0</td>
-<td style="text-align: right;">12.6</td>
-<td style="text-align: left;">All Rounder</td>
+<td style="text-align: left;">Wout Van Aert</td>
+<td style="text-align: left;">Jumbo-Visma</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">540</td>
+<td style="text-align: right;">16.875</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
-<td style="text-align: left;">Magnus Cort</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">20.0</td>
-<td style="text-align: right;">2.5</td>
-<td style="text-align: left;">Unclassed</td>
+<td style="text-align: left;">Stefan Küng</td>
+<td style="text-align: left;">Groupama - FDJ</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: right;">360</td>
+<td style="text-align: right;">16.3636</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
-<td style="text-align: left;">Enric Mas</td>
-<td style="text-align: left;">Movistar Team</td>
+<td style="text-align: left;">Mauro Schmid</td>
+<td style="text-align: left;">Soudal - Quick Step</td>
 <td style="text-align: right;">14</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: right;">0.0</td>
-<td style="text-align: left;">All Rounder</td>
+<td style="text-align: right;">216</td>
+<td style="text-align: right;">15.4286</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
-<td style="text-align: left;">Richard Carapaz</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">12</td>
+<td style="text-align: left;">Tadej Pogačar</td>
+<td style="text-align: left;">UAE Team Emirates</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">480</td>
+<td style="text-align: right;">15.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<section id="lowest-value-riders" class="level2">
+<h2 class="anchored" data-anchor-id="lowest-value-riders">Lowest value riders</h2>
+<div class="cell" data-execution_count="6">
+<div class="cell-output cell-output-display" data-execution_count="6">
+<div><div style="float: left;"><span>15×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
+<thead>
+<tr class="header header">
+<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">score</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
+</tr>
+<tr class="odd subheader headerLastRow">
+<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
+<td style="text-align: left;">Xabier Berasategi</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
+<td style="text-align: left;">Filip Maciejuk</td>
+<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
-<td style="text-align: left;">All Rounder</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
+<td style="text-align: left;">Ahmed Madan</td>
+<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
+<td style="text-align: left;">Unai Cuadrado</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
+<td style="text-align: left;">Emilien Jeannière</td>
+<td style="text-align: left;">TotalEnergies</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
+<td style="text-align: left;">Asier Etxeberria</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
+<td style="text-align: left;">Peio Goikoetxea</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
+<td style="text-align: left;">Juri Hollmann</td>
+<td style="text-align: left;">Movistar Team</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
+<td style="text-align: left;">Xabier Isasa</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
+<td style="text-align: left;">Mikel Iturria</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
+<td style="text-align: left;">Ayco Bastiaens</td>
+<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
+<td style="text-align: left;">Johan Price-Pejtersen</td>
+<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
+<td style="text-align: left;">Andoni López De Abetxuko</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
+<td style="text-align: left;">Cameron Scott</td>
+<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
+<td style="text-align: left;">Moritz Kärsten</td>
+<td style="text-align: left;">Team DSM</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<section id="lowest-value-riders-who-cost-more-than-7pts" class="level2">
+<h2 class="anchored" data-anchor-id="lowest-value-riders-who-cost-more-than-7pts">Lowest value riders who cost more than 7pts</h2>
+<p>Riders costing more than 7pts might have been expected to do something in the race so who of them performed the worst?</p>
+<div class="cell" data-execution_count="7">
+<div class="cell-output cell-output-display" data-execution_count="7">
+<div><div style="float: left;"><span>15×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
+<table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
+<thead>
+<tr class="header header">
+<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">cost</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">score</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">value</th>
+</tr>
+<tr class="odd subheader headerLastRow">
+<th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;"></th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="String">String</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Int64">Int64</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th" title="Float64">Float64</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
+<td style="text-align: left;">Lucas Hamilton</td>
+<td style="text-align: left;">Team Jayco AlUla</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
+<td style="text-align: left;">David De La Cruz</td>
+<td style="text-align: left;">Astana Qazaqstan Team</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
+<td style="text-align: left;">Francesco Gavazzi</td>
+<td style="text-align: left;">EOLO-Kometa</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
+<td style="text-align: left;">Samuele Rivi</td>
+<td style="text-align: left;">EOLO-Kometa</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
+<td style="text-align: left;">Filippo Zana</td>
+<td style="text-align: left;">Team Jayco AlUla</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
+<td style="text-align: left;">Luis León Sánchez</td>
+<td style="text-align: left;">Astana Qazaqstan Team</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
+<td style="text-align: left;">Milan Menten</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
+<td style="text-align: left;">Maxim Van Gils</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
+<td style="text-align: left;">Brent Van Moer</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
+<td style="text-align: left;">Sandy Dujardin</td>
+<td style="text-align: left;">TotalEnergies</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
+<td style="text-align: left;">Gorka Izagirre</td>
+<td style="text-align: left;">Movistar Team</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
+<td style="text-align: left;">Lorrenzo Manzin</td>
+<td style="text-align: left;">TotalEnergies</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
+<td style="text-align: left;">Johan Jacobs</td>
+<td style="text-align: left;">Movistar Team</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
+<td style="text-align: left;">Daniel Oss</td>
+<td style="text-align: left;">TotalEnergies</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
+<td style="text-align: left;">Hermann Pernsteiner</td>
+<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
 </tr>
 </tbody>
 </table>

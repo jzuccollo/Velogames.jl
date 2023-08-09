@@ -1,24 +1,24 @@
 """
-`normalise_name` takes a rider's name and returns a normalised version of it.
+`normalisename` takes a rider's name and returns a normalised version of it.
 
 The normalisation process involves:
     * removing accents
     * removing case
     * replacing spaces with hyphens
 """
-function normalise_name(rider_name::String)
-    new_name = replace(
-        Unicode.normalize(rider_name, stripmark=true, stripcc=true, casefold=true),
+function normalisename(ridername::String)
+    newname = replace(
+        Unicode.normalize(ridername, stripmark=true, stripcc=true, casefold=true),
         " " => "-"
     )
-    return new_name
+    return newname
 end
 
 """
-`create_key` creates a unique key for each rider based on their name.
+`createkey` creates a unique key for each rider based on their name.
 """
-function create_key(rider_name::String)
-    s = replace(rider_name, r"[^a-zA-Z0-9_]" => "")
+function createkey(ridername::String)
+    s = replace(ridername, r"[^a-zA-Z0-9]" => "")
     newkey = join(
         sort(
             collect(

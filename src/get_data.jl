@@ -7,29 +7,29 @@ The function returns a DataFrame with the columns of the first table on the page
 """
 function gettable(pageurl::String)
     page = scrape_tables(pageurl)
-    rider_df = DataFrame(page[1])
+    riderdf = DataFrame(page[1])
 
     # lowercase the column names and remove spaces
-    rename!(rider_df, lowercase.(replace.(names(rider_df), " " => "", "#" => "rank")))
+    rename!(riderdf, lowercase.(replace.(names(riderdf), " " => "", "#" => "rank")))
     # rename score to points if it exists
-    if hasproperty(rider_df, :score)
-        rename!(rider_df, :score => :points)
+    if hasproperty(riderdf, :score)
+        rename!(riderdf, :score => :points)
     end
     # cast the cost and rank columns to Int64 if they exist
     for col in [:cost, :rank]
-        if hasproperty(rider_df, col)
-            rider_df[!, col] = parse.(Int64, rider_df[!, col])
+        if hasproperty(riderdf, col)
+            riderdf[!, col] = parse.(Int64, riderdf[!, col])
         end
     end
     # cast points column to number
-    rider_df[!, :points] = parse.(Float64, rider_df[!, :points])
+    riderdf[!, :points] = parse.(Float64, riderdf[!, :points])
 
     # add a riderkey column based on the name
-    rider_df.riderkey = map(x -> create_key(x), rider_df.rider)
+    riderdf.riderkey = map(x -> createkey(x), riderdf.rider)
     # check that the riderkey is unique
-    @assert length(unique(rider_df.riderkey)) == length(rider_df.riderkey) "Rider keys are not unique"
+    @assert length(unique(riderdf.riderkey)) == length(riderdf.riderkey) "Rider keys are not unique"
 
-    return rider_df
+    return riderdf
 end
 
 
@@ -46,9 +46,9 @@ The function returns a DataFrame with the following columns:
     * `score` - the number of points scored by the rider
 """
 function getpcsraceriders(pageurl::String)
-    rider_df = scrape_tables(pageurl)
+    riderdf = scrape_tables(pageurl)
 
-    return rider_df
+    return riderdf
 
 end
 
@@ -72,16 +72,16 @@ function getpcsranking(gender::String, category::String)
     @assert category in ["individual", "one-day-races", "gc-ranking", "sprinters", "climbers", "time-trial"] "Invalid argument: $category. Must be one of 'individual', 'one-day-races', 'gc-ranking', 'sprinters', 'climbers', 'time-trial'."
 
     # build the ranking url
-    base_url = "https://www.procyclingstats.com/rankings/"
-    ranking_url = joinpath(base_url, gender, category)
+    baseurl = "https://www.procyclingstats.com/rankings/"
+    rankingurl = joinpath(baseurl, gender, category)
 
     # download the page and parse the table
-    page = gettable(ranking_url)
+    page = gettable(rankingurl)
 
     # filter to rank, rider, team, and points
-    rider_df = page[:, [:rank, :rider, :team, :points, :riderkey]]
+    riderdf = page[:, [:rank, :rider, :team, :points, :riderkey]]
 
-    return rider_df
+    return riderdf
 end
 
 
@@ -99,22 +99,22 @@ The function returns a DataFrame with the following columns:
 """
 function getvgriders(pageurl::String)
     # download the page and parse the table
-    rider_df = gettable(pageurl)
+    riderdf = gettable(pageurl)
 
     # normalise class data, if it exists
-    if hasproperty(rider_df, :class)
+    if hasproperty(riderdf, :class)
         # lowercase the class column and remove spaces
-        rename!(rider_df, :class => :class_raw)
-        rider_df.class = lowercase.(replace.(rider_df.class_raw, " " => ""))
-        for class in unique(rider_df.class)
-            rider_df[!, class] = rider_df.class .== class
+        rename!(riderdf, :class => :classraw)
+        riderdf.class = lowercase.(replace.(riderdf.classraw, " " => ""))
+        for class in unique(riderdf.class)
+            riderdf[!, class] = riderdf.class .== class
         end
     end
 
     # calculate the value of the rider
-    rider_df.value = rider_df.points ./ rider_df.cost
+    riderdf.value = riderdf.points ./ riderdf.cost
 
-    return rider_df
+    return riderdf
 end
 
 
@@ -131,15 +131,15 @@ It returns a Dict with the following values:
     * `sprint` - the points for sprints
     * `climber` - the points for climbers
 """
-function getpcsriderpts(rider_name::String)
-    regularised_name = normalise_name(rider_name)
-    pageurl = "https://www.procyclingstats.com/rider/" * regularised_name
+function getpcsriderpts(ridername::String)
+    regularisedname = normalisename(ridername)
+    pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
     page = parsehtml(read(download(pageurl), String))
-    rider_table = eachmatch(sel".pnt", page.root)
-    raw_pts = map(x -> parse(Int, x[1].text), rider_table)
-    rider_pts = Dict(zip(["oneday", "gc", "tt", "sprint", "climber"], raw_pts))
-    return Dict(rider_name => rider_pts)
+    ridertable = eachmatch(sel".pnt", page.root)
+    rawpts = map(x -> parse(Int, x[1].text), ridertable)
+    riderpts = Dict(zip(["oneday", "gc", "tt", "sprint", "climber"], rawpts))
+    return Dict(ridername => riderpts)
 end
 
 
@@ -154,13 +154,13 @@ It returns a DataFrame with a row for each year the rider is active on the PCS w
     * `points` - the total points scored by the rider in that year
     * `rank` - the rank of the rider in that year
 """
-function getpcsriderhistory(rider_name::String)
-    regularised_name = normalise_name(rider_name)
-    pageurl = "https://www.procyclingstats.com/rider/" * regularised_name
+function getpcsriderhistory(ridername::String)
+    regularisedname = normalisename(ridername)
+    pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
-    rider_pts = DataFrame(scrape_tables(pageurl)[2])
-    rename!(rider_pts, [:year, :points, :rank])
-    return rider_pts
+    riderpts = DataFrame(scrape_tables(pageurl)[2])
+    rename!(riderpts, [:year, :points, :rank])
+    return riderpts
 end
 
 """
@@ -191,12 +191,47 @@ function getodds(pageurl::String)
     # calculate decimal odds from strings of the form "1/2"
     riderodds = map(x -> parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
 
-    betfair_odds = DataFrame(rider=ridernames, odds=riderodds)
+    betfairodds = DataFrame(rider=ridernames, odds=riderodds)
 
     # add a riderkey column based on the name
-    betfair_odds.riderkey = map(x -> create_key(x), betfair_odds.rider)
+    betfairodds.riderkey = map(x -> createkey(x), betfairodds.rider)
     # check that the riderkey is unique
-    @assert length(unique(betfair_odds.riderkey)) == length(betfair_odds.riderkey) "Rider keys are not unique"
+    @assert length(unique(betfairodds.riderkey)) == length(betfairodds.riderkey) "Rider keys are not unique"
 
-    return betfair_odds
+    return betfairodds
+end
+
+"""
+## `getvgracepoints`
+
+This function retrieves the points scored by riders for a single event.
+
+It returns a DataFrame with the following columns:
+
+    * `name` - the name of the rider
+    * `team` - the team the rider rides for
+    * `score` - the number of points scored by the rider in that race
+"""
+function getvgracepoints(pageurl::String)
+    # download the page and parse the table
+    page = HTTP.get(pageurl)
+    pagehtml = Gumbo.parsehtml(String(page.body))
+
+    resultsdf = DataFrame(rider=[], team=[], score=[])
+
+    for entry in eachmatch(Selector("#users li"), pagehtml.root)
+        rider = nodeText(eachmatch(Selector(".name"), entry)[1])
+        pointsstr = nodeText(eachmatch(Selector(".born"), entry)[1])
+        points = parse(Int, match(r"\d+", pointsstr).match)
+        team = nodeText(eachmatch(Selector(".born"), entry)[2])
+
+        # append the row to the results DataFrame
+        rowdf = DataFrame(rider=[rider], team=[team], score=[points])
+        resultsdf = vcat(resultsdf, rowdf)
+    end
+
+    # add a riderkey column based on the name
+    resultsdf.riderkey = map(x -> createkey(x), resultsdf.rider)
+
+    return resultsdf
 end
