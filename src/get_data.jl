@@ -189,9 +189,12 @@ function getodds(pageurl::String)
     # strip newlines from fractional odds strings
     riderodds = replace.(riderodds, "\n" => "")
     # calculate decimal odds from strings of the form "1/2"
-    riderodds = map(x -> parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
+    riderodds = map(x -> 1 + parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
 
     betfairodds = DataFrame(rider=ridernames, odds=riderodds)
+
+    # tweak the rider names for better matching with Velogames
+    betfairodds.rider = replace.(betfairodds.rider, "Tom Pidcock" => "Thomas Pidcock")
 
     # add a riderkey column based on the name
     betfairodds.riderkey = map(x -> createkey(x), betfairodds.rider)

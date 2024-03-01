@@ -54,12 +54,12 @@ riderdf[ismissing.(riderdf.pcspoints), :pcspoints] .= 0
 riderdf[ismissing.(riderdf.odds), :odds] .= 500
 
 # convert odds to probability of win
-riderdf.invodds = 1 ./ riderdf.odds
+riderdf.pwin = 1 ./ riderdf.odds
 
 disallowmissing!(riderdf, [:vgpoints, :pcspoints])
 
 # normalise odds, vgpoints, pcspoints
-riderdf.zinvodds = StatsBase.zscore(riderdf.invodds)
+riderdf.zpwin = StatsBase.zscore(riderdf.pwin)
 riderdf.zvgpoints = StatsBase.zscore(riderdf.vgpoints)
 riderdf.zpcspoints = StatsBase.zscore(riderdf.pcspoints)
 ```
@@ -72,7 +72,7 @@ WEIGHTS = [1, 0, 0]
 
 # calculate rider calcscore as the mean of the velogames score and the PCS score
 zweights = WEIGHTS ./ sum(WEIGHTS)
-riderdf.calcscore = zweights[1] .* riderdf.zinvodds .+ zweights[2] .* riderdf.vgpoints .+ zweights[3] .* riderdf.zpcspoints
+riderdf.calcscore = zweights[1] .* riderdf.zpwin .+ zweights[2] .* riderdf.vgpoints .+ zweights[3] .* riderdf.zpcspoints
 
 # calculate rider value as the ratio of rider score to rider cost
 riderdf.calcvalue = riderdf.calcscore ./ riderdf.vgcost
