@@ -5,9 +5,9 @@ title: "One-day"
 ```{julia}
 using Velogames, DataFrames, Statistics, StatsBase
 
-raceurl = "https://www.velogames.com/sixes-superclasico/2023/riders.php"
-betfairurl = "https://www.betfair.com/sport/cycling/world-championships/12064071/mens-road-race-winner/924.369154252"
-racehash = "#WorldChamps"
+raceurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
+betfairurl = "https://www.betfair.com/sport/cycling/strade-bianche/12311793"
+racehash = "#StradeBianche"
 racesex = "me"
 racecategory = "one-day-races"
 ```
@@ -42,7 +42,8 @@ rename!(
     :points => :vgpoints,
     :cost => :vgcost,
     :rank => :pcsrank,
-    :points_1 => :pcspoints
+    :points_1 => :pcspoints,
+    :value => :vgvalue,
 )
 # drop columns ending in _1
 select!(riderdf, Not([:rider_1, :rider_2, :team_1]))
@@ -55,7 +56,7 @@ riderdf[ismissing.(riderdf.odds), :odds] .= 500
 # convert odds to probability of win
 riderdf.invodds = 1 ./ riderdf.odds
 
-disallowmissing!(riderdf)
+disallowmissing!(riderdf, [:vgpoints, :pcspoints])
 
 # normalise odds, vgpoints, pcspoints
 riderdf.zinvodds = StatsBase.zscore(riderdf.invodds)
@@ -67,11 +68,11 @@ riderdf.zpcspoints = StatsBase.zscore(riderdf.pcspoints)
 
 ```{julia}
 # weights for inv odds, vgpoints, pcspoints
-WEIGHTS = [1, 1, 1]
+WEIGHTS = [1, 0, 0]
 
 # calculate rider calcscore as the mean of the velogames score and the PCS score
 zweights = WEIGHTS ./ sum(WEIGHTS)
-riderdf.calcscore = zweights[1] .* riderdf.zinvodds .+ zweights[2] .* riderdf.zvgpoints .+ zweights[3] .* riderdf.zpcspoints
+riderdf.calcscore = zweights[1] .* riderdf.zinvodds .+ zweights[2] .* riderdf.vgpoints .+ zweights[3] .* riderdf.zpcspoints
 
 # calculate rider value as the ratio of rider score to rider cost
 riderdf.calcvalue = riderdf.calcscore ./ riderdf.vgcost
@@ -90,7 +91,16 @@ sort(riderdf, :calcscore, rev=true)[1:10, :]
 ## Top 10 riders by value
 
 ```{julia}
-sort(riderdf, :calcvalue, rev=true)[1:10, :]
+sort(riderdf, :calcvalue, rev=true)[1:10, Not(:riderkey)]
+```
+
+# Thumb on the scales
+
+Set the rider score to 0 for riders you don't fancy.
+
+```{julia}
+unfancied = ["Mathieu Van Der Poel"]
+riderdf.calcscore[occursin.(unfancied, riderdf.rider)] .= 0
 ```
 
 # Results
@@ -112,5 +122,5 @@ riderdf.vgcost .* modelresults.data |> sum
 # selected riders
 riderdf[!, :chosen] = modelresults.data .|> !iszero
 chosenteam = filter(row -> row.chosen, riderdf)
-chosenteam[:, [:rider, :team, :vgcost, :vgpoints, :pcspoints, :pcsrank, :odds, :calcscore, :calcvalue]]
+sort(chosenteam, :vgcost, rev=true)[:, [:rider, :team, :vgcost, :odds, :pcspoints, :pcsrank, :calcscore, :calcvalue]]
 ```
