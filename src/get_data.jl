@@ -10,7 +10,10 @@ function gettable(pageurl::String)
     riderdf = DataFrame(page[1])
 
     # lowercase the column names and remove spaces
-    rename!(riderdf, lowercase.(replace.(names(riderdf), " " => "", "#" => "rank")))
+    rename!(
+        riderdf,
+        lowercase.(replace.(names(riderdf), " " => "", "#" => "rank"))
+    )
     # rename score to points if it exists
     if hasproperty(riderdf, :score)
         rename!(riderdf, :score => :points)
@@ -80,6 +83,35 @@ function getpcsranking(gender::String, category::String)
 
     # filter to rank, rider, team, and points
     riderdf = page[:, [:rank, :rider, :team, :points, :riderkey]]
+
+    return riderdf
+end
+
+"""
+## `getpcsraceranking`
+
+This function downloads and parses the rider rankings for a specific race from the PCS website.
+
+The function returns a DataFrame with the following columns:
+
+    * `rider` - the name of the rider
+    * `team` - the team the rider rides for
+    * `rank` - the rank of the rider in the category
+    * `points` - the number of PCS points scored by the rider
+    * `riderkey` - a unique key for each rider based on their name
+"""
+function getpcsraceranking(pageurl::String)
+    # download the page and parse the table
+    riderdf = gettable(pageurl)
+
+    # rename column pcs-ranking to pcsrank
+    rename!(riderdf, "pcs-ranking" => :pcsrank)
+
+    # convert pcs-ranking to Int64
+    riderdf[!, :pcsrank] = parse.(Int64, riderdf[!, :pcsrank])
+
+    # add 1/pcs-ranking to points to avoid ties
+    riderdf[!, :pcspoints] = riderdf[!, :pcspoints] .+ 1 ./ riderdf[!, :pcsrank]
 
     return riderdf
 end
@@ -189,9 +221,12 @@ function getodds(pageurl::String)
     # strip newlines from fractional odds strings
     riderodds = replace.(riderodds, "\n" => "")
     # calculate decimal odds from strings of the form "1/2"
-    riderodds = map(x -> parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
+    riderodds = map(x -> 1 + parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
 
     betfairodds = DataFrame(rider=ridernames, odds=riderodds)
+
+    # tweak the rider names for better matching with Velogames
+    betfairodds.rider = replace.(betfairodds.rider, "Tom Pidcock" => "Thomas Pidcock")
 
     # add a riderkey column based on the name
     betfairodds.riderkey = map(x -> createkey(x), betfairodds.rider)
