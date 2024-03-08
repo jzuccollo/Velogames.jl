@@ -93,8 +93,8 @@ allriderdata[1:15, [:rider, :team, :cost, :score, :value]]
 ## Lowest value riders
 
 ```{julia}
-# select the bottom 15 riders,
-allriderdata[end-14:end, [:rider, :team, :cost, :score, :value]]
+# select the bottom 15 riders, sorting by cost
+sort!(allriderdata[end-14:end, [:rider, :team, :cost, :score, :value]], :cost, rev=true)
 ```
 
 ## Lowest value riders who cost more than 7pts
