@@ -5,11 +5,11 @@ title: "Stage race"
 ## Load libraries
 
 ```{julia}
-using Velogames, DataFrames
+using Velogames, DataFrames, Statistics, StatsBase
 
-raceurl = "https://www.velogames.com/velogame-femmes/2023/riders.php"
-racesex = "we"
-racecategory = "individual"
+raceurl = "https://www.velogames.com/spain/2023/riders.php"
+betfairurl = "https://www.betfair.com/sport/cycling/vuelta-a-espana/11338652/winner/924.370900945"
+racepcsrankingurl = "https://www.procyclingstats.com/race/vuelta-a-espana/2023/startlist/startlist-quality"
 ```
 
 ## Load data
@@ -17,35 +17,97 @@ racecategory = "individual"
 Using only PCS ranking at the moment and assuming 0pts for all riders not in the top 100 of the PCS ranking for that category.
 
 ```{julia}
-riderdf = getvgriders(raceurl)
-pcsdf = getpcsranking(racesex, racecategory)
-rename!(pcsdf, :points => :pcspts)
-select!(pcsdf, Not([:rider, :team]))
+# get Velogames riders
+ridervg = getvgriders(raceurl)
 
-# join the velogames and pcs dataframes on the riderkey column
-riderdf = leftjoin(riderdf, pcsdf, on=:riderkey)
-riderdf = coalesce.(riderdf, 0)
+# get PCS rankings
+# pcsranking = getpcsranking(racesex, racecategory)
+
+# get PCS race ranking
+pcsraceranking = getpcsraceranking(racepcsrankingurl)
+
+# get Betfair odds
+riderodds = getodds(betfairurl)
 ```
+
+## Combine datasets
 
 ```{julia}
-show(riderdf)
+# join all three datasets on riderkey
+riderdf = leftjoin(ridervg, pcsranking, on=:riderkey, makeunique=true)
+riderdf = leftjoin(riderdf, riderodds, on=:riderkey, makeunique=true)
+
+# rename points to vgpoints
+rename!(
+    riderdf,
+    :points => :vgpoints,
+    :cost => :vgcost,
+    :rank => :pcsrank,
+    :points_1 => :pcspoints,
+    :value => :vgvalue,
+)
+# drop columns ending in _1
+select!(riderdf, Not([:rider_1, :rider_2, :team_1]))
+
+# fill in missing values in rank and points with 0
+riderdf[ismissing.(riderdf.pcsrank), :pcsrank] .= 0
+riderdf[ismissing.(riderdf.pcspoints), :pcspoints] .= 0
+riderdf[ismissing.(riderdf.odds), :odds] .= 500
+
+# convert odds to probability of win
+riderdf.invodds = 1 ./ riderdf.odds
+
+disallowmissing!(riderdf)
+
+# normalise odds, vgpoints, pcspoints
+riderdf.zinvodds = StatsBase.zscore(riderdf.invodds)
+riderdf.zvgpoints = StatsBase.zscore(riderdf.vgpoints)
+riderdf.zpcspoints = StatsBase.zscore(riderdf.pcspoints)
+
+# if the stage race hasn't started, vg points will be 0, so set zvgpoints to 0
+riderdf.zvgpoints[iszero.(riderdf.vgpoints)] .= 0
 ```
+
+## Calculate rider score and value
+
+```{julia}
+# weights for inv odds, vgpoints, pcspoints
+WEIGHTS = [1, 0, 0]
+
+# calculate rider calcscore as the mean of the velogames score and the PCS score
+zweights = WEIGHTS ./ sum(WEIGHTS)
+riderdf.calcscore = zweights[1] .* riderdf.zinvodds .+ zweights[2] .* riderdf.zvgpoints .+ zweights[3] .* riderdf.zpcspoints
+
+# calculate rider value as the ratio of rider score to rider cost
+riderdf.calcvalue = riderdf.calcscore ./ riderdf.vgcost
+
+riderdf
+```
+
+# Inspect the data
+
+## Top 10 riders by points
+
+```{julia}
+sort(riderdf, :calcscore, rev=true)[1:10, :]
+```
+
+## Top 30 riders by value
+
+```{julia}
+sort(riderdf, :calcvalue, rev=true)[1:30, :]
+```
+
 
 ## Build model
 
-Uses the one-day model because women's races don't have the rider types that men's stage races do. Need to split these.
-
 ```{julia}
-modelresults = buildmodeloneday(riderdf, 9, :pcspts, :cost);
-```
-
-```{julia}
-modelresults.data |> sum
+modelresults = buildmodelstage(riderdf, 9, :calcvalue, :vgcost);
 ```
 
 ```{julia}
 # total cost
-riderdf.cost .* modelresults.data |> sum
+riderdf.vgcost .* modelresults.data |> sum
 ```
 
 ## Results
@@ -54,6 +116,6 @@ riderdf.cost .* modelresults.data |> sum
 # selected riders
 riderdf.chosen = modelresults.data .> 0.5
 chosenteam = filter(row -> row.chosen, riderdf)
-chosenteam[:, [:rider, :team, :chosen, :pcspts, :cost]]
+chosenteam[:, [:rider, :team, :classraw, :odds, :pcsrank, :vgcost]]
 ```
 

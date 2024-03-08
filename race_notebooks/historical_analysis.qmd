@@ -1,6 +1,6 @@
 ---
 title: "Historical analysis"
-subtitle: "Men's elite world championship road race 2023"
+subtitle: "Strade Bianche 2024"
 ---
 
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
@@ -8,9 +8,9 @@ Looking back on the race, what's the best team you could have picked? And what's
 ```{julia}
 using Velogames, DataFrames, HiGHS, JuMP
 
-riderseriesurl = "https://www.velogames.com/sixes-superclasico/2023/riders.php"
-riderraceurl = "https://www.velogames.com/sixes-superclasico/2023/ridescore.php?ga=13&st=24"
-bestteamscore = 1884;
+riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
+riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=1"
+bestteamscore = 1826;
 ```
 
 # Best team you could have picked
@@ -52,7 +52,7 @@ chosenteampost[:, [:rider, :team, :cost, :score, :scoreperpoint]]
 
 # Cheapest team that would have beaten the best team
 
-The actual winning team in the Velogames competition scored `{julia} bestteamscore` **[NB. this syntax will work once Quarto 1.4 is released]** points. What's the cheapest team you could have picked that would have beaten that team?
+The actual winning team in the Velogames competition scored `{julia} bestteamscore` points. What's the cheapest team you could have picked that would have beaten that team?
 
 ```{julia}
 modelpost2 = JuMP.Model(HiGHS.Optimizer)

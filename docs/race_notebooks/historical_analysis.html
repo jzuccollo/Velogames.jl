@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.3.450">
+<meta name="generator" content="quarto-1.4.551">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -23,7 +23,7 @@ ul.task-list li input[type="checkbox"] {
 </style>
 
 
-<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script><script src="../site_libs/quarto-nav/quarto-nav.js"></script>
 <script src="../site_libs/quarto-nav/headroom.min.js"></script>
 <script src="../site_libs/clipboard/clipboard.min.js"></script>
 <script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
@@ -45,7 +45,13 @@ ul.task-list li input[type="checkbox"] {
   "collapse-after": 3,
   "panel-placement": "start",
   "type": "textbox",
-  "limit": 20,
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
   "language": {
     "search-no-results-text": "No results",
     "search-matching-documents-text": "matching documents",
@@ -54,13 +60,14 @@ ul.task-list li input[type="checkbox"] {
     "search-more-match-text": "more match in this document",
     "search-more-matches-text": "more matches in this document",
     "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
     "search-detached-cancel-button-title": "Cancel",
     "search-submit-button-title": "Submit",
     "search-label": "Search"
   }
 }</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" integrity="sha512-c3Nl8+7g4LMSTdrm621y7kf9v3SDPnhxLNhcjFJbKECVnmZHTdo+IRO05sNLTH/D3vA6u1X32ehoLC7WFVdheg==" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
+
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
 
@@ -72,12 +79,12 @@ ul.task-list li input[type="checkbox"] {
   <header id="quarto-header" class="headroom fixed-top">
   <nav class="quarto-secondary-nav">
     <div class="container-fluid d-flex">
-      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-      <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../race_notebooks/historical_analysis.html">Historical analysis</a></li></ol></nav>
-      <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
-      </a>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../race_notebooks/historical_analysis.html">Historical analysis</a></li></ol></nav>
+        <a class="flex-grow-1" role="button" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
       <button type="button" class="btn quarto-search-button" aria-label="" onclick="window.quartoOpenSearch();">
         <i class="bi bi-search"></i>
       </button>
@@ -87,7 +94,7 @@ ul.task-list li input[type="checkbox"] {
 <!-- content -->
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
 <!-- sidebar -->
-  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal sidebar-navigation docked overflow-auto">
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
     <div class="pt-lg-2 mt-2 text-left sidebar-header">
     <div class="sidebar-title mb-0 py-0">
       <a href="../">Velogames solver</a> 
@@ -108,18 +115,6 @@ ul.task-list li input[type="checkbox"] {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../race_notebooks/oneday.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">One day races</span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../race_notebooks/stagerace.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">Stage races</span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
   <a href="../race_notebooks/historical_analysis.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">Historical analysis</span></a>
   </div>
@@ -127,7 +122,7 @@ ul.task-list li input[type="checkbox"] {
     </ul>
     </div>
 </nav>
-<div id="quarto-sidebar-glass" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar,#quarto-sidebar-glass"></div>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
         <nav id="TOC" role="doc-toc" class="toc-active">
@@ -151,7 +146,7 @@ ul.task-list li input[type="checkbox"] {
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
 <h1 class="title">Historical analysis</h1>
-<p class="subtitle lead">Men’s elite world championship road race 2023</p>
+<p class="subtitle lead">Strade Bianche 2024</p>
 </div>
 
 
@@ -164,22 +159,25 @@ ul.task-list li input[type="checkbox"] {
   </div>
   
 
+
 </header>
+
 
 <p>Looking back on the race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best team?</p>
 <section id="best-team-you-could-have-picked" class="level1">
 <h1>Best team you could have picked</h1>
 <p>With the benefit of hindsight, what’s the best team you could have picked?</p>
-<div class="cell" data-execution_count="3">
+<div id="9d3b03e1" class="cell" data-execution_count="2">
 <div class="cell-output cell-output-stdout">
-<pre><code>Score of the team: 2343
+<pre><code>Score of the team: 1970
 Cost of the team: 100</code></pre>
 </div>
 <div class="cell-output cell-output-display" data-execution_count="3">
+<div>
 <div><div style="float: left;"><span>6×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
-<tr class="header header">
+<tr class="header">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
@@ -199,71 +197,73 @@ Cost of the team: 100</code></pre>
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Mathieu Van Der Poel</td>
-<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: left;">Tadej Pogačar</td>
+<td style="text-align: left;">UAE Team Emirates</td>
 <td style="text-align: right;">32</td>
-<td style="text-align: right;">720</td>
-<td style="text-align: right;">22.5</td>
+<td style="text-align: right;">585</td>
+<td style="text-align: right;">18.2812</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Wout Van Aert</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">32</td>
-<td style="text-align: right;">540</td>
-<td style="text-align: right;">16.875</td>
+<td style="text-align: left;">Maxim Van Gils</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">360</td>
+<td style="text-align: right;">22.5</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Alberto Bettiol</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: right;">315</td>
-<td style="text-align: right;">17.5</td>
+<td style="text-align: left;">Toms Skujiņš</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">405</td>
+<td style="text-align: right;">25.3125</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Matthew Dinham</td>
-<td style="text-align: left;">Team DSM</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">360</td>
-<td style="text-align: right;">60.0</td>
+<td style="text-align: left;">Filippo Zana</td>
+<td style="text-align: left;">Team Jayco AlUla</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: right;">204</td>
+<td style="text-align: right;">14.5714</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Kevin Vermaerke</td>
-<td style="text-align: left;">Team DSM</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">192</td>
-<td style="text-align: right;">32.0</td>
+<td style="text-align: left;">Lenny Martinez</td>
+<td style="text-align: left;">Groupama - FDJ</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">216</td>
+<td style="text-align: right;">18.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Owain Doull</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">216</td>
-<td style="text-align: right;">36.0</td>
+<td style="text-align: left;">Lennert Van Eetvelt</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">200</td>
+<td style="text-align: right;">20.0</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 </div>
+</div>
 </section>
 <section id="cheapest-team-that-would-have-beaten-the-best-team" class="level1">
 <h1>Cheapest team that would have beaten the best team</h1>
-<p>The actual winning team in the Velogames competition scored <code>{julia} bestteamscore</code> <strong>[NB. this syntax will work once Quarto 1.4 is released]</strong> points. What’s the cheapest team you could have picked that would have beaten that team?</p>
-<div class="cell" data-execution_count="4">
+<p>The actual winning team in the Velogames competition scored 1826 points. What’s the cheapest team you could have picked that would have beaten that team?</p>
+<div id="878c7e64" class="cell" data-execution_count="3">
 <div class="cell-output cell-output-stdout">
-<pre><code>Score of the team: 1917
-Cost of the team: 68</code></pre>
+<pre><code>Score of the team: 1838
+Cost of the team: 92</code></pre>
 </div>
-<div class="cell-output cell-output-display" data-execution_count="4">
+<div class="cell-output cell-output-display" data-execution_count="5">
+<div>
 <div><div style="float: left;"><span>6×4 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
-<tr class="header header">
+<tr class="header">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
@@ -281,48 +281,49 @@ Cost of the team: 68</code></pre>
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Mathieu Van Der Poel</td>
-<td style="text-align: left;">Alpecin-Deceuninck</td>
+<td style="text-align: left;">Tadej Pogačar</td>
+<td style="text-align: left;">UAE Team Emirates</td>
 <td style="text-align: right;">32</td>
-<td style="text-align: right;">720</td>
+<td style="text-align: right;">585</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Toms Skujiņš</td>
-<td style="text-align: left;">Lidl - Trek</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">285</td>
+<td style="text-align: left;">Maxim Van Gils</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">360</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Matthew Dinham</td>
-<td style="text-align: left;">Team DSM</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">360</td>
+<td style="text-align: left;">Toms Skujiņš</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">405</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Kevin Vermaerke</td>
-<td style="text-align: left;">Team DSM</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">192</td>
+<td style="text-align: left;">Krists Neilands</td>
+<td style="text-align: left;">Israel - Premier Tech</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">135</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Owain Doull</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">216</td>
+<td style="text-align: left;">Lennert Van Eetvelt</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">200</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Petr Kelemen</td>
-<td style="text-align: left;">Tudor Pro Cycling Team</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">144</td>
+<td style="text-align: left;">Francesco Busatto</td>
+<td style="text-align: left;">Intermarché - Wanty</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">153</td>
 </tr>
 </tbody>
 </table>
+</div>
 </div>
 </div>
 </div>
@@ -332,12 +333,13 @@ Cost of the team: 68</code></pre>
 <section id="highest-value-riders" class="level2">
 <h2 class="anchored" data-anchor-id="highest-value-riders">Highest value riders</h2>
 <p>The rider with the highest value is the rider who scored the most points for the least cost. Who are the top 15 riders by value?</p>
-<div class="cell" data-execution_count="5">
-<div class="cell-output cell-output-display" data-execution_count="5">
+<div id="9dbcaae7" class="cell" data-execution_count="4">
+<div class="cell-output cell-output-display" data-execution_count="6">
+<div>
 <div><div style="float: left;"><span>15×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
-<tr class="header header">
+<tr class="header">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
@@ -357,138 +359,140 @@ Cost of the team: 68</code></pre>
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Matthew Dinham</td>
-<td style="text-align: left;">Team DSM</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">360</td>
-<td style="text-align: right;">60.0</td>
+<td style="text-align: left;">Toms Skujiņš</td>
+<td style="text-align: left;">Lidl - Trek</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">405</td>
+<td style="text-align: right;">25.3125</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Owain Doull</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">216</td>
-<td style="text-align: right;">36.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Petr Kelemen</td>
-<td style="text-align: left;">Tudor Pro Cycling Team</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">144</td>
-<td style="text-align: right;">36.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Kevin Vermaerke</td>
-<td style="text-align: left;">Team DSM</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">192</td>
-<td style="text-align: right;">32.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Patrick Gamper</td>
-<td style="text-align: left;">BORA - hansgrohe</td>
-<td style="text-align: right;">6</td>
-<td style="text-align: right;">168</td>
-<td style="text-align: right;">28.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Mathieu Van Der Poel</td>
-<td style="text-align: left;">Alpecin-Deceuninck</td>
-<td style="text-align: right;">32</td>
-<td style="text-align: right;">720</td>
+<td style="text-align: left;">Maxim Van Gils</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">360</td>
 <td style="text-align: right;">22.5</td>
 </tr>
 <tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;">Toms Skujiņš</td>
-<td style="text-align: left;">Lidl - Trek</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">285</td>
-<td style="text-align: right;">20.3571</td>
+<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
+<td style="text-align: left;">Lennert Van Eetvelt</td>
+<td style="text-align: left;">Lotto Dstny</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">200</td>
+<td style="text-align: right;">20.0</td>
 </tr>
 <tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;">Krists Neilands</td>
-<td style="text-align: left;">Israel - Premier Tech</td>
+<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
+<td style="text-align: left;">Francesco Busatto</td>
+<td style="text-align: left;">Intermarché - Wanty</td>
 <td style="text-align: right;">8</td>
-<td style="text-align: right;">156</td>
-<td style="text-align: right;">19.5</td>
+<td style="text-align: right;">153</td>
+<td style="text-align: right;">19.125</td>
 </tr>
 <tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;">Jasper Stuyven</td>
-<td style="text-align: left;">Lidl - Trek</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: right;">390</td>
-<td style="text-align: right;">17.7273</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
-<td style="text-align: left;">Mads Pedersen</td>
-<td style="text-align: left;">Lidl - Trek</td>
-<td style="text-align: right;">24</td>
-<td style="text-align: right;">420</td>
-<td style="text-align: right;">17.5</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
-<td style="text-align: left;">Alberto Bettiol</td>
-<td style="text-align: left;">EF Education-EasyPost</td>
-<td style="text-align: right;">18</td>
-<td style="text-align: right;">315</td>
-<td style="text-align: right;">17.5</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
-<td style="text-align: left;">Wout Van Aert</td>
-<td style="text-align: left;">Jumbo-Visma</td>
-<td style="text-align: right;">32</td>
-<td style="text-align: right;">540</td>
-<td style="text-align: right;">16.875</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
-<td style="text-align: left;">Stefan Küng</td>
-<td style="text-align: left;">Groupama - FDJ</td>
-<td style="text-align: right;">22</td>
-<td style="text-align: right;">360</td>
-<td style="text-align: right;">16.3636</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
-<td style="text-align: left;">Mauro Schmid</td>
-<td style="text-align: left;">Soudal - Quick Step</td>
-<td style="text-align: right;">14</td>
-<td style="text-align: right;">216</td>
-<td style="text-align: right;">15.4286</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
+<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
 <td style="text-align: left;">Tadej Pogačar</td>
 <td style="text-align: left;">UAE Team Emirates</td>
 <td style="text-align: right;">32</td>
-<td style="text-align: right;">480</td>
-<td style="text-align: right;">15.0</td>
+<td style="text-align: right;">585</td>
+<td style="text-align: right;">18.2812</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
+<td style="text-align: left;">Lenny Martinez</td>
+<td style="text-align: left;">Groupama - FDJ</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">216</td>
+<td style="text-align: right;">18.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
+<td style="text-align: left;">Filippo Zana</td>
+<td style="text-align: left;">Team Jayco AlUla</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: right;">204</td>
+<td style="text-align: right;">14.5714</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
+<td style="text-align: left;">Davide Formolo</td>
+<td style="text-align: left;">Movistar Team</td>
+<td style="text-align: right;">16</td>
+<td style="text-align: right;">228</td>
+<td style="text-align: right;">14.25</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
+<td style="text-align: left;">Benoît Cosnefroy</td>
+<td style="text-align: left;">Decathlon AG2R La Mondiale Team</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">246</td>
+<td style="text-align: right;">13.6667</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
+<td style="text-align: left;">Krists Neilands</td>
+<td style="text-align: left;">Israel - Premier Tech</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">135</td>
+<td style="text-align: right;">13.5</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
+<td style="text-align: left;">Thomas Pidcock</td>
+<td style="text-align: left;">INEOS Grenadiers</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">315</td>
+<td style="text-align: right;">13.125</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
+<td style="text-align: left;">Lennard Kämna</td>
+<td style="text-align: left;">BORA - hansgrohe</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">99</td>
+<td style="text-align: right;">12.375</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
+<td style="text-align: left;">Matej Mohorič</td>
+<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">270</td>
+<td style="text-align: right;">11.25</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
+<td style="text-align: left;">Kévin Vauquelin</td>
+<td style="text-align: left;">Arkéa - B&amp;B Hotels</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">90</td>
+<td style="text-align: right;">11.25</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
+<td style="text-align: left;">Anders Halland Johannessen</td>
+<td style="text-align: left;">Uno-X Mobility</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">45</td>
+<td style="text-align: right;">11.25</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 </div>
+</div>
 </section>
 <section id="lowest-value-riders" class="level2">
 <h2 class="anchored" data-anchor-id="lowest-value-riders">Lowest value riders</h2>
-<div class="cell" data-execution_count="6">
-<div class="cell-output cell-output-display" data-execution_count="6">
+<div id="ea404bd4" class="cell" data-execution_count="5">
+<div class="cell-output cell-output-display" data-execution_count="7">
+<div>
 <div><div style="float: left;"><span>15×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
-<tr class="header header">
+<tr class="header">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
@@ -508,6 +512,70 @@ Cost of the team: 68</code></pre>
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
+<td style="text-align: left;">Manlio Moro</td>
+<td style="text-align: left;">Movistar Team</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
+<td style="text-align: left;">Jonas Iversby Hvideberg</td>
+<td style="text-align: left;">Uno-X Mobility</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
+<td style="text-align: left;">Sakarias Koller Løland</td>
+<td style="text-align: left;">Uno-X Mobility</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
+<td style="text-align: left;">Martin Tjøtta</td>
+<td style="text-align: left;">Arkéa - B&amp;B Hotels</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
+<td style="text-align: left;">Victor De La Parte</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
+<td style="text-align: left;">Max Walker</td>
+<td style="text-align: left;">Astana Qazaqstan Team</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
+<td style="text-align: left;">Mikel Iturria</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
+<td style="text-align: left;">Anders Skaarseth</td>
+<td style="text-align: left;">Uno-X Mobility</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
 <td style="text-align: left;">Xabier Berasategi</td>
 <td style="text-align: left;">Euskaltel - Euskadi</td>
 <td style="text-align: right;">4</td>
@@ -515,95 +583,15 @@ Cost of the team: 68</code></pre>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">Filip Maciejuk</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Ahmed Madan</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Unai Cuadrado</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Emilien Jeannière</td>
-<td style="text-align: left;">TotalEnergies</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Asier Etxeberria</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;">Peio Goikoetxea</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;">Juri Hollmann</td>
-<td style="text-align: left;">Movistar Team</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;">Xabier Isasa</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
-<td style="text-align: left;">Mikel Iturria</td>
-<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: left;">Magnus Kulset</td>
+<td style="text-align: left;">Uno-X Mobility</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
-<td style="text-align: left;">Ayco Bastiaens</td>
-<td style="text-align: left;">Alpecin-Deceuninck</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
-<td style="text-align: left;">Johan Price-Pejtersen</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
-<td style="text-align: right;">4</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
 <td style="text-align: left;">Andoni López De Abetxuko</td>
 <td style="text-align: left;">Euskaltel - Euskadi</td>
 <td style="text-align: right;">4</td>
@@ -611,17 +599,33 @@ Cost of the team: 68</code></pre>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
+<td style="text-align: left;">Marcus Sander Hansen</td>
+<td style="text-align: left;">Uno-X Mobility</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
+<td style="text-align: left;">Ibai Azurmendi</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
-<td style="text-align: left;">Cameron Scott</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: left;">Idar Andersen</td>
+<td style="text-align: left;">Uno-X Mobility</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
-<td style="text-align: left;">Moritz Kärsten</td>
-<td style="text-align: left;">Team DSM</td>
+<td style="text-align: left;">Sindre Kulset</td>
+<td style="text-align: left;">Uno-X Mobility</td>
 <td style="text-align: right;">4</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
@@ -631,16 +635,18 @@ Cost of the team: 68</code></pre>
 </div>
 </div>
 </div>
+</div>
 </section>
 <section id="lowest-value-riders-who-cost-more-than-7pts" class="level2">
 <h2 class="anchored" data-anchor-id="lowest-value-riders-who-cost-more-than-7pts">Lowest value riders who cost more than 7pts</h2>
 <p>Riders costing more than 7pts might have been expected to do something in the race so who of them performed the worst?</p>
-<div class="cell" data-execution_count="7">
-<div class="cell-output cell-output-display" data-execution_count="7">
+<div id="1c5b52d5" class="cell" data-execution_count="6">
+<div class="cell-output cell-output-display" data-execution_count="8">
+<div>
 <div><div style="float: left;"><span>15×5 DataFrame</span></div><div style="clear: both;"></div></div><div class="data-frame" style="overflow-x: scroll;">
 <table class="data-frame table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
-<tr class="header header">
+<tr class="header">
 <th class="rowNumber" data-quarto-table-cell-role="th" style="text-align: right; font-weight: bold;">Row</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">rider</th>
 <th style="text-align: left;" data-quarto-table-cell-role="th">team</th>
@@ -660,102 +666,54 @@ Cost of the team: 68</code></pre>
 <tbody>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">1</td>
-<td style="text-align: left;">Lucas Hamilton</td>
-<td style="text-align: left;">Team Jayco AlUla</td>
+<td style="text-align: left;">Anthon Charmig</td>
+<td style="text-align: left;">Astana Qazaqstan Team</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">2</td>
-<td style="text-align: left;">David De La Cruz</td>
-<td style="text-align: left;">Astana Qazaqstan Team</td>
+<td style="text-align: left;">Daan Hoole</td>
+<td style="text-align: left;">Lidl - Trek</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">3</td>
-<td style="text-align: left;">Francesco Gavazzi</td>
-<td style="text-align: left;">EOLO-Kometa</td>
+<td style="text-align: left;">Antonio Tiberi</td>
+<td style="text-align: left;">Bahrain - Victorious</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">4</td>
-<td style="text-align: left;">Samuele Rivi</td>
-<td style="text-align: left;">EOLO-Kometa</td>
+<td style="text-align: left;">Pelayo Sánchez</td>
+<td style="text-align: left;">Movistar Team</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">5</td>
-<td style="text-align: left;">Filippo Zana</td>
-<td style="text-align: left;">Team Jayco AlUla</td>
+<td style="text-align: left;">Jonas Abrahamsen</td>
+<td style="text-align: left;">Uno-X Mobility</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">6</td>
-<td style="text-align: left;">Luis León Sánchez</td>
-<td style="text-align: left;">Astana Qazaqstan Team</td>
+<td style="text-align: left;">Erik Nordsæter Resell</td>
+<td style="text-align: left;">Uno-X Mobility</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">7</td>
-<td style="text-align: left;">Milan Menten</td>
-<td style="text-align: left;">Lotto Dstny</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
-<td style="text-align: left;">Maxim Van Gils</td>
-<td style="text-align: left;">Lotto Dstny</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
-<td style="text-align: left;">Brent Van Moer</td>
-<td style="text-align: left;">Lotto Dstny</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
-<td style="text-align: left;">Sandy Dujardin</td>
-<td style="text-align: left;">TotalEnergies</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
-<td style="text-align: left;">Gorka Izagirre</td>
-<td style="text-align: left;">Movistar Team</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="even">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
-<td style="text-align: left;">Lorrenzo Manzin</td>
-<td style="text-align: left;">TotalEnergies</td>
-<td style="text-align: right;">8</td>
-<td style="text-align: right;">0</td>
-<td style="text-align: right;">0.0</td>
-</tr>
-<tr class="odd">
-<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
 <td style="text-align: left;">Johan Jacobs</td>
 <td style="text-align: left;">Movistar Team</td>
 <td style="text-align: right;">8</td>
@@ -763,23 +721,72 @@ Cost of the team: 68</code></pre>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">8</td>
+<td style="text-align: left;">Martin Urianstad</td>
+<td style="text-align: left;">Uno-X Mobility</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">9</td>
+<td style="text-align: left;">Jon Aberasturi</td>
+<td style="text-align: left;">Euskaltel - Euskadi</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">10</td>
+<td style="text-align: left;">Julien Vermote</td>
+<td style="text-align: left;">Team Visma | Lease a Bike</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">11</td>
+<td style="text-align: left;">Odd Christian Eiking</td>
+<td style="text-align: left;">Uno-X Mobility</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">12</td>
+<td style="text-align: left;">Emanuel Buchmann</td>
+<td style="text-align: left;">BORA - hansgrohe</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="odd">
+<td class="rowNumber" style="text-align: right; font-weight: bold;">13</td>
+<td style="text-align: left;">Roger Adrià</td>
+<td style="text-align: left;">BORA - hansgrohe</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.0</td>
+</tr>
+<tr class="even">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">14</td>
-<td style="text-align: left;">Daniel Oss</td>
-<td style="text-align: left;">TotalEnergies</td>
+<td style="text-align: left;">Matteo Sobrero</td>
+<td style="text-align: left;">BORA - hansgrohe</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 <tr class="odd">
 <td class="rowNumber" style="text-align: right; font-weight: bold;">15</td>
-<td style="text-align: left;">Hermann Pernsteiner</td>
-<td style="text-align: left;">Bahrain - Victorious</td>
+<td style="text-align: left;">Mattia Cattaneo</td>
+<td style="text-align: left;">Soudal - Quick Step</td>
 <td style="text-align: right;">8</td>
 <td style="text-align: right;">0</td>
 <td style="text-align: right;">0.0</td>
 </tr>
 </tbody>
 </table>
+</div>
 </div>
 </div>
 </div>
@@ -868,10 +875,29 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
     // clear code selection
     e.clearSelection();
   });
-  function tippyHover(el, contentFn) {
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+          // default icon
+          link.classList.add("external");
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
     const config = {
       allowHTML: true,
-      content: contentFn,
       maxWidth: 500,
       delay: 100,
       arrow: false,
@@ -881,8 +907,17 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
       interactive: true,
       interactiveBorder: 10,
       theme: 'quarto',
-      placement: 'bottom-start'
+      placement: 'bottom-start',
     };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
     window.tippy(el, config); 
   }
   const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
@@ -894,7 +929,130 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
       try { href = new URL(href).hash; } catch {}
       const id = href.replace(/^#\/?/, "");
       const note = window.document.getElementById(id);
-      return note.innerHTML;
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      // TODO in 1.5, we should make sure this works without a callout special case
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
     });
   }
       let selectedAnnoteEl;
@@ -938,6 +1096,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
             }
             div.style.top = top - 2 + "px";
             div.style.height = height + 4 + "px";
+            div.style.left = 0;
             let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
             if (gutterDiv === null) {
               gutterDiv = window.document.createElement("div");
@@ -963,6 +1122,32 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
         });
         selectedAnnoteEl = undefined;
       };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
       // Attach click handler to the DT
       const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
       for (const annoteDlNode of annoteDls) {
@@ -1020,23 +1205,10 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
       });
     }
   }
-    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
-      var filterRegex = new RegExp('/' + window.location.host + '/');
-    var isInternal = (href) => {
-        return filterRegex.test(href) || localhostRegex.test(href);
-    }
-    // Inspect non-navigation links and adorn them if external
- 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item)');
-    for (var i=0; i<links.length; i++) {
-      const link = links[i];
-      if (!isInternal(link.href)) {
-          // default icon
-          link.classList.add("external");
-      }
-    }
 });
 </script>
 </div> <!-- /content -->
+
 
 
 

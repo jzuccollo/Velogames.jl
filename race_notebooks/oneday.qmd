@@ -5,10 +5,10 @@ title: "One-day"
 ```{julia}
 using Velogames, DataFrames, Statistics, StatsBase
 
-raceurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
-betfairurl = "https://www.betfair.com/sport/cycling/strade-bianche/12311793"
+raceurl = "https://www.velogames.com/womens-classics/2024/riders.php"
+betfairurl = "https://www.betfair.com/sport/cycling/strade-bianche-women/12651760"
 racehash = "#StradeBianche"
-racesex = "me"
+racesex = "we"
 racecategory = "one-day-races"
 ```
 
