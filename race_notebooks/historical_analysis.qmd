@@ -77,7 +77,7 @@ allriderdata.chosen2 = modelpost2results.data .> 0.5
 chosen2teampost = filter(row -> row.chosen2, allriderdata)
 ```
 
-The cheapest team that would have beaten the best team scored `{julia} chosen2teampost.score |> sum` points and cost `{julia} chosen2teampost.cost |> sum` points:
+The best team picked by anyone scored `{julia} bestteamscore`. The cheapest team that would have beaten that scored `{julia} chosen2teampost.score |> sum` points and cost `{julia} chosen2teampost.cost |> sum` points:
 
 ```{julia}
 markdown_table(chosen2teampost[:, [:rider, :team, :cost, :score]])
