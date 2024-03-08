@@ -20,31 +20,21 @@
     ]
   },
   {
-    "objectID": "race_notebooks/historical_analysis.html#highest-value-riders",
-    "href": "race_notebooks/historical_analysis.html#highest-value-riders",
+    "objectID": "race_notebooks/historical_analysis.html#top-picks",
+    "href": "race_notebooks/historical_analysis.html#top-picks",
     "title": "Historical analysis",
-    "section": "Highest value riders",
-    "text": "Highest value riders\nThe rider with the highest value is the rider who scored the most points for the least cost. Who are the top 15 riders by value?\n\n\n\n15×5 DataFrame\n\n\n\nRow\nrider\nteam\ncost\nscore\nvalue\n\n\n\nString\nString\nInt64\nInt64\nFloat64\n\n\n\n\n1\nToms Skujiņš\nLidl - Trek\n16\n405\n25.3125\n\n\n2\nMaxim Van Gils\nLotto Dstny\n16\n360\n22.5\n\n\n3\nLennert Van Eetvelt\nLotto Dstny\n10\n200\n20.0\n\n\n4\nFrancesco Busatto\nIntermarché - Wanty\n8\n153\n19.125\n\n\n5\nTadej Pogačar\nUAE Team Emirates\n32\n585\n18.2812\n\n\n6\nLenny Martinez\nGroupama - FDJ\n12\n216\n18.0\n\n\n7\nFilippo Zana\nTeam Jayco AlUla\n14\n204\n14.5714\n\n\n8\nDavide Formolo\nMovistar Team\n16\n228\n14.25\n\n\n9\nBenoît Cosnefroy\nDecathlon AG2R La Mondiale Team\n18\n246\n13.6667\n\n\n10\nKrists Neilands\nIsrael - Premier Tech\n10\n135\n13.5\n\n\n11\nThomas Pidcock\nINEOS Grenadiers\n24\n315\n13.125\n\n\n12\nLennard Kämna\nBORA - hansgrohe\n8\n99\n12.375\n\n\n13\nMatej Mohorič\nBahrain - Victorious\n24\n270\n11.25\n\n\n14\nKévin Vauquelin\nArkéa - B&B Hotels\n8\n90\n11.25\n\n\n15\nAnders Halland Johannessen\nUno-X Mobility\n4\n45\n11.25",
+    "section": "Top picks",
+    "text": "Top picks\nThe riders with the highest value is the rider who scored the most points for the least cost:\n\n\n\n\n\n\n\n\n\n\n\n\nrider\nteam\ncost\nscore\nvalue\n\n\n\n\nToms Skujiņš\nLidl - Trek\n16\n405\n25.3125\n\n\nMaxim Van Gils\nLotto Dstny\n16\n360\n22.5\n\n\nLennert Van Eetvelt\nLotto Dstny\n10\n200\n20.0\n\n\nFrancesco Busatto\nIntermarché - Wanty\n8\n153\n19.125\n\n\nTadej Pogačar\nUAE Team Emirates\n32\n585\n18.28125\n\n\nLenny Martinez\nGroupama - FDJ\n12\n216\n18.0\n\n\nFilippo Zana\nTeam Jayco AlUla\n14\n204\n14.571428571428571\n\n\nDavide Formolo\nMovistar Team\n16\n228\n14.25\n\n\nBenoît Cosnefroy\nDecathlon AG2R La Mondiale Team\n18\n246\n13.666666666666666\n\n\nKrists Neilands\nIsrael - Premier Tech\n10\n135\n13.5\n\n\nThomas Pidcock\nINEOS Grenadiers\n24\n315\n13.125\n\n\nLennard Kämna\nBORA - hansgrohe\n8\n99\n12.375\n\n\nMatej Mohorič\nBahrain - Victorious\n24\n270\n11.25\n\n\nKévin Vauquelin\nArkéa - B&B Hotels\n8\n90\n11.25\n\n\nAnders Halland Johannessen\nUno-X Mobility\n4\n45\n11.25",
     "crumbs": [
       "Historical analysis"
     ]
   },
   {
-    "objectID": "race_notebooks/historical_analysis.html#lowest-value-riders",
-    "href": "race_notebooks/historical_analysis.html#lowest-value-riders",
+    "objectID": "race_notebooks/historical_analysis.html#worst-picks",
+    "href": "race_notebooks/historical_analysis.html#worst-picks",
     "title": "Historical analysis",
-    "section": "Lowest value riders",
-    "text": "Lowest value riders\n\n\n\n15×5 DataFrame\n\n\n\nRow\nrider\nteam\ncost\nscore\nvalue\n\n\n\nString\nString\nInt64\nInt64\nFloat64\n\n\n\n\n1\nManlio Moro\nMovistar Team\n4\n0\n0.0\n\n\n2\nJonas Iversby Hvideberg\nUno-X Mobility\n4\n0\n0.0\n\n\n3\nSakarias Koller Løland\nUno-X Mobility\n4\n0\n0.0\n\n\n4\nMartin Tjøtta\nArkéa - B&B Hotels\n4\n0\n0.0\n\n\n5\nVictor De La Parte\nEuskaltel - Euskadi\n4\n0\n0.0\n\n\n6\nMax Walker\nAstana Qazaqstan Team\n4\n0\n0.0\n\n\n7\nMikel Iturria\nEuskaltel - Euskadi\n4\n0\n0.0\n\n\n8\nAnders Skaarseth\nUno-X Mobility\n4\n0\n0.0\n\n\n9\nXabier Berasategi\nEuskaltel - Euskadi\n4\n0\n0.0\n\n\n10\nMagnus Kulset\nUno-X Mobility\n4\n0\n0.0\n\n\n11\nAndoni López De Abetxuko\nEuskaltel - Euskadi\n4\n0\n0.0\n\n\n12\nMarcus Sander Hansen\nUno-X Mobility\n4\n0\n0.0\n\n\n13\nIbai Azurmendi\nEuskaltel - Euskadi\n4\n0\n0.0\n\n\n14\nIdar Andersen\nUno-X Mobility\n4\n0\n0.0\n\n\n15\nSindre Kulset\nUno-X Mobility\n4\n0\n0.0",
-    "crumbs": [
-      "Historical analysis"
-    ]
-  },
-  {
-    "objectID": "race_notebooks/historical_analysis.html#lowest-value-riders-who-cost-more-than-7pts",
-    "href": "race_notebooks/historical_analysis.html#lowest-value-riders-who-cost-more-than-7pts",
-    "title": "Historical analysis",
-    "section": "Lowest value riders who cost more than 7pts",
-    "text": "Lowest value riders who cost more than 7pts\nRiders costing more than 7pts might have been expected to do something in the race so who of them performed the worst?\n\n\n\n15×5 DataFrame\n\n\n\nRow\nrider\nteam\ncost\nscore\nvalue\n\n\n\nString\nString\nInt64\nInt64\nFloat64\n\n\n\n\n1\nAnthon Charmig\nAstana Qazaqstan Team\n8\n0\n0.0\n\n\n2\nDaan Hoole\nLidl - Trek\n8\n0\n0.0\n\n\n3\nAntonio Tiberi\nBahrain - Victorious\n8\n0\n0.0\n\n\n4\nPelayo Sánchez\nMovistar Team\n8\n0\n0.0\n\n\n5\nJonas Abrahamsen\nUno-X Mobility\n8\n0\n0.0\n\n\n6\nErik Nordsæter Resell\nUno-X Mobility\n8\n0\n0.0\n\n\n7\nJohan Jacobs\nMovistar Team\n8\n0\n0.0\n\n\n8\nMartin Urianstad\nUno-X Mobility\n8\n0\n0.0\n\n\n9\nJon Aberasturi\nEuskaltel - Euskadi\n8\n0\n0.0\n\n\n10\nJulien Vermote\nTeam Visma | Lease a Bike\n8\n0\n0.0\n\n\n11\nOdd Christian Eiking\nUno-X Mobility\n8\n0\n0.0\n\n\n12\nEmanuel Buchmann\nBORA - hansgrohe\n8\n0\n0.0\n\n\n13\nRoger Adrià\nBORA - hansgrohe\n8\n0\n0.0\n\n\n14\nMatteo Sobrero\nBORA - hansgrohe\n8\n0\n0.0\n\n\n15\nMattia Cattaneo\nSoudal - Quick Step\n8\n0\n0.0",
+    "section": "Worst picks",
+    "text": "Worst picks\nThe most expensive 15 riders who scored nil points:\n\n\n\n\n\n\n\n\n\n\n\n\nrider\nteam\ncost\nscore\nvalue\n\n\n\n\nNeilson Powless\nEF Education-EasyPost\n22\n0\n0.0\n\n\nJulian Alaphilippe\nSoudal - Quick Step\n22\n0\n0.0\n\n\nKasper Asgreen\nSoudal - Quick Step\n22\n0\n0.0\n\n\nAxel Zingle\nCofidis\n18\n0\n0.0\n\n\nWarren Barguil\nTeam dsm-firmenich PostNL\n18\n0\n0.0\n\n\nDaniel Martínez\nBORA - hansgrohe\n16\n0\n0.0\n\n\nGuillaume Martin\nCofidis\n16\n0\n0.0\n\n\nAlberto Bettiol\nEF Education-EasyPost\n16\n0\n0.0\n\n\nGianni Vermeersch\nAlpecin-Deceuninck\n16\n0\n0.0\n\n\nMichał Kwiatkowski\nINEOS Grenadiers\n16\n0\n0.0\n\n\nIván García Cortina\nMovistar Team\n16\n0\n0.0\n\n\nSergio Higuita\nBORA - hansgrohe\n16\n0\n0.0\n\n\nMauri Vansevenant\nSoudal - Quick Step\n14\n0\n0.0\n\n\nSepp Kuss\nTeam Visma\nLease a Bike\n14\n0\n\n\nRomain Grégoire\nGroupama - FDJ\n14\n0\n0.0",
     "crumbs": [
       "Historical analysis"
     ]

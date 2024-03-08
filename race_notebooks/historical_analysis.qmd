@@ -6,20 +6,22 @@ subtitle: "Strade Bianche 2024"
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
 
 ```{julia}
-using Velogames, DataFrames, HiGHS, JuMP
+using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables
 
 riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
 riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=1"
+racehash = "#StradeBianche"
 bestteamscore = 1826;
 ```
 
 # Best team you could have picked
 
-With the benefit of hindsight, what's the best team you could have picked?
-
 ```{julia}
+#| output: false
+
 # get the rider data
 ridervgpost = getvgriders(riderseriesurl)
+ridervgpost = ridervgpost[ridervgpost.startlist.==racehash, :]
 
 # this will only be needed for individual rounds of a longer series
 riderracepoints = getvgracepoints(riderraceurl)
@@ -45,16 +47,19 @@ modelpostresults = JuMP.value.(x)
 
 allriderdata.chosen = modelpostresults.data .> 0.5
 chosenteampost = filter(row -> row.chosen, allriderdata)
-println("Score of the team: ", chosenteampost.score |> sum)
-println("Cost of the team: ", chosenteampost.cost |> sum)
-chosenteampost[:, [:rider, :team, :cost, :score, :scoreperpoint]]
+```
+
+With the benefit of hindsight, the best team you could have picked scored `{julia} chosenteampost.score |> sum` points and cost `{julia} chosenteampost.cost |> sum` points:
+
+```{julia}
+markdown_table(chosenteampost[:, [:rider, :team, :cost, :score, :scoreperpoint]])
 ```
 
 # Cheapest team that would have beaten the best team
 
-The actual winning team in the Velogames competition scored `{julia} bestteamscore` points. What's the cheapest team you could have picked that would have beaten that team?
-
 ```{julia}
+#| output: false
+
 modelpost2 = JuMP.Model(HiGHS.Optimizer)
 JuMP.set_silent(modelpost2)
 JuMP.@variable(modelpost2, x[allriderdata.rider], Bin)
@@ -70,16 +75,19 @@ modelpost2results = JuMP.value.(x)
 
 allriderdata.chosen2 = modelpost2results.data .> 0.5
 chosen2teampost = filter(row -> row.chosen2, allriderdata)
-println("Score of the team: ", chosen2teampost.score |> sum)
-println("Cost of the team: ", chosen2teampost.cost |> sum)
-chosen2teampost[:, [:rider, :team, :cost, :score]]
+```
+
+The cheapest team that would have beaten the best team scored `{julia} chosen2teampost.score |> sum` points and cost `{julia} chosen2teampost.cost |> sum` points:
+
+```{julia}
+markdown_table(chosen2teampost[:, [:rider, :team, :cost, :score]])
 ```
 
 # Rider value
 
-## Highest value riders
+## Top picks
 
-The rider with the highest value is the rider who scored the most points for the least cost. Who are the top 15 riders by value?
+The riders with the highest value is the rider who scored the most points for the least cost:
 
 ```{julia}
 # calculate points per cost
@@ -87,21 +95,17 @@ allriderdata.value = allriderdata.score ./ allriderdata.cost
 # sort by ppc
 sort!(allriderdata, :value, rev=true)
 # select the top 15 riders,
-allriderdata[1:15, [:rider, :team, :cost, :score, :value]]
+markdown_table(allriderdata[1:15, [:rider, :team, :cost, :score, :value]])
 ```
 
-## Lowest value riders
+## Worst picks
+
+The most expensive 15 riders who scored nil points:
 
 ```{julia}
-# select the bottom 15 riders, sorting by cost
-sort!(allriderdata[end-14:end, [:rider, :team, :cost, :score, :value]], :cost, rev=true)
-```
-
-## Lowest value riders who cost more than 7pts
-
-Riders costing more than 7pts might have been expected to do something in the race so who of them performed the worst?
-
-```{julia}
-# select the bottom 15 riders who cost more than 7pts,
-allriderdata[findall(allriderdata.cost .> 7)[end-14:end], [:rider, :team, :cost, :score, :value]]
+# select the 15 riders with the highest cost who scored zero
+zero_score_riders = filter(row -> row[:points] == 0, allriderdata)
+sorted_riders = sort(zero_score_riders, :cost, rev=true)
+top_15_riders = sorted_riders[1:15, :]
+markdown_table(top_15_riders[end-14:end, [:rider, :team, :cost, :score, :value]])
 ```
