@@ -4,8 +4,10 @@ project:
   render:
     - "race_notebooks/*.qmd"
     - "!race_notebooks/giro_2023.qmd"
+    - "!race_notebooks/oneday.qmd"
+    - "!race_notebooks/stagerace.qmd"
 
-jupyter: julia-1.9
+jupyter: julia-1.10
 
 website:
   title: "Velogames solver"
@@ -14,10 +16,10 @@ website:
     contents:
       - href: race_notebooks/index.qmd
         text: "Overview"
-      - href: race_notebooks/oneday.qmd
-        text: "One day races"
-      - href: race_notebooks/stagerace.qmd
-        text: "Stage races"
+      # - href: race_notebooks/oneday.qmd
+      #   text: "One day races"
+      # - href: race_notebooks/stagerace.qmd
+      #   text: "Stage races"
       - href: race_notebooks/historical_analysis.qmd
         text: "Historical analysis"
 
@@ -35,6 +37,6 @@ link-external-icon: true
 execute:
   echo: false
   warning: false
-  cache: true
+  cache: false
 
 date-format: long

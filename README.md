@@ -8,7 +8,7 @@ Solve a linear programme to maximise expected points, constrained by budget and 
 
 ## Usage
 
-Outputs calculated in the Quarto files in the `race_notebooks/` directory. Quarto files are locally rendered to `docs/` with `quarto render` and [served with Pages](https:://jzuccollo.github.io/Velogames.jl). 
+Outputs calculated in the Quarto files in the `race_notebooks/` directory. Quarto files are locally rendered to `docs/` with `quarto render` and [served with Pages](https://jzuccollo.github.io/Velogames.jl). 
 
 No guarantee they'll re-render because they pull from the moving target of velogames.com rider pages, so URLs typically need to be updated for every render.
 
