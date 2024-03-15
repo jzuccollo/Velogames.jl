@@ -5,10 +5,10 @@ title: "One-day"
 ```{julia}
 using Velogames, DataFrames, Statistics, StatsBase
 
-raceurl = "https://www.velogames.com/womens-classics/2024/riders.php"
-betfairurl = "https://www.betfair.com/sport/cycling/strade-bianche-women/12651760"
-racehash = "#StradeBianche"
-racesex = "we"
+raceurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
+betfairurl = "https://www.betfair.com/betting/cycling/milan-san-remo/c-10580778"
+racehash = "#MilanoSanremo"
+racesex = "me"
 racecategory = "one-day-races"
 ```
 
@@ -18,6 +18,7 @@ Data is scraped from the [Velogames website](https://www.velogames.com/). Rider 
 
 ```{julia}
 ridervg = getvgriders(raceurl)
+ridervg_previous = getvgriders("https://www.velogames.com/sixes-superclasico/2023/riders.php")
 
 # keep only riders in the startlist for for the race
 ridervg = ridervg[ridervg.startlist.==racehash, :]
@@ -35,22 +36,25 @@ riderodds = getodds(betfairurl)
 # join all three datasets on riderkey
 riderdf = leftjoin(ridervg, rideroneday, on=:riderkey, makeunique=true)
 riderdf = leftjoin(riderdf, riderodds, on=:riderkey, makeunique=true)
+riderdf = leftjoin(riderdf, ridervg_previous[!, [:riderkey, :points]], on=:riderkey, makeunique=true)
 
-# rename points to vgpoints
+# drop column names ending with _1 or _2
+# keeps PREVIOUS season's points. Switch to using :points for current season.
 rename!(
     riderdf,
-    :points => :vgpoints,
+    :points_2 => :vgpoints,
     :cost => :vgcost,
     :rank => :pcsrank,
     :points_1 => :pcspoints,
     :value => :vgvalue,
 )
-# drop columns ending in _1
-select!(riderdf, Not([:rider_1, :rider_2, :team_1]))
+cols_to_drop = [name for name in names(riderdf) if endswith(string(name), "_1") || endswith(string(name), "_2")]
+select!(riderdf, Not(cols_to_drop))
 
-# fill in missing values in rank and points with 0
+# fill in missing values with a default
 riderdf[ismissing.(riderdf.pcsrank), :pcsrank] .= 0
 riderdf[ismissing.(riderdf.pcspoints), :pcspoints] .= 0
+riderdf[ismissing.(riderdf.vgpoints), :vgpoints] .= minimum(skipmissing(riderdf.vgpoints))
 riderdf[ismissing.(riderdf.odds), :odds] .= 500
 
 # convert odds to probability of win
@@ -68,7 +72,7 @@ riderdf.zpcspoints = StatsBase.zscore(riderdf.pcspoints)
 
 ```{julia}
 # weights for inv odds, vgpoints, pcspoints
-WEIGHTS = [1, 0, 0]
+WEIGHTS = [0, 0, 1]
 
 # calculate rider calcscore as the mean of the velogames score and the PCS score
 zweights = WEIGHTS ./ sum(WEIGHTS)
@@ -122,5 +126,5 @@ riderdf.vgcost .* modelresults.data |> sum
 # selected riders
 riderdf[!, :chosen] = modelresults.data .|> !iszero
 chosenteam = filter(row -> row.chosen, riderdf)
-sort(chosenteam, :vgcost, rev=true)[:, [:rider, :team, :vgcost, :odds, :pcspoints, :pcsrank, :calcscore, :calcvalue]]
+sort(chosenteam, :vgcost, rev=true)[:, [:rider, :team, :vgcost, :odds, :vgpoints, :pcsrank, :calcscore, :calcvalue]]
 ```
