@@ -9,7 +9,7 @@ Looking back on the race, what's the best team you could have picked? And what's
 using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables
 
 riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
-riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=1"
+riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=3"
 racehash = "#MilanoSanremo"
 bestteamscore = 1908;
 ```
