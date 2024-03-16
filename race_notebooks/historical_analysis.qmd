@@ -1,6 +1,6 @@
 ---
 title: "Historical analysis"
-subtitle: "Strade Bianche 2024"
+subtitle: "Milano-Sanremo 2024"
 ---
 
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
@@ -10,8 +10,8 @@ using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables
 
 riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
 riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=1"
-racehash = "#StradeBianche"
-bestteamscore = 1826;
+racehash = "#MilanoSanremo"
+bestteamscore = 1908;
 ```
 
 # Best team you could have picked
