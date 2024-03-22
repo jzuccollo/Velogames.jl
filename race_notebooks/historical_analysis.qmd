@@ -99,10 +99,12 @@ The riders with the highest value is the rider who scored the most points for th
 allriderdata.value = allriderdata.score ./ allriderdata.cost
 # sort by ppc
 sort!(allriderdata, :value, rev=true)
-# select the top 20 riders,
+# select the top 20 riders an display in a table
 displaytable3 = rename(allriderdata, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Score, :value => :Value)
 displaytable3[!, :Value] = round.(displaytable3[!, :Value], digits=1)
-markdown_table(displaytable3[1:20, [:Rider, :Team, :Cost, :Score, :Value]])
+displaytable3[!, :Rank] = 1:nrow(displaytable3)
+displaytable3 = displaytable3[:, [:Rank, :Rider, :Team, :Cost, :Score, :Value]]
+markdown_table(displaytable3[1:20, :])
 ```
 
 ## Worst picks
