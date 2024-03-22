@@ -1,6 +1,6 @@
 ---
 title: "Historical analysis"
-subtitle: "Milano-Sanremo 2024"
+subtitle: "E3 Saxo Classic 2024"
 ---
 
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
@@ -9,9 +9,9 @@ Looking back on the race, what's the best team you could have picked? And what's
 using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables
 
 riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
-riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=3"
-racehash = "#MilanoSanremo"
-bestteamscore = 1908;
+riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=5"
+racehash = "#E3Saxo"
+bestteamscore = 1665;
 ```
 
 # Best team you could have picked
@@ -21,13 +21,13 @@ bestteamscore = 1908;
 
 # get the rider data
 ridervgpost = getvgriders(riderseriesurl)
-ridervgpost = ridervgpost[ridervgpost.startlist.==racehash, :]
+# ridervgpost = ridervgpost[ridervgpost.startlist.==racehash, :]
 
 # this will only be needed for individual rounds of a longer series
 riderracepoints = getvgracepoints(riderraceurl)
 
 # join the datasets on riderkey
-allriderdata = leftjoin(ridervgpost, riderracepoints, on=:riderkey, makeunique=true)
+allriderdata = leftjoin(riderracepoints, ridervgpost, on=:riderkey, makeunique=true)
 allriderdata = coalesce.(allriderdata, 0)
 allriderdata.scoreperpoint = allriderdata.score ./ allriderdata.cost
 
@@ -100,7 +100,9 @@ markdown_table(allriderdata[1:15, [:rider, :team, :cost, :score, :value]])
 
 ## Worst picks
 
-The most expensive 15 riders who scored nil points:
+**Not available for this race because of boring data reasons. Expect it back for Gent-Wevelgem.**
+
+<!-- The most expensive 15 riders who scored nil points:
 
 ```{julia}
 # select the 15 riders with the highest cost who scored zero
@@ -108,4 +110,4 @@ zero_score_riders = filter(row -> row[:points] == 0, allriderdata)
 sorted_riders = sort(zero_score_riders, :cost, rev=true)
 top_15_riders = sorted_riders[1:15, :]
 markdown_table(top_15_riders[end-14:end, [:rider, :team, :cost, :score, :value]])
-```
+``` -->
