@@ -31,6 +31,9 @@ allriderdata = leftjoin(riderracepoints, ridervgpost, on=:riderkey, makeunique=t
 allriderdata = coalesce.(allriderdata, 0)
 allriderdata.scoreperpoint = allriderdata.score ./ allriderdata.cost
 
+# get rid of pipes in the team names to make the markdown table look better
+allriderdata.team = replace.(allriderdata.team, r"\|" => "-")
+
 modelpost = JuMP.Model(HiGHS.Optimizer)
 JuMP.set_silent(modelpost)
 JuMP.@variable(modelpost, x[allriderdata.rider], Bin)
