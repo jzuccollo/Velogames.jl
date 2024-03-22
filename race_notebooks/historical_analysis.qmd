@@ -52,7 +52,8 @@ chosenteampost = filter(row -> row.chosen, allriderdata)
 With the benefit of hindsight, the best team you could have picked scored `{julia} chosenteampost.score |> sum` points and cost `{julia} chosenteampost.cost |> sum` points:
 
 ```{julia}
-markdown_table(chosenteampost[:, [:rider, :team, :cost, :score, :scoreperpoint]])
+displaytable1 = rename(chosenteampost, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Score)
+markdown_table(displaytable1[:, [:Rider, :Team, :Cost, :Score]])
 ```
 
 # Cheapest team that would have beaten the best team
@@ -80,7 +81,8 @@ chosen2teampost = filter(row -> row.chosen2, allriderdata)
 The best team picked by anyone scored `{julia} bestteamscore`. The cheapest team that would have beaten that scored `{julia} chosen2teampost.score |> sum` points and cost `{julia} chosen2teampost.cost |> sum` points:
 
 ```{julia}
-markdown_table(chosen2teampost[:, [:rider, :team, :cost, :score]])
+displaytable2 = rename(chosen2teampost, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Score)
+markdown_table(displaytable2[:, [:Rider, :Team, :Cost, :Score]])
 ```
 
 # Rider value
@@ -94,8 +96,10 @@ The riders with the highest value is the rider who scored the most points for th
 allriderdata.value = allriderdata.score ./ allriderdata.cost
 # sort by ppc
 sort!(allriderdata, :value, rev=true)
-# select the top 15 riders,
-markdown_table(allriderdata[1:15, [:rider, :team, :cost, :score, :value]])
+# select the top 20 riders,
+displaytable3 = rename(allriderdata, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Score, :value => :Value)
+displaytable3[!, :Value] = round.(displaytable3[!, :Value], digits=1)
+markdown_table(displaytable3[1:20, [:Rider, :Team, :Cost, :Score, :Value]])
 ```
 
 ## Worst picks
