@@ -3,7 +3,7 @@ title: "Historical analysis"
 subtitle: "Gent-Wevelgem 2024"
 ---
 
-Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best team?
+Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best DPCC team?
 
 ```{julia}
 using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables
@@ -11,7 +11,7 @@ using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables
 riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
 riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=6"
 racehash = "#GentWevelgem"
-bestteamscore = 1698;
+bestteamscore = 1251;
 ```
 
 # Best team you could have picked
@@ -59,7 +59,7 @@ displaytable1 = rename(chosenteampost, :rider => :Rider, :team => :Team, :cost =
 markdown_table(displaytable1[:, [:Rider, :Team, :Cost, :Score]])
 ```
 
-# Cheapest team that would have beaten the best team
+# Cheapest team that would have beaten the best DPCC team
 
 ```{julia}
 #| output: false
@@ -81,7 +81,7 @@ allriderdata.chosen2 = modelpost2results.data .> 0.5
 chosen2teampost = filter(row -> row.chosen2, allriderdata)
 ```
 
-The best team picked by anyone scored `{julia} bestteamscore`. The cheapest team that would have beaten that scored `{julia} chosen2teampost.score |> sum` points and cost `{julia} chosen2teampost.cost |> sum` points:
+The best team picked by a DPCC league member was Mark Readiot's, which scored `{julia} bestteamscore` points. The cheapest team that would have beaten that scored `{julia} chosen2teampost.score |> sum` points and cost `{julia} chosen2teampost.cost |> sum` points:
 
 ```{julia}
 displaytable2 = rename(chosen2teampost, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Score)
