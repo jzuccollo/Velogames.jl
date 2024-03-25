@@ -92,7 +92,7 @@ markdown_table(displaytable2[:, [:Rider, :Team, :Cost, :Score]])
 
 ## Top picks
 
-The riders with the highest value is the rider who scored the most points for the least cost:
+The highest value riders are the ones who scored the most points per credit cost:
 
 ```{julia}
 # calculate points per cost
@@ -109,7 +109,7 @@ markdown_table(displaytable3[1:20, :])
 
 ## Worst picks
 
-**Not available for this race because of boring data reasons. Expect it back in future.**
+**Not available for this race for boring data reasons. Expect it back in future.**
 
 <!-- The most expensive 15 riders who scored nil points:
 

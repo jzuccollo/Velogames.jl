@@ -24,7 +24,7 @@
     "href": "race_notebooks/historical_analysis.html#top-picks",
     "title": "Historical analysis",
     "section": "Top picks",
-    "text": "Top picks\nThe riders with the highest value is the rider who scored the most points for the least cost:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nJonathan Milan\nLidl - Trek\n14\n330\n23.6\n\n\n2\nMads Pedersen\nLidl - Trek\n26\n585\n22.5\n\n\n3\nMarius Mayrhofer\nTudor Pro Cycling Team\n6\n117\n19.5\n\n\n4\nJordi Meeus\nBORA - hansgrohe\n20\n360\n18.0\n\n\n5\nStefan Bissegger\nEF Education-EasyPost\n10\n171\n17.1\n\n\n6\nMathieu Van Der Poel\nAlpecin-Deceuninck\n32\n540\n16.9\n\n\n7\nJasper Philipsen\nAlpecin-Deceuninck\n26\n355\n13.7\n\n\n8\nFabian Lienhard\nGroupama - FDJ\n6\n81\n13.5\n\n\n9\nJonas Abrahamsen\nUno-X Mobility\n8\n99\n12.4\n\n\n10\nLuca Mozzato\nArkéa - B&B Hotels\n12\n144\n12.0\n\n\n11\nOliver Naesen\nDecathlon AG2R La Mondiale Team\n16\n180\n11.2\n\n\n12\nCyrus Monk\nQ36.5 Pro Cycling Team\n4\n45\n11.2\n\n\n13\nBiniam Girmay\nIntermarché - Wanty\n22\n228\n10.4\n\n\n14\nOlav Kooij\nTeam Visma - Lease a Bike\n24\n246\n10.2\n\n\n15\nAlex Kirsch\nLidl - Trek\n6\n60\n10.0\n\n\n16\nOtto Vergaerde\nLidl - Trek\n6\n60\n10.0\n\n\n17\nLaurenz Rex\nIntermarché - Wanty\n14\n135\n9.6\n\n\n18\nMatteo Trentin\nTudor Pro Cycling Team\n20\n192\n9.6\n\n\n19\nDylan Groenewegen\nTeam Jayco AlUla\n22\n204\n9.3\n\n\n20\nTim Merlier\nSoudal - Quick Step\n24\n216\n9.0",
+    "text": "Top picks\nThe highest value riders are the ones who scored the most points per credit cost:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nJonathan Milan\nLidl - Trek\n14\n330\n23.6\n\n\n2\nMads Pedersen\nLidl - Trek\n26\n585\n22.5\n\n\n3\nMarius Mayrhofer\nTudor Pro Cycling Team\n6\n117\n19.5\n\n\n4\nJordi Meeus\nBORA - hansgrohe\n20\n360\n18.0\n\n\n5\nStefan Bissegger\nEF Education-EasyPost\n10\n171\n17.1\n\n\n6\nMathieu Van Der Poel\nAlpecin-Deceuninck\n32\n540\n16.9\n\n\n7\nJasper Philipsen\nAlpecin-Deceuninck\n26\n355\n13.7\n\n\n8\nFabian Lienhard\nGroupama - FDJ\n6\n81\n13.5\n\n\n9\nJonas Abrahamsen\nUno-X Mobility\n8\n99\n12.4\n\n\n10\nLuca Mozzato\nArkéa - B&B Hotels\n12\n144\n12.0\n\n\n11\nOliver Naesen\nDecathlon AG2R La Mondiale Team\n16\n180\n11.2\n\n\n12\nCyrus Monk\nQ36.5 Pro Cycling Team\n4\n45\n11.2\n\n\n13\nBiniam Girmay\nIntermarché - Wanty\n22\n228\n10.4\n\n\n14\nOlav Kooij\nTeam Visma - Lease a Bike\n24\n246\n10.2\n\n\n15\nAlex Kirsch\nLidl - Trek\n6\n60\n10.0\n\n\n16\nOtto Vergaerde\nLidl - Trek\n6\n60\n10.0\n\n\n17\nLaurenz Rex\nIntermarché - Wanty\n14\n135\n9.6\n\n\n18\nMatteo Trentin\nTudor Pro Cycling Team\n20\n192\n9.6\n\n\n19\nDylan Groenewegen\nTeam Jayco AlUla\n22\n204\n9.3\n\n\n20\nTim Merlier\nSoudal - Quick Step\n24\n216\n9.0",
     "crumbs": [
       "Historical analysis"
     ]
@@ -34,7 +34,7 @@
     "href": "race_notebooks/historical_analysis.html#worst-picks",
     "title": "Historical analysis",
     "section": "Worst picks",
-    "text": "Worst picks\nNot available for this race because of boring data reasons. Expect it back in future.",
+    "text": "Worst picks\nNot available for this race for boring data reasons. Expect it back in future.",
     "crumbs": [
       "Historical analysis"
     ]
