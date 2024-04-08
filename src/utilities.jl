@@ -19,7 +19,13 @@ end
 `createkey` creates a unique key for each rider based on their name.
 """
 function createkey(ridername::String)
-    # s = replace(ridername, r"[^a-zA-Z0-9]" => "")
     newkey = join(sort(collect(normalisename(ridername, true))))
     return newkey
+end
+
+"""
+`unpipe` takes a vector of strings and replaces all instances of `|` with `-`.
+"""
+function unpipe(str::String)
+    return replace(str, "|" => "-")
 end

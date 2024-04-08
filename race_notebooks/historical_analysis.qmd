@@ -6,7 +6,7 @@ subtitle: "Paris-Roubaix 2024"
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best DPCC team?
 
 ```{julia}
-using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables
+using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables, Feather
 
 riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
 riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=10"
@@ -22,7 +22,7 @@ bestteamscore = 1860;
 #| output: false
 
 # get the rider data
-ridervgpost = getvgriders(riderseriesurl)
+ridervgpost = getvgriders(riderseriesurl, fetchagain=false)
 # ridervgpost = ridervgpost[ridervgpost.startlist.==racehash, :]
 
 # this will only be needed for individual rounds of a longer series

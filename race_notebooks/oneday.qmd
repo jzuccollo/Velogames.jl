@@ -7,8 +7,9 @@ using Velogames, DataFrames, Statistics, StatsBase
 
 raceurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
 lastyearurl = "https://www.velogames.com/sixes-superclasico/2023/riders.php"
-betfairurl = "https://www.betfair.com/betting/cycling/e3-saxo-classic/c-12566873"
-racehash = "#E3SaxoClassic"
+lastyearraceurl = "https://www.velogames.com/sixes-superclasico/2023/ridescore.php?ga=13&st=13"
+betfairurl = "https://www.betfair.com/betting/cycling/tour-de-france/c-10536712"
+racehash = "#BrabantsePijl"
 racesex = "me"
 racecategory = "one-day-races"
 ```
@@ -18,8 +19,9 @@ racecategory = "one-day-races"
 Data is scraped from the [Velogames website](https://www.velogames.com/). Rider scores are the number of points they have accumulated in the current season.
 
 ```{julia}
-ridervg = getvgriders(raceurl)
-ridervg_previous = getvgriders(lastyearurl)
+ridervg = getvgriders(raceurl, fetchagain=true)
+ridervg_prevyear = getvgriders(lastyearurl, fetchagain=true)
+# ridervg_prevrace = getvgriders(lastyearraceurl, fetchagain=true)
 
 # keep only riders in the startlist for for the race
 ridervg = ridervg[ridervg.startlist.==racehash, :]
@@ -37,7 +39,7 @@ riderodds = getodds(betfairurl)
 # join all three datasets on riderkey
 riderdf = leftjoin(ridervg, rideroneday, on=:riderkey, makeunique=true)
 riderdf = leftjoin(riderdf, riderodds, on=:riderkey, makeunique=true)
-riderdf = leftjoin(riderdf, ridervg_previous[!, [:riderkey, :points]], on=:riderkey, makeunique=true)
+riderdf = leftjoin(riderdf, ridervg_prevyear[!, [:riderkey, :points]], on=:riderkey, makeunique=true)
 
 # drop column names ending with _1 or _2
 # keeps PREVIOUS season's points. Switch to using :points for current season.

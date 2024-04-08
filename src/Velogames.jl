@@ -1,6 +1,6 @@
 module Velogames
 
-using HTTP, DataFrames, TableScraper, Cascadia, Gumbo, CategoricalArrays, Unicode, HiGHS, JuMP
+using HTTP, DataFrames, TableScraper, Cascadia, Gumbo, CategoricalArrays, Unicode, HiGHS, JuMP, Feather
 export solverace, getvgriders, getvgracepoints, getpcsriderpts, getpcsriderhistory, getpcsranking, getpcsraceranking, getodds, buildmodeloneday, buildmodelstage
 
 include("build_model.jl")
