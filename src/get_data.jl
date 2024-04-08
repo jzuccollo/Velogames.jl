@@ -6,8 +6,8 @@ This function downloads and parses the rider data from the Velogames and PCS web
 The function returns a DataFrame with the columns of the first table on the page. It also adds a (hopefully) unique key for each rider based on their name.
 """
 function gettable(pageurl::String)
-    page = scrape_tables(pageurl)
-    riderdf = DataFrame(page[1])
+    page = TableScraper.scrape_tables(pageurl)
+    riderdf = DataFrames.DataFrame(page[1])
 
     # lowercase the column names and remove spaces
     rename!(
@@ -29,6 +29,10 @@ function gettable(pageurl::String)
 
     # add a riderkey column based on the name
     riderdf.riderkey = map(x -> createkey(x), riderdf.rider)
+
+    # drop duplicate riderkeys
+    riderdf = unique(riderdf, :riderkey)
+
     # check that the riderkey is unique
     @assert length(unique(riderdf.riderkey)) == length(riderdf.riderkey) "Rider keys are not unique"
 
@@ -128,23 +132,33 @@ The function returns a DataFrame with the following columns:
     * `team` - the team the rider rides for
     * `rank` - the rank of the rider in the category
     * `score` - the number of points scored by the rider
+    * `fetchagain` - a boolean indicating whether to fetch the data again
 """
-function getvgriders(pageurl::String)
-    # download the page and parse the table
-    riderdf = gettable(pageurl)
+function getvgriders(pageurl::String; fetchagain::Bool=false)
+    filename = split(pageurl, "/")[end]
+    if fetchagain
+        # download the page and parse the table
+        riderdf = gettable(pageurl)
 
-    # normalise class data, if it exists
-    if hasproperty(riderdf, :class)
-        # lowercase the class column and remove spaces
-        rename!(riderdf, :class => :classraw)
-        riderdf.class = lowercase.(replace.(riderdf.classraw, " " => ""))
-        for class in unique(riderdf.class)
-            riderdf[!, class] = riderdf.class .== class
+        # normalise class data, if it exists
+        if hasproperty(riderdf, :class)
+            # lowercase the class column and remove spaces
+            rename!(riderdf, :class => :classraw)
+            riderdf.class = lowercase.(replace.(riderdf.classraw, " " => ""))
+            for class in unique(riderdf.class)
+                riderdf[!, class] = riderdf.class .== class
+            end
         end
-    end
 
-    # calculate the value of the rider
-    riderdf.value = riderdf.points ./ riderdf.cost
+        # calculate the value of the rider
+        riderdf.value = riderdf.points ./ riderdf.cost
+
+        # save the data to an Arrow file
+        Feather.write(filename * ".feather", riderdf)
+    else
+        # read the data from the file
+        riderdf = Feather.read(filename * ".feather")
+    end
 
     return riderdf
 end
