@@ -1,6 +1,6 @@
 ---
 title: "Historical analysis"
-subtitle: "Paris-Roubaix 2024"
+subtitle: "Liège–Bastogne–Liège 2024"
 ---
 
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best DPCC team?
@@ -9,11 +9,11 @@ Looking back on the race, what's the best team you could have picked? And what's
 using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables, Feather
 
 riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
-riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=10"
-racehash = "#ParisRoubaix"
+riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=14"
+racehash = "#LiegeBastogneLiege"
 
-winnername = "Michiko"
-bestteamscore = 1860;
+winnername = "Max"
+bestteamscore = 1635;
 ```
 
 # Best team you could have picked
@@ -22,14 +22,14 @@ bestteamscore = 1860;
 #| output: false
 
 # get the rider data
-ridervgpost = getvgriders(riderseriesurl, fetchagain=false)
-# ridervgpost = ridervgpost[ridervgpost.startlist.==racehash, :]
+ridervgpost = getvgriders(riderseriesurl, fetchagain=true)
+ridervgpost = ridervgpost[ridervgpost.startlist.==racehash, :]
 
 # this will only be needed for individual rounds of a longer series
 riderracepoints = getvgracepoints(riderraceurl)
 
 # join the datasets on riderkey
-allriderdata = leftjoin(riderracepoints, ridervgpost, on=:riderkey, makeunique=true)
+allriderdata = leftjoin(ridervgpost, riderracepoints, on=:riderkey, makeunique=true)
 allriderdata = coalesce.(allriderdata, 0)
 allriderdata.scoreperpoint = allriderdata.score ./ allriderdata.cost
 
@@ -111,9 +111,7 @@ markdown_table(displaytable3[1:20, :])
 
 ## Worst picks
 
-**Not available for this race for boring data reasons. Expect it back in future.**
-
-<!-- The most expensive 15 riders who scored nil points:
+The most expensive 15 riders who scored nil points:
 
 ```{julia}
 # select the 15 riders with the highest cost who scored zero
@@ -121,4 +119,4 @@ zero_score_riders = filter(row -> row[:points] == 0, allriderdata)
 sorted_riders = sort(zero_score_riders, :cost, rev=true)
 top_15_riders = sorted_riders[1:15, :]
 markdown_table(top_15_riders[end-14:end, [:rider, :team, :cost, :score, :value]])
-``` -->
+```
