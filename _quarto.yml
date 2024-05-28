@@ -2,10 +2,7 @@ project:
   type: website
   output-dir: docs
   render:
-    - "race_notebooks/*.qmd"
-    - "!race_notebooks/giro_2023.qmd"
-    - "!race_notebooks/oneday.qmd"
-    - "!race_notebooks/stagerace.qmd"
+    - "race_notebooks/historical_analysis_stagerace.qmd"
 
 jupyter: julia-1.10
 
@@ -20,7 +17,7 @@ website:
       #   text: "One day races"
       # - href: race_notebooks/stagerace.qmd
       #   text: "Stage races"
-      - href: race_notebooks/historical_analysis.qmd
+      - href: race_notebooks/historical_analysis_stagerace.qmd
         text: "Historical analysis"
 
 format:

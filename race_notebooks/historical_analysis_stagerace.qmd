@@ -1,0 +1,141 @@
+---
+title: "Historical analysis"
+subtitle: "Giro d'Italia 2024"
+---
+
+Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best DPCC team?
+
+```{julia}
+using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables, Feather
+
+ridersurl = "https://www.velogames.com/italy/2024/riders.php"
+
+winnername = "Tim"
+bestteamscore = 9709;
+```
+
+# Best team you could have picked
+
+```{julia}
+#| output: false
+
+# get the rider data
+allriderdata = getvgriders(ridersurl, fetchagain=false)
+allriderdata = coalesce.(allriderdata, 0)
+allriderdata.scoreperpoint = allriderdata.points ./ allriderdata.cost
+
+# get rid of pipes in the team names to make the markdown table look better
+allriderdata.team = replace.(allriderdata.team, r"\|" => "-")
+
+model = JuMP.Model(HiGHS.Optimizer)
+JuMP.set_silent(model)
+JuMP.@variable(model, x[allriderdata.rider], Bin)
+JuMP.@objective(model, Max, allriderdata[!, "points"]' * x) # maximise the total score
+JuMP.@constraint(model, allriderdata[!, "cost"]' * x <= 100) # cost must be <= 100
+JuMP.@constraint(model, sum(x) == 9) # exactly n riders must be chosen
+JuMP.@constraint(model, allriderdata[!, "allrounder"]' * x >= 2) # at least 2 must be all rounders
+JuMP.@constraint(model, allriderdata[!, "sprinter"]' * x >= 1) # at least 1 must be a sprinter
+JuMP.@constraint(model, allriderdata[!, "climber"]' * x >= 2) # at least 2 must be climbers
+JuMP.@constraint(model, allriderdata[!, "unclassed"]' * x >= 3) # at least 3 must be unclassed
+JuMP.optimize!(model)
+modelpostresults = JuMP.value.(x)
+
+allriderdata.chosen = modelpostresults.data .> 0.5
+chosenteampost = filter(row -> row.chosen, allriderdata)
+```
+
+With the benefit of hindsight, the best team you could have picked scored `{julia} chosenteampost.points |> sum` points and cost `{julia} chosenteampost.cost |> sum` points:
+
+```{julia}
+displaytable1 = rename(chosenteampost, :rider => :Rider, :team => :Team, :cost => :Cost, :points => :Score)
+markdown_table(displaytable1[:, [:Rider, :Team, :Cost, :Score]])
+```
+
+# Cheapest team that would have beaten the best DPCC team
+
+```{julia}
+#| output: false
+
+modelpost2 = JuMP.Model(HiGHS.Optimizer)
+JuMP.set_silent(modelpost2)
+JuMP.@variable(modelpost2, x[allriderdata.rider], Bin)
+JuMP.@objective(modelpost2, Min, allriderdata.cost' * x) # maximise the total score
+JuMP.@constraint(modelpost2, allriderdata.points' * x >= bestteamscore) # cost must be <= 100
+JuMP.@constraint(modelpost2, sum(x) == 9) # exactly 9 riders must be chosen
+@constraint(modelpost2, allriderdata.allrounder' * x >= 2) # at least 2 must be all rounders
+@constraint(modelpost2, allriderdata.sprinter' * x >= 1) # at least 1 must be a sprinter
+@constraint(modelpost2, allriderdata.climber' * x >= 2) # at least 2 must be climbers
+@constraint(modelpost2, allriderdata.unclassed' * x >= 3) # at least 3 must be unclassed
+JuMP.optimize!(modelpost2)
+modelpost2results = JuMP.value.(x)
+
+allriderdata.chosen2 = modelpost2results.data .> 0.5
+chosen2teampost = filter(row -> row.chosen2, allriderdata)
+```
+
+The best team picked by a DPCC league member was `{julia} winnername`'s, which scored `{julia} bestteamscore` points. The cheapest team that would have beaten that scored `{julia} chosen2teampost.points |> sum` points and cost `{julia} chosen2teampost.cost |> sum` points:
+
+```{julia}
+displaytable2 = rename(chosen2teampost, :rider => :Rider, :team => :Team, :cost => :Cost, :points => :Score)
+markdown_table(displaytable2[:, [:Rider, :Team, :Cost, :Score]])
+```
+
+# Rider value
+
+## Top picks
+
+The highest value riders are the ones who scored the most points per credit cost:
+
+```{julia}
+# calculate points per cost
+allriderdata.value = allriderdata.points ./ allriderdata.cost
+# sort by ppc
+sort!(allriderdata, :value, rev=true)
+# select the top 20 riders an display in a table
+valuetable = rename(allriderdata, :rider => :Rider, :team => :Team, :cost => :Cost, :points => :Score, :value => :Value)
+valuetable[!, :Value] = round.(valuetable[!, :Value], digits=1)
+valuetable[!, :Rank] = 1:nrow(valuetable)
+markdown_table(valuetable[1:20, [:Rank, :Rider, :Team, :Cost, :Score, :Value]])
+```
+
+### Best all-rounders
+
+Two were required in each team. The best value all-rounders were:
+
+```{julia}
+# select the best allrounders
+allrounders = filter(row -> row.allrounder == 1, valuetable)
+markdown_table(allrounders[1:5, [:Rank, :Rider, :Team, :Cost, :Score, :Value]])
+```
+
+### Best climbers
+
+Two were required in each team. The best value climbers were:
+
+```{julia}
+# select the best allrounders
+climbers = filter(row -> row.climber == 1, valuetable)
+markdown_table(climbers[1:5, [:Rank, :Rider, :Team, :Cost, :Score, :Value]])
+```
+
+### Best sprinters
+
+One was required in each team. The best value sprinters were:
+
+```{julia}
+# select the best allrounders
+sprinters = filter(row -> row.sprinter == 1, valuetable)
+markdown_table(sprinters[1:5, [:Rank, :Rider, :Team, :Cost, :Score, :Value]])
+```
+
+## Worst picks
+
+The most expensive 15 riders who scored nil points:
+
+```{julia}
+# select the 15 riders with the highest cost who scored zero
+zero_score_riders = filter(row -> row[:points] == 0, allriderdata)
+sorted_riders = sort(zero_score_riders, :cost, rev=true)
+top_15_riders = sorted_riders[1:15, :]
+markdown_table(top_15_riders[end-14:end, [:rider, :team, :cost, :points, :value]])
+```
