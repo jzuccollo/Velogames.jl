@@ -6,7 +6,9 @@ subtitle: "Giro d'Italia 2024"
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best DPCC team?
 
 ```{julia}
-using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables, Feather
+using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables, Feather, Plots
+
+plotlyjs()
 
 ridersurl = "https://www.velogames.com/italy/2024/riders.php"
 
@@ -81,6 +83,17 @@ markdown_table(displaytable2[:, [:Rider, :Team, :Cost, :Score]])
 ```
 
 # Rider value
+
+```{julia}
+# scatter plot of points vs cost
+hovertext = allriderdata.rider .* " (" .* allriderdata.team .* ")"
+valueplot = scatter(
+    allriderdata.cost .+ randn(length(allriderdata.cost)) * 0.3, allriderdata.points, group=allriderdata.team,
+    title="Rider value", xlabel="Cost", ylabel="Points",
+    legend=false, alpha=0.5, hover=hovertext
+)
+display(valueplot)
+```
 
 ## Top picks
 
