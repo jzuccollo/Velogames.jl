@@ -130,12 +130,18 @@ markdown_table(sprinters[1:5, [:Rank, :Rider, :Team, :Cost, :Score, :Value]])
 
 ## Worst picks
 
-The most expensive 15 riders who scored nil points:
+The riders costing at least 6 credits who scored nil points:
 
 ```{julia}
-# select the 15 riders with the highest cost who scored zero
-zero_score_riders = filter(row -> row[:points] == 0, allriderdata)
-sorted_riders = sort(zero_score_riders, :cost, rev=true)
-top_15_riders = sorted_riders[1:15, :]
-markdown_table(top_15_riders[end-14:end, [:rider, :team, :cost, :points, :value]])
+# select the riders with the highest cost who scored zero
+zero_score_riders = filter(row -> row[:Score] == 0 && row[:Cost] >= 6, valuetable)
+markdown_table(zero_score_riders[:, [:Rank, :Rider, :Team, :Cost, :Score, :Value]])
+```
+
+The lowest value riders who did score points:
+
+```{julia}
+# select the 5 riders with the lowest value who scored points
+non_zero_score_riders = filter(row -> row[:Score] > 0, valuetable)
+markdown_table(non_zero_score_riders[end-5:end, [:Rank, :Rider, :Team, :Cost, :Score, :Value]])
 ```
