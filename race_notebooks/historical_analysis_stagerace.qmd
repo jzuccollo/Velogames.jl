@@ -88,9 +88,10 @@ markdown_table(displaytable2[:, [:Rider, :Team, :Cost, :Score]])
 # scatter plot of points vs cost
 hovertext = allriderdata.rider .* " (" .* allriderdata.team .* ")"
 valueplot = scatter(
-    allriderdata.cost .+ randn(length(allriderdata.cost)) * 0.3, allriderdata.points, group=allriderdata.team,
+    allriderdata.cost .+ randn(length(allriderdata.cost)) * 0.2, allriderdata.points, group=allriderdata.cost,
     title="Rider value", xlabel="Cost", ylabel="Points",
-    legend=false, alpha=0.5, hover=hovertext
+    legend=false, alpha=0.5, hover=hovertext,
+    xticks=[4, 6, 8, 10, 12, 14, 16, 22, 32]
 )
 display(valueplot)
 ```
