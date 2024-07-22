@@ -1,6 +1,6 @@
 ---
 title: "Historical analysis"
-subtitle: "Giro d'Italia 2024"
+subtitle: "Tour de France 2024"
 ---
 
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best DPCC team?
@@ -10,10 +10,10 @@ using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables, Feather, Plots
 
 plotlyjs()
 
-ridersurl = "https://www.velogames.com/italy/2024/riders.php"
+ridersurl = "https://www.velogames.com/velogame/2024/riders.php"
 
-winnername = "Tim"
-bestteamscore = 9709;
+winnername = "Conor"
+bestteamscore = 10035;
 ```
 
 # Best team you could have picked
@@ -91,7 +91,7 @@ valueplot = scatter(
     allriderdata.cost .+ randn(length(allriderdata.cost)) * 0.2, allriderdata.points, group=allriderdata.cost,
     title="Rider value", xlabel="Cost", ylabel="Points",
     legend=false, alpha=0.5, hover=hovertext,
-    xticks=[4, 6, 8, 10, 12, 14, 16, 22, 32]
+    xticks=[4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28]
 )
 display(valueplot)
 ```
