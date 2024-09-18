@@ -2,6 +2,8 @@ project:
   type: website
   output-dir: docs
   render:
+    - "race_notebooks/index.qmd"
+    - "race_notebooks/historical_analysis.qmd"
     - "race_notebooks/historical_analysis_stagerace.qmd"
 
 jupyter: julia-1.10
@@ -18,7 +20,9 @@ website:
       # - href: race_notebooks/stagerace.qmd
       #   text: "Stage races"
       - href: race_notebooks/historical_analysis_stagerace.qmd
-        text: "Historical analysis"
+        text: "Vuelta a España 2024"
+      - href: race_notebooks/historical_analysis.qmd
+        text: "Olympic road race 2024"
 
 format:
   html:
@@ -35,5 +39,6 @@ execute:
   echo: false
   warning: false
   cache: false
+  freeze: auto
 
 date-format: long

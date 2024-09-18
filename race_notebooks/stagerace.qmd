@@ -7,9 +7,9 @@ title: "Stage race"
 ```{julia}
 using Velogames, DataFrames, Statistics, StatsBase
 
-raceurl = "https://www.velogames.com/spain/2023/riders.php"
-betfairurl = "https://www.betfair.com/sport/cycling/vuelta-a-espana/11338652/winner/924.370900945"
-racepcsrankingurl = "https://www.procyclingstats.com/race/vuelta-a-espana/2023/startlist/startlist-quality"
+raceurl = "https://www.velogames.com/spain/2024/riders.php"
+# betfairurl = "https://www.betfair.com/betting/cycling/tour-de-france/tour-top-10/mwe-924.411629792"
+racepcsrankingurl = "https://www.procyclingstats.com/race/vuelta-a-espana/2024/startlist/startlist-quality"
 ```
 
 ## Load data
@@ -27,7 +27,7 @@ ridervg = getvgriders(raceurl)
 pcsraceranking = getpcsraceranking(racepcsrankingurl)
 
 # get Betfair odds
-riderodds = getodds(betfairurl)
+# riderodds = getodds(betfairurl)
 ```
 
 ## Combine datasets

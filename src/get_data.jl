@@ -219,9 +219,9 @@ It returns a DataFrame with the following columns:
     * `name` - the name of the rider
     * `odds` - the odds for the rider
 """
-function getodds(pageurl::String)
+function getodds(pageurl::String, headers::Dict=Dict("User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"))
     # download the page and parse the table
-    oddspage = HTTP.get(pageurl)
+    oddspage = HTTP.get(pageurl, headers)
     oddshtml = Gumbo.parsehtml(String(oddspage.body))
 
     selectors = [".runner-info", ".ui-display-fraction-price"]

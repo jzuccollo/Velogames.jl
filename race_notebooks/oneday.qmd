@@ -7,9 +7,9 @@ using Velogames, DataFrames, Statistics, StatsBase
 
 raceurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
 lastyearurl = "https://www.velogames.com/sixes-superclasico/2023/riders.php"
-lastyearraceurl = "https://www.velogames.com/sixes-superclasico/2023/ridescore.php?ga=13&st=13"
-betfairurl = "https://www.betfair.com/betting/cycling/tour-de-france/c-10536712"
-racehash = "#BrabantsePijl"
+# lastyearraceurl = "https://www.velogames.com/sixes-superclasico/2023/ridescore.php?ga=13&st=27"
+# betfairurl = "https://www.betfair.com/betting/cycling/gp-de-quebec/outright-betting/mwe-924.419811627"
+racehash = "#GPMontreal"
 racesex = "me"
 racecategory = "one-day-races"
 ```
@@ -30,7 +30,43 @@ ridervg = ridervg[ridervg.startlist.==racehash, :]
 rideroneday = getpcsranking(racesex, racecategory)
 
 # get Betfair odds
-riderodds = getodds(betfairurl)
+# riderodds = getodds(betfairurl)
+```
+
+Manually enter the Betfair odds now that the scraper has been broken by the Betfair website's switch to AJAX loading. Save the Betfair odds to a text file and run this to read it in.
+
+```{julia}
+# Read the text from the file
+filepath = "oddsfile.csv"
+lines = readlines(filepath)
+
+# Drop all empty strings from lines
+lines = filter(x -> !isempty(strip(x)), lines)
+
+# Initialize arrays to store names and odds
+riders = String[]
+odds = String[]
+
+# Process the lines
+for (i, line) in enumerate(lines)
+    if isodd(i)
+        push!(riders, strip(line))
+    else
+        push!(odds, strip(line))
+    end
+end
+
+# Create a DataFrame
+riderodds = DataFrame(name = riders, odds = odds)
+
+# Calculate decimal odds from strings of the form "1/2"
+riderodds.odds = map(x -> 1 + parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds.odds)
+
+# Tweak the rider names for better matching with Velogames
+riderodds.name = replace.(riderodds.name, "Tom Pidcock" => "Thomas Pidcock")
+
+# Add a riderkey column based on the name
+riderodds.riderkey = map(x -> createkey(x), riderodds.name)
 ```
 
 ## Combine datasets
@@ -63,6 +99,7 @@ end
 # convert odds to probability of win and normalize columns
 riderdf[!, :pwin] = 1 ./ riderdf[!, :odds]
 disallowmissing!(riderdf, [:vgpoints, :pcspoints, :prevpoints])
+# for col in [:vgpoints, :prevpoints, :pcspoints]
 for col in [:pwin, :vgpoints, :prevpoints, :pcspoints]
     riderdf[!, Symbol("z", col)] = StatsBase.zscore(riderdf[!, col])
 end
@@ -72,7 +109,8 @@ end
 
 ```{julia}
 # weights for inv odds, vgpoints, prevvgpoints, pcspoints
-WEIGHTS = [1, 0.1, 0.1, 0]
+WEIGHTS = [1, 0, 0, 0]
+# zvalues = [:zvgpoints, :zprevpoints, :zpcspoints]
 zvalues = [:zpwin, :zvgpoints, :zprevpoints, :zpcspoints]
 
 # calculate rider calcscore as the mean of the velogames score and the PCS score
@@ -93,7 +131,7 @@ riderdf
 ## Top 10 riders by points
 
 ```{julia}
-sort(riderdf, :calcscore, rev=true)[1:10, :]
+sort(riderdf, :vgpoints, rev=true)[1:10, :]
 ```
 
 ## Top 10 riders by value
@@ -107,8 +145,10 @@ sort(riderdf, :calcvalue, rev=true)[1:10, Not(:riderkey)]
 Set the rider score to 0 for riders you don't fancy.
 
 ```{julia}
-unfancied = ["Mathieu Van Der Poel"]
-riderdf.calcscore[occursin.(unfancied, riderdf.rider)] .= 0
+unfancied = ["Wilco Kelderman"]
+for rider in unfancied
+    riderdf.calcscore[occursin.(rider, riderdf.rider)] .= 0
+end
 ```
 
 # Results

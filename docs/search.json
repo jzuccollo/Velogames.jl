@@ -4,9 +4,9 @@
     "href": "race_notebooks/historical_analysis_stagerace.html",
     "title": "Historical analysis",
     "section": "",
-    "text": "Looking back on the race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best DPCC team?",
+    "text": "Looking back on the race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best DPCC team?\nThe WebIO Jupyter extension was not detected. See the\n\n    WebIO Jupyter integration documentation\n\nfor more information.",
     "crumbs": [
-      "Historical analysis"
+      "Vuelta a España 2024"
     ]
   },
   {
@@ -14,9 +14,9 @@
     "href": "race_notebooks/historical_analysis_stagerace.html#top-picks",
     "title": "Historical analysis",
     "section": "Top picks",
-    "text": "Top picks\nThe highest value riders are the ones who scored the most points per credit cost:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nBiniam Girmay\nIntermarché - Wanty\n8\n1741.0\n217.6\n\n\n2\nMikel Landa\nSoudal - Quick Step\n8\n1342.0\n167.8\n\n\n3\nAnthony Turgis\nTotalEnergies\n4\n644.0\n161.0\n\n\n4\nPascal Ackermann\nIsrael - Premier Tech\n6\n957.0\n159.5\n\n\n5\nRichard Carapaz\nEF Education-EasyPost\n8\n1238.0\n154.8\n\n\n6\nJoão Almeida\nUAE Team Emirates\n12\n1788.0\n149.0\n\n\n7\nRemco Evenepoel\nSoudal - Quick Step\n18\n2619.0\n145.5\n\n\n8\nTadej Pogačar\nUAE Team Emirates\n28\n3841.0\n137.2\n\n\n9\nDerek Gee\nIsrael - Premier Tech\n8\n949.0\n118.6\n\n\n10\nJonas Vingegaard\nTeam Visma - Lease a Bike\n24\n2703.0\n112.6\n\n\n11\nJonas Abrahamsen\nUno-X Mobility\n6\n606.0\n101.0\n\n\n12\nFernando Gaviria\nMovistar Team\n6\n603.0\n100.5\n\n\n13\nGiulio Ciccone\nLidl - Trek\n8\n798.0\n99.8\n\n\n14\nAdam Yates\nUAE Team Emirates\n14\n1369.0\n97.8\n\n\n15\nMatteo Jorgenson\nTeam Visma - Lease a Bike\n14\n1365.0\n97.5\n\n\n16\nSantiago Buitrago\nBahrain - Victorious\n8\n777.0\n97.1\n\n\n17\nJasper Philipsen\nAlpecin-Deceuninck\n16\n1482.0\n92.6\n\n\n18\nBryan Coquard\nCofidis\n8\n690.0\n86.2\n\n\n19\nAlex Aranburu\nMovistar Team\n6\n503.0\n83.8\n\n\n20\nArnaud De Lie\nLotto Dstny\n10\n820.0\n82.0\n\n\n\n\n\n\nBest all-rounders\nTwo were required in each team. The best value all-rounders were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n6\nJoão Almeida\nUAE Team Emirates\n12\n1788.0\n149.0\n\n\n7\nRemco Evenepoel\nSoudal - Quick Step\n18\n2619.0\n145.5\n\n\n8\nTadej Pogačar\nUAE Team Emirates\n28\n3841.0\n137.2\n\n\n10\nJonas Vingegaard\nTeam Visma - Lease a Bike\n24\n2703.0\n112.6\n\n\n15\nMatteo Jorgenson\nTeam Visma - Lease a Bike\n14\n1365.0\n97.5\n\n\n\n\n\n\n\nBest climbers\nTwo were required in each team. The best value climbers were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n2\nMikel Landa\nSoudal - Quick Step\n8\n1342.0\n167.8\n\n\n5\nRichard Carapaz\nEF Education-EasyPost\n8\n1238.0\n154.8\n\n\n13\nGiulio Ciccone\nLidl - Trek\n8\n798.0\n99.8\n\n\n14\nAdam Yates\nUAE Team Emirates\n14\n1369.0\n97.8\n\n\n16\nSantiago Buitrago\nBahrain - Victorious\n8\n777.0\n97.1\n\n\n\n\n\n\n\nBest sprinters\nOne was required in each team. The best value sprinters were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nBiniam Girmay\nIntermarché - Wanty\n8\n1741.0\n217.6\n\n\n4\nPascal Ackermann\nIsrael - Premier Tech\n6\n957.0\n159.5\n\n\n12\nFernando Gaviria\nMovistar Team\n6\n603.0\n100.5\n\n\n17\nJasper Philipsen\nAlpecin-Deceuninck\n16\n1482.0\n92.6\n\n\n18\nBryan Coquard\nCofidis\n8\n690.0\n86.2",
+    "text": "Top picks\nThe highest value riders are the ones who scored the most points per credit cost:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nBen O’Connor\nDecathlon AG2R La Mondiale Team\n10\n1808.0\n180.8\n\n\n2\nMarc Soler\nUAE Team Emirates\n8\n1370.0\n171.2\n\n\n3\nPablo Castrillo\nEquipo Kern Pharma\n6\n989.0\n164.8\n\n\n4\nStefan Küng\nGroupama - FDJ\n6\n972.0\n162.0\n\n\n5\nMathias Vacek\nLidl - Trek\n6\n964.0\n160.7\n\n\n6\nFlorian Lipowitz\nRed Bull - BORA - hansgrohe\n8\n1271.0\n158.9\n\n\n7\nUrko Berrade\nEquipo Kern Pharma\n4\n616.0\n154.0\n\n\n8\nEddie Dunbar\nTeam Jayco AlUla\n6\n909.0\n151.5\n\n\n9\nDavid Gaudu\nGroupama - FDJ\n8\n1110.0\n138.8\n\n\n10\nPavel Sivakov\nUAE Team Emirates\n8\n1109.0\n138.6\n\n\n11\nPau Miquel\nEquipo Kern Pharma\n6\n749.0\n124.8\n\n\n12\nPrimož Roglič\nRed Bull - BORA - hansgrohe\n24\n2928.0\n122.0\n\n\n13\nKaden Groves\nAlpecin-Deceuninck\n12\n1431.0\n119.2\n\n\n14\nMauro Schmid\nTeam Jayco AlUla\n8\n936.0\n117.0\n\n\n15\nEnric Mas\nMovistar Team\n16\n1805.0\n112.8\n\n\n16\nWout Van Aert\nTeam Visma - Lease a Bike\n18\n2026.0\n112.6\n\n\n17\nMattias Skjelmose\nLidl - Trek\n12\n1282.0\n106.8\n\n\n18\nRichard Carapaz\nEF Education-EasyPost\n12\n1275.0\n106.2\n\n\n19\nFilippo Baroncini\nUAE Team Emirates\n6\n622.0\n103.7\n\n\n20\nAleksandr Vlasov\nRed Bull - BORA - hansgrohe\n10\n983.0\n98.3\n\n\n\n\n\n\nBest all-rounders\nTwo were required in each team. The best value all-rounders were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n2\nMarc Soler\nUAE Team Emirates\n8\n1370.0\n171.2\n\n\n8\nEddie Dunbar\nTeam Jayco AlUla\n6\n909.0\n151.5\n\n\n12\nPrimož Roglič\nRed Bull - BORA - hansgrohe\n24\n2928.0\n122.0\n\n\n17\nMattias Skjelmose\nLidl - Trek\n12\n1282.0\n106.8\n\n\n20\nAleksandr Vlasov\nRed Bull - BORA - hansgrohe\n10\n983.0\n98.3\n\n\n\n\n\n\n\nBest climbers\nTwo were required in each team. The best value climbers were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nBen O’Connor\nDecathlon AG2R La Mondiale Team\n10\n1808.0\n180.8\n\n\n6\nFlorian Lipowitz\nRed Bull - BORA - hansgrohe\n8\n1271.0\n158.9\n\n\n9\nDavid Gaudu\nGroupama - FDJ\n8\n1110.0\n138.8\n\n\n10\nPavel Sivakov\nUAE Team Emirates\n8\n1109.0\n138.6\n\n\n15\nEnric Mas\nMovistar Team\n16\n1805.0\n112.8\n\n\n\n\n\n\n\nBest sprinters\nOne was required in each team. The best value sprinters were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n5\nMathias Vacek\nLidl - Trek\n6\n964.0\n160.7\n\n\n11\nPau Miquel\nEquipo Kern Pharma\n6\n749.0\n124.8\n\n\n13\nKaden Groves\nAlpecin-Deceuninck\n12\n1431.0\n119.2\n\n\n16\nWout Van Aert\nTeam Visma - Lease a Bike\n18\n2026.0\n112.6\n\n\n22\nPavel Bittner\nTeam dsm-firmenich PostNL\n8\n749.0\n93.6",
     "crumbs": [
-      "Historical analysis"
+      "Vuelta a España 2024"
     ]
   },
   {
@@ -24,9 +24,49 @@
     "href": "race_notebooks/historical_analysis_stagerace.html#worst-picks",
     "title": "Historical analysis",
     "section": "Worst picks",
-    "text": "Worst picks\nThe riders costing at least 6 credits who scored nil points:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n171\nJesús Herrada\nCofidis\n6\n0.0\n0.0\n\n\n172\nAlexis Renard\nCofidis\n6\n0.0\n0.0\n\n\n173\nNans Peters\nDecathlon AG2R La Mondiale Team\n6\n0.0\n0.0\n\n\n174\nNicolas Prodhomme\nDecathlon AG2R La Mondiale Team\n6\n0.0\n0.0\n\n\n\n\n\nThe lowest value riders who did score points:\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n165\nElmar Reinders\nTeam Jayco AlUla\n4\n8.0\n2.0\n\n\n166\nAmaury Capiot\nArkéa - B&B Hotels\n6\n8.0\n1.3\n\n\n167\nLuca Mozzato\nArkéa - B&B Hotels\n6\n8.0\n1.3\n\n\n168\nJack Haig\nBahrain - Victorious\n6\n8.0\n1.3\n\n\n169\nNico Denz\nBORA - hansgrohe\n6\n7.0\n1.2\n\n\n170\nCasper Pedersen\nSoudal - Quick Step\n6\n6.0\n1.0",
+    "text": "Worst picks\nThe riders costing at least 6 credits who scored nil points:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n161\nThymen Arensman\nINEOS Grenadiers\n10\n0.0\n0.0\n\n\n162\nDamiano Caruso\nBahrain - Victorious\n8\n0.0\n0.0\n\n\n163\nÉlie Gesbert\nArkéa - B&B Hotels\n6\n0.0\n0.0\n\n\n164\nGleb Brussenskiy\nAstana Qazaqstan Team\n6\n0.0\n0.0\n\n\n165\nHarold Martin López\nAstana Qazaqstan Team\n6\n0.0\n0.0\n\n\n166\nKenny Elissonde\nCofidis\n6\n0.0\n0.0\n\n\n167\nRui Costa\nEF Education-EasyPost\n6\n0.0\n0.0\n\n\n168\nRigoberto Urán\nEF Education-EasyPost\n6\n0.0\n0.0\n\n\n169\nLaurens De Plus\nINEOS Grenadiers\n6\n0.0\n0.0\n\n\n170\nKobe Goossens\nIntermarché - Wanty\n6\n0.0\n0.0\n\n\n\n\n\nThe lowest value riders who did score points:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n155\nJames Knox\nSoudal - Quick Step\n6\n6.0\n1.0\n\n\n156\nKevin Geniets\nGroupama - FDJ\n6\n4.0\n0.7\n\n\n157\nThomas De Gendt\nLotto Dstny\n6\n4.0\n0.7\n\n\n158\nEduardo Sepúlveda\nLotto Dstny\n6\n4.0\n0.7\n\n\n159\nRein Taaramäe\nIntermarché - Wanty\n6\n2.0\n0.3\n\n\n160\nCasper Pedersen\nSoudal - Quick Step\n6\n2.0\n0.3",
     "crumbs": [
-      "Historical analysis"
+      "Vuelta a España 2024"
+    ]
+  },
+  {
+    "objectID": "race_notebooks/index.html",
+    "href": "race_notebooks/index.html",
+    "title": "Velogames solver",
+    "section": "",
+    "text": "Building on the work of GraemeHawker, this is a simple set of functions to pick a team for the Velogames Fantasy Cycling competition.\n\nOutline\nThe Julia package uses the Gumbo and Cascadia libraries to scrape rider data, and the JuMP optimisation library / HiGHS solver to construct and solve a mixed-integer program described below.\nAt the end of the race, each rider will have accumulated a score based on their performance, and the aim is to pick a team with the highest combined score at the end of the race. The rules are slightly difference for each type of race.\n\n\nOne-day races and short tours\nFor short races, riders are all unclassed and teams are 6-9 riders, depending upon the competition.\nThe optimisation problem can be stated as:\n\\(maximise \\sum_{j=1}^{n} x_j y_j\\)\n\\(s.t.\\)\n\\(\\sum_{j=1}^{n} x_j= maxriders\\)\n\\(\\sum_{j=1}^{n} x_j z_j \\leq 100\\)\nwhere \\(j=1...n\\) is the set of all riders\n\\(x_j\\in[0,1]\\) is a binary decision variable denoting if rider \\(j\\) is chosen (1 for chosen, 0 for not chosen)\n\\(z_j\\in Z^+\\) and \\(y_j\\in Z^+\\) are the cost and score parameters of rider \\(j\\) respectively\n\n\nGrand tours\nFor grand tours each rider is classed as either an All-Rounder, a Climber, a Sprinter or is Unclassed. A team must contain 2 All-Rounders, 2 Climbers, 1 Sprinter and 3 Unclassed riders. The 9th selection can be from any of these categories.\nThe optimisation problem then becomes:\n\\(maximise \\sum_{j=1}^{n} x_j y_j\\)\n\\(s.t.\\)\n\\(\\sum_{j=1}^{n} x_j=9\\)\n\\(\\sum_{j=1}^{n} x_j z_j \\leq 100\\)\n\\(\\sum_{j=1}^{n} x_j a_j \\geq 2\\)\n\\(\\sum_{j=1}^{n} x_j c_j \\geq 2\\)\n\\(\\sum_{j=1}^{n} x_j s_j \\geq 1\\)\n\\(\\sum_{j=1}^{n} x_j u_j \\geq 3\\)\nwhere \\(j=1...n\\) is the set of all riders\n\\(x_j\\in[0,1]\\) is a binary decision variable denoting if rider \\(j\\) is chosen (1 for chosen, 0 for not chosen)\n\\(z_j\\in Z^+\\) and \\(y_j\\in Z^+\\) are the cost and score parameters of rider \\(j\\) respectively\n\\(a_j\\in[0,1]\\), \\(c_j\\in[0,1]\\), \\(s_j\\in[0,1]\\) and \\(u_j\\in[0,1]\\) are binary parameters denoting if rider \\(j\\) is an All-Rounder, Climber, Sprinter or Unclassed respectively, with the further parameter constraint that \\(a_i+c_i+s_i+u_i=1\\) \\(\\forall i=1...n\\) (i.e. each rider is allocated to one and only one of the 4 categories) and by implication \\(\\sum_{j=1}^{n} a_j+\\sum_{j=1}^{n} c_j+\\sum_{j=1}^{n} s_j+\\sum_{j=1}^{n} u_j=n\\) (i.e. the sum of the number of riders in each category is equal to the total number of riders)",
+    "crumbs": [
+      "Overview"
+    ]
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis.html",
+    "href": "race_notebooks/historical_analysis.html",
+    "title": "Historical analysis",
+    "section": "",
+    "text": "Looking back on the race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best DPCC team?",
+    "crumbs": [
+      "Olympic road race 2024"
+    ]
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis.html#top-picks",
+    "href": "race_notebooks/historical_analysis.html#top-picks",
+    "title": "Historical analysis",
+    "section": "Top picks",
+    "text": "Top picks\nThe highest value riders are the ones who scored the most points per credit cost:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nMarco Haller\nRed Bull - BORA - hansgrohe\n10\n330\n33.0\n\n\n2\nValentin Madouas\nGroupama - FDJ\n22\n630\n28.6\n\n\n3\nAttila Valter\nTeam Visma - Lease a Bike\n16\n420\n26.2\n\n\n4\nMathias Vacek\nLidl - Trek\n8\n204\n25.5\n\n\n5\nRemco Evenepoel\nSoudal - Quick Step\n30\n720\n24.0\n\n\n6\nChristophe Laporte\nTeam Visma - Lease a Bike\n24\n540\n22.5\n\n\n7\nToms Skujiņš\nLidl - Trek\n16\n360\n22.5\n\n\n8\nBen Healy\nEF Education-EasyPost\n20\n315\n15.8\n\n\n9\nJulian Alaphilippe\nSoudal - Quick Step\n22\n330\n15.0\n\n\n10\nStefan Küng\nGroupama - FDJ\n20\n300\n15.0\n\n\n11\nAchraf Ed Doghmy\nMorocco\n4\n60\n15.0\n\n\n12\nThanakhan Chaiyasombat\nThailand\n4\n60\n15.0\n\n\n13\nCharles Kagimu\nUganda\n4\n60\n15.0\n\n\n14\nEric Manizabayo\nRwanda\n4\n60\n15.0\n\n\n15\nChristopher Lagane\nMauritius\n4\n60\n15.0\n\n\n16\nJan Tratnik\nTeam Visma - Lease a Bike\n20\n285\n14.2\n\n\n17\nMatteo Jorgenson\nTeam Visma - Lease a Bike\n22\n270\n12.3\n\n\n18\nKévin Vauquelin\nArkéa - B&B Hotels\n8\n90\n11.2\n\n\n19\nJasper Stuyven\nLidl - Trek\n20\n210\n10.5\n\n\n20\nSantiago Buitrago\nBahrain - Victorious\n14\n144\n10.3",
+    "crumbs": [
+      "Olympic road race 2024"
+    ]
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis.html#worst-picks",
+    "href": "race_notebooks/historical_analysis.html#worst-picks",
+    "title": "Historical analysis",
+    "section": "Worst picks",
+    "text": "Worst picks\n\nThe lowest scoring riders of those who scored points. Riders who scored zero are excluded because Velogames doesn’t record who they were and I didn’t save it.\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n39\nMadis Mihkels\nIntermarché - Wanty\n6\n12\n2.0\n\n\n38\nWout Van Aert\nTeam Visma - Lease a Bike\n32\n90\n2.8\n\n\n36\nCorbin Strong\nIsrael - Premier Tech\n16\n48\n3.0\n\n\n37\nMaximilian Schachmann\nRed Bull - BORA - hansgrohe\n12\n36\n3.0\n\n\n35\nLukáš Kubiš\nElkov - Kasper\n6\n24\n4.0\n\n\n34\nTiesj Benoot\nTeam Visma - Lease a Bike\n22\n90\n4.1\n\n\n32\nAlexey Lutsenko\nAstana Qazaqstan Team\n14\n60\n4.3\n\n\n33\nFelix Großschartner\nUAE Team Emirates\n14\n60\n4.3\n\n\n31\nDaniel Martínez\nRed Bull - BORA - hansgrohe\n16\n72\n4.5\n\n\n30\nMads Pedersen\nLidl - Trek\n26\n132\n5.1\n\n\n29\nBrandon McNulty\nUAE Team Emirates\n16\n84\n5.2\n\n\n28\nJuan Ayuso\nUAE Team Emirates\n20\n108\n5.4\n\n\n27\nAlberto Bettiol\nAstana Qazaqstan Team\n16\n96\n6.0\n\n\n26\nMathieu Van Der Poel\nAlpecin-Deceuninck\n32\n228\n7.1\n\n\n25\nMarc Hirschi\nUAE Team Emirates\n24\n180\n7.5",
+    "crumbs": [
+      "Olympic road race 2024"
     ]
   }
 ]
