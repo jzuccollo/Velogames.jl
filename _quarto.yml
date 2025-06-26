@@ -20,7 +20,7 @@ website:
       # - href: race_notebooks/stagerace.qmd
       #   text: "Stage races"
       - href: race_notebooks/historical_analysis_stagerace.qmd
-        text: "Vuelta a España 2024"
+        text: "Giro d'Italia 2025"
       - href: race_notebooks/historical_analysis.qmd
         text: "Olympic road race 2024"
 

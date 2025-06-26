@@ -1,6 +1,6 @@
 ---
 title: "Historical analysis"
-subtitle: "Vuelta a España 2024"
+subtitle: "Giro d'Italia 2025"
 ---
 
 Looking back on the race, what's the best team you could have picked? And what's the cheapest team you could have picked that would have beaten the best DPCC team?
@@ -10,10 +10,10 @@ using Velogames, DataFrames, HiGHS, JuMP, MarkdownTables, Feather, Plots
 
 plotlyjs()
 
-ridersurl = "https://www.velogames.com/spain/2024/riders.php"
+ridersurl = "https://www.velogames.com/italy/2025/riders.php"
 
-winnername = "The Slovenian Dream"
-bestteamscore = 8647;
+winnername = "Giallo in Rosa"
+bestteamscore = 9231;
 ```
 
 # Best team you could have picked

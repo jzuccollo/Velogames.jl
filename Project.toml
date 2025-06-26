@@ -24,4 +24,7 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TableScraper = "3d876f86-fca9-45cb-9864-7207416dc431"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
-velogames = "c78eb28f-1885-4f76-9e5d-892ae81e1a61"
+WebIO = "0f1e0344-ec1d-5b48-a673-e5cf874b6c29"
+
+[compat]
+WebIO = "0.8.21"
