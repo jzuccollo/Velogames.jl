@@ -64,31 +64,30 @@ end
 
 This function downloads and parses the rider rankings for a specific category from the PCS website.
 
-The function returns a DataFrame with the following columns:
-
-    * `rider` - the name of the rider
-    * `team` - the team the rider rides for
-    * `rank` - the rank of the rider in the category
-    * `points` - the number of PCS points scored by the rider
-    * `riderkey` - a unique key for each rider based on their name
+Returns a DataFrame with cached data retrieval.
 """
-function getpcsranking(gender::String, category::String)
-    # check gender in me/we
-    @assert gender in ["we", "me"] "Invalid argument: $gender. Must be one of 'we or 'me'."
-    # check category
-    @assert category in ["individual", "one-day-races", "gc-ranking", "sprinters", "climbers", "time-trial"] "Invalid argument: $category. Must be one of 'individual', 'one-day-races', 'gc-ranking', 'sprinters', 'climbers', 'time-trial'."
+function getpcsranking(gender::String, category::String;
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE)
 
-    # build the ranking url
+    # Input validation
+    @assert gender in ["we", "me"] "Invalid gender: $gender. Must be 'we' or 'me'."
+    @assert category in ["individual", "one-day-races", "gc-ranking", "sprinters", "climbers", "time-trial"] "Invalid category: $category. Must be one of: 'individual', 'one-day-races', 'gc-ranking', 'sprinters', 'climbers', 'time-trial'."
+
+    # Build URL
     baseurl = "https://www.procyclingstats.com/rankings/"
     rankingurl = joinpath(baseurl, gender, category)
 
-    # download the page and parse the table
-    page = gettable(rankingurl)
+    function fetch_pcs_ranking(url, params)
+        page = gettable(url)
+        return page[:, [:rank, :rider, :team, :points, :riderkey]]
+    end
 
-    # filter to rank, rider, team, and points
-    riderdf = page[:, [:rank, :rider, :team, :points, :riderkey]]
+    # Parameters for cache key
+    params = Dict("gender" => gender, "category" => category)
 
-    return riderdf
+    return cached_fetch(fetch_pcs_ranking, rankingurl, params;
+        cache_config=cache_config, force_refresh=force_refresh)
 end
 
 """
@@ -96,33 +95,35 @@ end
 
 This function downloads and parses the rider rankings for a specific race from the PCS website.
 
-The function returns a DataFrame with the following columns:
-
-    * `rider` - the name of the rider
-    * `team` - the team the rider rides for
-    * `rank` - the rank of the rider in the category
-    * `points` - the number of PCS points scored by the rider
-    * `riderkey` - a unique key for each rider based on their name
+Returns a DataFrame with cached data retrieval.
 """
-function getpcsraceranking(pageurl::String)
-    # download the page and parse the table
-    riderdf = gettable(pageurl)
+function getpcsraceranking(pageurl::String;
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE)
 
-    # drop any rows with missing or empty values in the riderkey column
-    riderdf = dropmissing(riderdf, :riderkey)
-    riderdf = filter(row -> !isempty(row.riderkey), riderdf)
+    function fetch_race_ranking(url, params)
+        # download the page and parse the table
+        riderdf = gettable(url)
 
-    # rename column pcs-ranking to pcsrank
-    rename!(riderdf, "pcs-ranking" => :pcsrank)
-    rename!(riderdf, "points" => :pcspoints)
+        # drop any rows with missing or empty values in the riderkey column
+        riderdf = dropmissing(riderdf, :riderkey)
+        riderdf = filter(row -> !isempty(row.riderkey), riderdf)
 
-    # convert pcsrank to Int64, assigning 1000 if value is "-" or ""
-    riderdf[!, :pcsrank] = [x == "-" || x == "" ? 1000 : parse(Int64, x) for x in riderdf[!, :pcsrank]]
+        # rename columns
+        rename!(riderdf, "pcs-ranking" => :pcsrank)
+        rename!(riderdf, "points" => :pcspoints)
 
-    # add 1/pcs-ranking to points to avoid ties
-    riderdf[!, :pcspoints] = riderdf[!, :pcspoints] .+ 1 ./ riderdf[!, :pcsrank]
+        # convert pcsrank to Int64, assigning 1000 if value is "-" or ""
+        riderdf[!, :pcsrank] = [x == "-" || x == "" ? 1000 : parse(Int64, x) for x in riderdf[!, :pcsrank]]
 
-    return riderdf
+        # add 1/pcs-ranking to points to avoid ties
+        riderdf[!, :pcspoints] = riderdf[!, :pcspoints] .+ 1 ./ riderdf[!, :pcsrank]
+
+        return riderdf
+    end
+
+    return cached_fetch(fetch_race_ranking, pageurl, Dict();
+        cache_config=cache_config, force_refresh=force_refresh)
 end
 
 
@@ -131,23 +132,18 @@ end
 
 This function downloads and parses the rider listing for a specific race from the Velogames website.
 
-The function returns a DataFrame with the following columns:
-
-    * `name` - the name of the rider
-    * `team` - the team the rider rides for
-    * `rank` - the rank of the rider in the category
-    * `score` - the number of points scored by the rider
-    * `fetchagain` - a boolean indicating whether to fetch the data again
+Returns a DataFrame with cached data retrieval.
 """
-function getvgriders(pageurl::String; fetchagain::Bool=false)
-    filename = split(pageurl, "/")[end]
-    if fetchagain
-        # download the page and parse the table
-        riderdf = gettable(pageurl)
+function getvgriders(pageurl::String;
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
+    verbose::Bool=true)
 
-        # normalise class data, if it exists
+    function fetch_vg_data(url, params)
+        riderdf = gettable(url)
+
+        # Process class data if it exists
         if hasproperty(riderdf, :class)
-            # lowercase the class column and remove spaces
             rename!(riderdf, :class => :classraw)
             riderdf.class = lowercase.(replace.(riderdf.classraw, " " => ""))
             for class in unique(riderdf.class)
@@ -155,17 +151,14 @@ function getvgriders(pageurl::String; fetchagain::Bool=false)
             end
         end
 
-        # calculate the value of the rider
+        # Calculate rider value
         riderdf.value = riderdf.points ./ riderdf.cost
 
-        # save the data to an Arrow file
-        Feather.write(filename * ".feather", riderdf)
-    else
-        # read the data from the file
-        riderdf = Feather.read(filename * ".feather")
+        return riderdf
     end
 
-    return riderdf
+    return cached_fetch(fetch_vg_data, pageurl, Dict();
+        cache_config=cache_config, force_refresh=force_refresh, verbose=verbose)
 end
 
 
@@ -174,23 +167,35 @@ end
 
 This function downloads and parses the rider points for a specific rider from the PCS website.
 
-It returns a Dict with the following values:
-
-    * `oneday` - the points for one day races
-    * `gc` - the points for general classification
-    * `tt` - the points for time trials
-    * `sprint` - the points for sprints
-    * `climber` - the points for climbers
+Returns a DataFrame with columns: rider, oneday, gc, tt, sprint, climber, riderkey
 """
-function getpcsriderpts(ridername::String)
+function getpcsriderpts(ridername::String;
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE)
+
     regularisedname = normalisename(ridername)
     pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
-    page = parsehtml(read(Downloads.download(pageurl), String))
-    ridertable = eachmatch(sel".pnt", page.root)
-    rawpts = map(x -> parse(Int, x[1].text), ridertable)
-    riderpts = Dict(zip(["oneday", "gc", "tt", "sprint", "climber"], rawpts))
-    return Dict(ridername => riderpts)
+    function fetch_rider_pts(url, params)
+        page = parsehtml(read(Downloads.download(url), String))
+        ridertable = eachmatch(sel".pnt", page.root)
+        rawpts = map(x -> parse(Int, x[1].text), ridertable)
+
+        # Return DataFrame instead of nested Dict
+        return DataFrame(
+            rider=[ridername],
+            oneday=[rawpts[1]],
+            gc=[rawpts[2]],
+            tt=[rawpts[3]],
+            sprint=[rawpts[4]],
+            climber=[rawpts[5]],
+            riderkey=[createkey(ridername)]
+        )
+    end
+
+    params = Dict("rider" => ridername)
+    return cached_fetch(fetch_rider_pts, pageurl, params;
+        cache_config=cache_config, force_refresh=force_refresh)
 end
 
 
@@ -199,19 +204,24 @@ end
 
 This function downloads and parses the rider points for a specific rider for each year they are active on the PCS website.
 
-It returns a DataFrame with a row for each year the rider is active on the PCS website and the following columns:
-
-    * `year` - the year the points are for
-    * `points` - the total points scored by the rider in that year
-    * `rank` - the rank of the rider in that year
+Returns a DataFrame with cached data retrieval.
 """
-function getpcsriderhistory(ridername::String)
+function getpcsriderhistory(ridername::String;
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE)
+
     regularisedname = normalisename(ridername)
     pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
-    riderpts = DataFrame(scrape_tables(pageurl)[2])
-    rename!(riderpts, [:year, :points, :rank])
-    return riderpts
+    function fetch_rider_history(url, params)
+        riderpts = DataFrame(scrape_tables(url)[2])
+        rename!(riderpts, [:year, :points, :rank])
+        return riderpts
+    end
+
+    params = Dict("rider" => ridername)
+    return cached_fetch(fetch_rider_history, pageurl, params;
+        cache_config=cache_config, force_refresh=force_refresh)
 end
 
 """
@@ -219,40 +229,41 @@ end
 
 This function retrieves the odds listings from the Betfair website.
 
-It returns a DataFrame with the following columns:
-
-    * `name` - the name of the rider
-    * `odds` - the odds for the rider
+Returns a DataFrame with cached data retrieval.
 """
-function getodds(pageurl::String, headers::Dict=Dict("User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"))
-    # download the page and parse the table
-    oddspage = HTTP.get(pageurl, headers)
-    oddshtml = Gumbo.parsehtml(String(oddspage.body))
+function getodds(pageurl::String;
+    headers::Dict=Dict("User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"),
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE)
 
-    selectors = [".runner-info", ".ui-display-fraction-price"]
-    ridertable = [eachmatch(
-        Selector(s),
-        oddshtml.root
-    ) for s in selectors]
-    ridernames = [Cascadia.nodeText(r) for r in ridertable[1]]
-    riderodds = [Cascadia.nodeText(r) for r in ridertable[2]]
+    function fetch_odds(url, params)
+        used_headers = get(params, "headers", headers)
 
-    # strip newlines from fractional odds strings
-    riderodds = replace.(riderodds, "\n" => "")
-    # calculate decimal odds from strings of the form "1/2"
-    riderodds = map(x -> 1 + parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
+        oddspage = HTTP.get(url, used_headers)
+        oddshtml = Gumbo.parsehtml(String(oddspage.body))
 
-    betfairodds = DataFrame(rider=ridernames, odds=riderodds)
+        selectors = [".runner-info", ".ui-display-fraction-price"]
+        ridertable = [eachmatch(Selector(s), oddshtml.root) for s in selectors]
+        ridernames = [Cascadia.nodeText(r) for r in ridertable[1]]
+        riderodds = [Cascadia.nodeText(r) for r in ridertable[2]]
 
-    # tweak the rider names for better matching with Velogames
-    betfairodds.rider = replace.(betfairodds.rider, "Tom Pidcock" => "Thomas Pidcock")
+        # Process odds
+        riderodds = replace.(riderodds, "\n" => "")
+        riderodds = map(x -> 1 + parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
 
-    # add a riderkey column based on the name
-    betfairodds.riderkey = map(x -> createkey(x), betfairodds.rider)
-    # check that the riderkey is unique
-    @assert length(unique(betfairodds.riderkey)) == length(betfairodds.riderkey) "Rider keys are not unique"
+        betfairodds = DataFrame(rider=ridernames, odds=riderodds)
+        betfairodds.rider = replace.(betfairodds.rider, "Tom Pidcock" => "Thomas Pidcock")
+        betfairodds.riderkey = map(x -> createkey(x), betfairodds.rider)
 
-    return betfairodds
+        @assert length(unique(betfairodds.riderkey)) == length(betfairodds.riderkey) "Rider keys are not unique"
+
+        return betfairodds
+    end
+
+    # Include headers in cache key since they affect the result
+    params = Dict("headers" => headers)
+    return cached_fetch(fetch_odds, pageurl, params;
+        cache_config=cache_config, force_refresh=force_refresh)
 end
 
 """
@@ -260,32 +271,67 @@ end
 
 This function retrieves the points scored by riders for a single event.
 
-It returns a DataFrame with the following columns:
-
-    * `name` - the name of the rider
-    * `team` - the team the rider rides for
-    * `score` - the number of points scored by the rider in that race
+Returns a DataFrame with cached data retrieval.
 """
-function getvgracepoints(pageurl::String)
-    # download the page and parse the table
-    page = HTTP.get(pageurl)
-    pagehtml = Gumbo.parsehtml(String(page.body))
+function getvgracepoints(pageurl::String;
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE)
 
-    resultsdf = DataFrame(rider=[], team=[], score=[])
+    function fetch_race_points(url, params)
+        page = HTTP.get(url)
+        pagehtml = Gumbo.parsehtml(String(page.body))
 
-    for entry in eachmatch(Selector("#users li"), pagehtml.root)
-        rider = nodeText(eachmatch(Selector(".name"), entry)[1])
-        pointsstr = nodeText(eachmatch(Selector(".born"), entry)[1])
-        points = parse(Int, match(r"\d+", pointsstr).match)
-        team = nodeText(eachmatch(Selector(".born"), entry)[2])
+        resultsdf = DataFrame(rider=[], team=[], score=[])
 
-        # append the row to the results DataFrame
-        rowdf = DataFrame(rider=[rider], team=[team], score=[points])
-        resultsdf = vcat(resultsdf, rowdf)
+        for entry in eachmatch(Selector("#users li"), pagehtml.root)
+            rider = nodeText(eachmatch(Selector(".name"), entry)[1])
+            pointsstr = nodeText(eachmatch(Selector(".born"), entry)[1])
+            points = parse(Int, match(r"\d+", pointsstr).match)
+            team = nodeText(eachmatch(Selector(".born"), entry)[2])
+
+            rowdf = DataFrame(rider=[rider], team=[team], score=[points])
+            resultsdf = vcat(resultsdf, rowdf)
+        end
+
+        resultsdf.riderkey = map(x -> createkey(x), resultsdf.rider)
+        return resultsdf
     end
 
-    # add a riderkey column based on the name
-    resultsdf.riderkey = map(x -> createkey(x), resultsdf.rider)
+    return cached_fetch(fetch_race_points, pageurl, Dict();
+        cache_config=cache_config, force_refresh=force_refresh)
+end
 
-    return resultsdf
+"""
+## `getpcsriderpts_batch`
+
+Batch version - get points for multiple riders efficiently.
+Returns a DataFrame with all riders' points, including rows with missing values for failed requests.
+"""
+function getpcsriderpts_batch(ridernames::Vector{String};
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE)
+
+    all_pts = DataFrame()
+
+    for rider in ridernames
+        try
+            rider_pts = getpcsriderpts(rider; force_refresh=force_refresh, cache_config=cache_config)
+            all_pts = vcat(all_pts, rider_pts)
+        catch e
+            @warn "Failed to get points for $rider: $e"
+            # Add row with missing values
+            missing_row = DataFrame(
+                rider=[rider],
+                oneday=[missing],
+                gc=[missing],
+                tt=[missing],
+                sprint=[missing],
+                climber=[missing],
+                riderkey=[createkey(rider)]
+            )
+            all_pts = vcat(all_pts, missing_row)
+        end
+    end
+
+    return all_pts
 end

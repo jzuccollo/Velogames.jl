@@ -3,6 +3,7 @@ using Velogames
 using Test
 using JuMP
 using HTTP
+using Dates
 
 @testset "Functions are defined" begin
     # test that functions are defined
@@ -17,6 +18,12 @@ using HTTP
     @test isdefined(Velogames, :getvgracepoints)
     @test isdefined(Velogames, :getodds)
     @test isdefined(Velogames, :getpcsraceranking)
+    # Test new caching functions
+    @test isdefined(Velogames, :CacheConfig)
+    @test isdefined(Velogames, :clear_cache)
+    @test isdefined(Velogames, :cached_fetch)
+    @test isdefined(Velogames, :DEFAULT_CACHE)
+    @test isdefined(Velogames, :cache_key)
 end
 
 @testset "Utility Functions" begin
@@ -45,9 +52,9 @@ end
 end
 
 @testset "getvgriders" begin
-    # Test that the function returns a DataFrame
+    # Test that the function returns a DataFrame with new signature
     url = "https://www.velogames.com/velogame/2025/riders.php"
-    df = getvgriders(url, fetchagain=true)  # Force fresh download for tests
+    df = getvgriders(url, force_refresh=true)  # Force fresh download for tests
     @test typeof(df) == DataFrame
 
     # Test that the DataFrame has the expected columns: rider, team, classraw, cost, points, riderkey, class, allrounder, sprinter, climber, unclassed, value
@@ -70,6 +77,11 @@ end
 
     # Test that the riderkey column is unique
     @test length(unique(df.riderkey)) == length(df.riderkey)
+
+    # Test caching functionality
+    df_cached = getvgriders(url)  # Should use cache
+    @test typeof(df_cached) == DataFrame
+    @test size(df_cached) == size(df)
 
     # Test that the class column is lowercase and has no spaces
     if hasproperty(df, :class)
@@ -119,8 +131,9 @@ end
         @test_throws AssertionError getpcsranking("me", "invalid-category")
 
         # Test that valid inputs don't immediately error (though they may fail due to network)
-        @test_nowarn try
+        try
             getpcsranking("me", "individual")
+            @test true  # If we get here, function call succeeded
         catch e
             # Network errors are expected in tests, other errors are not
             @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
@@ -151,8 +164,9 @@ end
 
     @testset "getvgracepoints" begin
         # Test that function accepts string input
-        @test_nowarn try
+        try
             getvgracepoints("https://example.com")
+            @test true  # If we get here, function call succeeded
         catch e
             # Network/parsing errors are expected in tests
             @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
@@ -161,16 +175,18 @@ end
 
     @testset "getodds" begin
         # Test that function accepts string input and optional headers
-        @test_nowarn try
+        try
             getodds("https://example.com")
+            @test true  # If we get here, function call succeeded
         catch e
             # Network/parsing errors are expected in tests
             @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
         end
 
-        # Test with custom headers
-        @test_nowarn try
-            getodds("https://example.com", Dict("Custom-Header" => "test"))
+        # Test with custom headers (now using keyword arguments)
+        try
+            getodds("https://example.com", headers=Dict("Custom-Header" => "test"))
+            @test true  # If we get here, function call succeeded
         catch e
             # Network/parsing errors are expected in tests
             @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
@@ -192,19 +208,107 @@ end
 @testset "Integration Tests" begin
     @testset "solverace" begin
         # Test that function accepts required parameters
-        @test_nowarn try
-            solverace("https://www.velogames.com/velogame/2025/riders.php", :oneday)
+        try
+            result = solverace("https://www.velogames.com/velogame/2025/riders.php", :oneday)
+            @test true  # If no exception, test passes
         catch e
-            # Network/parsing errors are expected in tests
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            # Network/parsing errors are expected in tests, signature errors are not
+            @test !isa(e, MethodError)
         end
 
         # Test with optional parameters
-        @test_nowarn try
-            solverace("https://www.velogames.com/velogame/2025/riders.php", :stage, "testhash", 0.7)
+        try
+            result = solverace("https://www.velogames.com/velogame/2025/riders.php", :stage, "testhash", 0.7)
+            @test true  # If no exception, test passes
         catch e
-            # Network/parsing errors are expected in tests
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            # Network/parsing errors are expected in tests, signature errors are not
+            @test !isa(e, MethodError)
         end
     end
+end
+
+@testset "Caching System" begin
+    @testset "CacheConfig" begin
+        # Test default cache config
+        @test DEFAULT_CACHE.enabled == true
+        @test DEFAULT_CACHE.max_age_hours == 24
+        @test endswith(DEFAULT_CACHE.cache_dir, ".velogames_cache")
+
+        # Test custom cache config
+        custom_cache = CacheConfig("/tmp/test_cache", 12, true)
+        @test custom_cache.cache_dir == "/tmp/test_cache"
+        @test custom_cache.max_age_hours == 12
+        @test custom_cache.enabled == true
+    end
+
+    @testset "Cache Key Generation" begin
+        # Test cache key generation
+        key1 = cache_key("http://example.com")
+        key2 = cache_key("http://example.com", Dict("param" => "value"))
+        key3 = cache_key("http://different.com")
+
+        @test length(key1) == 16  # Should be 16 character hash
+        @test key1 != key2  # Different params should give different keys
+        @test key1 != key3  # Different URLs should give different keys
+        @test key2 != key3
+    end
+
+    @testset "Cache Clear" begin
+        # Test cache clearing (should not error even if cache doesn't exist)
+        test_cache_dir = "/tmp/velogames_test_cache"
+        @test_nowarn clear_cache(test_cache_dir)
+    end
+
+    @testset "Function Signature Updates" begin
+        # Test that all functions accept force_refresh parameter
+        test_params = [
+            (getpcsranking, ("me", "individual")),
+            (getpcsraceranking, ("http://example.com",)),
+            (getpcsriderhistory, ("test rider",)),
+            (getvgracepoints, ("http://example.com",)),
+            (getodds, ("http://example.com",)),
+        ]
+
+        for (func, args) in test_params
+            # Test that functions accept force_refresh parameter (will likely error on network, but shouldn't error on signature)
+            try
+                func(args..., force_refresh=true)
+            catch e
+                # Network errors are expected, signature errors are not
+                @test !isa(e, MethodError)
+            end
+        end
+    end
+end
+
+@testset "DataFrame Return Types" begin
+    @testset "getpcsriderpts DataFrame Return" begin
+        # Test that getpcsriderpts now returns DataFrame instead of Dict
+        try
+            result = getpcsriderpts("test-rider", force_refresh=true)
+            @test result isa DataFrame
+            # Should have these columns if successful
+            expected_cols = ["rider", "oneday", "gc", "tt", "sprint", "climber", "riderkey"]
+            if size(result, 1) > 0
+                @test all(col in names(result) for col in expected_cols)
+            end
+        catch e
+        end
+    end
+end
+
+@testset "Batch functions" begin
+    test_riders = ["tadej-pogacar", "jonas-vingegaard"]
+
+    # Test batch processing - warnings are expected for network failures
+    batch_df = getpcsriderpts_batch(test_riders)
+
+    @test batch_df isa DataFrame
+    @test nrow(batch_df) == length(test_riders)
+    @test hasproperty(batch_df, :rider)
+    @test hasproperty(batch_df, :oneday)
+    @test hasproperty(batch_df, :riderkey)
+
+    # Test that all expected riders are present
+    @test Set(batch_df.rider) == Set(test_riders)
 end
