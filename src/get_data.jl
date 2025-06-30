@@ -108,11 +108,16 @@ function getpcsraceranking(pageurl::String)
     # download the page and parse the table
     riderdf = gettable(pageurl)
 
+    # drop any rows with missing or empty values in the riderkey column
+    riderdf = dropmissing(riderdf, :riderkey)
+    riderdf = filter(row -> !isempty(row.riderkey), riderdf)
+
     # rename column pcs-ranking to pcsrank
     rename!(riderdf, "pcs-ranking" => :pcsrank)
+    rename!(riderdf, "points" => :pcspoints)
 
-    # convert pcs-ranking to Int64
-    riderdf[!, :pcsrank] = parse.(Int64, riderdf[!, :pcsrank])
+    # convert pcsrank to Int64, assigning 1000 if value is "-" or ""
+    riderdf[!, :pcsrank] = [x == "-" || x == "" ? 1000 : parse(Int64, x) for x in riderdf[!, :pcsrank]]
 
     # add 1/pcs-ranking to points to avoid ties
     riderdf[!, :pcspoints] = riderdf[!, :pcspoints] .+ 1 ./ riderdf[!, :pcsrank]
@@ -181,7 +186,7 @@ function getpcsriderpts(ridername::String)
     regularisedname = normalisename(ridername)
     pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
-    page = parsehtml(read(download(pageurl), String))
+    page = parsehtml(read(Downloads.download(pageurl), String))
     ridertable = eachmatch(sel".pnt", page.root)
     rawpts = map(x -> parse(Int, x[1].text), ridertable)
     riderpts = Dict(zip(["oneday", "gc", "tt", "sprint", "climber"], rawpts))

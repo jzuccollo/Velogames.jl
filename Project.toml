@@ -8,6 +8,7 @@ CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Cascadia = "54eefc05-d75b-58de-a785-1a3403f0919f"
 CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 Feather = "becb17da-46f6-5d3c-ad1b-1c5fe96bc73c"
 Gumbo = "708ec375-b3d6-5a57-a7ce-8257bf98657a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
@@ -27,4 +28,5 @@ Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 WebIO = "0f1e0344-ec1d-5b48-a673-e5cf874b6c29"
 
 [compat]
+Downloads = "1.6.0"
 WebIO = "0.8.21"
