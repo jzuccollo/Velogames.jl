@@ -33,6 +33,11 @@ function gettable(pageurl::String)
     # drop duplicate riderkeys
     riderdf = unique(riderdf, :riderkey)
 
+    # Remove any empty column name (fixes join issues)
+    if "" in names(riderdf)
+        select!(riderdf, Not(""))
+    end
+
     # check that the riderkey is unique
     @assert length(unique(riderdf.riderkey)) == length(riderdf.riderkey) "Rider keys are not unique"
 
@@ -146,9 +151,11 @@ function getvgriders(pageurl::String;
         if hasproperty(riderdf, :class)
             rename!(riderdf, :class => :classraw)
             riderdf.class = lowercase.(replace.(riderdf.classraw, " " => ""))
-            for class in unique(riderdf.class)
-                riderdf[!, class] = riderdf.class .== class
-            end
+        end
+
+        # Clean up team names
+        if hasproperty(riderdf, :team)
+            riderdf.team = unpipe.(riderdf.team)
         end
 
         # Calculate rider value
@@ -178,10 +185,12 @@ function getpcsriderpts(ridername::String;
 
     function fetch_rider_pts(url, params)
         page = parsehtml(read(Downloads.download(url), String))
-        ridertable = eachmatch(sel".pnt", page.root)
-        rawpts = map(x -> parse(Int, x[1].text), ridertable)
-
-        # Return DataFrame instead of nested Dict
+        # Try new PCS structure: .xvalue class
+        value_elements = eachmatch(sel".xvalue", page.root)
+        if length(value_elements) < 5
+            error("Could not find expected points data structure on PCS page for $ridername")
+        end
+        rawpts = map(x -> parse(Int, nodeText(x)), value_elements[1:5])
         return DataFrame(
             rider=[ridername],
             oneday=[rawpts[1]],
@@ -331,6 +340,11 @@ function getpcsriderpts_batch(ridernames::Vector{String};
             )
             all_pts = vcat(all_pts, missing_row)
         end
+    end
+
+    # Remove any empty column name (fixes join issues)
+    if "" in names(all_pts)
+        select!(all_pts, Not(""))
     end
 
     return all_pts

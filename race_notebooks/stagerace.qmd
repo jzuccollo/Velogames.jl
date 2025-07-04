@@ -1,121 +1,403 @@
 ---
-title: "Stage race"
+title: "Tour de France Team Optimization"
+subtitle: "Multi-Source Historical and Current Form Analysis"
 ---
 
-## Load libraries
+## Configuration and Data Loading
 
 ```{julia}
-using Velogames, DataFrames, Statistics, StatsBase
+#| echo: false
+using Velogames, DataFrames, Statistics, StatsBase, Printf, MarkdownTables
 
-raceurl = "https://www.velogames.com/spain/2024/riders.php"
-# betfairurl = "https://www.betfair.com/betting/cycling/tour-de-france/tour-top-10/mwe-924.411629792"
-racepcsrankingurl = "https://www.procyclingstats.com/race/vuelta-a-espana/2024/startlist/startlist-quality"
+# Tour de France data sources
+current_tdf_url = "https://www.velogames.com/velogame/2025/riders.php"
+tdf_2024_url = "https://www.velogames.com/velogame/2024/riders.php"
+tdf_2023_url = "https://www.velogames.com/velogame/2023/riders.php"
+
+# Weighting parameters (must sum to 1.0)
+pcs_weight = 0.4        # Current form emphasis
+tdf_2024_weight = 0.3   # Recent Tour performance
+tdf_2023_weight = 0.3   # Historical Tour performance
+
+# Cache configuration
+tdf_cache = CacheConfig("/tmp/tdf_optimization", 12, true)
+
+println("🚴 Tour de France Team Optimization")
+println("📊 Data Sources: Current form ($(pcs_weight*100)%), 2024 Tour ($(tdf_2024_weight*100)%), 2023 Tour ($(tdf_2023_weight*100)%)")
+println("🎯 Target: Optimal 9-rider team with stage race constraints")
 ```
 
-## Load data
-
-Using only PCS ranking at the moment and assuming 0pts for all riders not in the top 100 of the PCS ranking for that category.
+## Data Collection
 
 ```{julia}
-# get Velogames riders
-ridervg = getvgriders(raceurl)
+#| echo: false
+println("📥 Collecting data from three sources...")
 
-# get PCS rankings
-# pcsranking = getpcsranking(racesex, racecategory)
+# Initialize data availability flags
+has_2024_data = false
+has_2023_data = false
+has_pcs_data = false
 
-# get PCS race ranking
-pcsraceranking = getpcsraceranking(racepcsrankingurl)
+# 1. Current Tour riders (2025)
+println("1️⃣ Current Tour de France riders...")
+current_riders = getvgriders(current_tdf_url; cache_config=tdf_cache)
+println("   ✅ Current riders: $(nrow(current_riders))")
 
-# get Betfair odds
-# riderodds = getodds(betfairurl)
+# 2. 2024 Tour results
+println("2️⃣ 2024 Tour de France results...")
+try
+    global tdf_2024 = getvgriders(tdf_2024_url; cache_config=tdf_cache)
+    tdf_2024 = select(tdf_2024, :riderkey, :rider, :points => :points_2024)
+    println("   ✅ 2024 Tour data: $(nrow(tdf_2024)) riders")
+    global has_2024_data = true
+catch e
+    println("   ⚠️ 2024 Tour data unavailable: $e")
+    global tdf_2024 = DataFrame(riderkey=String[], rider=String[], points_2024=Float64[])
+    global has_2024_data = false
+end
+
+# 3. 2023 Tour results
+println("3️⃣ 2023 Tour de France results...")
+try
+    global tdf_2023 = getvgriders(tdf_2023_url; cache_config=tdf_cache)
+    tdf_2023 = select(tdf_2023, :riderkey, :rider, :points => :points_2023)
+    println("   ✅ 2023 Tour data: $(nrow(tdf_2023)) riders")
+    global has_2023_data = true
+catch e
+    println("   ⚠️ 2023 Tour data unavailable: $e")
+    global tdf_2023 = DataFrame(riderkey=String[], rider=String[], points_2023=Float64[])
+    global has_2023_data = false
+end
+
+# 4. Current PCS rankings for form
+println("4️⃣ Current PCS rankings...")
+try
+    global pcs_current = getpcsranking("me", "individual"; cache_config=tdf_cache)
+    pcs_current = select(pcs_current, :riderkey, :rider, :points => :pcs_points)
+    println("   ✅ PCS rankings: $(nrow(pcs_current)) riders")
+    global has_pcs_data = true
+catch e
+    println("   ⚠️ PCS rankings unavailable: $e")
+    global pcs_current = DataFrame(riderkey=String[], rider=String[], pcs_points=Float64[])
+    global has_pcs_data = false
+end
 ```
 
-## Combine datasets
+## Data Integration
 
 ```{julia}
-# join all three datasets on riderkey
-riderdf = leftjoin(ridervg, pcsranking, on=:riderkey, makeunique=true)
-riderdf = leftjoin(riderdf, riderodds, on=:riderkey, makeunique=true)
+#| echo: false
+println("🔄 Integrating data sources...")
 
-# rename points to vgpoints
-rename!(
-    riderdf,
-    :points => :vgpoints,
-    :cost => :vgcost,
-    :rank => :pcsrank,
-    :points_1 => :pcspoints,
-    :value => :vgvalue,
-)
-# drop columns ending in _1
-select!(riderdf, Not([:rider_1, :rider_2, :team_1]))
+# Start with current riders
+team_data = current_riders
+println("   📋 Base dataset: $(nrow(team_data)) riders")
 
-# fill in missing values in rank and points with 0
-riderdf[ismissing.(riderdf.pcsrank), :pcsrank] .= 0
-riderdf[ismissing.(riderdf.pcspoints), :pcspoints] .= 0
-riderdf[ismissing.(riderdf.odds), :odds] .= 500
+# Join 2024 Tour data
+if has_2024_data
+    team_data = leftjoin(team_data, tdf_2024, on=:riderkey, makeunique=true)
+    println("   ✅ Added 2024 Tour data")
+else
+    team_data[!, :points_2024] = zeros(nrow(team_data))
+    println("   ⚠️ Using zeros for 2024 Tour data")
+end
 
-# convert odds to probability of win
-riderdf.invodds = 1 ./ riderdf.odds
+# Join 2023 Tour data
+if has_2023_data
+    team_data = leftjoin(team_data, tdf_2023, on=:riderkey, makeunique=true)
+    println("   ✅ Added 2023 Tour data")
+else
+    team_data[!, :points_2023] = zeros(nrow(team_data))
+    println("   ⚠️ Using zeros for 2023 Tour data")
+end
 
-disallowmissing!(riderdf)
+# Join PCS current form
+if has_pcs_data
+    team_data = leftjoin(team_data, pcs_current, on=:riderkey, makeunique=true)
+    println("   ✅ Added PCS current form")
+else
+    team_data[!, :pcs_points] = zeros(nrow(team_data))
+    println("   ⚠️ Using zeros for PCS data")
+end
 
-# normalise odds, vgpoints, pcspoints
-riderdf.zinvodds = StatsBase.zscore(riderdf.invodds)
-riderdf.zvgpoints = StatsBase.zscore(riderdf.vgpoints)
-riderdf.zpcspoints = StatsBase.zscore(riderdf.pcspoints)
+# Handle missing values and ensure numeric types
+for col in [:points_2024, :points_2023, :pcs_points]
+    if hasproperty(team_data, col)
+        # Replace missing values with 0.0
+        team_data[ismissing.(team_data[!, col]), col] .= 0.0
+        # Convert to Float64 to ensure numeric type
+        team_data[!, col] = Float64.(team_data[!, col])
+    else
+        # Create column with zeros if it doesn't exist
+        team_data[!, col] = zeros(Float64, nrow(team_data))
+    end
+end
 
-# if the stage race hasn't started, vg points will be 0, so set zvgpoints to 0
-riderdf.zvgpoints[iszero.(riderdf.vgpoints)] .= 0
+# Improved imputation for previous-year scores with mean reversion
+for i in 1:nrow(team_data)
+    p2024 = team_data[i, :points_2024]
+    p2023 = team_data[i, :points_2023]
+    cost = team_data[i, :cost]
+    # Helper: get cost-group mean for a column
+    function cost_group_mean(col)
+        mask = (team_data[!, :cost] .== cost) .& (team_data[!, col] .!= 0.0) .& .!ismissing.(team_data[!, col])
+        if any(mask)
+            return mean(team_data[mask, col])
+        else
+            nonzero = (team_data[!, col] .!= 0.0) .& .!ismissing.(team_data[!, col])
+            return any(nonzero) ? mean(team_data[nonzero, col]) : 0.0
+        end
+    end
+    # If missing/zero in 2024 but has 2023, impute as mean of 2023 and cost-group mean for 2024
+    if (ismissing(p2024) || p2024 == 0.0) && (!ismissing(p2023) && p2023 != 0.0)
+        team_data[i, :points_2024] = (p2023 + cost_group_mean(:points_2024)) / 2
+        # If missing/zero in 2023 but has 2024, impute as mean of 2024 and cost-group mean for 2023
+    elseif (ismissing(p2023) || p2023 == 0.0) && (!ismissing(p2024) && p2024 != 0.0)
+        team_data[i, :points_2023] = (p2024 + cost_group_mean(:points_2023)) / 2
+        # If missing/zero in both, impute with cost-group mean for each year
+    elseif (ismissing(p2024) || p2024 == 0.0) && (ismissing(p2023) || p2023 == 0.0)
+        team_data[i, :points_2024] = cost_group_mean(:points_2024)
+        team_data[i, :points_2023] = cost_group_mean(:points_2023)
+    end
+end
+
+# Clean up column names
+rename!(team_data, :points => :current_points, :cost => :vg_cost)
+
+println("   ✅ Final dataset: $(nrow(team_data)) riders with $(ncol(team_data)) variables")
 ```
 
-## Calculate rider score and value
+## Composite Scoring
 
 ```{julia}
-# weights for inv odds, vgpoints, pcspoints
-WEIGHTS = [1, 0, 0]
+#| echo: false
+println("🧮 Calculating composite scores...")
 
-# calculate rider calcscore as the mean of the velogames score and the PCS score
-zweights = WEIGHTS ./ sum(WEIGHTS)
-riderdf.calcscore = zweights[1] .* riderdf.zinvodds .+ zweights[2] .* riderdf.zvgpoints .+ zweights[3] .* riderdf.zpcspoints
+# Adjust weights if data sources are unavailable
+actual_pcs_weight = has_pcs_data ? pcs_weight : 0.0
+actual_2024_weight = has_2024_data ? tdf_2024_weight : 0.0
+actual_2023_weight = has_2023_data ? tdf_2023_weight : 0.0
 
-# calculate rider value as the ratio of rider score to rider cost
-riderdf.calcvalue = riderdf.calcscore ./ riderdf.vgcost
+# Redistribute weights if some sources are missing
+total_available_weight = actual_pcs_weight + actual_2024_weight + actual_2023_weight
+if total_available_weight > 0
+    actual_pcs_weight = actual_pcs_weight / total_available_weight
+    actual_2024_weight = actual_2024_weight / total_available_weight
+    actual_2023_weight = actual_2023_weight / total_available_weight
+else
+    # Fallback to current points only
+    actual_pcs_weight = 0.0
+    actual_2024_weight = 0.0
+    actual_2023_weight = 0.0
+    println("   ⚠️ No external data available, using current points only")
+end
 
-riderdf
+# Normalize scores (z-score transformation) with proper handling of numeric vectors
+for col in [:pcs_points, :points_2024, :points_2023]
+    col_data = team_data[!, col]
+    if sum(col_data) > 0 && length(col_data) > 1
+        # Ensure we have a clean numeric vector
+        clean_data = Float64.(col_data)
+        team_data[!, Symbol("z_", col)] = StatsBase.zscore(clean_data)
+    else
+        team_data[!, Symbol("z_", col)] = zeros(Float64, nrow(team_data))
+    end
+end
+
+# Calculate composite score
+if total_available_weight > 0
+    team_data[!, :composite_score] = (
+        actual_pcs_weight .* team_data[!, :z_pcs_points] .+
+        actual_2024_weight .* team_data[!, :z_points_2024] .+
+        actual_2023_weight .* team_data[!, :z_points_2023]
+    )
+else
+    # Use current points if no other data
+    current_clean = Float64.(team_data[!, :current_points])
+    team_data[!, :composite_score] = StatsBase.zscore(current_clean)
+end
+
+# Calculate value (score per cost)
+team_data[!, :value] = team_data[!, :composite_score] ./ team_data[!, :vg_cost]
+
+println("   ✅ Composite scoring complete")
+println("   📊 Final weights: PCS($(round(actual_pcs_weight*100, digits=1))%), 2024($(round(actual_2024_weight*100, digits=1))%), 2023($(round(actual_2023_weight*100, digits=1))%)")
 ```
 
-# Inspect the data
-
-## Top 10 riders by points
+## Team Optimization
 
 ```{julia}
-sort(riderdf, :calcscore, rev=true)[1:10, :]
-```
+#| echo: false
+println("🎯 Optimizing Tour de France team...")
 
-## Top 30 riders by value
+# Initialize optimization variables
+optimization_success = false
+optimal_team = DataFrame()
 
-```{julia}
-sort(riderdf, :calcvalue, rev=true)[1:30, :]
-```
+# Verify data integrity before optimization
+println("   📊 Pre-optimization checks:")
+println("      Dataset size: $(nrow(team_data)) riders")
+println("      Has classification data: $(hasproperty(team_data, :class))")
 
+# Use stage race constraints for Tour de France
+try
+    # Ensure core columns are present
+    required_cols = [:rider, :vg_cost, :composite_score]
+    missing_cols = setdiff(required_cols, Symbol.(names(team_data)))
 
-## Build model
+    if !isempty(missing_cols)
+        throw(ArgumentError("Missing required columns: $missing_cols"))
+    end
 
-```{julia}
-modelresults = buildmodelstage(riderdf, 9, :calcvalue, :vgcost);
-```
+    # Call the optimization function (it will handle classification columns internally)
+    solution = buildmodelstage(team_data, 9, :composite_score, :vg_cost; totalcost=100)
 
-```{julia}
-# total cost
-riderdf.vgcost .* modelresults.data |> sum
+    if solution !== nothing
+        # Convert JuMP DenseAxisArray to Boolean vector in DataFrame row order
+        chosen_values = [solution[rider] > 0.5 for rider in team_data.rider]
+        team_data[!, :chosen] = chosen_values
+        global optimal_team = filter(:chosen => ==(true), team_data)
+
+        println("   ✅ Optimization successful!")
+        println("   👥 Team size: $(nrow(optimal_team)) riders")
+        println("   💰 Total cost: $(sum(optimal_team.vg_cost))/100 credits")
+
+        # Check classification constraints
+        class_cols = intersect(["allrounder", "sprinter", "climber", "unclassed"], names(optimal_team))
+        if !isempty(class_cols)
+            println("   🏷️ Classification breakdown:")
+            for col in class_cols
+                count = sum(optimal_team[:, col])
+                println("      $(uppercasefirst(col)): $count riders")
+            end
+        end
+
+        global optimization_success = true
+    else
+        println("   ❌ No feasible solution found or invalid solution length")
+        global optimization_success = false
+    end
+
+catch e
+    println("   ❌ Optimization failed: $e")
+    println("   🔍 Debug info: $(typeof(e))")
+    global optimization_success = false
+end
 ```
 
 ## Results
 
 ```{julia}
-# selected riders
-riderdf.chosen = modelresults.data .> 0.5
-chosenteam = filter(row -> row.chosen, riderdf)
-chosenteam[:, [:rider, :team, :classraw, :odds, :pcsrank, :vgcost]]
+#| echo: false
+if optimization_success && @isdefined(optimal_team)
+    println("🏆 OPTIMAL TOUR DE FRANCE TEAM")
+    println("="^50)
+
+    # Prepare display data
+    display_team = sort(optimal_team, [:classraw, :vg_cost], rev=[false, true])
+
+    # Clean team names
+    if hasproperty(display_team, :team)
+        display_team = transform(display_team, :team => ByRow(x -> Velogames.unpipe(x)) => :team)
+    end
+
+    # Select display columns
+    display_cols = [:rider, :team, :classraw, :vg_cost, :composite_score]
+
+    # Add historical data columns if available
+    if has_2024_data
+        push!(display_cols, :points_2024)
+    end
+    if has_2023_data
+        push!(display_cols, :points_2023)
+    end
+    if has_pcs_data
+        push!(display_cols, :pcs_points)
+    end
+
+    # Display the team
+    final_display = display_team[:, display_cols]
+    final_display[!, :composite_score] = round.(final_display.composite_score, digits=2)
+    final_display[!, :points_2024] = round.(final_display.points_2024)
+    final_display[!, :points_2023] = round.(final_display.points_2023)
+
+    display(markdown_table(final_display))
+
+    # Team statistics
+    println("\n📊 TEAM STATISTICS")
+    println("="^30)
+    println("💰 Total Cost: $(sum(optimal_team.vg_cost))/100 credits")
+    println("📈 Average Composite Score: $(round(mean(optimal_team.composite_score), digits=2))")
+    println("💎 Average Value: $(round(mean(optimal_team.value), digits=2))")
+
+    if has_2024_data
+        println("🏆 2024 Tour Points: $(sum(optimal_team.points_2024))")
+    end
+    if has_2023_data
+        println("🏆 2023 Tour Points: $(sum(optimal_team.points_2023))")
+    end
+    if has_pcs_data
+        println("📊 PCS Points: $(sum(optimal_team.pcs_points))")
+    end
+
+    # Classification summary
+    class_cols = intersect(["allrounder", "sprinter", "climber", "unclassed"], names(optimal_team))
+    if !isempty(class_cols)
+        println("\n🏷️ TEAM COMPOSITION")
+        println("="^25)
+        for col in class_cols
+            count = sum(optimal_team[:, col])
+            println("$(uppercasefirst(col)): $count riders")
+        end
+    end
+
+else
+    println("❌ Team optimization failed - no results to display")
+end
 ```
 
+## Top Performers by Source
+
+```{julia}
+#| echo: false
+if @isdefined(team_data)
+    println("\n🌟 TOP PERFORMERS BY SOURCE")
+    println("="^35)
+
+    # Top by current form (PCS)
+    if has_pcs_data
+        println("\n🔥 Top 5 by Current Form (PCS):")
+        top_pcs = sort(team_data, :pcs_points, rev=true)[1:min(5, nrow(team_data)), :]
+        display(markdown_table(top_pcs[:, [:rider, :team, :vg_cost, :pcs_points]]))
+    end
+
+    # Top by 2024 Tour performance
+    if has_2024_data
+        println("\n🏆 Top 5 by 2024 Tour Performance:")
+        top_2024 = sort(team_data, :points_2024, rev=true)[1:min(5, nrow(team_data)), :]
+        display(markdown_table(top_2024[:, [:rider, :team, :vg_cost, :points_2024]]))
+    end
+
+    # Top by 2023 Tour performance
+    if has_2023_data
+        println("\n🏆 Top 5 by 2023 Tour Performance:")
+        top_2023 = sort(team_data, :points_2023, rev=true)[1:min(5, nrow(team_data)), :]
+        display(markdown_table(top_2023[:, [:rider, :team, :vg_cost, :points_2023]]))
+    end
+
+    # Top by value
+    println("\n💎 Top 5 by Value (Score/Cost):")
+    top_value = sort(team_data, :value, rev=true)[1:min(5, nrow(team_data)), :]
+    display(markdown_table(top_value[:, [:rider, :team, :vg_cost, :composite_score, :value]]))
+end
+```
+
+---
+
+*To adjust the weighting strategy, modify the parameters at the top:*
+
+- `pcs_weight`: Current form emphasis (0.0 - 1.0)
+- `tdf_2024_weight`: Recent Tour performance (0.0 - 1.0)  
+- `tdf_2023_weight`: Historical Tour performance (0.0 - 1.0)
+
+*The weights are automatically normalized if data sources are unavailable.*

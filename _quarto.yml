@@ -3,7 +3,6 @@ project:
   output-dir: docs
   render:
     - "race_notebooks/index.qmd"
-    - "race_notebooks/historical_analysis.qmd"
     - "race_notebooks/historical_analysis_stagerace.qmd"
 
 jupyter: julia-1.10

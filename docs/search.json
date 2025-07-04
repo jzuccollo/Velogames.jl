@@ -2,29 +2,69 @@
   {
     "objectID": "race_notebooks/historical_analysis_stagerace.html",
     "href": "race_notebooks/historical_analysis_stagerace.html",
-    "title": "Historical analysis",
+    "title": "The Perfect Fantasy Giro Team: A Hindsight Analysis",
     "section": "",
-    "text": "Looking back on the race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best DPCC team?\nThe WebIO Jupyter extension was not detected. See the\n\n    WebIO Jupyter integration documentation\n\nfor more information.",
+    "text": "Every year, fantasy cycling aficionados meticulously pick a team of nine riders, hoping to conquer the Grand Tours. We sweat over budgets, agonize over sprinters versus climbers, and celebrate every breakaway point. But once the race is over and the winner is crowned, a tantalizing question remains: what was the best possible team you could have picked?\nThis analysis looks back at a recent Giro d’Italia to answer that question. With the benefit of perfect hindsight, we’ll use the final race results to build the ultimate fantasy team, see how it stacks up against the actual winning score, and dive deep into which riders provided the most (and least) value.",
     "crumbs": [
       "Giro d'Italia 2025"
     ]
   },
   {
-    "objectID": "race_notebooks/historical_analysis_stagerace.html#top-picks",
-    "href": "race_notebooks/historical_analysis_stagerace.html#top-picks",
-    "title": "Historical analysis",
-    "section": "Top picks",
-    "text": "Top picks\nThe highest value riders are the ones who scored the most points per credit cost:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nIsaac Del Toro\nUAE Team Emirates - XRG\n10\n2742.0\n274.2\n\n\n2\nDamiano Caruso\nBahrain - Victorious\n8\n1319.0\n164.9\n\n\n3\nRichard Carapaz\nEF Education - EasyPost\n12\n1978.0\n164.8\n\n\n4\nMads Pedersen\nLidl - Trek\n14\n2106.0\n150.4\n\n\n5\nSimon Yates\nTeam Visma - Lease a Bike\n12\n1795.0\n149.6\n\n\n6\nOrluis Aular\nMovistar Team\n6\n864.0\n144.0\n\n\n7\nBrandon McNulty\nUAE Team Emirates - XRG\n8\n1118.0\n139.8\n\n\n8\nNicolas Prodhomme\nDecathlon AG2R La Mondiale Team\n6\n787.0\n131.2\n\n\n9\nLorenzo Fortunato\nXDS Astana Team\n8\n981.0\n122.6\n\n\n10\nGiulio Pellizzari\nRed Bull - BORA - hansgrohe\n8\n942.0\n117.8\n\n\n11\nMax Poole\nTeam Picnic PostNL\n8\n860.0\n107.5\n\n\n12\nDries De Bondt\nDecathlon AG2R La Mondiale Team\n4\n428.0\n107.0\n\n\n13\nDerek Gee\nIsrael - Premier Tech\n12\n1252.0\n104.3\n\n\n14\nChristian Scaroni\nXDS Astana Team\n8\n830.0\n103.8\n\n\n15\nOlav Kooij\nTeam Visma - Lease a Bike\n12\n1199.0\n99.9\n\n\n16\nRafał Majka\nUAE Team Emirates - XRG\n6\n599.0\n99.8\n\n\n17\nCarlos Verona\nLidl - Trek\n6\n574.0\n95.7\n\n\n18\nDaan Hoole\nLidl - Trek\n6\n573.0\n95.5\n\n\n19\nMirco Maestri\nTeam Polti VisitMalta\n4\n371.0\n92.8\n\n\n20\nGianmarco Garofoli\nSoudal Quick-Step\n4\n361.0\n90.2\n\n\n\n\n\n\nBest all-rounders\nTwo were required in each team. The best value all-rounders were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nIsaac Del Toro\nUAE Team Emirates - XRG\n10\n2742.0\n274.2\n\n\n7\nBrandon McNulty\nUAE Team Emirates - XRG\n8\n1118.0\n139.8\n\n\n13\nDerek Gee\nIsrael - Premier Tech\n12\n1252.0\n104.3\n\n\n31\nAntonio Tiberi\nBahrain - Victorious\n14\n1085.0\n77.5\n\n\n46\nJay Vine\nUAE Team Emirates - XRG\n8\n486.0\n60.8\n\n\n\n\n\n\n\nBest climbers\nTwo were required in each team. The best value climbers were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n2\nDamiano Caruso\nBahrain - Victorious\n8\n1319.0\n164.9\n\n\n3\nRichard Carapaz\nEF Education - EasyPost\n12\n1978.0\n164.8\n\n\n5\nSimon Yates\nTeam Visma - Lease a Bike\n12\n1795.0\n149.6\n\n\n9\nLorenzo Fortunato\nXDS Astana Team\n8\n981.0\n122.6\n\n\n10\nGiulio Pellizzari\nRed Bull - BORA - hansgrohe\n8\n942.0\n117.8\n\n\n\n\n\n\n\nBest sprinters\nOne was required in each team. The best value sprinters were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n4\nMads Pedersen\nLidl - Trek\n14\n2106.0\n150.4\n\n\n6\nOrluis Aular\nMovistar Team\n6\n864.0\n144.0\n\n\n15\nOlav Kooij\nTeam Visma - Lease a Bike\n12\n1199.0\n99.9\n\n\n21\nKaden Groves\nAlpecin - Deceuninck\n10\n883.0\n88.3\n\n\n25\nCasper Van Uden\nTeam Picnic PostNL\n6\n518.0\n86.3",
+    "objectID": "race_notebooks/historical_analysis_stagerace.html#the-target-beating-the-winner",
+    "href": "race_notebooks/historical_analysis_stagerace.html#the-target-beating-the-winner",
+    "title": "The Perfect Fantasy Giro Team: A Hindsight Analysis",
+    "section": "The Target: Beating the Winner",
+    "text": "The Target: Beating the Winner\nThe winning team in our league, Giallo in Rosa, put up a massive score of 9231 points. This is the benchmark for our retrospective analysis.",
     "crumbs": [
       "Giro d'Italia 2025"
     ]
   },
   {
-    "objectID": "race_notebooks/historical_analysis_stagerace.html#worst-picks",
-    "href": "race_notebooks/historical_analysis_stagerace.html#worst-picks",
-    "title": "Historical analysis",
-    "section": "Worst picks",
-    "text": "Worst picks\nThe riders costing at least 6 credits who scored nil points:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n177\nMikel Landa\nSoudal Quick-Step\n14\n0.0\n0.0\n\n\n178\nGeoffrey Bouchard\nDecathlon AG2R La Mondiale Team\n6\n0.0\n0.0\n\n\n179\nDion Smith\nIntermarché - Wanty\n6\n0.0\n0.0\n\n\n180\nAlessandro Pinarello\nVF Group - Bardiani CSF - Faizanè\n6\n0.0\n0.0\n\n\n\n\n\nThe lowest value riders who did score points:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n171\nSergio Samitier\nCofidis\n4\n4.0\n1.0\n\n\n172\nJonathan Castroviejo\nINEOS Grenadiers\n4\n4.0\n1.0\n\n\n173\nLucas Hamilton\nINEOS Grenadiers\n6\n4.0\n0.7\n\n\n174\nJakob Fuglsang\nIsrael - Premier Tech\n6\n4.0\n0.7\n\n\n175\nJan Hirt\nIsrael - Premier Tech\n6\n4.0\n0.7\n\n\n176\nNick Schultz\nIsrael - Premier Tech\n6\n4.0\n0.7",
+    "objectID": "race_notebooks/historical_analysis_stagerace.html#the-dream-team-the-best-possible-squad",
+    "href": "race_notebooks/historical_analysis_stagerace.html#the-dream-team-the-best-possible-squad",
+    "title": "The Perfect Fantasy Giro Team: A Hindsight Analysis",
+    "section": "The Dream Team: The Best Possible Squad",
+    "text": "The Dream Team: The Best Possible Squad\nWith perfect hindsight, we can determine the highest-scoring combination of nine riders that fits within the budget and classification rules. The analysis reveals a “dream team” that would have scored a staggering 13620.0 points, costing 92 credits. That’s 4389.0 points more than the league winner!\nHere is the ultimate team:\n\n\n\n\n\n\n\n\n\n\n\n\nRider\nTeam\nClass\nCost\nScore\n\n\n\n\nMads Pedersen\nLidl - Trek\nsprinter\n14\n2106.0\n\n\nRichard Carapaz\nEF Education - EasyPost\nclimber\n12\n1978.0\n\n\nDerek Gee\nIsrael - Premier Tech\nallrounder\n12\n1252.0\n\n\nSimon Yates\nTeam Visma\nLease a Bike\nclimber\n12\n\n\nThomas Pidcock\nQ36.5 Pro Cycling Team\nunclassed\n10\n811.0\n\n\nIsaac Del Toro\nUAE Team Emirates - XRG\nallrounder\n10\n2742.0\n\n\nDamiano Caruso\nBahrain - Victorious\nclimber\n8\n1319.0\n\n\nChristian Scaroni\nXDS Astana Team\nunclassed\n8\n830.0\n\n\nNicolas Prodhomme\nDecathlon AG2R La Mondiale Team\nunclassed\n6\n787.0",
+    "crumbs": [
+      "Giro d'Italia 2025"
+    ]
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis_stagerace.html#the-bargain-hunters-team-cheapest-way-to-win",
+    "href": "race_notebooks/historical_analysis_stagerace.html#the-bargain-hunters-team-cheapest-way-to-win",
+    "title": "The Perfect Fantasy Giro Team: A Hindsight Analysis",
+    "section": "The Bargain Hunter’s Team: Cheapest Way to Win",
+    "text": "The Bargain Hunter’s Team: Cheapest Way to Win\nWhile the dream team is impressive, what’s the cheapest squad that still would have beaten the winner’s score? Our analysis found a team that would have scored 9513.0 points, just enough to take the crown, but for only 60 credits.\nHere is the most cost-effective winning team:\n\n\n\n\n\n\n\n\n\n\n\n\nRider\nTeam\nClass\nCost\nScore\n\n\n\n\nRichard Carapaz\nEF Education - EasyPost\nclimber\n12\n1978.0\n\n\nIsaac Del Toro\nUAE Team Emirates - XRG\nallrounder\n10\n2742.0\n\n\nDamiano Caruso\nBahrain - Victorious\nclimber\n8\n1319.0\n\n\nBrandon McNulty\nUAE Team Emirates - XRG\nallrounder\n8\n1118.0\n\n\nOrluis Aular\nMovistar Team\nsprinter\n6\n864.0\n\n\nDries De Bondt\nDecathlon AG2R La Mondiale Team\nunclassed\n4\n428.0\n\n\nGianmarco Garofoli\nSoudal Quick-Step\nunclassed\n4\n361.0\n\n\nMirco Maestri\nTeam Polti VisitMalta\nunclassed\n4\n371.0\n\n\nFlorian Stork\nTudor Pro Cycling Team\nunclassed\n4\n332.0",
+    "crumbs": [
+      "Giro d'Italia 2025"
+    ]
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis_stagerace.html#where-to-spend-your-credits",
+    "href": "race_notebooks/historical_analysis_stagerace.html#where-to-spend-your-credits",
+    "title": "The Perfect Fantasy Giro Team: A Hindsight Analysis",
+    "section": "Where to Spend Your Credits?",
+    "text": "Where to Spend Your Credits?\nThat scatter plot is great for spotting individual riders, but what can it tell us about overall strategy? By breaking the data down by cost and rider classification, we can uncover some key trends that could inform future fantasy picks.\n\nPerformance by Cost Bracket\nFirst, let’s see if the expensive, big-name riders were actually worth their price tag. We’ve grouped all riders into three cost brackets to see how they performed on average.\n\n\n\n\n\n\n\n\n\n\n\n\nCost Bracket\nAvg. Score\nAvg. Cost\nRiders\nAvg. Value (Score/Cost)\n\n\n\n\nPremium (12+)\n1159.6\n14.6\n13\n79.34\n\n\nMid-Range (8-11)\n573.7\n8.5\n30\n67.76\n\n\nBudget (&lt;8)\n154.6\n5.1\n141\n30.03\n\n\n\n\n\n\n\nValue by Rider Class\nNext, which type of rider provided the best value? The chart below shows the distribution of “value” (points per credit) for each of the four rider classifications.",
+    "crumbs": [
+      "Giro d'Italia 2025"
+    ]
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis_stagerace.html#top-value-riders",
+    "href": "race_notebooks/historical_analysis_stagerace.html#top-value-riders",
+    "title": "The Perfect Fantasy Giro Team: A Hindsight Analysis",
+    "section": "Top Value Riders",
+    "text": "Top Value Riders\nThe highest value riders scored the most points per credit. Here are the top 20 riders who gave the most bang for your buck.\n\n\n\n\n\n\n\n\n\n\n\n\n\nRider\nTeam\nClass\nCost\nScore\nValue\n\n\n\n\nIsaac Del Toro\nUAE Team Emirates - XRG\nallrounder\n10\n2742.0\n274.2\n\n\nDamiano Caruso\nBahrain - Victorious\nclimber\n8\n1319.0\n164.88\n\n\nRichard Carapaz\nEF Education - EasyPost\nclimber\n12\n1978.0\n164.83\n\n\nMads Pedersen\nLidl - Trek\nsprinter\n14\n2106.0\n150.43\n\n\nSimon Yates\nTeam Visma\nLease a Bike\nclimber\n12\n1795.0\n\n\nOrluis Aular\nMovistar Team\nsprinter\n6\n864.0\n144.0\n\n\nBrandon McNulty\nUAE Team Emirates - XRG\nallrounder\n8\n1118.0\n139.75\n\n\nNicolas Prodhomme\nDecathlon AG2R La Mondiale Team\nunclassed\n6\n787.0\n131.17\n\n\nLorenzo Fortunato\nXDS Astana Team\nclimber\n8\n981.0\n122.62\n\n\nGiulio Pellizzari\nRed Bull - BORA - hansgrohe\nclimber\n8\n942.0\n117.75\n\n\nMax Poole\nTeam Picnic PostNL\nclimber\n8\n860.0\n107.5\n\n\nDries De Bondt\nDecathlon AG2R La Mondiale Team\nunclassed\n4\n428.0\n107.0\n\n\nDerek Gee\nIsrael - Premier Tech\nallrounder\n12\n1252.0\n104.33\n\n\nChristian Scaroni\nXDS Astana Team\nunclassed\n8\n830.0\n103.75\n\n\nOlav Kooij\nTeam Visma\nLease a Bike\nsprinter\n12\n1199.0\n\n\nRafał Majka\nUAE Team Emirates - XRG\nclimber\n6\n599.0\n99.83\n\n\nCarlos Verona\nLidl - Trek\nunclassed\n6\n574.0\n95.67\n\n\nDaan Hoole\nLidl - Trek\nunclassed\n6\n573.0\n95.5\n\n\nMirco Maestri\nTeam Polti VisitMalta\nunclassed\n4\n371.0\n92.75\n\n\nGianmarco Garofoli\nSoudal Quick-Step\nunclassed\n4\n361.0\n90.25\n\n\n\n\n\n\nBest All-Rounders\nTwo all-rounders were required in each team. The best value picks were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nIsaac Del Toro\nUAE Team Emirates - XRG\n10\n2742.0\n274.2\n\n\n7\nBrandon McNulty\nUAE Team Emirates - XRG\n8\n1118.0\n139.75\n\n\n13\nDerek Gee\nIsrael - Premier Tech\n12\n1252.0\n104.33\n\n\n31\nAntonio Tiberi\nBahrain - Victorious\n14\n1085.0\n77.5\n\n\n46\nJay Vine\nUAE Team Emirates - XRG\n8\n486.0\n60.75\n\n\n\n\n\n\n\nBest Climbers\nTwo climbers were required. The best value climbers were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n2\nDamiano Caruso\nBahrain - Victorious\n8\n1319.0\n164.88\n\n\n3\nRichard Carapaz\nEF Education - EasyPost\n12\n1978.0\n164.83\n\n\n5\nSimon Yates\nTeam Visma\nLease a Bike\n12\n1795.0\n\n\n9\nLorenzo Fortunato\nXDS Astana Team\n8\n981.0\n122.62\n\n\n10\nGiulio Pellizzari\nRed Bull - BORA - hansgrohe\n8\n942.0\n117.75\n\n\n\n\n\n\n\nBest Sprinters\nOne sprinter was required. The best value sprinters were:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n4\nMads Pedersen\nLidl - Trek\n14\n2106.0\n150.43\n\n\n6\nOrluis Aular\nMovistar Team\n6\n864.0\n144.0\n\n\n15\nOlav Kooij\nTeam Visma\nLease a Bike\n12\n1199.0\n\n\n21\nKaden Groves\nAlpecin - Deceuninck\n10\n883.0\n88.3\n\n\n25\nCasper Van Uden\nTeam Picnic PostNL\n6\n518.0\n86.33",
+    "crumbs": [
+      "Giro d'Italia 2025"
+    ]
+  },
+  {
+    "objectID": "race_notebooks/historical_analysis_stagerace.html#worst-value-analysis",
+    "href": "race_notebooks/historical_analysis_stagerace.html#worst-value-analysis",
+    "title": "The Perfect Fantasy Giro Team: A Hindsight Analysis",
+    "section": "Worst Value Analysis",
+    "text": "Worst Value Analysis\nNot every pick can be a winner. Here we look at the riders who didn’t live up to their price tag.\n\nExpensive Failures\nThese riders cost at least 6 credits but scored zero points.\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nClass\nCost\nScore\n\n\n\n\n177\nMikel Landa\nSoudal Quick-Step\nclimber\n14\n0.0\n\n\n178\nGeoffrey Bouchard\nDecathlon AG2R La Mondiale Team\nunclassed\n6\n0.0\n\n\n179\nDion Smith\nIntermarché - Wanty\nunclassed\n6\n0.0\n\n\n180\nAlessandro Pinarello\nVF Group - Bardiani CSF - Faizanè\nunclassed\n6\n0.0\n\n\n\n\n\n\n\nLowest Value Performers\nFinally, these are the riders who, despite scoring some points, delivered the worst value for their cost.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nClass\nCost\nScore\nValue\n\n\n\n\n171\nSergio Samitier\nCofidis\nunclassed\n4\n4.0\n1.0\n\n\n172\nJonathan Castroviejo\nINEOS Grenadiers\nunclassed\n4\n4.0\n1.0\n\n\n173\nLucas Hamilton\nINEOS Grenadiers\nunclassed\n6\n4.0\n0.67\n\n\n174\nJakob Fuglsang\nIsrael - Premier Tech\nunclassed\n6\n4.0\n0.67\n\n\n175\nJan Hirt\nIsrael - Premier Tech\nclimber\n6\n4.0\n0.67\n\n\n176\nNick Schultz\nIsrael - Premier Tech\nunclassed\n6\n4.0\n0.67",
     "crumbs": [
       "Giro d'Italia 2025"
     ]
@@ -37,36 +77,6 @@
     "text": "Building on the work of GraemeHawker, this is a simple set of functions to pick a team for the Velogames Fantasy Cycling competition.\n\nOutline\nThe Julia package uses the Gumbo and Cascadia libraries to scrape rider data, and the JuMP optimisation library / HiGHS solver to construct and solve a mixed-integer program described below.\nAt the end of the race, each rider will have accumulated a score based on their performance, and the aim is to pick a team with the highest combined score at the end of the race. The rules are slightly difference for each type of race.\n\n\nOne-day races and short tours\nFor short races, riders are all unclassed and teams are 6-9 riders, depending upon the competition.\nThe optimisation problem can be stated as:\n\\(maximise \\sum_{j=1}^{n} x_j y_j\\)\n\\(s.t.\\)\n\\(\\sum_{j=1}^{n} x_j= maxriders\\)\n\\(\\sum_{j=1}^{n} x_j z_j \\leq 100\\)\nwhere \\(j=1...n\\) is the set of all riders\n\\(x_j\\in[0,1]\\) is a binary decision variable denoting if rider \\(j\\) is chosen (1 for chosen, 0 for not chosen)\n\\(z_j\\in Z^+\\) and \\(y_j\\in Z^+\\) are the cost and score parameters of rider \\(j\\) respectively\n\n\nGrand tours\nFor grand tours each rider is classed as either an All-Rounder, a Climber, a Sprinter or is Unclassed. A team must contain 2 All-Rounders, 2 Climbers, 1 Sprinter and 3 Unclassed riders. The 9th selection can be from any of these categories.\nThe optimisation problem then becomes:\n\\(maximise \\sum_{j=1}^{n} x_j y_j\\)\n\\(s.t.\\)\n\\(\\sum_{j=1}^{n} x_j=9\\)\n\\(\\sum_{j=1}^{n} x_j z_j \\leq 100\\)\n\\(\\sum_{j=1}^{n} x_j a_j \\geq 2\\)\n\\(\\sum_{j=1}^{n} x_j c_j \\geq 2\\)\n\\(\\sum_{j=1}^{n} x_j s_j \\geq 1\\)\n\\(\\sum_{j=1}^{n} x_j u_j \\geq 3\\)\nwhere \\(j=1...n\\) is the set of all riders\n\\(x_j\\in[0,1]\\) is a binary decision variable denoting if rider \\(j\\) is chosen (1 for chosen, 0 for not chosen)\n\\(z_j\\in Z^+\\) and \\(y_j\\in Z^+\\) are the cost and score parameters of rider \\(j\\) respectively\n\\(a_j\\in[0,1]\\), \\(c_j\\in[0,1]\\), \\(s_j\\in[0,1]\\) and \\(u_j\\in[0,1]\\) are binary parameters denoting if rider \\(j\\) is an All-Rounder, Climber, Sprinter or Unclassed respectively, with the further parameter constraint that \\(a_i+c_i+s_i+u_i=1\\) \\(\\forall i=1...n\\) (i.e. each rider is allocated to one and only one of the 4 categories) and by implication \\(\\sum_{j=1}^{n} a_j+\\sum_{j=1}^{n} c_j+\\sum_{j=1}^{n} s_j+\\sum_{j=1}^{n} u_j=n\\) (i.e. the sum of the number of riders in each category is equal to the total number of riders)",
     "crumbs": [
       "Overview"
-    ]
-  },
-  {
-    "objectID": "race_notebooks/historical_analysis.html",
-    "href": "race_notebooks/historical_analysis.html",
-    "title": "Historical analysis",
-    "section": "",
-    "text": "Looking back on the race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best DPCC team?",
-    "crumbs": [
-      "Olympic road race 2024"
-    ]
-  },
-  {
-    "objectID": "race_notebooks/historical_analysis.html#top-picks",
-    "href": "race_notebooks/historical_analysis.html#top-picks",
-    "title": "Historical analysis",
-    "section": "Top picks",
-    "text": "Top picks\nThe highest value riders are the ones who scored the most points per credit cost:\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n1\nMarco Haller\nRed Bull - BORA - hansgrohe\n10\n330\n33.0\n\n\n2\nValentin Madouas\nGroupama - FDJ\n22\n630\n28.6\n\n\n3\nAttila Valter\nTeam Visma - Lease a Bike\n16\n420\n26.2\n\n\n4\nMathias Vacek\nLidl - Trek\n8\n204\n25.5\n\n\n5\nRemco Evenepoel\nSoudal - Quick Step\n30\n720\n24.0\n\n\n6\nChristophe Laporte\nTeam Visma - Lease a Bike\n24\n540\n22.5\n\n\n7\nToms Skujiņš\nLidl - Trek\n16\n360\n22.5\n\n\n8\nBen Healy\nEF Education-EasyPost\n20\n315\n15.8\n\n\n9\nJulian Alaphilippe\nSoudal - Quick Step\n22\n330\n15.0\n\n\n10\nStefan Küng\nGroupama - FDJ\n20\n300\n15.0\n\n\n11\nAchraf Ed Doghmy\nMorocco\n4\n60\n15.0\n\n\n12\nThanakhan Chaiyasombat\nThailand\n4\n60\n15.0\n\n\n13\nCharles Kagimu\nUganda\n4\n60\n15.0\n\n\n14\nEric Manizabayo\nRwanda\n4\n60\n15.0\n\n\n15\nChristopher Lagane\nMauritius\n4\n60\n15.0\n\n\n16\nJan Tratnik\nTeam Visma - Lease a Bike\n20\n285\n14.2\n\n\n17\nMatteo Jorgenson\nTeam Visma - Lease a Bike\n22\n270\n12.3\n\n\n18\nKévin Vauquelin\nArkéa - B&B Hotels\n8\n90\n11.2\n\n\n19\nJasper Stuyven\nLidl - Trek\n20\n210\n10.5\n\n\n20\nSantiago Buitrago\nBahrain - Victorious\n14\n144\n10.3",
-    "crumbs": [
-      "Olympic road race 2024"
-    ]
-  },
-  {
-    "objectID": "race_notebooks/historical_analysis.html#worst-picks",
-    "href": "race_notebooks/historical_analysis.html#worst-picks",
-    "title": "Historical analysis",
-    "section": "Worst picks",
-    "text": "Worst picks\n\nThe lowest scoring riders of those who scored points. Riders who scored zero are excluded because Velogames doesn’t record who they were and I didn’t save it.\n\n\n\n\n\n\n\n\n\n\n\n\n\nRank\nRider\nTeam\nCost\nScore\nValue\n\n\n\n\n39\nMadis Mihkels\nIntermarché - Wanty\n6\n12\n2.0\n\n\n38\nWout Van Aert\nTeam Visma - Lease a Bike\n32\n90\n2.8\n\n\n36\nCorbin Strong\nIsrael - Premier Tech\n16\n48\n3.0\n\n\n37\nMaximilian Schachmann\nRed Bull - BORA - hansgrohe\n12\n36\n3.0\n\n\n35\nLukáš Kubiš\nElkov - Kasper\n6\n24\n4.0\n\n\n34\nTiesj Benoot\nTeam Visma - Lease a Bike\n22\n90\n4.1\n\n\n32\nAlexey Lutsenko\nAstana Qazaqstan Team\n14\n60\n4.3\n\n\n33\nFelix Großschartner\nUAE Team Emirates\n14\n60\n4.3\n\n\n31\nDaniel Martínez\nRed Bull - BORA - hansgrohe\n16\n72\n4.5\n\n\n30\nMads Pedersen\nLidl - Trek\n26\n132\n5.1\n\n\n29\nBrandon McNulty\nUAE Team Emirates\n16\n84\n5.2\n\n\n28\nJuan Ayuso\nUAE Team Emirates\n20\n108\n5.4\n\n\n27\nAlberto Bettiol\nAstana Qazaqstan Team\n16\n96\n6.0\n\n\n26\nMathieu Van Der Poel\nAlpecin-Deceuninck\n32\n228\n7.1\n\n\n25\nMarc Hirschi\nUAE Team Emirates\n24\n180\n7.5",
-    "crumbs": [
-      "Olympic road race 2024"
     ]
   }
 ]

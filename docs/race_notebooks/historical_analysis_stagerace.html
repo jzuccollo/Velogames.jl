@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Historical analysis – Velogames solver</title>
+<title>The Perfect Fantasy Giro Team: A Hindsight Analysis – Velogames solver</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -122,7 +122,7 @@ ul.task-list li input[type="checkbox"] {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../race_notebooks/historical_analysis.html" class="sidebar-item-text sidebar-link">
+  <a href="../race_notebooks/historical_analysis.qmd" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Olympic road race 2024</span></a>
   </div>
 </li>
@@ -136,17 +136,27 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#best-team-you-could-have-picked" id="toc-best-team-you-could-have-picked" class="nav-link active" data-scroll-target="#best-team-you-could-have-picked">Best team you could have picked</a></li>
-  <li><a href="#cheapest-team-that-would-have-beaten-the-best-dpcc-team" id="toc-cheapest-team-that-would-have-beaten-the-best-dpcc-team" class="nav-link" data-scroll-target="#cheapest-team-that-would-have-beaten-the-best-dpcc-team">Cheapest team that would have beaten the best DPCC team</a></li>
-  <li><a href="#rider-value" id="toc-rider-value" class="nav-link" data-scroll-target="#rider-value">Rider value</a>
+  <li><a href="#the-target-beating-the-winner" id="toc-the-target-beating-the-winner" class="nav-link active" data-scroll-target="#the-target-beating-the-winner">The Target: Beating the Winner</a></li>
+  <li><a href="#the-dream-team-the-best-possible-squad" id="toc-the-dream-team-the-best-possible-squad" class="nav-link" data-scroll-target="#the-dream-team-the-best-possible-squad">The Dream Team: The Best Possible Squad</a></li>
+  <li><a href="#the-bargain-hunters-team-cheapest-way-to-win" id="toc-the-bargain-hunters-team-cheapest-way-to-win" class="nav-link" data-scroll-target="#the-bargain-hunters-team-cheapest-way-to-win">The Bargain Hunter’s Team: Cheapest Way to Win</a></li>
+  <li><a href="#rider-value-analysis" id="toc-rider-value-analysis" class="nav-link" data-scroll-target="#rider-value-analysis">Rider Value Analysis</a>
   <ul class="collapse">
-  <li><a href="#top-picks" id="toc-top-picks" class="nav-link" data-scroll-target="#top-picks">Top picks</a>
+  <li><a href="#where-to-spend-your-credits" id="toc-where-to-spend-your-credits" class="nav-link" data-scroll-target="#where-to-spend-your-credits">Where to Spend Your Credits?</a>
   <ul class="collapse">
-  <li><a href="#best-all-rounders" id="toc-best-all-rounders" class="nav-link" data-scroll-target="#best-all-rounders">Best all-rounders</a></li>
-  <li><a href="#best-climbers" id="toc-best-climbers" class="nav-link" data-scroll-target="#best-climbers">Best climbers</a></li>
-  <li><a href="#best-sprinters" id="toc-best-sprinters" class="nav-link" data-scroll-target="#best-sprinters">Best sprinters</a></li>
+  <li><a href="#performance-by-cost-bracket" id="toc-performance-by-cost-bracket" class="nav-link" data-scroll-target="#performance-by-cost-bracket">Performance by Cost Bracket</a></li>
+  <li><a href="#value-by-rider-class" id="toc-value-by-rider-class" class="nav-link" data-scroll-target="#value-by-rider-class">Value by Rider Class</a></li>
   </ul></li>
-  <li><a href="#worst-picks" id="toc-worst-picks" class="nav-link" data-scroll-target="#worst-picks">Worst picks</a></li>
+  <li><a href="#top-value-riders" id="toc-top-value-riders" class="nav-link" data-scroll-target="#top-value-riders">Top Value Riders</a>
+  <ul class="collapse">
+  <li><a href="#best-all-rounders" id="toc-best-all-rounders" class="nav-link" data-scroll-target="#best-all-rounders">Best All-Rounders</a></li>
+  <li><a href="#best-climbers" id="toc-best-climbers" class="nav-link" data-scroll-target="#best-climbers">Best Climbers</a></li>
+  <li><a href="#best-sprinters" id="toc-best-sprinters" class="nav-link" data-scroll-target="#best-sprinters">Best Sprinters</a></li>
+  </ul></li>
+  <li><a href="#worst-value-analysis" id="toc-worst-value-analysis" class="nav-link" data-scroll-target="#worst-value-analysis">Worst Value Analysis</a>
+  <ul class="collapse">
+  <li><a href="#expensive-failures" id="toc-expensive-failures" class="nav-link" data-scroll-target="#expensive-failures">Expensive Failures</a></li>
+  <li><a href="#lowest-value-performers" id="toc-lowest-value-performers" class="nav-link" data-scroll-target="#lowest-value-performers">Lowest Value Performers</a></li>
+  </ul></li>
   </ul></li>
   </ul>
 </nav>
@@ -156,8 +166,8 @@ ul.task-list li input[type="checkbox"] {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Historical analysis</h1>
-<p class="subtitle lead">Giro d’Italia 2025</p>
+<h1 class="title">The Perfect Fantasy Giro Team: A Hindsight Analysis</h1>
+<p class="subtitle lead">Uncovering the best possible team, the best value riders, and the biggest busts from the race.</p>
 </div>
 
 
@@ -174,28 +184,31 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p>Looking back on the race, what’s the best team you could have picked? And what’s the cheapest team you could have picked that would have beaten the best DPCC team?</p>
-<div id="d3e55809" class="cell" data-execution_count="1">
-<div class="cell-output cell-output-display">
-<div style="padding: 1em; background-color: #f8d6da; border: 1px solid #f5c6cb; font-weight: bold;">
-<p>The WebIO Jupyter extension was not detected. See the
-<a href="https://juliagizmos.github.io/WebIO.jl/latest/providers/ijulia/" target="_blank">
-    WebIO Jupyter integration documentation
-</a>
-for more information.
-</p></div>
-</div>
-</div>
-<section id="best-team-you-could-have-picked" class="level1">
-<h1>Best team you could have picked</h1>
-<p>With the benefit of hindsight, the best team you could have picked scored 13620.0 points and cost 92 points:</p>
-<div id="ab0f9a54" class="cell" data-execution_count="3">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="5">
+<p>Every year, fantasy cycling aficionados meticulously pick a team of nine riders, hoping to conquer the Grand Tours. We sweat over budgets, agonize over sprinters versus climbers, and celebrate every breakaway point. But once the race is over and the winner is crowned, a tantalizing question remains: what was the <em>best possible</em> team you could have picked?</p>
+<p>This analysis looks back at a recent Giro d’Italia to answer that question. With the benefit of perfect hindsight, we’ll use the final race results to build the ultimate fantasy team, see how it stacks up against the actual winning score, and dive deep into which riders provided the most (and least) value.</p>
+<section id="the-target-beating-the-winner" class="level2">
+<h2 class="anchored" data-anchor-id="the-target-beating-the-winner">The Target: Beating the Winner</h2>
+<p>The winning team in our league, <strong>Giallo in Rosa</strong>, put up a massive score of <strong>9231</strong> points. This is the benchmark for our retrospective analysis.</p>
+</section>
+<section id="the-dream-team-the-best-possible-squad" class="level2">
+<h2 class="anchored" data-anchor-id="the-dream-team-the-best-possible-squad">The Dream Team: The Best Possible Squad</h2>
+<p>With perfect hindsight, we can determine the highest-scoring combination of nine riders that fits within the budget and classification rules. The analysis reveals a “dream team” that would have scored a staggering <strong>13620.0</strong> points, costing <strong>92</strong> credits. That’s <strong>4389.0</strong> points more than the league winner!</p>
+<p>Here is the ultimate team:</p>
+<div id="790ae99c" class="cell" data-execution_count="2">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="4">
 <table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 24%">
+<col style="width: 42%">
+<col style="width: 15%">
+<col style="width: 7%">
+<col style="width: 10%">
+</colgroup>
 <thead>
 <tr class="header">
 <th>Rider</th>
 <th>Team</th>
+<th>Class</th>
 <th>Cost</th>
 <th>Score</th>
 </tr>
@@ -204,54 +217,63 @@ for more information.
 <tr class="odd">
 <td>Mads Pedersen</td>
 <td>Lidl - Trek</td>
+<td>sprinter</td>
 <td>14</td>
 <td>2106.0</td>
 </tr>
 <tr class="even">
 <td>Richard Carapaz</td>
 <td>EF Education - EasyPost</td>
+<td>climber</td>
 <td>12</td>
 <td>1978.0</td>
 </tr>
 <tr class="odd">
 <td>Derek Gee</td>
 <td>Israel - Premier Tech</td>
+<td>allrounder</td>
 <td>12</td>
 <td>1252.0</td>
 </tr>
 <tr class="even">
 <td>Simon Yates</td>
-<td>Team Visma - Lease a Bike</td>
+<td>Team Visma</td>
+<td>Lease a Bike</td>
+<td>climber</td>
 <td>12</td>
-<td>1795.0</td>
 </tr>
 <tr class="odd">
 <td>Thomas Pidcock</td>
 <td>Q36.5 Pro Cycling Team</td>
+<td>unclassed</td>
 <td>10</td>
 <td>811.0</td>
 </tr>
 <tr class="even">
 <td>Isaac Del Toro</td>
 <td>UAE Team Emirates - XRG</td>
+<td>allrounder</td>
 <td>10</td>
 <td>2742.0</td>
 </tr>
 <tr class="odd">
 <td>Damiano Caruso</td>
 <td>Bahrain - Victorious</td>
+<td>climber</td>
 <td>8</td>
 <td>1319.0</td>
 </tr>
 <tr class="even">
 <td>Christian Scaroni</td>
 <td>XDS Astana Team</td>
+<td>unclassed</td>
 <td>8</td>
 <td>830.0</td>
 </tr>
 <tr class="odd">
 <td>Nicolas Prodhomme</td>
 <td>Decathlon AG2R La Mondiale Team</td>
+<td>unclassed</td>
 <td>6</td>
 <td>787.0</td>
 </tr>
@@ -260,16 +282,25 @@ for more information.
 </div>
 </div>
 </section>
-<section id="cheapest-team-that-would-have-beaten-the-best-dpcc-team" class="level1">
-<h1>Cheapest team that would have beaten the best DPCC team</h1>
-<p>The best team picked by a DPCC league member was Giallo in Rosa’s, which scored 9231 points. The cheapest team that would have beaten that scored 9513.0 points and cost 60 points:</p>
-<div id="acd6c75d" class="cell" data-execution_count="5">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="8">
+<section id="the-bargain-hunters-team-cheapest-way-to-win" class="level2">
+<h2 class="anchored" data-anchor-id="the-bargain-hunters-team-cheapest-way-to-win">The Bargain Hunter’s Team: Cheapest Way to Win</h2>
+<p>While the dream team is impressive, what’s the <em>cheapest</em> squad that still would have beaten the winner’s score? Our analysis found a team that would have scored <strong>9513.0</strong> points, just enough to take the crown, but for only <strong>60</strong> credits.</p>
+<p>Here is the most cost-effective winning team:</p>
+<div id="3f049086" class="cell" data-execution_count="3">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="6">
 <table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 41%">
+<col style="width: 15%">
+<col style="width: 7%">
+<col style="width: 10%">
+</colgroup>
 <thead>
 <tr class="header">
 <th>Rider</th>
 <th>Team</th>
+<th>Class</th>
 <th>Cost</th>
 <th>Score</th>
 </tr>
@@ -278,54 +309,63 @@ for more information.
 <tr class="odd">
 <td>Richard Carapaz</td>
 <td>EF Education - EasyPost</td>
+<td>climber</td>
 <td>12</td>
 <td>1978.0</td>
 </tr>
 <tr class="even">
 <td>Isaac Del Toro</td>
 <td>UAE Team Emirates - XRG</td>
+<td>allrounder</td>
 <td>10</td>
 <td>2742.0</td>
 </tr>
 <tr class="odd">
 <td>Damiano Caruso</td>
 <td>Bahrain - Victorious</td>
+<td>climber</td>
 <td>8</td>
 <td>1319.0</td>
 </tr>
 <tr class="even">
 <td>Brandon McNulty</td>
 <td>UAE Team Emirates - XRG</td>
+<td>allrounder</td>
 <td>8</td>
 <td>1118.0</td>
 </tr>
 <tr class="odd">
 <td>Orluis Aular</td>
 <td>Movistar Team</td>
+<td>sprinter</td>
 <td>6</td>
 <td>864.0</td>
 </tr>
 <tr class="even">
 <td>Dries De Bondt</td>
 <td>Decathlon AG2R La Mondiale Team</td>
+<td>unclassed</td>
 <td>4</td>
 <td>428.0</td>
 </tr>
 <tr class="odd">
 <td>Gianmarco Garofoli</td>
 <td>Soudal Quick-Step</td>
+<td>unclassed</td>
 <td>4</td>
 <td>361.0</td>
 </tr>
 <tr class="even">
 <td>Mirco Maestri</td>
 <td>Team Polti VisitMalta</td>
+<td>unclassed</td>
 <td>4</td>
 <td>371.0</td>
 </tr>
 <tr class="odd">
 <td>Florian Stork</td>
 <td>Tudor Pro Cycling Team</td>
+<td>unclassed</td>
 <td>4</td>
 <td>332.0</td>
 </tr>
@@ -334,11 +374,12 @@ for more information.
 </div>
 </div>
 </section>
-<section id="rider-value" class="level1">
-<h1>Rider value</h1>
-<div id="1fa9d179" class="cell" data-execution_count="6">
-<div class="cell-output cell-output-display">
-    <div id="38242f93-df42-45ba-92a0-164b7baba626" style="width:672px;height:480px;"></div>
+<section id="rider-value-analysis" class="level1">
+<h1>Rider Value Analysis</h1>
+<p>Which riders punched above their weight, and who were the expensive disappointments? This chart plots every rider’s cost against the points they scored, giving a clear view of their value.</p>
+<div id="6251b741" class="cell" data-execution_count="4">
+<div class="cell-output cell-output-display" data-execution_count="7">
+    <div id="4b45c3b5-5620-49a4-aece-32db34282f4a" style="width:672px;height:480px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -349,7 +390,7 @@ for more information.
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('38242f93-df42-45ba-92a0-164b7baba626', [
+        Plotly.newPlot('4b45c3b5-5620-49a4-aece-32db34282f4a', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -360,143 +401,608 @@ for more information.
         },
         "yaxis": "y",
         "text": [
-            "Juri Hollmann (Alpecin - Deceuninck)",
-            "Jimmy Janssens (Alpecin - Deceuninck)",
-            "Edward Planckaert (Alpecin - Deceuninck)",
-            "Fabio Van Den Bossche (Alpecin - Deceuninck)",
-            "Giosuè Epis (Arkéa - B&B Hotels )",
-            "Simon Guglielmi (Arkéa - B&B Hotels )",
-            "Laurens Huys (Arkéa - B&B Hotels )",
-            "Michel Ries (Arkéa - B&B Hotels )",
-            "Embret Svestad-Bårdseng (Arkéa - B&B Hotels )",
-            "Martin Tjøtta (Arkéa - B&B Hotels )",
-            "Alessandro Verre (Arkéa - B&B Hotels )",
-            "Afonso Eulálio (Bahrain - Victorious)",
-            "Fran Miholjević (Bahrain - Victorious)",
-            "Andrea Pasqualon (Bahrain - Victorious)",
-            "Nicolas Debeaumarché (Cofidis)",
-            "Jonathan Lastra (Cofidis)",
-            "Jan Maas (Cofidis)",
-            "Anthony Perez (Cofidis)",
-            "Sergio Samitier (Cofidis)",
-            "Dries De Bondt (Decathlon AG2R La Mondiale Team)",
-            "Owain Doull (EF Education - EasyPost)",
-            "James Shaw (EF Education - EasyPost)",
-            "Sven Erik Bystrøm (Groupama - FDJ)",
-            "Clément Davy (Groupama - FDJ)",
-            "Lorenzo Germani (Groupama - FDJ)",
-            "Enzo Paleni (Groupama - FDJ)",
-            "Rémy Rochas (Groupama - FDJ)",
-            "Jonathan Castroviejo (INEOS Grenadiers)",
-            "Kim Heiduk (INEOS Grenadiers)",
-            "Kevin Colleoni (Intermarché - Wanty)",
-            "Simone Petilli (Intermarché - Wanty)",
-            "Taco Van Der Hoorn (Intermarché - Wanty)",
-            "Gijs Van Hoecke (Intermarché - Wanty)",
-            "Hugo Houle (Israel - Premier Tech)",
-            "Jacopo Mosca (Lidl - Trek)",
-            "Lorenzo Milesi (Movistar Team)",
-            "Albert Torres (Movistar Team)",
-            "Xabier Mikel Azparren (Q36.5 Pro Cycling Team)",
-            "Nickolas Zukowsky (Q36.5 Pro Cycling Team)",
-            "Nico Denz (Red Bull - BORA - hansgrohe )",
-            "Gianni Moscon (Red Bull - BORA - hansgrohe )",
-            "Josef Černý (Soudal Quick-Step )",
-            "Gianmarco Garofoli (Soudal Quick-Step )",
-            "James Knox (Soudal Quick-Step )",
-            "Michael Hepburn (Team Jayco AlUla)",
-            "Alex Edmondson (Team Picnic PostNL )",
-            "Niklas Märkl (Team Picnic PostNL )",
-            "Bram Welten (Team Picnic PostNL )",
-            "Davide Bais (Team Polti VisitMalta)",
-            "Mattia Bais (Team Polti VisitMalta)",
-            "Mirco Maestri (Team Polti VisitMalta)",
-            "Francisco Muñoz (Team Polti VisitMalta)",
-            "Andrea Pietrobon (Team Polti VisitMalta)",
-            "Dylan Van Baarle (Team Visma - Lease a Bike )",
-            "Alexander Krieger (Tudor Pro Cycling Team)",
-            "Florian Stork (Tudor Pro Cycling Team)",
-            "Larry Warbasse (Tudor Pro Cycling Team)",
-            "Luca Covili (VF Group - Bardiani CSF - Faizanè)",
-            "Martin Marcellusi (VF Group - Bardiani CSF - Faizanè)",
-            "Anton Kuzmin (XDS Astana Team )"
+            "Primož Roglič (Red Bull - BORA - hansgrohe )<br>Class: allrounder<br>VG: 913.0 pts",
+            "Juan Ayuso (UAE Team Emirates - XRG)<br>Class: allrounder<br>VG: 1153.0 pts",
+            "Antonio Tiberi (Bahrain - Victorious)<br>Class: allrounder<br>VG: 1085.0 pts",
+            "Derek Gee (Israel - Premier Tech)<br>Class: allrounder<br>VG: 1252.0 pts",
+            "Thymen Arensman (INEOS Grenadiers)<br>Class: allrounder<br>VG: 243.0 pts",
+            "Daniel Felipe Martínez (Red Bull - BORA - hansgrohe )<br>Class: allrounder<br>VG: 94.0 pts",
+            "Isaac Del Toro (UAE Team Emirates - XRG)<br>Class: allrounder<br>VG: 2742.0 pts",
+            "Pello Bilbao (Bahrain - Victorious)<br>Class: allrounder<br>VG: 191.0 pts",
+            "Wilco Kelderman (Team Visma | Lease a Bike )<br>Class: allrounder<br>VG: 396.0 pts",
+            "Brandon McNulty (UAE Team Emirates - XRG)<br>Class: allrounder<br>VG: 1118.0 pts",
+            "Jay Vine (UAE Team Emirates - XRG)<br>Class: allrounder<br>VG: 486.0 pts"
         ],
         "x": [
-            4.203311270871212,
-            3.965319469377365,
-            4.076334738838727,
-            3.8025102956282253,
-            4.15278441696556,
-            3.82765933323768,
-            4.116103023664592,
-            4.152257644134298,
-            3.931177085119436,
-            3.7239381395888658,
-            3.6880720059928884,
-            3.9211604829558975,
-            4.122394032287485,
-            4.314679512335791,
-            4.0418277203032895,
-            3.753452693412794,
-            4.218974394420746,
-            3.776544481474664,
-            3.6806353044174998,
-            3.609103479173699,
-            4.010801900350046,
-            4.21024385030423,
-            4.058150316293616,
-            3.9326150584239388,
-            4.158028860489616,
-            3.8401810882118963,
-            3.9999975623375486,
-            3.804705099982562,
-            3.837072255840658,
-            3.994767020737371,
-            4.0737318397375315,
-            4.156772593050073,
-            4.0409470548010065,
-            4.0914041911103185,
-            3.850253893914872,
-            4.054330659459213,
-            3.7882362403449648,
-            3.7008028652693783,
-            4.194218279524344,
-            4.102015675476638,
-            4.13347933077679,
-            3.8610926777268157,
-            4.123429943988968,
-            3.549454566849091,
-            3.954524037319773,
-            4.067378657799475,
-            3.9758194277360634,
-            4.024769682683926,
-            4.45338561778724,
-            4.357156055707332,
-            4.1430294402416825,
-            4.3063346294592915,
-            3.6364104812576397,
-            4.052274122518979,
-            4.330791175366303,
-            4.284130564585619,
-            4.132079868633276,
-            4.034913619454479,
-            3.9466527468673327,
-            3.9510019109997008
+            23.879081019070423,
+            19.928309837753268,
+            13.417874220480781,
+            11.729338331559548,
+            10.10511740159556,
+            9.830643481384323,
+            9.994138652106042,
+            7.826149644760814,
+            8.062825046351547,
+            8.335704248062596,
+            8.061474599780206
         ],
         "showlegend": true,
         "mode": "markers",
-        "name": "4",
-        "legendgroup": "4",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
         "marker": {
             "symbol": "circle",
-            "color": "rgba(0, 154, 250, 0.500)",
+            "color": "rgba(0, 154, 250, 0.600)",
             "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
+                "color": "rgba(0, 0, 0, 0.600)",
                 "width": 1
             },
             "size": 8
         },
         "y": [
+            913.0,
+            1153.0,
+            1085.0,
+            1252.0,
+            243.0,
+            94.0,
+            2742.0,
+            191.0,
+            396.0,
+            1118.0,
+            486.0
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303337
+        },
+        "yaxis": "y",
+        "text": [
+            "Adam Yates (UAE Team Emirates - XRG)<br>Class: climber<br>VG: 778.0 pts",
+            "Mikel Landa (Soudal Quick-Step )<br>Class: climber<br>VG: 0.0 pts",
+            "Richard Carapaz (EF Education - EasyPost)<br>Class: climber<br>VG: 1978.0 pts",
+            "Egan Bernal (INEOS Grenadiers)<br>Class: climber<br>VG: 1037.0 pts",
+            "Simon Yates (Team Visma | Lease a Bike )<br>Class: climber<br>VG: 1795.0 pts",
+            "Michael Storer (Tudor Pro Cycling Team)<br>Class: climber<br>VG: 737.0 pts",
+            "Giulio Ciccone (Lidl - Trek)<br>Class: climber<br>VG: 831.0 pts",
+            "Jai Hindley (Red Bull - BORA - hansgrohe )<br>Class: climber<br>VG: 68.0 pts",
+            "Damiano Caruso (Bahrain - Victorious)<br>Class: climber<br>VG: 1319.0 pts",
+            "Georg Steinhauser (EF Education - EasyPost)<br>Class: climber<br>VG: 199.0 pts",
+            "David Gaudu (Groupama - FDJ)<br>Class: climber<br>VG: 56.0 pts",
+            "Nairo Quintana (Movistar Team)<br>Class: climber<br>VG: 77.0 pts",
+            "Einer Rubio (Movistar Team)<br>Class: climber<br>VG: 695.0 pts",
+            "Giulio Pellizzari (Red Bull - BORA - hansgrohe )<br>Class: climber<br>VG: 942.0 pts",
+            "Filippo Zana (Team Jayco AlUla)<br>Class: climber<br>VG: 167.0 pts",
+            "Romain Bardet (Team Picnic PostNL )<br>Class: climber<br>VG: 582.0 pts",
+            "Max Poole (Team Picnic PostNL )<br>Class: climber<br>VG: 860.0 pts",
+            "Davide Piganzoli (Team Polti VisitMalta)<br>Class: climber<br>VG: 348.0 pts",
+            "Lorenzo Fortunato (XDS Astana Team )<br>Class: climber<br>VG: 981.0 pts",
+            "Jefferson Alexander Cepeda (EF Education - EasyPost)<br>Class: climber<br>VG: 38.0 pts",
+            "Louis Meintjes (Intermarché - Wanty)<br>Class: climber<br>VG: 170.0 pts",
+            "Marco Frigo (Israel - Premier Tech)<br>Class: climber<br>VG: 144.0 pts",
+            "Jan Hirt (Israel - Premier Tech)<br>Class: climber<br>VG: 4.0 pts",
+            "Jefferson Alveiro Cepeda (Movistar Team)<br>Class: climber<br>VG: 193.0 pts",
+            "Paul Double (Team Jayco AlUla)<br>Class: climber<br>VG: 127.0 pts",
+            "Rafał Majka (UAE Team Emirates - XRG)<br>Class: climber<br>VG: 599.0 pts"
+        ],
+        "x": [
+            16.00251525378691,
+            13.920103067577362,
+            11.840321596269682,
+            12.032048374595735,
+            12.319176825143371,
+            12.017397870105869,
+            10.191732769046702,
+            10.291321635897026,
+            7.9252861749299015,
+            7.657661634693194,
+            8.103479378948352,
+            8.294030186766872,
+            7.792810613319384,
+            8.527926098019346,
+            7.837370363019843,
+            7.6754288022796215,
+            8.030850987287756,
+            7.908820692169661,
+            7.979179132926493,
+            6.104983426578762,
+            6.114372637011791,
+            6.118081885048225,
+            5.745003760004058,
+            6.101448450569173,
+            6.2464170231990455,
+            6.290179445559638
+        ],
+        "showlegend": true,
+        "mode": "markers",
+        "name": "climber",
+        "legendgroup": "climber",
+        "marker": {
+            "symbol": "circle",
+            "color": "rgba(227, 111, 71, 0.600)",
+            "line": {
+                "color": "rgba(0, 0, 0, 0.600)",
+                "width": 1
+            },
+            "size": 8
+        },
+        "y": [
+            778.0,
+            0.0,
+            1978.0,
+            1037.0,
+            1795.0,
+            737.0,
+            831.0,
+            68.0,
+            1319.0,
+            199.0,
+            56.0,
+            77.0,
+            695.0,
+            942.0,
+            167.0,
+            582.0,
+            860.0,
+            348.0,
+            981.0,
+            38.0,
+            170.0,
+            144.0,
+            4.0,
+            193.0,
+            127.0,
+            599.0
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303337
+        },
+        "yaxis": "y",
+        "text": [
+            "Wout Van Aert (Team Visma | Lease a Bike )<br>Class: sprinter<br>VG: 1042.0 pts",
+            "Mads Pedersen (Lidl - Trek)<br>Class: sprinter<br>VG: 2106.0 pts",
+            "Olav Kooij (Team Visma | Lease a Bike )<br>Class: sprinter<br>VG: 1199.0 pts",
+            "Kaden Groves (Alpecin - Deceuninck)<br>Class: sprinter<br>VG: 883.0 pts",
+            "Sam Bennett (Decathlon AG2R La Mondiale Team)<br>Class: sprinter<br>VG: 258.0 pts",
+            "Andrea Vendrame (Decathlon AG2R La Mondiale Team)<br>Class: sprinter<br>VG: 297.0 pts",
+            "Gerben Thijssen (Intermarché - Wanty)<br>Class: sprinter<br>VG: 87.0 pts",
+            "Corbin Strong (Israel - Premier Tech)<br>Class: sprinter<br>VG: 237.0 pts",
+            "Paul Magnier (Soudal Quick-Step )<br>Class: sprinter<br>VG: 335.0 pts",
+            "Luca Mozzato (Arkéa - B&B Hotels )<br>Class: sprinter<br>VG: 184.0 pts",
+            "Matevž Govekar (Bahrain - Victorious)<br>Class: sprinter<br>VG: 259.0 pts",
+            "Milan Fretin (Cofidis)<br>Class: sprinter<br>VG: 365.0 pts",
+            "Orluis Aular (Movistar Team)<br>Class: sprinter<br>VG: 864.0 pts",
+            "Jon Barrenetxea (Movistar Team)<br>Class: sprinter<br>VG: 32.0 pts",
+            "Matteo Moschetti (Q36.5 Pro Cycling Team)<br>Class: sprinter<br>VG: 292.0 pts",
+            "Luke Lamperti (Soudal Quick-Step )<br>Class: sprinter<br>VG: 142.0 pts",
+            "Casper Van Uden (Team Picnic PostNL )<br>Class: sprinter<br>VG: 518.0 pts",
+            "Giovanni Lonardi (Team Polti VisitMalta)<br>Class: sprinter<br>VG: 236.0 pts",
+            "Maikel Zijlaard (Tudor Pro Cycling Team)<br>Class: sprinter<br>VG: 286.0 pts",
+            "Max Kanter (XDS Astana Team )<br>Class: sprinter<br>VG: 409.0 pts"
+        ],
+        "x": [
+            15.984994196022305,
+            13.859040567288243,
+            11.862563844268557,
+            9.926270410389343,
+            7.9041827973831635,
+            8.281731502935296,
+            7.971466155610436,
+            7.714108996482597,
+            7.656796714845827,
+            5.877770957759676,
+            5.867800809438574,
+            6.020682006171156,
+            5.954225962903611,
+            5.899005541142144,
+            5.703608514218998,
+            5.970039905441189,
+            5.922353595796662,
+            6.0031397907589525,
+            5.928596657177423,
+            5.9203702361686155
+        ],
+        "showlegend": true,
+        "mode": "markers",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "marker": {
+            "symbol": "circle",
+            "color": "rgba(62, 164, 78, 0.600)",
+            "line": {
+                "color": "rgba(0, 0, 0, 0.600)",
+                "width": 1
+            },
+            "size": 8
+        },
+        "y": [
+            1042.0,
+            2106.0,
+            1199.0,
+            883.0,
+            258.0,
+            297.0,
+            87.0,
+            237.0,
+            335.0,
+            184.0,
+            259.0,
+            365.0,
+            864.0,
+            32.0,
+            292.0,
+            142.0,
+            518.0,
+            236.0,
+            286.0,
+            409.0
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303337
+        },
+        "yaxis": "y",
+        "text": [
+            "Thomas Pidcock (Q36.5 Pro Cycling Team)<br>Class: unclassed<br>VG: 811.0 pts",
+            "Mathias Vacek (Lidl - Trek)<br>Class: unclassed<br>VG: 449.0 pts",
+            "Christian Scaroni (XDS Astana Team )<br>Class: unclassed<br>VG: 830.0 pts",
+            "Diego Ulissi (XDS Astana Team )<br>Class: unclassed<br>VG: 629.0 pts",
+            "Quinten Hermans (Alpecin - Deceuninck)<br>Class: unclassed<br>VG: 52.0 pts",
+            "Timo Kielich (Alpecin - Deceuninck)<br>Class: unclassed<br>VG: 18.0 pts",
+            "Jensen Plowright (Alpecin - Deceuninck)<br>Class: unclassed<br>VG: 85.0 pts",
+            "Edoardo Zambanini (Bahrain - Victorious)<br>Class: unclassed<br>VG: 424.0 pts",
+            "Sylvain Moniquet (Cofidis)<br>Class: unclassed<br>VG: 150.0 pts",
+            "Stefano Oldani (Cofidis)<br>Class: unclassed<br>VG: 293.0 pts",
+            "Geoffrey Bouchard (Decathlon AG2R La Mondiale Team)<br>Class: unclassed<br>VG: 0.0 pts",
+            "Stan Dewulf (Decathlon AG2R La Mondiale Team)<br>Class: unclassed<br>VG: 8.0 pts",
+            "Dorian Godon (Decathlon AG2R La Mondiale Team)<br>Class: unclassed<br>VG: 144.0 pts",
+            "Tord Gudmestad (Decathlon AG2R La Mondiale Team)<br>Class: unclassed<br>VG: 67.0 pts",
+            "Nicolas Prodhomme (Decathlon AG2R La Mondiale Team)<br>Class: unclassed<br>VG: 787.0 pts",
+            "Kasper Asgreen (EF Education - EasyPost)<br>Class: unclassed<br>VG: 325.0 pts",
+            "Mikkel Honoré (EF Education - EasyPost)<br>Class: unclassed<br>VG: 98.0 pts",
+            "Darren Rafferty (EF Education - EasyPost)<br>Class: unclassed<br>VG: 85.0 pts",
+            "Kevin Geniets (Groupama - FDJ)<br>Class: unclassed<br>VG: 89.0 pts",
+            "Quentin Pacher (Groupama - FDJ)<br>Class: unclassed<br>VG: 95.0 pts",
+            "Lucas Hamilton (INEOS Grenadiers)<br>Class: unclassed<br>VG: 4.0 pts",
+            "Brandon Smith Rivera (INEOS Grenadiers)<br>Class: unclassed<br>VG: 224.0 pts",
+            "Joshua Tarling (INEOS Grenadiers)<br>Class: unclassed<br>VG: 432.0 pts",
+            "Ben Turner (INEOS Grenadiers)<br>Class: unclassed<br>VG: 242.0 pts",
+            "Francesco Busatto (Intermarché - Wanty)<br>Class: unclassed<br>VG: 193.0 pts",
+            "Dion Smith (Intermarché - Wanty)<br>Class: unclassed<br>VG: 0.0 pts",
+            "Simon Clarke (Israel - Premier Tech)<br>Class: unclassed<br>VG: 24.0 pts",
+            "Jakob Fuglsang (Israel - Premier Tech)<br>Class: unclassed<br>VG: 4.0 pts",
+            "Nick Schultz (Israel - Premier Tech)<br>Class: unclassed<br>VG: 4.0 pts",
+            "Daan Hoole (Lidl - Trek)<br>Class: unclassed<br>VG: 573.0 pts",
+            "Patrick Konrad (Lidl - Trek)<br>Class: unclassed<br>VG: 178.0 pts",
+            "Søren Kragh Andersen (Lidl - Trek)<br>Class: unclassed<br>VG: 68.0 pts",
+            "Carlos Verona (Lidl - Trek)<br>Class: unclassed<br>VG: 574.0 pts",
+            "Davide Formolo (Movistar Team)<br>Class: unclassed<br>VG: 24.0 pts",
+            "Mark Donovan (Q36.5 Pro Cycling Team)<br>Class: unclassed<br>VG: 69.0 pts",
+            "Damien Howson (Q36.5 Pro Cycling Team)<br>Class: unclassed<br>VG: 44.0 pts",
+            "Emīls Liepiņš (Q36.5 Pro Cycling Team)<br>Class: unclassed<br>VG: 16.0 pts",
+            "Milan Vader (Q36.5 Pro Cycling Team)<br>Class: unclassed<br>VG: 24.0 pts",
+            "Giovanni Aleotti (Red Bull - BORA - hansgrohe )<br>Class: unclassed<br>VG: 44.0 pts",
+            "Jan Tratnik (Red Bull - BORA - hansgrohe )<br>Class: unclassed<br>VG: 114.0 pts",
+            "Mattia Cattaneo (Soudal Quick-Step )<br>Class: unclassed<br>VG: 266.0 pts",
+            "Ethan Hayter (Soudal Quick-Step )<br>Class: unclassed<br>VG: 232.0 pts",
+            "Koen Bouwman (Team Jayco AlUla)<br>Class: unclassed<br>VG: 10.0 pts",
+            "Davide De Pretto (Team Jayco AlUla)<br>Class: unclassed<br>VG: 189.0 pts",
+            "Felix Engelhardt (Team Jayco AlUla)<br>Class: unclassed<br>VG: 85.0 pts",
+            "Chris Harper (Team Jayco AlUla)<br>Class: unclassed<br>VG: 437.0 pts",
+            "Luke Plapp (Team Jayco AlUla)<br>Class: unclassed<br>VG: 362.0 pts",
+            "Chris Hamilton (Team Picnic PostNL )<br>Class: unclassed<br>VG: 71.0 pts",
+            "Gijs Leemreize (Team Picnic PostNL )<br>Class: unclassed<br>VG: 147.0 pts",
+            "Alessandro Tonelli (Team Polti VisitMalta)<br>Class: unclassed<br>VG: 306.0 pts",
+            "Edoardo Affini (Team Visma | Lease a Bike )<br>Class: unclassed<br>VG: 382.0 pts",
+            "Steven Kruijswijk (Team Visma | Lease a Bike )<br>Class: unclassed<br>VG: 152.0 pts",
+            "Bart Lemmen (Team Visma | Lease a Bike )<br>Class: unclassed<br>VG: 174.0 pts",
+            "Marco Brenner (Tudor Pro Cycling Team)<br>Class: unclassed<br>VG: 42.0 pts",
+            "Rick Pluimers (Tudor Pro Cycling Team)<br>Class: unclassed<br>VG: 146.0 pts",
+            "Yannis Voisard (Tudor Pro Cycling Team)<br>Class: unclassed<br>VG: 121.0 pts",
+            "Igor Arrieta (UAE Team Emirates - XRG)<br>Class: unclassed<br>VG: 528.0 pts",
+            "Filippo Baroncini (UAE Team Emirates - XRG)<br>Class: unclassed<br>VG: 456.0 pts",
+            "Filippo Fiorelli (VF Group - Bardiani CSF - Faizanè)<br>Class: unclassed<br>VG: 328.0 pts",
+            "Filippo Magli (VF Group - Bardiani CSF - Faizanè)<br>Class: unclassed<br>VG: 203.0 pts",
+            "Alessio Martinelli (VF Group - Bardiani CSF - Faizanè)<br>Class: unclassed<br>VG: 60.0 pts",
+            "Alessandro Pinarello (VF Group - Bardiani CSF - Faizanè)<br>Class: unclassed<br>VG: 0.0 pts",
+            "Manuele Tarozzi (VF Group - Bardiani CSF - Faizanè)<br>Class: unclassed<br>VG: 290.0 pts",
+            "Enrico Zanoncello (VF Group - Bardiani CSF - Faizanè)<br>Class: unclassed<br>VG: 185.0 pts",
+            "Nicola Conci (XDS Astana Team )<br>Class: unclassed<br>VG: 311.0 pts",
+            "Fausto Masnada (XDS Astana Team )<br>Class: unclassed<br>VG: 90.0 pts",
+            "Wout Poels (XDS Astana Team )<br>Class: unclassed<br>VG: 96.0 pts",
+            "Juri Hollmann (Alpecin - Deceuninck)<br>Class: unclassed<br>VG: 8.0 pts",
+            "Jimmy Janssens (Alpecin - Deceuninck)<br>Class: unclassed<br>VG: 18.0 pts",
+            "Edward Planckaert (Alpecin - Deceuninck)<br>Class: unclassed<br>VG: 250.0 pts",
+            "Fabio Van Den Bossche (Alpecin - Deceuninck)<br>Class: unclassed<br>VG: 34.0 pts",
+            "Giosuè Epis (Arkéa - B&B Hotels )<br>Class: unclassed<br>VG: 114.0 pts",
+            "Simon Guglielmi (Arkéa - B&B Hotels )<br>Class: unclassed<br>VG: 24.0 pts",
+            "Laurens Huys (Arkéa - B&B Hotels )<br>Class: unclassed<br>VG: 24.0 pts",
+            "Michel Ries (Arkéa - B&B Hotels )<br>Class: unclassed<br>VG: 0.0 pts",
+            "Embret Svestad-Bårdseng (Arkéa - B&B Hotels )<br>Class: unclassed<br>VG: 77.0 pts",
+            "Martin Tjøtta (Arkéa - B&B Hotels )<br>Class: unclassed<br>VG: 29.0 pts",
+            "Alessandro Verre (Arkéa - B&B Hotels )<br>Class: unclassed<br>VG: 276.0 pts",
+            "Afonso Eulálio (Bahrain - Victorious)<br>Class: unclassed<br>VG: 147.0 pts",
+            "Fran Miholjević (Bahrain - Victorious)<br>Class: unclassed<br>VG: 114.0 pts",
+            "Andrea Pasqualon (Bahrain - Victorious)<br>Class: unclassed<br>VG: 6.0 pts",
+            "Nicolas Debeaumarché (Cofidis)<br>Class: unclassed<br>VG: 4.0 pts",
+            "Jonathan Lastra (Cofidis)<br>Class: unclassed<br>VG: 12.0 pts",
+            "Jan Maas (Cofidis)<br>Class: unclassed<br>VG: 4.0 pts",
+            "Anthony Perez (Cofidis)<br>Class: unclassed<br>VG: 4.0 pts",
+            "Sergio Samitier (Cofidis)<br>Class: unclassed<br>VG: 4.0 pts",
+            "Dries De Bondt (Decathlon AG2R La Mondiale Team)<br>Class: unclassed<br>VG: 428.0 pts",
+            "Owain Doull (EF Education - EasyPost)<br>Class: unclassed<br>VG: 38.0 pts",
+            "James Shaw (EF Education - EasyPost)<br>Class: unclassed<br>VG: 38.0 pts",
+            "Sven Erik Bystrøm (Groupama - FDJ)<br>Class: unclassed<br>VG: 20.0 pts",
+            "Clément Davy (Groupama - FDJ)<br>Class: unclassed<br>VG: 42.0 pts",
+            "Lorenzo Germani (Groupama - FDJ)<br>Class: unclassed<br>VG: 114.0 pts",
+            "Enzo Paleni (Groupama - FDJ)<br>Class: unclassed<br>VG: 86.0 pts",
+            "Rémy Rochas (Groupama - FDJ)<br>Class: unclassed<br>VG: 287.0 pts",
+            "Jonathan Castroviejo (INEOS Grenadiers)<br>Class: unclassed<br>VG: 4.0 pts",
+            "Kim Heiduk (INEOS Grenadiers)<br>Class: unclassed<br>VG: 50.0 pts",
+            "Kevin Colleoni (Intermarché - Wanty)<br>Class: unclassed<br>VG: 0.0 pts",
+            "Simone Petilli (Intermarché - Wanty)<br>Class: unclassed<br>VG: 24.0 pts",
+            "Taco Van Der Hoorn (Intermarché - Wanty)<br>Class: unclassed<br>VG: 104.0 pts",
+            "Gijs Van Hoecke (Intermarché - Wanty)<br>Class: unclassed<br>VG: 0.0 pts",
+            "Hugo Houle (Israel - Premier Tech)<br>Class: unclassed<br>VG: 24.0 pts",
+            "Jacopo Mosca (Lidl - Trek)<br>Class: unclassed<br>VG: 168.0 pts",
+            "Lorenzo Milesi (Movistar Team)<br>Class: unclassed<br>VG: 161.0 pts",
+            "Albert Torres (Movistar Team)<br>Class: unclassed<br>VG: 12.0 pts",
+            "Xabier Mikel Azparren (Q36.5 Pro Cycling Team)<br>Class: unclassed<br>VG: 99.0 pts",
+            "Nickolas Zukowsky (Q36.5 Pro Cycling Team)<br>Class: unclassed<br>VG: 0.0 pts",
+            "Nico Denz (Red Bull - BORA - hansgrohe )<br>Class: unclassed<br>VG: 256.0 pts",
+            "Gianni Moscon (Red Bull - BORA - hansgrohe )<br>Class: unclassed<br>VG: 48.0 pts",
+            "Josef Černý (Soudal Quick-Step )<br>Class: unclassed<br>VG: 120.0 pts",
+            "Gianmarco Garofoli (Soudal Quick-Step )<br>Class: unclassed<br>VG: 361.0 pts",
+            "James Knox (Soudal Quick-Step )<br>Class: unclassed<br>VG: 76.0 pts",
+            "Michael Hepburn (Team Jayco AlUla)<br>Class: unclassed<br>VG: 121.0 pts",
+            "Alex Edmondson (Team Picnic PostNL )<br>Class: unclassed<br>VG: 136.0 pts",
+            "Niklas Märkl (Team Picnic PostNL )<br>Class: unclassed<br>VG: 46.0 pts",
+            "Bram Welten (Team Picnic PostNL )<br>Class: unclassed<br>VG: 8.0 pts",
+            "Davide Bais (Team Polti VisitMalta)<br>Class: unclassed<br>VG: 79.0 pts",
+            "Mattia Bais (Team Polti VisitMalta)<br>Class: unclassed<br>VG: 59.0 pts",
+            "Mirco Maestri (Team Polti VisitMalta)<br>Class: unclassed<br>VG: 371.0 pts",
+            "Francisco Muñoz (Team Polti VisitMalta)<br>Class: unclassed<br>VG: 54.0 pts",
+            "Andrea Pietrobon (Team Polti VisitMalta)<br>Class: unclassed<br>VG: 84.0 pts",
+            "Dylan Van Baarle (Team Visma | Lease a Bike )<br>Class: unclassed<br>VG: 192.0 pts",
+            "Alexander Krieger (Tudor Pro Cycling Team)<br>Class: unclassed<br>VG: 16.0 pts",
+            "Florian Stork (Tudor Pro Cycling Team)<br>Class: unclassed<br>VG: 332.0 pts",
+            "Larry Warbasse (Tudor Pro Cycling Team)<br>Class: unclassed<br>VG: 76.0 pts",
+            "Luca Covili (VF Group - Bardiani CSF - Faizanè)<br>Class: unclassed<br>VG: 24.0 pts",
+            "Martin Marcellusi (VF Group - Bardiani CSF - Faizanè)<br>Class: unclassed<br>VG: 323.0 pts",
+            "Anton Kuzmin (XDS Astana Team )<br>Class: unclassed<br>VG: 64.0 pts"
+        ],
+        "x": [
+            10.360015205555893,
+            7.893477933727426,
+            7.862663625553538,
+            7.804349803356425,
+            5.909709386604778,
+            6.208673406028204,
+            5.932447749511861,
+            5.869311760189547,
+            6.248357553347143,
+            6.274929237848239,
+            6.0323934485650526,
+            5.867881639036241,
+            6.043848701840362,
+            6.08534283681324,
+            6.133711231258854,
+            6.206761529192154,
+            6.3705343821480325,
+            5.967928390511284,
+            5.948113731110578,
+            5.707011956479486,
+            5.760721242734702,
+            6.434153602723613,
+            5.842080667666211,
+            6.370431992995395,
+            5.76874826264485,
+            6.035619937978199,
+            5.565657249658741,
+            5.819251640721159,
+            5.9603940835152285,
+            5.714618650347962,
+            5.7874162238562095,
+            5.933981260416706,
+            6.094560866726802,
+            6.136564835560675,
+            6.175229638207866,
+            6.225407387360338,
+            5.766210677786219,
+            6.080031863467424,
+            6.007830703165397,
+            5.9900865555256715,
+            6.131946481772427,
+            5.678645601637847,
+            5.945524340719373,
+            5.646899584781119,
+            6.250927201054859,
+            6.128237410767636,
+            6.307457092158239,
+            5.989840800524169,
+            6.337011013956557,
+            5.902247349529529,
+            6.0874418645852355,
+            5.949962205663092,
+            5.966074834107511,
+            6.0550937336793,
+            5.817284142185402,
+            6.196411417067384,
+            6.190444335280163,
+            6.457600517409376,
+            6.026737241680864,
+            5.84684775092611,
+            5.6724163340048,
+            5.931637250691519,
+            5.927721070720196,
+            6.038072860029426,
+            6.088681971722701,
+            5.698648391158649,
+            6.140253926908115,
+            3.860471699237313,
+            4.250187833070878,
+            3.9443441826643957,
+            3.9829633427586786,
+            3.7570868997534363,
+            4.142571993226226,
+            3.6925050099046124,
+            4.45913064547328,
+            3.9586874670609413,
+            4.057428658631836,
+            4.098652561741532,
+            3.702171899316466,
+            3.9895411760139985,
+            3.6863519842209103,
+            3.879721441812828,
+            4.0513500438307055,
+            3.9058780449578014,
+            4.202962184321924,
+            4.034348121452525,
+            4.215032896271804,
+            3.976983634213953,
+            3.717243365609952,
+            4.468012539181426,
+            4.1529963549246,
+            3.8224434010369026,
+            3.870154153407745,
+            3.9037493701486996,
+            3.665412224520448,
+            4.028440367303863,
+            3.872836788587624,
+            3.7923839460898194,
+            4.368265788927979,
+            3.774976490271457,
+            4.047590175921146,
+            3.726465874140865,
+            4.264276090499716,
+            3.923042165510059,
+            4.047330690869655,
+            3.9544282022602206,
+            3.978784706177588,
+            3.8419308480676375,
+            4.343390861940419,
+            3.974226694390003,
+            4.086463391036078,
+            3.9668293562967882,
+            3.872336605622442,
+            4.0496377810864415,
+            3.5864355156439567,
+            4.048242801522652,
+            4.230049049032655,
+            3.716881232245348,
+            3.9370928858859924,
+            3.7837008811982056,
+            3.732360346849662,
+            4.039988203267307,
+            4.107752215056599,
+            3.81867619860056,
+            4.061345688198145,
+            4.0182708925980375,
+            4.019247528454005
+        ],
+        "showlegend": true,
+        "mode": "markers",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "marker": {
+            "symbol": "circle",
+            "color": "rgba(195, 113, 210, 0.600)",
+            "line": {
+                "color": "rgba(0, 0, 0, 0.600)",
+                "width": 1
+            },
+            "size": 8
+        },
+        "y": [
+            811.0,
+            449.0,
+            830.0,
+            629.0,
+            52.0,
+            18.0,
+            85.0,
+            424.0,
+            150.0,
+            293.0,
+            0.0,
+            8.0,
+            144.0,
+            67.0,
+            787.0,
+            325.0,
+            98.0,
+            85.0,
+            89.0,
+            95.0,
+            4.0,
+            224.0,
+            432.0,
+            242.0,
+            193.0,
+            0.0,
+            24.0,
+            4.0,
+            4.0,
+            573.0,
+            178.0,
+            68.0,
+            574.0,
+            24.0,
+            69.0,
+            44.0,
+            16.0,
+            24.0,
+            44.0,
+            114.0,
+            266.0,
+            232.0,
+            10.0,
+            189.0,
+            85.0,
+            437.0,
+            362.0,
+            71.0,
+            147.0,
+            306.0,
+            382.0,
+            152.0,
+            174.0,
+            42.0,
+            146.0,
+            121.0,
+            528.0,
+            456.0,
+            328.0,
+            203.0,
+            60.0,
+            0.0,
+            290.0,
+            185.0,
+            311.0,
+            90.0,
+            96.0,
             8.0,
             18.0,
             250.0,
@@ -560,630 +1066,10 @@ for more information.
         ],
         "type": "scatter",
         "hoverinfo": "text"
-    },
-    {
-        "xaxis": "x",
-        "colorbar": {
-            "y": 0.5072337962962964,
-            "title": "",
-            "len": 0.8881096894138233,
-            "x": 0.9941413573303337
-        },
-        "yaxis": "y",
-        "text": [
-            "Quinten Hermans (Alpecin - Deceuninck)",
-            "Timo Kielich (Alpecin - Deceuninck)",
-            "Jensen Plowright (Alpecin - Deceuninck)",
-            "Luca Mozzato (Arkéa - B&B Hotels )",
-            "Matevž Govekar (Bahrain - Victorious)",
-            "Edoardo Zambanini (Bahrain - Victorious)",
-            "Milan Fretin (Cofidis)",
-            "Sylvain Moniquet (Cofidis)",
-            "Stefano Oldani (Cofidis)",
-            "Geoffrey Bouchard (Decathlon AG2R La Mondiale Team)",
-            "Stan Dewulf (Decathlon AG2R La Mondiale Team)",
-            "Dorian Godon (Decathlon AG2R La Mondiale Team)",
-            "Tord Gudmestad (Decathlon AG2R La Mondiale Team)",
-            "Nicolas Prodhomme (Decathlon AG2R La Mondiale Team)",
-            "Kasper Asgreen (EF Education - EasyPost)",
-            "Jefferson Alexander Cepeda (EF Education - EasyPost)",
-            "Mikkel Honoré (EF Education - EasyPost)",
-            "Darren Rafferty (EF Education - EasyPost)",
-            "Kevin Geniets (Groupama - FDJ)",
-            "Quentin Pacher (Groupama - FDJ)",
-            "Lucas Hamilton (INEOS Grenadiers)",
-            "Brandon Smith Rivera (INEOS Grenadiers)",
-            "Joshua Tarling (INEOS Grenadiers)",
-            "Ben Turner (INEOS Grenadiers)",
-            "Francesco Busatto (Intermarché - Wanty)",
-            "Louis Meintjes (Intermarché - Wanty)",
-            "Dion Smith (Intermarché - Wanty)",
-            "Simon Clarke (Israel - Premier Tech)",
-            "Marco Frigo (Israel - Premier Tech)",
-            "Jakob Fuglsang (Israel - Premier Tech)",
-            "Jan Hirt (Israel - Premier Tech)",
-            "Nick Schultz (Israel - Premier Tech)",
-            "Daan Hoole (Lidl - Trek)",
-            "Patrick Konrad (Lidl - Trek)",
-            "Søren Kragh Andersen (Lidl - Trek)",
-            "Carlos Verona (Lidl - Trek)",
-            "Orluis Aular (Movistar Team)",
-            "Jon Barrenetxea (Movistar Team)",
-            "Jefferson Alveiro Cepeda (Movistar Team)",
-            "Davide Formolo (Movistar Team)",
-            "Mark Donovan (Q36.5 Pro Cycling Team)",
-            "Damien Howson (Q36.5 Pro Cycling Team)",
-            "Emīls Liepiņš (Q36.5 Pro Cycling Team)",
-            "Matteo Moschetti (Q36.5 Pro Cycling Team)",
-            "Milan Vader (Q36.5 Pro Cycling Team)",
-            "Giovanni Aleotti (Red Bull - BORA - hansgrohe )",
-            "Jan Tratnik (Red Bull - BORA - hansgrohe )",
-            "Mattia Cattaneo (Soudal Quick-Step )",
-            "Ethan Hayter (Soudal Quick-Step )",
-            "Luke Lamperti (Soudal Quick-Step )",
-            "Koen Bouwman (Team Jayco AlUla)",
-            "Davide De Pretto (Team Jayco AlUla)",
-            "Paul Double (Team Jayco AlUla)",
-            "Felix Engelhardt (Team Jayco AlUla)",
-            "Chris Harper (Team Jayco AlUla)",
-            "Luke Plapp (Team Jayco AlUla)",
-            "Chris Hamilton (Team Picnic PostNL )",
-            "Gijs Leemreize (Team Picnic PostNL )",
-            "Casper Van Uden (Team Picnic PostNL )",
-            "Giovanni Lonardi (Team Polti VisitMalta)",
-            "Alessandro Tonelli (Team Polti VisitMalta)",
-            "Edoardo Affini (Team Visma - Lease a Bike )",
-            "Steven Kruijswijk (Team Visma - Lease a Bike )",
-            "Bart Lemmen (Team Visma - Lease a Bike )",
-            "Marco Brenner (Tudor Pro Cycling Team)",
-            "Rick Pluimers (Tudor Pro Cycling Team)",
-            "Yannis Voisard (Tudor Pro Cycling Team)",
-            "Maikel Zijlaard (Tudor Pro Cycling Team)",
-            "Igor Arrieta (UAE Team Emirates - XRG)",
-            "Filippo Baroncini (UAE Team Emirates - XRG)",
-            "Rafał Majka (UAE Team Emirates - XRG)",
-            "Filippo Fiorelli (VF Group - Bardiani CSF - Faizanè)",
-            "Filippo Magli (VF Group - Bardiani CSF - Faizanè)",
-            "Alessio Martinelli (VF Group - Bardiani CSF - Faizanè)",
-            "Alessandro Pinarello (VF Group - Bardiani CSF - Faizanè)",
-            "Manuele Tarozzi (VF Group - Bardiani CSF - Faizanè)",
-            "Enrico Zanoncello (VF Group - Bardiani CSF - Faizanè)",
-            "Nicola Conci (XDS Astana Team )",
-            "Max Kanter (XDS Astana Team )",
-            "Fausto Masnada (XDS Astana Team )",
-            "Wout Poels (XDS Astana Team )"
-        ],
-        "x": [
-            5.990815307785737,
-            6.336285145651996,
-            6.188692702616971,
-            6.074231630507831,
-            6.028606166233625,
-            5.724631669552491,
-            5.874449379031926,
-            5.749232471748765,
-            5.4409381057393,
-            6.446016899995057,
-            6.378314944699531,
-            5.780416281648036,
-            5.875898526582646,
-            5.9499864655750985,
-            5.936390130157654,
-            5.885501578590154,
-            5.820102572789452,
-            6.028053320427888,
-            5.914055524519163,
-            6.056803135884382,
-            5.943442170249194,
-            6.120395223928995,
-            5.761309051701172,
-            6.118848337089937,
-            6.523071849245451,
-            5.919678770738921,
-            6.25840809133399,
-            5.916122013422473,
-            5.9720642772461545,
-            5.938785754308469,
-            5.774286612536118,
-            6.122578708929317,
-            5.777738312360478,
-            5.977519728534636,
-            6.220011041494867,
-            6.041781806534395,
-            5.803783534158906,
-            5.77168578269021,
-            6.348029324046044,
-            5.9003504785099405,
-            6.101751503518778,
-            5.327064375302949,
-            6.045230548675708,
-            6.2144305522668795,
-            5.56670117448154,
-            6.0913367366812174,
-            6.008655937085986,
-            5.95255082488623,
-            5.484727488666965,
-            5.8734670312099535,
-            6.174254216043082,
-            5.813840068608453,
-            6.037633246987948,
-            6.344758205179173,
-            5.90208574652325,
-            6.0984878980638175,
-            5.848171056631163,
-            5.979917580843512,
-            5.979356946847256,
-            6.056034092689919,
-            5.950138444771696,
-            6.025979084200484,
-            5.773680737139865,
-            6.485202636423444,
-            6.037477349280082,
-            6.034457672149258,
-            5.672434538092418,
-            6.129190293983825,
-            5.8981911882980835,
-            6.048613013021452,
-            5.691047747385616,
-            5.582938302489213,
-            5.682980108347902,
-            6.417128533689481,
-            5.870907897574425,
-            5.911413536367816,
-            6.098272878592942,
-            5.54430570610093,
-            6.128363874800199,
-            6.127098932097406,
-            6.071909520341162
-        ],
-        "showlegend": true,
-        "mode": "markers",
-        "name": "6",
-        "legendgroup": "6",
-        "marker": {
-            "symbol": "circle",
-            "color": "rgba(227, 111, 71, 0.500)",
-            "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
-                "width": 1
-            },
-            "size": 8
-        },
-        "y": [
-            52.0,
-            18.0,
-            85.0,
-            184.0,
-            259.0,
-            424.0,
-            365.0,
-            150.0,
-            293.0,
-            0.0,
-            8.0,
-            144.0,
-            67.0,
-            787.0,
-            325.0,
-            38.0,
-            98.0,
-            85.0,
-            89.0,
-            95.0,
-            4.0,
-            224.0,
-            432.0,
-            242.0,
-            193.0,
-            170.0,
-            0.0,
-            24.0,
-            144.0,
-            4.0,
-            4.0,
-            4.0,
-            573.0,
-            178.0,
-            68.0,
-            574.0,
-            864.0,
-            32.0,
-            193.0,
-            24.0,
-            69.0,
-            44.0,
-            16.0,
-            292.0,
-            24.0,
-            44.0,
-            114.0,
-            266.0,
-            232.0,
-            142.0,
-            10.0,
-            189.0,
-            127.0,
-            85.0,
-            437.0,
-            362.0,
-            71.0,
-            147.0,
-            518.0,
-            236.0,
-            306.0,
-            382.0,
-            152.0,
-            174.0,
-            42.0,
-            146.0,
-            121.0,
-            286.0,
-            528.0,
-            456.0,
-            599.0,
-            328.0,
-            203.0,
-            60.0,
-            0.0,
-            290.0,
-            185.0,
-            311.0,
-            409.0,
-            90.0,
-            96.0
-        ],
-        "type": "scatter",
-        "hoverinfo": "text"
-    },
-    {
-        "xaxis": "x",
-        "colorbar": {
-            "y": 0.5072337962962964,
-            "title": "",
-            "len": 0.8881096894138233,
-            "x": 0.9941413573303337
-        },
-        "yaxis": "y",
-        "text": [
-            "Pello Bilbao (Bahrain - Victorious)",
-            "Damiano Caruso (Bahrain - Victorious)",
-            "Sam Bennett (Decathlon AG2R La Mondiale Team)",
-            "Andrea Vendrame (Decathlon AG2R La Mondiale Team)",
-            "Georg Steinhauser (EF Education - EasyPost)",
-            "David Gaudu (Groupama - FDJ)",
-            "Gerben Thijssen (Intermarché - Wanty)",
-            "Corbin Strong (Israel - Premier Tech)",
-            "Mathias Vacek (Lidl - Trek)",
-            "Nairo Quintana (Movistar Team)",
-            "Einer Rubio (Movistar Team)",
-            "Giulio Pellizzari (Red Bull - BORA - hansgrohe )",
-            "Paul Magnier (Soudal Quick-Step )",
-            "Filippo Zana (Team Jayco AlUla)",
-            "Romain Bardet (Team Picnic PostNL )",
-            "Max Poole (Team Picnic PostNL )",
-            "Davide Piganzoli (Team Polti VisitMalta)",
-            "Wilco Kelderman (Team Visma - Lease a Bike )",
-            "Brandon McNulty (UAE Team Emirates - XRG)",
-            "Jay Vine (UAE Team Emirates - XRG)",
-            "Lorenzo Fortunato (XDS Astana Team )",
-            "Christian Scaroni (XDS Astana Team )",
-            "Diego Ulissi (XDS Astana Team )"
-        ],
-        "x": [
-            7.891923173451381,
-            8.100009842729305,
-            8.128459708798768,
-            7.964677020077921,
-            7.911323066892983,
-            7.94261496318147,
-            7.980037895547799,
-            7.902247567926544,
-            8.325073000663245,
-            8.163724242528057,
-            8.236302425813523,
-            8.138930542439763,
-            7.92353090132395,
-            8.323911995005952,
-            8.405680121520353,
-            7.75826201806394,
-            7.891424872277282,
-            7.912085721172865,
-            7.731755028438084,
-            8.304189703368637,
-            8.16239584759794,
-            8.171683001329221,
-            7.969078457285624
-        ],
-        "showlegend": true,
-        "mode": "markers",
-        "name": "8",
-        "legendgroup": "8",
-        "marker": {
-            "symbol": "circle",
-            "color": "rgba(62, 164, 78, 0.500)",
-            "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
-                "width": 1
-            },
-            "size": 8
-        },
-        "y": [
-            191.0,
-            1319.0,
-            258.0,
-            297.0,
-            199.0,
-            56.0,
-            87.0,
-            237.0,
-            449.0,
-            77.0,
-            695.0,
-            942.0,
-            335.0,
-            167.0,
-            582.0,
-            860.0,
-            348.0,
-            396.0,
-            1118.0,
-            486.0,
-            981.0,
-            830.0,
-            629.0
-        ],
-        "type": "scatter",
-        "hoverinfo": "text"
-    },
-    {
-        "xaxis": "x",
-        "colorbar": {
-            "y": 0.5072337962962964,
-            "title": "",
-            "len": 0.8881096894138233,
-            "x": 0.9941413573303337
-        },
-        "yaxis": "y",
-        "text": [
-            "Kaden Groves (Alpecin - Deceuninck)",
-            "Thymen Arensman (INEOS Grenadiers)",
-            "Giulio Ciccone (Lidl - Trek)",
-            "Thomas Pidcock (Q36.5 Pro Cycling Team)",
-            "Jai Hindley (Red Bull - BORA - hansgrohe )",
-            "Daniel Felipe Martínez (Red Bull - BORA - hansgrohe )",
-            "Isaac Del Toro (UAE Team Emirates - XRG)"
-        ],
-        "x": [
-            9.625797455626206,
-            9.992745259038598,
-            9.974078599740691,
-            9.988373360615451,
-            9.791038185563183,
-            9.711541418589723,
-            9.652960869124776
-        ],
-        "showlegend": true,
-        "mode": "markers",
-        "name": "10",
-        "legendgroup": "10",
-        "marker": {
-            "symbol": "circle",
-            "color": "rgba(195, 113, 210, 0.500)",
-            "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
-                "width": 1
-            },
-            "size": 8
-        },
-        "y": [
-            883.0,
-            243.0,
-            831.0,
-            811.0,
-            68.0,
-            94.0,
-            2742.0
-        ],
-        "type": "scatter",
-        "hoverinfo": "text"
-    },
-    {
-        "xaxis": "x",
-        "colorbar": {
-            "y": 0.5072337962962964,
-            "title": "",
-            "len": 0.8881096894138233,
-            "x": 0.9941413573303337
-        },
-        "yaxis": "y",
-        "text": [
-            "Richard Carapaz (EF Education - EasyPost)",
-            "Egan Bernal (INEOS Grenadiers)",
-            "Derek Gee (Israel - Premier Tech)",
-            "Olav Kooij (Team Visma - Lease a Bike )",
-            "Simon Yates (Team Visma - Lease a Bike )",
-            "Michael Storer (Tudor Pro Cycling Team)"
-        ],
-        "x": [
-            11.927277591321884,
-            12.239999096437257,
-            11.760511272007488,
-            11.596720695024047,
-            12.110184586113427,
-            11.796729672507894
-        ],
-        "showlegend": true,
-        "mode": "markers",
-        "name": "12",
-        "legendgroup": "12",
-        "marker": {
-            "symbol": "circle",
-            "color": "rgba(172, 142, 24, 0.500)",
-            "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
-                "width": 1
-            },
-            "size": 8
-        },
-        "y": [
-            1978.0,
-            1037.0,
-            1252.0,
-            1199.0,
-            1795.0,
-            737.0
-        ],
-        "type": "scatter",
-        "hoverinfo": "text"
-    },
-    {
-        "xaxis": "x",
-        "colorbar": {
-            "y": 0.5072337962962964,
-            "title": "",
-            "len": 0.8881096894138233,
-            "x": 0.9941413573303337
-        },
-        "yaxis": "y",
-        "text": [
-            "Antonio Tiberi (Bahrain - Victorious)",
-            "Mads Pedersen (Lidl - Trek)",
-            "Mikel Landa (Soudal Quick-Step )"
-        ],
-        "x": [
-            13.941655846606725,
-            14.202825177552775,
-            13.926375376585344
-        ],
-        "showlegend": true,
-        "mode": "markers",
-        "name": "14",
-        "legendgroup": "14",
-        "marker": {
-            "symbol": "circle",
-            "color": "rgba(0, 170, 174, 0.500)",
-            "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
-                "width": 1
-            },
-            "size": 8
-        },
-        "y": [
-            1085.0,
-            2106.0,
-            0.0
-        ],
-        "type": "scatter",
-        "hoverinfo": "text"
-    },
-    {
-        "xaxis": "x",
-        "colorbar": {
-            "y": 0.5072337962962964,
-            "title": "",
-            "len": 0.8881096894138233,
-            "x": 0.9941413573303337
-        },
-        "yaxis": "y",
-        "text": [
-            "Wout Van Aert (Team Visma - Lease a Bike )",
-            "Adam Yates (UAE Team Emirates - XRG)"
-        ],
-        "x": [
-            16.004472539347695,
-            15.954635861628732
-        ],
-        "showlegend": true,
-        "mode": "markers",
-        "name": "16",
-        "legendgroup": "16",
-        "marker": {
-            "symbol": "circle",
-            "color": "rgba(237, 94, 147, 0.500)",
-            "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
-                "width": 1
-            },
-            "size": 8
-        },
-        "y": [
-            1042.0,
-            778.0
-        ],
-        "type": "scatter",
-        "hoverinfo": "text"
-    },
-    {
-        "xaxis": "x",
-        "colorbar": {
-            "y": 0.5072337962962964,
-            "title": "",
-            "len": 0.8881096894138233,
-            "x": 0.9941413573303337
-        },
-        "yaxis": "y",
-        "text": [
-            "Juan Ayuso (UAE Team Emirates - XRG)"
-        ],
-        "x": [
-            19.787522936392577
-        ],
-        "showlegend": true,
-        "mode": "markers",
-        "name": "20",
-        "legendgroup": "20",
-        "marker": {
-            "symbol": "circle",
-            "color": "rgba(198, 130, 37, 0.500)",
-            "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
-                "width": 1
-            },
-            "size": 8
-        },
-        "y": [
-            1153.0
-        ],
-        "type": "scatter",
-        "hoverinfo": "text"
-    },
-    {
-        "xaxis": "x",
-        "colorbar": {
-            "y": 0.5072337962962964,
-            "title": "",
-            "len": 0.8881096894138233,
-            "x": 0.9941413573303337
-        },
-        "yaxis": "y",
-        "text": [
-            "Primož Roglič (Red Bull - BORA - hansgrohe )"
-        ],
-        "x": [
-            23.644462671340886
-        ],
-        "showlegend": true,
-        "mode": "markers",
-        "name": "24",
-        "legendgroup": "24",
-        "marker": {
-            "symbol": "circle",
-            "color": "rgba(0, 169, 141, 0.500)",
-            "line": {
-                "color": "rgba(0, 0, 0, 0.500)",
-                "width": 1
-            },
-            "size": 8
-        },
-        "y": [
-            913.0
-        ],
-        "type": "scatter",
-        "hoverinfo": "text"
     }
 ]
 , {
-    "showlegend": false,
+    "showlegend": true,
     "xaxis": {
         "showticklabels": true,
         "gridwidth": 0.5,
@@ -1200,8 +1086,8 @@ for more information.
             24.0
         ],
         "range": [
-            2.9466043237143342,
-            24.247312914475643
+            2.9776561505411614,
+            24.487860384173217
         ],
         "domain": [
             0.08150348393950756,
@@ -1235,7 +1121,7 @@ for more information.
         "tickmode": "array",
         "linecolor": "rgba(0, 0, 0, 1.000)",
         "showgrid": true,
-        "title": "Cost",
+        "title": "Cost (credits)",
         "gridcolor": "rgba(0, 0, 0, 0.100)",
         "titlefont": {
             "color": "rgba(0, 0, 0, 1.000)",
@@ -1259,7 +1145,7 @@ for more information.
             },
             "yref": "paper",
             "showarrow": false,
-            "text": "Rider value",
+            "text": "Rider Value by Classification",
             "xref": "paper",
             "x": 0.5378224206349206
         }
@@ -1315,7 +1201,1580 @@ for more information.
         "tickmode": "array",
         "linecolor": "rgba(0, 0, 0, 1.000)",
         "showgrid": true,
-        "title": "Points",
+        "title": "VeloGames Points",
+        "gridcolor": "rgba(0, 0, 0, 0.100)",
+        "titlefont": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 15
+        },
+        "tickcolor": "rgb(0, 0, 0)",
+        "type": "-"
+    },
+    "legend": {
+        "yanchor": "auto",
+        "xanchor": "auto",
+        "bordercolor": "rgba(0, 0, 0, 1.000)",
+        "bgcolor": "rgba(255, 255, 255, 1.000)",
+        "borderwidth": 1,
+        "tracegroupgap": 0,
+        "y": 1.0,
+        "font": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 11
+        },
+        "title": {
+            "font": {
+                "color": "rgba(0, 0, 0, 1.000)",
+                "family": "sans-serif",
+                "size": 15
+            },
+            "text": ""
+        },
+        "traceorder": "normal",
+        "x": 1.0
+    },
+    "width": 672
+}
+);
+        });
+    }
+    </script>
+</div>
+</div>
+<section id="where-to-spend-your-credits" class="level2">
+<h2 class="anchored" data-anchor-id="where-to-spend-your-credits">Where to Spend Your Credits?</h2>
+<p>That scatter plot is great for spotting individual riders, but what can it tell us about overall strategy? By breaking the data down by cost and rider classification, we can uncover some key trends that could inform future fantasy picks.</p>
+<section id="performance-by-cost-bracket" class="level3">
+<h3 class="anchored" data-anchor-id="performance-by-cost-bracket">Performance by Cost Bracket</h3>
+<p>First, let’s see if the expensive, big-name riders were actually worth their price tag. We’ve grouped all riders into three cost brackets to see how they performed on average.</p>
+<div id="bdbc686a" class="cell" data-execution_count="5">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="8">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 24%">
+<col style="width: 16%">
+<col style="width: 14%">
+<col style="width: 10%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Cost Bracket</th>
+<th>Avg. Score</th>
+<th>Avg. Cost</th>
+<th>Riders</th>
+<th>Avg. Value (Score/Cost)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Premium (12+)</td>
+<td>1159.6</td>
+<td>14.6</td>
+<td>13</td>
+<td>79.34</td>
+</tr>
+<tr class="even">
+<td>Mid-Range (8-11)</td>
+<td>573.7</td>
+<td>8.5</td>
+<td>30</td>
+<td>67.76</td>
+</tr>
+<tr class="odd">
+<td>Budget (&lt;8)</td>
+<td>154.6</td>
+<td>5.1</td>
+<td>141</td>
+<td>30.03</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="value-by-rider-class" class="level3">
+<h3 class="anchored" data-anchor-id="value-by-rider-class">Value by Rider Class</h3>
+<p>Next, which type of rider provided the best value? The chart below shows the distribution of “value” (points per credit) for each of the four rider classifications.</p>
+<div id="24288206" class="cell" data-execution_count="6">
+<div class="cell-output cell-output-display" data-execution_count="9">
+    <div id="25eb1d1b-3e9d-40d3-a72d-be59d52f12db" style="width:672px;height:480px;"></div>
+    <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
+    <script>
+    function plots_jl_plotly_init() {
+            requirejs.config({
+        paths: {
+            plotly: 'https://cdn.plot.ly/plotly-2.6.3.min'
+        }
+    });
+    require(['plotly'], function (Plotly) {
+
+        Plotly.newPlot('25eb1d1b-3e9d-40d3-a72d-be59d52f12db', [
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            0.5,
+            0.3,
+            0.7,
+            0.5,
+            0.5,
+            0.5
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 1.000)",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            9.4,
+            9.4,
+            9.4,
+            9.4,
+            31.170833333333334,
+            9.4
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            0.9,
+            0.9,
+            0.09999999999999998,
+            0.09999999999999998,
+            0.9,
+            0.9,
+            0.9
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 1.000)",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            31.170833333333334,
+            57.65,
+            57.65,
+            31.170833333333334,
+            31.170833333333334,
+            57.65,
+            31.170833333333334
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            0.9,
+            0.09999999999999998,
+            0.09999999999999998,
+            0.9,
+            0.9,
+            0.5,
+            0.9
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 1.000)",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            90.91666666666666,
+            90.91666666666666,
+            57.65,
+            57.65,
+            90.91666666666666,
+            90.91666666666666,
+            90.91666666666666
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            0.5,
+            0.3,
+            0.7,
+            0.5,
+            0.5,
+            0.5
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 1.000)",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            139.75,
+            139.75,
+            139.75,
+            139.75,
+            90.91666666666666,
+            139.75
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "x": [
+            0.5
+        ],
+        "showlegend": false,
+        "mode": "markers",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "marker": {
+            "symbol": "circle",
+            "color": "rgba(0, 154, 250, 1.000)",
+            "line": {
+                "color": "rgba(0, 0, 0, 1.000)",
+                "width": 1
+            },
+            "size": 8
+        },
+        "y": [
+            274.2
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Lower fence: 9.4",
+            "Lower fence: 9.4",
+            "Lower fence: 9.4",
+            "Lower fence: 9.4",
+            "Q1: 31.170833333333334"
+        ],
+        "x": [
+            0.5,
+            0.3,
+            0.7,
+            0.5,
+            0.5
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "line": {
+            "color": "rgba(0, 154, 250, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            9.4,
+            9.4,
+            9.4,
+            9.4,
+            31.170833333333334
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Q1: 31.170833333333334",
+            "Median: 57.65",
+            "Median: 57.65",
+            "Q1: 31.170833333333334",
+            "Q1: 31.170833333333334",
+            "Median: 57.65"
+        ],
+        "x": [
+            0.9,
+            0.9,
+            0.09999999999999998,
+            0.09999999999999998,
+            0.9,
+            0.9
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "line": {
+            "color": "rgba(0, 154, 250, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            31.170833333333334,
+            57.65,
+            57.65,
+            31.170833333333334,
+            31.170833333333334,
+            57.65
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Q3: 90.91666666666666",
+            "Q3: 90.91666666666666",
+            "Median: 57.65",
+            "Median: 57.65",
+            "Q3: 90.91666666666666",
+            "Q3: 90.91666666666666"
+        ],
+        "x": [
+            0.9,
+            0.09999999999999998,
+            0.09999999999999998,
+            0.9,
+            0.9,
+            0.5
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "line": {
+            "color": "rgba(0, 154, 250, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            90.91666666666666,
+            90.91666666666666,
+            57.65,
+            57.65,
+            90.91666666666666,
+            90.91666666666666
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Upper fence: 139.75",
+            "Upper fence: 139.75",
+            "Upper fence: 139.75",
+            "Upper fence: 139.75",
+            "Q3: 90.91666666666666"
+        ],
+        "x": [
+            0.5,
+            0.3,
+            0.7,
+            0.5,
+            0.5
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "allrounder",
+        "legendgroup": "allrounder",
+        "line": {
+            "color": "rgba(0, 154, 250, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            139.75,
+            139.75,
+            139.75,
+            139.75,
+            90.91666666666666
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1.9,
+            1.7,
+            2.1,
+            1.9,
+            1.9,
+            1.9
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "fillcolor": "rgba(227, 111, 71, 1.000)",
+        "name": "climber",
+        "legendgroup": "climber",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            20.947916666666668,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            2.3,
+            2.3,
+            1.5,
+            1.5,
+            2.3,
+            2.3,
+            2.3
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(227, 111, 71, 1.000)",
+        "name": "climber",
+        "legendgroup": "climber",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            20.947916666666668,
+            46.0625,
+            46.0625,
+            20.947916666666668,
+            20.947916666666668,
+            46.0625,
+            20.947916666666668
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            2.3,
+            1.5,
+            1.5,
+            2.3,
+            2.3,
+            1.9,
+            2.3
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(227, 111, 71, 1.000)",
+        "name": "climber",
+        "legendgroup": "climber",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            96.59375,
+            96.59375,
+            46.0625,
+            46.0625,
+            96.59375,
+            96.59375,
+            96.59375
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1.9,
+            1.7,
+            2.1,
+            1.9,
+            1.9,
+            1.9
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(227, 111, 71, 1.000)",
+        "name": "climber",
+        "legendgroup": "climber",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            164.875,
+            164.875,
+            164.875,
+            164.875,
+            96.59375,
+            164.875
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Lower fence: 0.0",
+            "Lower fence: 0.0",
+            "Lower fence: 0.0",
+            "Lower fence: 0.0",
+            "Q1: 20.947916666666668"
+        ],
+        "x": [
+            1.9,
+            1.7,
+            2.1,
+            1.9,
+            1.9
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "climber",
+        "legendgroup": "climber",
+        "line": {
+            "color": "rgba(227, 111, 71, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            20.947916666666668
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Q1: 20.947916666666668",
+            "Median: 46.0625",
+            "Median: 46.0625",
+            "Q1: 20.947916666666668",
+            "Q1: 20.947916666666668",
+            "Median: 46.0625"
+        ],
+        "x": [
+            2.3,
+            2.3,
+            1.5,
+            1.5,
+            2.3,
+            2.3
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "climber",
+        "legendgroup": "climber",
+        "line": {
+            "color": "rgba(227, 111, 71, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            20.947916666666668,
+            46.0625,
+            46.0625,
+            20.947916666666668,
+            20.947916666666668,
+            46.0625
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Q3: 96.59375",
+            "Q3: 96.59375",
+            "Median: 46.0625",
+            "Median: 46.0625",
+            "Q3: 96.59375",
+            "Q3: 96.59375"
+        ],
+        "x": [
+            2.3,
+            1.5,
+            1.5,
+            2.3,
+            2.3,
+            1.9
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "climber",
+        "legendgroup": "climber",
+        "line": {
+            "color": "rgba(227, 111, 71, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            96.59375,
+            96.59375,
+            46.0625,
+            46.0625,
+            96.59375,
+            96.59375
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Upper fence: 164.875",
+            "Upper fence: 164.875",
+            "Upper fence: 164.875",
+            "Upper fence: 164.875",
+            "Q3: 96.59375"
+        ],
+        "x": [
+            1.9,
+            1.7,
+            2.1,
+            1.9,
+            1.9
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "climber",
+        "legendgroup": "climber",
+        "line": {
+            "color": "rgba(227, 111, 71, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            164.875,
+            164.875,
+            164.875,
+            164.875,
+            96.59375
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            3.3,
+            3.0999999999999996,
+            3.5,
+            3.3,
+            3.3,
+            3.3
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "fillcolor": "rgba(62, 164, 78, 1.000)",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            5.333333333333333,
+            5.333333333333333,
+            5.333333333333333,
+            5.333333333333333,
+            31.854166666666668,
+            5.333333333333333
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            3.6999999999999997,
+            3.6999999999999997,
+            2.9,
+            2.9,
+            3.6999999999999997,
+            3.6999999999999997,
+            3.6999999999999997
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(62, 164, 78, 1.000)",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            31.854166666666668,
+            45.416666666666664,
+            45.416666666666664,
+            31.854166666666668,
+            31.854166666666668,
+            45.416666666666664,
+            31.854166666666668
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            3.6999999999999997,
+            2.9,
+            2.9,
+            3.6999999999999997,
+            3.6999999999999997,
+            3.3,
+            3.6999999999999997
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(62, 164, 78, 1.000)",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            72.70833333333333,
+            72.70833333333333,
+            45.416666666666664,
+            45.416666666666664,
+            72.70833333333333,
+            72.70833333333333,
+            72.70833333333333
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            3.3,
+            3.0999999999999996,
+            3.5,
+            3.3,
+            3.3,
+            3.3
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(62, 164, 78, 1.000)",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            99.91666666666667,
+            99.91666666666667,
+            99.91666666666667,
+            99.91666666666667,
+            72.70833333333333,
+            99.91666666666667
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "x": [
+            3.3,
+            3.3
+        ],
+        "showlegend": false,
+        "mode": "markers",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "marker": {
+            "symbol": "circle",
+            "color": "rgba(62, 164, 78, 1.000)",
+            "line": {
+                "color": "rgba(0, 0, 0, 1.000)",
+                "width": 1
+            },
+            "size": 8
+        },
+        "y": [
+            150.42857142857142,
+            144.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Lower fence: 5.333333333333333",
+            "Lower fence: 5.333333333333333",
+            "Lower fence: 5.333333333333333",
+            "Lower fence: 5.333333333333333",
+            "Q1: 31.854166666666668"
+        ],
+        "x": [
+            3.3,
+            3.0999999999999996,
+            3.5,
+            3.3,
+            3.3
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "line": {
+            "color": "rgba(62, 164, 78, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            5.333333333333333,
+            5.333333333333333,
+            5.333333333333333,
+            5.333333333333333,
+            31.854166666666668
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Q1: 31.854166666666668",
+            "Median: 45.416666666666664",
+            "Median: 45.416666666666664",
+            "Q1: 31.854166666666668",
+            "Q1: 31.854166666666668",
+            "Median: 45.416666666666664"
+        ],
+        "x": [
+            3.6999999999999997,
+            3.6999999999999997,
+            2.9,
+            2.9,
+            3.6999999999999997,
+            3.6999999999999997
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "line": {
+            "color": "rgba(62, 164, 78, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            31.854166666666668,
+            45.416666666666664,
+            45.416666666666664,
+            31.854166666666668,
+            31.854166666666668,
+            45.416666666666664
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Q3: 72.70833333333333",
+            "Q3: 72.70833333333333",
+            "Median: 45.416666666666664",
+            "Median: 45.416666666666664",
+            "Q3: 72.70833333333333",
+            "Q3: 72.70833333333333"
+        ],
+        "x": [
+            3.6999999999999997,
+            2.9,
+            2.9,
+            3.6999999999999997,
+            3.6999999999999997,
+            3.3
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "line": {
+            "color": "rgba(62, 164, 78, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            72.70833333333333,
+            72.70833333333333,
+            45.416666666666664,
+            45.416666666666664,
+            72.70833333333333,
+            72.70833333333333
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Upper fence: 99.91666666666667",
+            "Upper fence: 99.91666666666667",
+            "Upper fence: 99.91666666666667",
+            "Upper fence: 99.91666666666667",
+            "Q3: 72.70833333333333"
+        ],
+        "x": [
+            3.3,
+            3.0999999999999996,
+            3.5,
+            3.3,
+            3.3
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "sprinter",
+        "legendgroup": "sprinter",
+        "line": {
+            "color": "rgba(62, 164, 78, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            99.91666666666667,
+            99.91666666666667,
+            99.91666666666667,
+            99.91666666666667,
+            72.70833333333333
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            4.699999999999999,
+            4.499999999999999,
+            4.8999999999999995,
+            4.699999999999999,
+            4.699999999999999,
+            4.699999999999999
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "fillcolor": "rgba(195, 113, 210, 1.000)",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            6.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            5.1,
+            5.1,
+            4.299999999999999,
+            4.299999999999999,
+            5.1,
+            5.1,
+            5.1
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(195, 113, 210, 1.000)",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            6.0,
+            19.0,
+            19.0,
+            6.0,
+            6.0,
+            19.0,
+            6.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            5.1,
+            4.299999999999999,
+            4.299999999999999,
+            5.1,
+            5.1,
+            4.699999999999999,
+            5.1
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(195, 113, 210, 1.000)",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            41.16666666666667,
+            41.16666666666667,
+            19.0,
+            19.0,
+            41.16666666666667,
+            41.16666666666667,
+            41.16666666666667
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            4.699999999999999,
+            4.499999999999999,
+            4.8999999999999995,
+            4.699999999999999,
+            4.699999999999999,
+            4.699999999999999
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(195, 113, 210, 1.000)",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "line": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            92.75,
+            92.75,
+            92.75,
+            92.75,
+            41.16666666666667,
+            92.75
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "x": [
+            4.699999999999999,
+            4.699999999999999,
+            4.699999999999999,
+            4.699999999999999,
+            4.699999999999999
+        ],
+        "showlegend": false,
+        "mode": "markers",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "marker": {
+            "symbol": "circle",
+            "color": "rgba(195, 113, 210, 1.000)",
+            "line": {
+                "color": "rgba(0, 0, 0, 1.000)",
+                "width": 1
+            },
+            "size": 8
+        },
+        "y": [
+            103.75,
+            131.16666666666666,
+            95.5,
+            95.66666666666667,
+            107.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Lower fence: 0.0",
+            "Lower fence: 0.0",
+            "Lower fence: 0.0",
+            "Lower fence: 0.0",
+            "Q1: 6.0"
+        ],
+        "x": [
+            4.699999999999999,
+            4.499999999999999,
+            4.8999999999999995,
+            4.699999999999999,
+            4.699999999999999
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "line": {
+            "color": "rgba(195, 113, 210, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            6.0
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Q1: 6.0",
+            "Median: 19.0",
+            "Median: 19.0",
+            "Q1: 6.0",
+            "Q1: 6.0",
+            "Median: 19.0"
+        ],
+        "x": [
+            5.1,
+            5.1,
+            4.299999999999999,
+            4.299999999999999,
+            5.1,
+            5.1
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "line": {
+            "color": "rgba(195, 113, 210, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            6.0,
+            19.0,
+            19.0,
+            6.0,
+            6.0,
+            19.0
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Q3: 41.16666666666667",
+            "Q3: 41.16666666666667",
+            "Median: 19.0",
+            "Median: 19.0",
+            "Q3: 41.16666666666667",
+            "Q3: 41.16666666666667"
+        ],
+        "x": [
+            5.1,
+            4.299999999999999,
+            4.299999999999999,
+            5.1,
+            5.1,
+            4.699999999999999
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "line": {
+            "color": "rgba(195, 113, 210, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            41.16666666666667,
+            41.16666666666667,
+            19.0,
+            19.0,
+            41.16666666666667,
+            41.16666666666667
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5072337962962964,
+            "title": "",
+            "len": 0.8881096894138233,
+            "x": 0.9941413573303336
+        },
+        "yaxis": "y",
+        "text": [
+            "Upper fence: 92.75",
+            "Upper fence: 92.75",
+            "Upper fence: 92.75",
+            "Upper fence: 92.75",
+            "Q3: 41.16666666666667"
+        ],
+        "x": [
+            4.699999999999999,
+            4.499999999999999,
+            4.8999999999999995,
+            4.699999999999999,
+            4.699999999999999
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "name": "unclassed",
+        "legendgroup": "unclassed",
+        "line": {
+            "color": "rgba(195, 113, 210, 1.000)",
+            "shape": "linear",
+            "dash": "solid",
+            "width": 0
+        },
+        "y": [
+            92.75,
+            92.75,
+            92.75,
+            92.75,
+            41.16666666666667
+        ],
+        "type": "scatter",
+        "hoverinfo": "text"
+    }
+]
+, {
+    "showlegend": false,
+    "xaxis": {
+        "showticklabels": true,
+        "gridwidth": 0.5,
+        "tickvals": [
+            0.5,
+            1.9,
+            3.3,
+            4.699999999999999
+        ],
+        "range": [
+            -0.05000000000000071,
+            5.25
+        ],
+        "domain": [
+            0.06827597071199433,
+            0.9941413573303336
+        ],
+        "mirror": false,
+        "tickangle": 0,
+        "showline": true,
+        "ticktext": [
+            "allrounder",
+            "climber",
+            "sprinter",
+            "unclassed"
+        ],
+        "zeroline": false,
+        "tickfont": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 11
+        },
+        "zerolinecolor": "rgba(0, 0, 0, 1.000)",
+        "anchor": "y",
+        "visible": true,
+        "ticks": "inside",
+        "tickmode": "array",
+        "linecolor": "rgba(0, 0, 0, 1.000)",
+        "showgrid": true,
+        "title": "Rider Class",
+        "gridcolor": "rgba(0, 0, 0, 0.100)",
+        "titlefont": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 15
+        },
+        "tickcolor": "rgb(0, 0, 0)",
+        "type": "-"
+    },
+    "paper_bgcolor": "rgba(255, 255, 255, 1.000)",
+    "annotations": [
+        {
+            "yanchor": "top",
+            "xanchor": "center",
+            "rotation": -0.0,
+            "y": 1.0,
+            "font": {
+                "color": "rgba(0, 0, 0, 1.000)",
+                "family": "sans-serif",
+                "size": 20
+            },
+            "yref": "paper",
+            "showarrow": false,
+            "text": "Value Distribution by Rider Class",
+            "xref": "paper",
+            "x": 0.5312086640211641
+        }
+    ],
+    "height": 480,
+    "margin": {
+        "l": 0,
+        "b": 20,
+        "r": 0,
+        "t": 20
+    },
+    "plot_bgcolor": "rgba(255, 255, 255, 1.000)",
+    "yaxis": {
+        "showticklabels": true,
+        "gridwidth": 0.5,
+        "tickvals": [
+            0.0,
+            50.0,
+            100.0,
+            150.0,
+            200.0,
+            250.0
+        ],
+        "range": [
+            -8.225999999999999,
+            282.426
+        ],
+        "domain": [
+            0.0631789515893847,
+            0.951288641003208
+        ],
+        "mirror": false,
+        "tickangle": 0,
+        "showline": true,
+        "ticktext": [
+            "0",
+            "50",
+            "100",
+            "150",
+            "200",
+            "250"
+        ],
+        "zeroline": false,
+        "tickfont": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 11
+        },
+        "zerolinecolor": "rgba(0, 0, 0, 1.000)",
+        "anchor": "x",
+        "visible": true,
+        "ticks": "inside",
+        "tickmode": "array",
+        "linecolor": "rgba(0, 0, 0, 1.000)",
+        "showgrid": true,
+        "title": "Value (Points per Credit)",
         "gridcolor": "rgba(0, 0, 0, 0.100)",
         "titlefont": {
             "color": "rgba(0, 0, 0, 1.000)",
@@ -1333,25 +2792,27 @@ for more information.
     </script>
 </div>
 </div>
-<section id="top-picks" class="level2">
-<h2 class="anchored" data-anchor-id="top-picks">Top picks</h2>
-<p>The highest value riders are the ones who scored the most points per credit cost:</p>
-<div id="cf73d1bd" class="cell" data-execution_count="7">
+</section>
+</section>
+<section id="top-value-riders" class="level2">
+<h2 class="anchored" data-anchor-id="top-value-riders">Top Value Riders</h2>
+<p>The highest value riders scored the most points per credit. Here are the top 20 riders who gave the most bang for your buck.</p>
+<div id="59db703d" class="cell" data-execution_count="7">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="10">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 7%">
-<col style="width: 25%">
-<col style="width: 41%">
-<col style="width: 7%">
-<col style="width: 10%">
-<col style="width: 8%">
+<col style="width: 22%">
+<col style="width: 37%">
+<col style="width: 13%">
+<col style="width: 6%">
+<col style="width: 9%">
+<col style="width: 9%">
 </colgroup>
 <thead>
 <tr class="header">
-<th>Rank</th>
 <th>Rider</th>
 <th>Team</th>
+<th>Class</th>
 <th>Cost</th>
 <th>Score</th>
 <th>Value</th>
@@ -1359,182 +2820,182 @@ for more information.
 </thead>
 <tbody>
 <tr class="odd">
-<td>1</td>
 <td>Isaac Del Toro</td>
 <td>UAE Team Emirates - XRG</td>
+<td>allrounder</td>
 <td>10</td>
 <td>2742.0</td>
 <td>274.2</td>
 </tr>
 <tr class="even">
-<td>2</td>
 <td>Damiano Caruso</td>
 <td>Bahrain - Victorious</td>
+<td>climber</td>
 <td>8</td>
 <td>1319.0</td>
-<td>164.9</td>
+<td>164.88</td>
 </tr>
 <tr class="odd">
-<td>3</td>
 <td>Richard Carapaz</td>
 <td>EF Education - EasyPost</td>
+<td>climber</td>
 <td>12</td>
 <td>1978.0</td>
-<td>164.8</td>
+<td>164.83</td>
 </tr>
 <tr class="even">
-<td>4</td>
 <td>Mads Pedersen</td>
 <td>Lidl - Trek</td>
+<td>sprinter</td>
 <td>14</td>
 <td>2106.0</td>
-<td>150.4</td>
+<td>150.43</td>
 </tr>
 <tr class="odd">
-<td>5</td>
 <td>Simon Yates</td>
-<td>Team Visma - Lease a Bike</td>
+<td>Team Visma</td>
+<td>Lease a Bike</td>
+<td>climber</td>
 <td>12</td>
 <td>1795.0</td>
-<td>149.6</td>
 </tr>
 <tr class="even">
-<td>6</td>
 <td>Orluis Aular</td>
 <td>Movistar Team</td>
+<td>sprinter</td>
 <td>6</td>
 <td>864.0</td>
 <td>144.0</td>
 </tr>
 <tr class="odd">
-<td>7</td>
 <td>Brandon McNulty</td>
 <td>UAE Team Emirates - XRG</td>
+<td>allrounder</td>
 <td>8</td>
 <td>1118.0</td>
-<td>139.8</td>
+<td>139.75</td>
 </tr>
 <tr class="even">
-<td>8</td>
 <td>Nicolas Prodhomme</td>
 <td>Decathlon AG2R La Mondiale Team</td>
+<td>unclassed</td>
 <td>6</td>
 <td>787.0</td>
-<td>131.2</td>
+<td>131.17</td>
 </tr>
 <tr class="odd">
-<td>9</td>
 <td>Lorenzo Fortunato</td>
 <td>XDS Astana Team</td>
+<td>climber</td>
 <td>8</td>
 <td>981.0</td>
-<td>122.6</td>
+<td>122.62</td>
 </tr>
 <tr class="even">
-<td>10</td>
 <td>Giulio Pellizzari</td>
 <td>Red Bull - BORA - hansgrohe</td>
+<td>climber</td>
 <td>8</td>
 <td>942.0</td>
-<td>117.8</td>
+<td>117.75</td>
 </tr>
 <tr class="odd">
-<td>11</td>
 <td>Max Poole</td>
 <td>Team Picnic PostNL</td>
+<td>climber</td>
 <td>8</td>
 <td>860.0</td>
 <td>107.5</td>
 </tr>
 <tr class="even">
-<td>12</td>
 <td>Dries De Bondt</td>
 <td>Decathlon AG2R La Mondiale Team</td>
+<td>unclassed</td>
 <td>4</td>
 <td>428.0</td>
 <td>107.0</td>
 </tr>
 <tr class="odd">
-<td>13</td>
 <td>Derek Gee</td>
 <td>Israel - Premier Tech</td>
+<td>allrounder</td>
 <td>12</td>
 <td>1252.0</td>
-<td>104.3</td>
+<td>104.33</td>
 </tr>
 <tr class="even">
-<td>14</td>
 <td>Christian Scaroni</td>
 <td>XDS Astana Team</td>
+<td>unclassed</td>
 <td>8</td>
 <td>830.0</td>
-<td>103.8</td>
+<td>103.75</td>
 </tr>
 <tr class="odd">
-<td>15</td>
 <td>Olav Kooij</td>
-<td>Team Visma - Lease a Bike</td>
+<td>Team Visma</td>
+<td>Lease a Bike</td>
+<td>sprinter</td>
 <td>12</td>
 <td>1199.0</td>
-<td>99.9</td>
 </tr>
 <tr class="even">
-<td>16</td>
 <td>Rafał Majka</td>
 <td>UAE Team Emirates - XRG</td>
+<td>climber</td>
 <td>6</td>
 <td>599.0</td>
-<td>99.8</td>
+<td>99.83</td>
 </tr>
 <tr class="odd">
-<td>17</td>
 <td>Carlos Verona</td>
 <td>Lidl - Trek</td>
+<td>unclassed</td>
 <td>6</td>
 <td>574.0</td>
-<td>95.7</td>
+<td>95.67</td>
 </tr>
 <tr class="even">
-<td>18</td>
 <td>Daan Hoole</td>
 <td>Lidl - Trek</td>
+<td>unclassed</td>
 <td>6</td>
 <td>573.0</td>
 <td>95.5</td>
 </tr>
 <tr class="odd">
-<td>19</td>
 <td>Mirco Maestri</td>
 <td>Team Polti VisitMalta</td>
+<td>unclassed</td>
 <td>4</td>
 <td>371.0</td>
-<td>92.8</td>
+<td>92.75</td>
 </tr>
 <tr class="even">
-<td>20</td>
 <td>Gianmarco Garofoli</td>
 <td>Soudal Quick-Step</td>
+<td>unclassed</td>
 <td>4</td>
 <td>361.0</td>
-<td>90.2</td>
+<td>90.25</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 <section id="best-all-rounders" class="level3">
-<h3 class="anchored" data-anchor-id="best-all-rounders">Best all-rounders</h3>
-<p>Two were required in each team. The best value all-rounders were:</p>
-<div id="df3dab8f" class="cell" data-execution_count="8">
+<h3 class="anchored" data-anchor-id="best-all-rounders">Best All-Rounders</h3>
+<p>Two all-rounders were required in each team. The best value picks were:</p>
+<div id="f4ea4111" class="cell" data-execution_count="8">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="11">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 8%">
 <col style="width: 24%">
-<col style="width: 36%">
+<col style="width: 35%">
 <col style="width: 8%">
 <col style="width: 11%">
-<col style="width: 10%">
+<col style="width: 11%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -1561,7 +3022,7 @@ for more information.
 <td>UAE Team Emirates - XRG</td>
 <td>8</td>
 <td>1118.0</td>
-<td>139.8</td>
+<td>139.75</td>
 </tr>
 <tr class="odd">
 <td>13</td>
@@ -1569,7 +3030,7 @@ for more information.
 <td>Israel - Premier Tech</td>
 <td>12</td>
 <td>1252.0</td>
-<td>104.3</td>
+<td>104.33</td>
 </tr>
 <tr class="even">
 <td>31</td>
@@ -1585,7 +3046,7 @@ for more information.
 <td>UAE Team Emirates - XRG</td>
 <td>8</td>
 <td>486.0</td>
-<td>60.8</td>
+<td>60.75</td>
 </tr>
 </tbody>
 </table>
@@ -1593,18 +3054,18 @@ for more information.
 </div>
 </section>
 <section id="best-climbers" class="level3">
-<h3 class="anchored" data-anchor-id="best-climbers">Best climbers</h3>
-<p>Two were required in each team. The best value climbers were:</p>
-<div id="8ff31c79" class="cell" data-execution_count="9">
+<h3 class="anchored" data-anchor-id="best-climbers">Best Climbers</h3>
+<p>Two climbers were required. The best value climbers were:</p>
+<div id="1f8e870b" class="cell" data-execution_count="9">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="12">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 7%">
-<col style="width: 25%">
-<col style="width: 39%">
+<col style="width: 24%">
+<col style="width: 38%">
 <col style="width: 7%">
 <col style="width: 10%">
-<col style="width: 9%">
+<col style="width: 10%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -1623,7 +3084,7 @@ for more information.
 <td>Bahrain - Victorious</td>
 <td>8</td>
 <td>1319.0</td>
-<td>164.9</td>
+<td>164.88</td>
 </tr>
 <tr class="even">
 <td>3</td>
@@ -1631,15 +3092,15 @@ for more information.
 <td>EF Education - EasyPost</td>
 <td>12</td>
 <td>1978.0</td>
-<td>164.8</td>
+<td>164.83</td>
 </tr>
 <tr class="odd">
 <td>5</td>
 <td>Simon Yates</td>
-<td>Team Visma - Lease a Bike</td>
+<td>Team Visma</td>
+<td>Lease a Bike</td>
 <td>12</td>
 <td>1795.0</td>
-<td>149.6</td>
 </tr>
 <tr class="even">
 <td>9</td>
@@ -1647,7 +3108,7 @@ for more information.
 <td>XDS Astana Team</td>
 <td>8</td>
 <td>981.0</td>
-<td>122.6</td>
+<td>122.62</td>
 </tr>
 <tr class="odd">
 <td>10</td>
@@ -1655,7 +3116,7 @@ for more information.
 <td>Red Bull - BORA - hansgrohe</td>
 <td>8</td>
 <td>942.0</td>
-<td>117.8</td>
+<td>117.75</td>
 </tr>
 </tbody>
 </table>
@@ -1663,9 +3124,9 @@ for more information.
 </div>
 </section>
 <section id="best-sprinters" class="level3">
-<h3 class="anchored" data-anchor-id="best-sprinters">Best sprinters</h3>
-<p>One was required in each team. The best value sprinters were:</p>
-<div id="19cf2d6d" class="cell" data-execution_count="10">
+<h3 class="anchored" data-anchor-id="best-sprinters">Best Sprinters</h3>
+<p>One sprinter was required. The best value sprinters were:</p>
+<div id="3d3807a5" class="cell" data-execution_count="10">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="13">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
@@ -1673,8 +3134,8 @@ for more information.
 <col style="width: 23%">
 <col style="width: 38%">
 <col style="width: 8%">
-<col style="width: 11%">
-<col style="width: 9%">
+<col style="width: 10%">
+<col style="width: 10%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -1693,7 +3154,7 @@ for more information.
 <td>Lidl - Trek</td>
 <td>14</td>
 <td>2106.0</td>
-<td>150.4</td>
+<td>150.43</td>
 </tr>
 <tr class="even">
 <td>6</td>
@@ -1706,10 +3167,10 @@ for more information.
 <tr class="odd">
 <td>15</td>
 <td>Olav Kooij</td>
-<td>Team Visma - Lease a Bike</td>
+<td>Team Visma</td>
+<td>Lease a Bike</td>
 <td>12</td>
 <td>1199.0</td>
-<td>99.9</td>
 </tr>
 <tr class="even">
 <td>21</td>
@@ -1725,7 +3186,7 @@ for more information.
 <td>Team Picnic PostNL</td>
 <td>6</td>
 <td>518.0</td>
-<td>86.3</td>
+<td>86.33</td>
 </tr>
 </tbody>
 </table>
@@ -1733,18 +3194,21 @@ for more information.
 </div>
 </section>
 </section>
-<section id="worst-picks" class="level2">
-<h2 class="anchored" data-anchor-id="worst-picks">Worst picks</h2>
-<p>The riders costing at least 6 credits who scored nil points:</p>
-<div id="b0fc360a" class="cell" data-execution_count="11">
+<section id="worst-value-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="worst-value-analysis">Worst Value Analysis</h2>
+<p>Not every pick can be a winner. Here we look at the riders who didn’t live up to their price tag.</p>
+<section id="expensive-failures" class="level3">
+<h3 class="anchored" data-anchor-id="expensive-failures">Expensive Failures</h3>
+<p>These riders cost at least 6 credits but scored zero points.</p>
+<div id="3932acb5" class="cell" data-execution_count="11">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="14">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 7%">
-<col style="width: 26%">
-<col style="width: 42%">
-<col style="width: 7%">
-<col style="width: 8%">
+<col style="width: 6%">
+<col style="width: 25%">
+<col style="width: 40%">
+<col style="width: 12%">
+<col style="width: 6%">
 <col style="width: 8%">
 </colgroup>
 <thead>
@@ -1752,9 +3216,9 @@ for more information.
 <th>Rank</th>
 <th>Rider</th>
 <th>Team</th>
+<th>Class</th>
 <th>Cost</th>
 <th>Score</th>
-<th>Value</th>
 </tr>
 </thead>
 <tbody>
@@ -1762,55 +3226,60 @@ for more information.
 <td>177</td>
 <td>Mikel Landa</td>
 <td>Soudal Quick-Step</td>
+<td>climber</td>
 <td>14</td>
-<td>0.0</td>
 <td>0.0</td>
 </tr>
 <tr class="even">
 <td>178</td>
 <td>Geoffrey Bouchard</td>
 <td>Decathlon AG2R La Mondiale Team</td>
+<td>unclassed</td>
 <td>6</td>
-<td>0.0</td>
 <td>0.0</td>
 </tr>
 <tr class="odd">
 <td>179</td>
 <td>Dion Smith</td>
 <td>Intermarché - Wanty</td>
+<td>unclassed</td>
 <td>6</td>
-<td>0.0</td>
 <td>0.0</td>
 </tr>
 <tr class="even">
 <td>180</td>
 <td>Alessandro Pinarello</td>
 <td>VF Group - Bardiani CSF - Faizanè</td>
+<td>unclassed</td>
 <td>6</td>
-<td>0.0</td>
 <td>0.0</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
-<p>The lowest value riders who did score points:</p>
-<div id="54ada392" class="cell" data-execution_count="12">
+</section>
+<section id="lowest-value-performers" class="level3">
+<h3 class="anchored" data-anchor-id="lowest-value-performers">Lowest Value Performers</h3>
+<p>Finally, these are the riders who, despite scoring some points, delivered the worst value for their cost.</p>
+<div id="7dd89163" class="cell" data-execution_count="12">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="15">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
+<col style="width: 7%">
+<col style="width: 26%">
+<col style="width: 28%">
+<col style="width: 13%">
+<col style="width: 7%">
 <col style="width: 8%">
-<col style="width: 30%">
-<col style="width: 32%">
 <col style="width: 8%">
-<col style="width: 9%">
-<col style="width: 9%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Rank</th>
 <th>Rider</th>
 <th>Team</th>
+<th>Class</th>
 <th>Cost</th>
 <th>Score</th>
 <th>Value</th>
@@ -1821,6 +3290,7 @@ for more information.
 <td>171</td>
 <td>Sergio Samitier</td>
 <td>Cofidis</td>
+<td>unclassed</td>
 <td>4</td>
 <td>4.0</td>
 <td>1.0</td>
@@ -1829,6 +3299,7 @@ for more information.
 <td>172</td>
 <td>Jonathan Castroviejo</td>
 <td>INEOS Grenadiers</td>
+<td>unclassed</td>
 <td>4</td>
 <td>4.0</td>
 <td>1.0</td>
@@ -1837,33 +3308,37 @@ for more information.
 <td>173</td>
 <td>Lucas Hamilton</td>
 <td>INEOS Grenadiers</td>
+<td>unclassed</td>
 <td>6</td>
 <td>4.0</td>
-<td>0.7</td>
+<td>0.67</td>
 </tr>
 <tr class="even">
 <td>174</td>
 <td>Jakob Fuglsang</td>
 <td>Israel - Premier Tech</td>
+<td>unclassed</td>
 <td>6</td>
 <td>4.0</td>
-<td>0.7</td>
+<td>0.67</td>
 </tr>
 <tr class="odd">
 <td>175</td>
 <td>Jan Hirt</td>
 <td>Israel - Premier Tech</td>
+<td>climber</td>
 <td>6</td>
 <td>4.0</td>
-<td>0.7</td>
+<td>0.67</td>
 </tr>
 <tr class="even">
 <td>176</td>
 <td>Nick Schultz</td>
 <td>Israel - Premier Tech</td>
+<td>unclassed</td>
 <td>6</td>
 <td>4.0</td>
-<td>0.7</td>
+<td>0.67</td>
 </tr>
 </tbody>
 </table>
@@ -1871,6 +3346,7 @@ for more information.
 </div>
 
 
+</section>
 </section>
 </section>
 

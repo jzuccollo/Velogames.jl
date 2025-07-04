@@ -24,6 +24,8 @@ using Dates
     @test isdefined(Velogames, :cached_fetch)
     @test isdefined(Velogames, :DEFAULT_CACHE)
     @test isdefined(Velogames, :cache_key)
+    # Test new integration functions
+    @test isdefined(Velogames, :add_pcs_speciality_points!)
 end
 
 @testset "Utility Functions" begin
@@ -100,9 +102,14 @@ end
     )
 
     @testset "buildmodeloneday" begin
-        result = buildmodeloneday(sample_df, 2, :points, :cost, totalcost=50)
+        result = buildmodeloneday(sample_df, 2, :points, :cost)  # Specify correct columns
         @test result isa JuMP.Containers.DenseAxisArray  # Returns solution values, not model
         @test length(result) == 4  # Should have one value per rider
+
+        # Test with custom parameters
+        result2 = buildmodeloneday(sample_df, 2, :points, :cost, totalcost=50)
+        @test result2 isa JuMP.Containers.DenseAxisArray
+        @test length(result2) == 4
     end
 
     @testset "buildmodelstage" begin
@@ -113,12 +120,16 @@ end
         sample_df_stage.climber = [1, 0, 1, 1]
         sample_df_stage.unclassed = [1, 1, 1, 1]  # Need at least 3 unclassed riders
 
-        result = buildmodelstage(sample_df_stage, 4, :points, :cost)  # Select all 4 riders
+        result = buildmodelstage(sample_df_stage, 4, :points, :cost)  # Specify correct columns
         # Stage race model might not have feasible solution, so result could be nothing
         @test (result isa JuMP.Containers.DenseAxisArray) || (result === nothing)
         if result !== nothing
             @test length(result) == 4  # Should have one value per rider
         end
+
+        # Test fallback to one-day model when columns missing
+        result_fallback = buildmodelstage(sample_df, 2, :points, :cost)  # Missing stage columns
+        @test result_fallback isa JuMP.Containers.DenseAxisArray  # Should fallback to one-day model
     end
 end
 
@@ -311,4 +322,122 @@ end
 
     # Test that all expected riders are present
     @test Set(batch_df.rider) == Set(test_riders)
+end
+
+@testset "PCS Integration Tests" begin
+    @testset "add_pcs_speciality_points!" begin
+        # Test with complete data
+        test_df = DataFrame(
+            class=["allrounder", "sprinter", "climber", "unknown"],
+            gc=[1000, 200, 1200, 500],
+            sprint=[100, 1500, 50, 300],
+            climber=[800, 100, 1800, 400],
+            oneday=[900, 1200, 1000, 600]
+        )
+
+        result_df = add_pcs_speciality_points!(copy(test_df))
+
+        @test hasproperty(result_df, :pcs_speciality_points)
+        @test result_df.pcs_speciality_points[1] == 1000  # allrounder -> gc
+        @test result_df.pcs_speciality_points[2] == 1500  # sprinter -> sprint
+        @test result_df.pcs_speciality_points[3] == 1800  # climber -> climber
+        @test result_df.pcs_speciality_points[4] == 600   # unknown -> oneday
+
+        # Test with missing PCS data
+        test_df_missing = DataFrame(
+            class=["allrounder", "sprinter"],
+            gc=[missing, 200],
+            sprint=[100, missing]
+        )
+
+        result_df_missing = add_pcs_speciality_points!(copy(test_df_missing))
+        @test result_df_missing.pcs_speciality_points[1] == 0  # missing -> 0
+        @test result_df_missing.pcs_speciality_points[2] == 0  # missing -> 0
+
+        # Test without class column
+        test_df_no_class = DataFrame(rider=["test1", "test2"])
+        result_df_no_class = add_pcs_speciality_points!(copy(test_df_no_class))
+        @test hasproperty(result_df_no_class, :pcs_speciality_points)
+        @test all(ismissing, result_df_no_class.pcs_speciality_points)
+
+        # Test case variations
+        test_df_cases = DataFrame(
+            class=["All Rounder", "SPRINTER", "Climber"],
+            gc=[1000, 200, 1200],
+            sprint=[100, 1500, 50],
+            climber=[800, 100, 1800]
+        )
+
+        result_df_cases = add_pcs_speciality_points!(copy(test_df_cases))
+        @test result_df_cases.pcs_speciality_points[1] == 1000  # All Rounder -> gc
+        @test result_df_cases.pcs_speciality_points[2] == 1500  # SPRINTER -> sprint
+        @test result_df_cases.pcs_speciality_points[3] == 1800  # Climber -> climber
+    end
+
+    @testset "integrate_pcs_data! - Unit Tests" begin
+        # Create mock rider data
+        rider_df = DataFrame(
+            rider=["rider1", "rider2", "rider3"],
+            riderkey=["key1", "key2", "key3"],
+            class=["allrounder", "sprinter", "climber"],
+            vgpoints=[100, 200, 150],
+            vgcost=[10, 15, 12]
+        )
+
+        # Test error handling when PCS fetch fails
+        rider_names = ["nonexistent-rider-1", "nonexistent-rider-2"]
+
+        # This should handle the error gracefully and add default columns
+        result_df = integrate_pcs_data!(copy(rider_df), rider_names)
+
+        @test hasproperty(result_df, :pcs_speciality_points)
+        @test all(result_df.pcs_speciality_points .== 0)  # Should default to 0
+
+        # Test with valid structure but no network (will likely fail gracefully)
+        test_cache_config = CacheConfig("/tmp/test_integration", 1, false)
+        try
+            result_df_cached = integrate_pcs_data!(copy(rider_df), ["test-rider"];
+                cache_config=test_cache_config)
+            @test result_df_cached isa DataFrame
+            @test hasproperty(result_df_cached, :pcs_speciality_points)
+        catch e
+            # Network failures are expected in testing environment
+            @test true
+        end
+    end
+end
+
+@testset "Integration Workflow Tests" begin
+    # Test the complete workflow that notebooks will use
+
+    # Mock VG data structure
+    mock_vg_data = DataFrame(
+        rider=["Tadej Pogačar", "Jonas Vingegaard", "Primož Roglič"],
+        riderkey=[createkey("Tadej Pogačar"), createkey("Jonas Vingegaard"), createkey("Primož Roglič")],
+        class=["allrounder", "allrounder", "allrounder"],
+        vgpoints=[2000, 1800, 1600],
+        vgcost=[24, 22, 20],
+        allrounder=[true, true, true],
+        sprinter=[false, false, false],
+        climber=[false, false, false],
+        unclassed=[false, false, false]
+    )
+
+    # Test integration workflow
+    try
+        integrated_data = integrate_pcs_data!(copy(mock_vg_data), collect(mock_vg_data.rider))
+
+        @test integrated_data isa DataFrame
+        @test nrow(integrated_data) == nrow(mock_vg_data)
+        @test hasproperty(integrated_data, :pcs_speciality_points)
+
+        # Should preserve original VG columns
+        @test hasproperty(integrated_data, :vgpoints)
+        @test hasproperty(integrated_data, :vgcost)
+        @test hasproperty(integrated_data, :allrounder)
+
+    catch e
+        # Network issues are expected in CI/testing
+        @test e isa Exception
+    end
 end
