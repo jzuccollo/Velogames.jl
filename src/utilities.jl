@@ -53,7 +53,7 @@ function add_pcs_speciality_points!(allriderdata::DataFrame, pcsriderpts::DataFr
     pcs_speciality_data = pcsriderpts[:, pcs_cols_to_keep]
 
     # Reshape the data from wide to long format
-    pcs_long = stack(pcs_speciality_data, Not(:riderkey), variable_name=:pcs_col, value_name=:pcs_points)
+    pcs_long = stack(pcs_speciality_data, Not(:riderkey), variable_name=:pcs_col, value_name=:pcs_speciality_points)
 
     # Map the PCS column names to Velogames class names
     pcs_long.class = [get(pcs_col_to_vg_class, col, "unknown") for col in pcs_long.pcs_col]

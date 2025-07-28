@@ -3,12 +3,13 @@ project:
   output-dir: docs
   render:
     - "race_notebooks/index.qmd"
-    - "race_notebooks/historical_analysis_stagerace.qmd"
+    # - "race_notebooks/historical_analysis_giro2025.qmd"
+    - "race_notebooks/historical_analysis_tdf2025.qmd"
 
 jupyter: julia-1.10
 
 website:
-  title: "Velogames solver"
+  title: "Velogames"
   sidebar:
     style: "docked"
     contents:
@@ -16,12 +17,14 @@ website:
         text: "Overview"
       # - href: race_notebooks/oneday.qmd
       #   text: "One day races"
-      # - href: race_notebooks/stagerace.qmd
-      #   text: "Stage races"
-      - href: race_notebooks/historical_analysis_stagerace.qmd
-        text: "Giro d'Italia 2025"
-      - href: race_notebooks/historical_analysis.qmd
-        text: "Olympic road race 2024"
+      # - href: race_notebooks/stagerace_predictor.qmd
+      #   text: "Stage race team selection"
+      # - href: race_notebooks/historical_analysis_giro2025.qmd
+      #   text: "Giro d'Italia 2025"
+      - href: race_notebooks/historical_analysis_tdf2025.qmd
+        text: "Tour de France 2025"
+      # - href: race_notebooks/historical_analysis.qmd
+      #   text: "Olympic road race 2024"
 
 format:
   html:

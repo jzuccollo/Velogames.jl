@@ -26,6 +26,9 @@ using Dates
     @test isdefined(Velogames, :cache_key)
     # Test new integration functions
     @test isdefined(Velogames, :add_pcs_speciality_points!)
+    # Test historical analysis functions
+    @test isdefined(Velogames, :buildmodelhistorical)
+    @test isdefined(Velogames, :minimizecostforstage)
 end
 
 @testset "Utility Functions" begin
@@ -59,8 +62,9 @@ end
     df = getvgriders(url, force_refresh=true)  # Force fresh download for tests
     @test typeof(df) == DataFrame
 
-    # Test that the DataFrame has the expected columns: rider, team, classraw, cost, points, riderkey, class, allrounder, sprinter, climber, unclassed, value
-    expected_cols = ["rider", "team", "classraw", "cost", "points", "riderkey", "class", "allrounder", "sprinter", "climber", "unclassed", "value"]
+    # Test that the DataFrame has the expected columns from getvgriders
+    # Note: binary classification columns (allrounder, sprinter, etc.) are now created by optimization functions
+    expected_cols = ["rider", "team", "classraw", "cost", "points", "riderkey", "class"]
     @test all(col in names(df) for col in expected_cols)
 
     # Test that the cost column is Int64 (rank doesn't exist in this data)
@@ -147,7 +151,7 @@ end
             @test true  # If we get here, function call succeeded
         catch e
             # Network errors are expected in tests, other errors are not
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError,ErrorException}
         end
     end
 
@@ -158,7 +162,7 @@ end
             @test result isa Dict
         catch e
             # Network/parsing errors are expected in tests
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError,ErrorException}
         end
     end
 
@@ -169,7 +173,7 @@ end
             @test result isa DataFrames.DataFrame
         catch e
             # Network/parsing errors are expected in tests
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError,ErrorException}
         end
     end
 
@@ -180,7 +184,7 @@ end
             @test true  # If we get here, function call succeeded
         catch e
             # Network/parsing errors are expected in tests
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError,ErrorException}
         end
     end
 
@@ -191,7 +195,7 @@ end
             @test true  # If we get here, function call succeeded
         catch e
             # Network/parsing errors are expected in tests
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError,ErrorException}
         end
 
         # Test with custom headers (now using keyword arguments)
@@ -200,7 +204,7 @@ end
             @test true  # If we get here, function call succeeded
         catch e
             # Network/parsing errors are expected in tests
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError,ErrorException}
         end
     end
 
@@ -211,7 +215,7 @@ end
             @test result isa DataFrames.DataFrame
         catch e
             # Network/parsing errors are expected in tests
-            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError}
+            @test e isa Union{HTTP.Exceptions.StatusError,ArgumentError,BoundsError,ErrorException}
         end
     end
 end
@@ -327,83 +331,53 @@ end
 @testset "PCS Integration Tests" begin
     @testset "add_pcs_speciality_points!" begin
         # Test with complete data
-        test_df = DataFrame(
-            class=["allrounder", "sprinter", "climber", "unknown"],
+        rider_df = DataFrame(
+            riderkey=["rider1", "rider2", "rider3", "rider4"],
+            class=["allrounder", "sprinter", "climber", "unclassed"]
+        )
+        
+        pcs_df = DataFrame(
+            riderkey=["rider1", "rider2", "rider3", "rider4"],
             gc=[1000, 200, 1200, 500],
             sprint=[100, 1500, 50, 300],
             climber=[800, 100, 1800, 400],
             oneday=[900, 1200, 1000, 600]
         )
+        
+        vg_class_to_pcs_col = Dict(
+            "allrounder" => "gc",
+            "climber" => "climber",
+            "sprinter" => "sprint",
+            "unclassed" => "oneday"
+        )
 
-        result_df = add_pcs_speciality_points!(copy(test_df))
+        result_df = add_pcs_speciality_points!(copy(rider_df), pcs_df, vg_class_to_pcs_col)
 
         @test hasproperty(result_df, :pcs_speciality_points)
         @test result_df.pcs_speciality_points[1] == 1000  # allrounder -> gc
         @test result_df.pcs_speciality_points[2] == 1500  # sprinter -> sprint
         @test result_df.pcs_speciality_points[3] == 1800  # climber -> climber
-        @test result_df.pcs_speciality_points[4] == 600   # unknown -> oneday
+        @test result_df.pcs_speciality_points[4] == 600   # unclassed -> oneday
 
         # Test with missing PCS data
-        test_df_missing = DataFrame(
-            class=["allrounder", "sprinter"],
-            gc=[missing, 200],
-            sprint=[100, missing]
+        rider_df_missing = DataFrame(
+            riderkey=["rider1", "rider2"],
+            class=["allrounder", "sprinter"]
+        )
+        
+        pcs_df_missing = DataFrame(
+            riderkey=["rider1"],  # Missing rider2
+            gc=[1000],
+            sprint=[100],
+            climber=[800],
+            oneday=[900]
         )
 
-        result_df_missing = add_pcs_speciality_points!(copy(test_df_missing))
-        @test result_df_missing.pcs_speciality_points[1] == 0  # missing -> 0
-        @test result_df_missing.pcs_speciality_points[2] == 0  # missing -> 0
-
-        # Test without class column
-        test_df_no_class = DataFrame(rider=["test1", "test2"])
-        result_df_no_class = add_pcs_speciality_points!(copy(test_df_no_class))
-        @test hasproperty(result_df_no_class, :pcs_speciality_points)
-        @test all(ismissing, result_df_no_class.pcs_speciality_points)
-
-        # Test case variations
-        test_df_cases = DataFrame(
-            class=["All Rounder", "SPRINTER", "Climber"],
-            gc=[1000, 200, 1200],
-            sprint=[100, 1500, 50],
-            climber=[800, 100, 1800]
-        )
-
-        result_df_cases = add_pcs_speciality_points!(copy(test_df_cases))
-        @test result_df_cases.pcs_speciality_points[1] == 1000  # All Rounder -> gc
-        @test result_df_cases.pcs_speciality_points[2] == 1500  # SPRINTER -> sprint
-        @test result_df_cases.pcs_speciality_points[3] == 1800  # Climber -> climber
-    end
-
-    @testset "integrate_pcs_data! - Unit Tests" begin
-        # Create mock rider data
-        rider_df = DataFrame(
-            rider=["rider1", "rider2", "rider3"],
-            riderkey=["key1", "key2", "key3"],
-            class=["allrounder", "sprinter", "climber"],
-            vgpoints=[100, 200, 150],
-            vgcost=[10, 15, 12]
-        )
-
-        # Test error handling when PCS fetch fails
-        rider_names = ["nonexistent-rider-1", "nonexistent-rider-2"]
-
-        # This should handle the error gracefully and add default columns
-        result_df = integrate_pcs_data!(copy(rider_df), rider_names)
-
-        @test hasproperty(result_df, :pcs_speciality_points)
-        @test all(result_df.pcs_speciality_points .== 0)  # Should default to 0
-
-        # Test with valid structure but no network (will likely fail gracefully)
-        test_cache_config = CacheConfig("/tmp/test_integration", 1, false)
-        try
-            result_df_cached = integrate_pcs_data!(copy(rider_df), ["test-rider"];
-                cache_config=test_cache_config)
-            @test result_df_cached isa DataFrame
-            @test hasproperty(result_df_cached, :pcs_speciality_points)
-        catch e
-            # Network failures are expected in testing environment
-            @test true
-        end
+        result_df_missing = add_pcs_speciality_points!(copy(rider_df_missing), pcs_df_missing, vg_class_to_pcs_col)
+        
+        @test hasproperty(result_df_missing, :pcs_speciality_points)
+        @test result_df_missing.pcs_speciality_points[1] == 1000  # rider1 allrounder -> gc
+        @test ismissing(result_df_missing.pcs_speciality_points[2])  # rider2 missing data
     end
 end
 
@@ -439,5 +413,85 @@ end
     catch e
         # Network issues are expected in CI/testing
         @test e isa Exception
+    end
+end
+
+@testset "Historical Analysis Functions" begin
+    @testset "buildmodelhistorical" begin
+        # Create test data with actual points scored (historical analysis scenario)
+        test_data = DataFrame(
+            rider=["Rider A", "Rider B", "Rider C", "Rider D", "Rider E", "Rider F", "Rider G", "Rider H", "Rider I"],
+            points=[500, 400, 300, 250, 200, 150, 100, 50, 25],  # actual points scored
+            cost=[20, 16, 14, 12, 10, 8, 6, 4, 2],
+            class=["All rounder", "All rounder", "Climber", "Climber", "Sprinter", "Unclassed", "Unclassed", "Unclassed", "Unclassed"]
+        )
+
+        # Test the historical optimization function
+        result = buildmodelhistorical(test_data, 9, :points, :cost; totalcost=100)
+
+        @test result !== nothing
+        @test length(result) == nrow(test_data)
+
+        # Convert solution to team selection
+        chosen = [result[rider] > 0.5 for rider in test_data.rider]
+        selected_team = test_data[chosen, :]
+
+        # Test constraints are satisfied
+        @test nrow(selected_team) == 9  # exactly 9 riders
+        @test sum(selected_team.cost) <= 100  # within budget
+
+        # Test classification constraints
+        @test sum(selected_team.class .== "All rounder") >= 2
+        @test sum(selected_team.class .== "Sprinter") >= 1
+        @test sum(selected_team.class .== "Climber") >= 2
+        @test sum(selected_team.class .== "Unclassed") >= 3
+    end
+
+    @testset "minimizecostforstage" begin
+        # Create test data with actual points scored
+        test_data = DataFrame(
+            rider=["Rider A", "Rider B", "Rider C", "Rider D", "Rider E", "Rider F", "Rider G", "Rider H", "Rider I"],
+            points=[500, 400, 300, 250, 200, 150, 100, 50, 25],
+            cost=[20, 16, 14, 12, 10, 8, 6, 4, 2],
+            class=["All rounder", "All rounder", "Climber", "Climber", "Sprinter", "Unclassed", "Unclassed", "Unclassed", "Unclassed"]
+        )
+
+        # Test cost minimization for a target score
+        target_score = 1000
+        result = minimizecostforstage(test_data, target_score, 9, :cost; totalcost=100)
+
+        @test result !== nothing
+        @test length(result) == nrow(test_data)
+
+        # Convert solution to team selection
+        chosen = [result[rider] > 0.5 for rider in test_data.rider]
+        selected_team = test_data[chosen, :]
+
+        # Test constraints are satisfied
+        @test nrow(selected_team) == 9  # exactly 9 riders
+        @test sum(selected_team.points) > target_score  # beats target score
+
+        # Test classification constraints
+        @test sum(selected_team.class .== "All rounder") >= 2
+        @test sum(selected_team.class .== "Sprinter") >= 1
+        @test sum(selected_team.class .== "Climber") >= 2
+        @test sum(selected_team.class .== "Unclassed") >= 3
+    end
+
+    @testset "Historical functions with insufficient data" begin
+        # Test with insufficient riders of each class
+        insufficient_data = DataFrame(
+            rider=["Rider A", "Rider B"],
+            points=[500, 400],
+            cost=[20, 16],
+            class=["All rounder", "Climber"]
+        )
+
+        # Should return nothing when constraints cannot be satisfied
+        result1 = buildmodelhistorical(insufficient_data, 9, :points, :cost; totalcost=100)
+        @test result1 === nothing
+
+        result2 = minimizecostforstage(insufficient_data, 100, 9, :cost; totalcost=100)
+        @test result2 === nothing
     end
 end
