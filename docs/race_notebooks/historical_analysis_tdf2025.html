@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.31">
+<meta name="generator" content="quarto-1.8.24">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -23,7 +23,7 @@ ul.task-list li input[type="checkbox"] {
 </style>
 
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script><script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="../site_libs/quarto-nav/quarto-nav.js"></script>
 <script src="../site_libs/quarto-nav/headroom.min.js"></script>
 <script src="../site_libs/clipboard/clipboard.min.js"></script>
 <script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
@@ -32,14 +32,15 @@ ul.task-list li input[type="checkbox"] {
 <meta name="quarto:offset" content="../">
 <script src="../site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="../site_libs/quarto-html/popper.min.js"></script>
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-e1a5c8363afafaef2c763b6775fbf3ca.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dc55a5b9e770e841cd82e46aadbfb9b0.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-0626314e0a662c84ed7be5202fa45f0c.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-4d8b594121dd52e54118692cc759f5c0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -67,7 +68,7 @@ ul.task-list li input[type="checkbox"] {
     "search-label": "Search"
   }
 }</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" integrity="sha512-c3Nl8+7g4LMSTdrm621y7kf9v3SDPnhxLNhcjFJbKECVnmZHTdo+IRO05sNLTH/D3vA6u1X32ehoLC7WFVdheg==" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
 
 <script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
 
@@ -97,9 +98,8 @@ ul.task-list li input[type="checkbox"] {
 <!-- sidebar -->
   <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation docked overflow-auto">
     <div class="pt-lg-2 mt-2 text-left sidebar-header">
-    <div class="sidebar-title mb-0 py-0">
-      <a href="../">Velogames</a> 
-    </div>
+      <a href="../index.html" class="sidebar-logo-link">
+      </a>
       </div>
         <div class="mt-2 flex-shrink-0 align-items-center">
         <div class="sidebar-search">
@@ -120,6 +120,12 @@ ul.task-list li input[type="checkbox"] {
  <span class="menu-text">Tour de France 2025</span></a>
   </div>
 </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../race_notebooks/historical_analysis_vuelta2025.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Vuelta a España 2025</span></a>
+  </div>
+</li>
     </ul>
     </div>
 </nav>
@@ -132,14 +138,21 @@ ul.task-list li input[type="checkbox"] {
   <ul>
   <li><a href="#the-benefit-of-hindsight" id="toc-the-benefit-of-hindsight" class="nav-link active" data-scroll-target="#the-benefit-of-hindsight">The benefit of hindsight</a>
   <ul class="collapse">
-  <li><a href="#the-perfect-final-team" id="toc-the-perfect-final-team" class="nav-link" data-scroll-target="#the-perfect-final-team">The perfect final team</a></li>
-  <li><a href="#the-cheapest-winning-team" id="toc-the-cheapest-winning-team" class="nav-link" data-scroll-target="#the-cheapest-winning-team">The cheapest winning team</a></li>
-  <li><a href="#expensive-disappointments" id="toc-expensive-disappointments" class="nav-link" data-scroll-target="#expensive-disappointments">Expensive disappointments</a></li>
+  <li><a href="#optimal-team-composition" id="toc-optimal-team-composition" class="nav-link" data-scroll-target="#optimal-team-composition">Optimal team composition</a></li>
+  <li><a href="#minimum-winning-cost" id="toc-minimum-winning-cost" class="nav-link" data-scroll-target="#minimum-winning-cost">Minimum winning cost</a></li>
+  <li><a href="#high-cost-underperformers" id="toc-high-cost-underperformers" class="nav-link" data-scroll-target="#high-cost-underperformers">High-cost underperformers</a></li>
   </ul></li>
   <li><a href="#performance-analysis" id="toc-performance-analysis" class="nav-link" data-scroll-target="#performance-analysis">Performance analysis</a>
   <ul class="collapse">
   <li><a href="#points-vs-cost" id="toc-points-vs-cost" class="nav-link" data-scroll-target="#points-vs-cost">Points vs Cost</a></li>
   <li><a href="#value-vs-cost" id="toc-value-vs-cost" class="nav-link" data-scroll-target="#value-vs-cost">Value vs Cost</a></li>
+  <li><a href="#vs-historical-performance" id="toc-vs-historical-performance" class="nav-link" data-scroll-target="#vs-historical-performance">2025 vs historical performance</a>
+  <ul class="collapse">
+  <li><a href="#performance-vs-historical-average-above-average-riders" id="toc-performance-vs-historical-average-above-average-riders" class="nav-link" data-scroll-target="#performance-vs-historical-average-above-average-riders">Performance vs Historical Average: Above-Average Riders</a></li>
+  <li><a href="#performance-vs-historical-average-below-average-riders" id="toc-performance-vs-historical-average-below-average-riders" class="nav-link" data-scroll-target="#performance-vs-historical-average-below-average-riders">Performance vs Historical Average: Below-Average Riders</a></li>
+  <li><a href="#performance-change-distribution" id="toc-performance-change-distribution" class="nav-link" data-scroll-target="#performance-change-distribution">Performance Change Distribution</a></li>
+  <li><a href="#year-over-year-performance-matrix" id="toc-year-over-year-performance-matrix" class="nav-link" data-scroll-target="#year-over-year-performance-matrix">Year-over-Year Performance Matrix</a></li>
+  </ul></li>
   </ul></li>
   </ul>
 </nav>
@@ -167,16 +180,16 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p>The Tour de France 2025 is over, and what a race it was! Now that the dust has settled in Paris, it’s time to look back at the fantasy competition. Who were the riders that made the difference? Which high-cost stars delivered, and who would have formed the ultimate fantasy team with the benefit of hindsight?</p>
-<p>At the end of three weeks of thrilling racing, <strong>Marc Rediot</strong> won our fantasy league with a massive <strong>11048</strong> points. Their victory was built on a shrewd selection of riders who consistently performed across the entire race.</p>
+<p>The Tour de France 2025 has concluded. This analysis examines the fantasy competition results, identifying the highest-performing riders and the optimal team composition using complete race data.</p>
+<p>At the end of three weeks of racing, <strong>Marc Rediot</strong> won our fantasy league with <strong>11048</strong> points.</p>
 <section id="the-benefit-of-hindsight" class="level1">
 <h1>The benefit of hindsight</h1>
-<section id="the-perfect-final-team" class="level2">
-<h2 class="anchored" data-anchor-id="the-perfect-final-team">The perfect final team</h2>
-<p>With the benefit of knowing how the entire race played out, what would the optimal team have looked like? Using optimization, we can determine the highest-scoring combination of nine riders that fits within the budget and classification rules.</p>
-<p>The perfect final team would have scored 14216.0 points, costing 100 credits. That’s 3168.0 points more than our league winner!</p>
-<div id="f7bd8741" class="cell" data-execution_count="2">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="48">
+<section id="optimal-team-composition" class="level2">
+<h2 class="anchored" data-anchor-id="optimal-team-composition">Optimal team composition</h2>
+<p>Using complete race results, optimization analysis identifies the highest-scoring combination of nine riders within budget and classification constraints.</p>
+<p>The optimal team would have scored 14216.0 points at a cost of 100 credits—3168.0 points above the league winner.</p>
+<div id="30bcb967" class="cell" data-execution_count="2">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="4">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 21%">
@@ -274,20 +287,20 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 </section>
-<section id="the-cheapest-winning-team" class="level2">
-<h2 class="anchored" data-anchor-id="the-cheapest-winning-team">The cheapest winning team</h2>
-<p>While the perfect team shows the maximum possible score, what’s the <em>minimum</em> investment that could have secured victory in the Dulwich league? This section identifies the lowest-cost team that would have still beaten our league winner.</p>
-<p>This team scores 11270.0 points and costs just 78 credits.</p>
-<div id="21ea126d" class="cell" data-execution_count="3">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="50">
+<section id="minimum-winning-cost" class="level2">
+<h2 class="anchored" data-anchor-id="minimum-winning-cost">Minimum winning cost</h2>
+<p>Analysis of the lowest-cost team capable of defeating the league winner.</p>
+<p>This team scores 11141.0 points and costs just 76 credits.</p>
+<div id="71e79825" class="cell" data-execution_count="3">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="6">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 21%">
-<col style="width: 32%">
-<col style="width: 15%">
+<col style="width: 23%">
+<col style="width: 35%">
+<col style="width: 13%">
+<col style="width: 6%">
+<col style="width: 13%">
 <col style="width: 7%">
-<col style="width: 15%">
-<col style="width: 8%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -301,20 +314,36 @@ ul.task-list li input[type="checkbox"] {
 </thead>
 <tbody>
 <tr class="odd">
-<td>Jonas Vingegaard</td>
-<td>Team Visma - Lease a Bike</td>
-<td>All rounder</td>
-<td>24</td>
-<td>3200</td>
-<td>133</td>
-</tr>
-<tr class="even">
 <td>Jonathan Milan</td>
 <td>Lidl - Trek</td>
 <td>Sprinter</td>
 <td>12</td>
 <td>1343</td>
 <td>112</td>
+</tr>
+<tr class="even">
+<td>Florian Lipowitz</td>
+<td>Red Bull - BORA - hansgrohe</td>
+<td>All rounder</td>
+<td>12</td>
+<td>1683</td>
+<td>140</td>
+</tr>
+<tr class="odd">
+<td>Mathieu Van Der Poel</td>
+<td>Alpecin - Deceuninck</td>
+<td>Unclassed</td>
+<td>10</td>
+<td>1059</td>
+<td>106</td>
+</tr>
+<tr class="even">
+<td>Felix Gall</td>
+<td>Decathlon AG2R La Mondiale Team</td>
+<td>Climber</td>
+<td>10</td>
+<td>1272</td>
+<td>127</td>
 </tr>
 <tr class="odd">
 <td>Oscar Onley</td>
@@ -349,14 +378,6 @@ ul.task-list li input[type="checkbox"] {
 <td>111</td>
 </tr>
 <tr class="odd">
-<td>Jhonatan Narváez</td>
-<td>UAE Team Emirates - XRG</td>
-<td>Unclassed</td>
-<td>6</td>
-<td>653</td>
-<td>109</td>
-</tr>
-<tr class="even">
 <td>Tim Wellens</td>
 <td>UAE Team Emirates - XRG</td>
 <td>Unclassed</td>
@@ -364,24 +385,16 @@ ul.task-list li input[type="checkbox"] {
 <td>701</td>
 <td>117</td>
 </tr>
-<tr class="odd">
-<td>Pascal Eenkhoorn</td>
-<td>Soudal Quick-Step</td>
-<td>Unclassed</td>
-<td>4</td>
-<td>290</td>
-<td>72</td>
-</tr>
 </tbody>
 </table>
 </div>
 </div>
 </section>
-<section id="expensive-disappointments" class="level2">
-<h2 class="anchored" data-anchor-id="expensive-disappointments">Expensive disappointments</h2>
+<section id="high-cost-underperformers" class="level2">
+<h2 class="anchored" data-anchor-id="high-cost-underperformers">High-cost underperformers</h2>
 <p>These high-cost riders didn’t deliver the points their price tags demanded over the three weeks of racing:</p>
-<div id="e02209e5" class="cell" data-execution_count="4">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="51">
+<div id="74b5f597" class="cell" data-execution_count="4">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="7">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 25%">
@@ -446,9 +459,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="points-vs-cost" class="level3">
 <h3 class="anchored" data-anchor-id="points-vs-cost">Points vs Cost</h3>
 <p>First, let’s look at the raw performance: how many points each rider scored versus their cost. This helps us identify the high-scorers at every price point.</p>
-<div id="be5740b6" class="cell" data-cache="true" data-execution_count="5">
-<div class="cell-output cell-output-display" data-execution_count="52">
-    <div id="267d0e70-f856-4447-8260-75d0061ad241" style="width:800px;height:600px;"></div>
+<div id="72c7973d" class="cell" data-cache="true" data-execution_count="5">
+<div class="cell-output cell-output-display" data-execution_count="8">
+    <div id="7c9df915-4c96-4f72-9922-fb5712244805" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -459,7 +472,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('267d0e70-f856-4447-8260-75d0061ad241', [
+        Plotly.newPlot('7c9df915-4c96-4f72-9922-fb5712244805', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -489,23 +502,23 @@ ul.task-list li input[type="checkbox"] {
             "Eddie Dunbar<br>Team: Team Jayco AlUla<br>Class: All rounder<br>Cost: 6<br>Points: 165<br>Value: 27.5"
         ],
         "x": [
-            31.862832043078082,
-            23.872673279369202,
-            18.135017514058156,
-            16.141205390028375,
-            14.1145437774871,
-            12.04428279277215,
-            12.1013873641156,
-            9.894321305207583,
-            9.922942998501378,
-            7.930562523403986,
-            8.046235831331227,
-            7.940873367043813,
-            6.030747260085247,
-            5.855111254970554,
-            5.901229723639624,
-            6.013881661029509,
-            5.871543619465805
+            31.902072372738353,
+            23.94649848574734,
+            17.927575640985946,
+            15.8999315932257,
+            14.00810450213267,
+            12.14422729670894,
+            11.878329434571425,
+            10.146793506238726,
+            9.866589467894526,
+            8.093605559344756,
+            8.024063492807576,
+            7.877475504192342,
+            5.912480768886205,
+            5.909423904272514,
+            6.137332209150697,
+            6.095167338390832,
+            6.09061559068703
         ],
         "showlegend": true,
         "mode": "markers",
@@ -577,29 +590,29 @@ ul.task-list li input[type="checkbox"] {
             "Clément Champoussin<br>Team: XDS Astana Team <br>Class: Climber<br>Cost: 6<br>Points: 16<br>Value: 2.7"
         ],
         "x": [
-            12.101859020139585,
-            11.945950486908831,
-            10.102846045385167,
-            10.071038524142372,
-            10.064709973709185,
-            9.911793654691689,
-            7.867679409969836,
-            7.866989105460625,
-            7.943827337383385,
-            7.944516349517869,
-            5.989332516382334,
-            6.04534913691519,
-            5.87696780473153,
-            5.999513001205808,
-            5.892622242082856,
-            5.882909452406587,
-            5.921021930381,
-            6.089229286965166,
-            6.120286013733738,
-            5.8887298005876305,
-            5.869189886471485,
-            6.10902913632846,
-            5.875663449771848
+            12.090828765383993,
+            11.980174265851293,
+            9.90502874646101,
+            9.95425251669273,
+            10.03679416150938,
+            9.85809542574999,
+            8.101200636266876,
+            8.115947064192726,
+            8.012878779840257,
+            7.9508231423005995,
+            5.854828500806132,
+            6.080781255166175,
+            6.131955757090222,
+            5.960802091127078,
+            5.970112041282345,
+            6.069717996130445,
+            6.041571387172496,
+            6.143678232074001,
+            5.907420245351822,
+            5.907564299039033,
+            6.004572902618653,
+            5.97682407294079,
+            5.962104709326931
         ],
         "showlegend": true,
         "mode": "markers",
@@ -683,35 +696,35 @@ ul.task-list li input[type="checkbox"] {
             "Søren Wærenskjold<br>Team: Uno-X Mobility<br>Class: Sprinter<br>Cost: 6<br>Points: 327<br>Value: 54.5"
         ],
         "x": [
-            12.127634079760167,
-            12.063886012908432,
-            9.889957105657986,
-            8.142904047503746,
-            7.9481927864157305,
-            7.917484738132201,
-            8.00756377994903,
-            7.873732950883878,
-            5.955490512836401,
-            5.945393412882037,
-            5.973509949377516,
-            5.9732984091758565,
-            5.870577693192847,
-            6.07948116892267,
-            6.134566712122237,
-            6.057215905477716,
-            6.070141017176707,
-            6.001266381025868,
-            5.884274336761204,
-            5.975224844008032,
-            6.105552333639928,
-            6.058624849074048,
-            5.947360192271297,
-            6.077552534641796,
-            6.061618500580014,
-            5.992870870389907,
-            5.97053240642205,
-            6.110642456533981,
-            6.146048675828822
+            11.994906641090536,
+            11.967199016725948,
+            10.14359156134873,
+            8.040494154854235,
+            8.001333071256886,
+            8.09692083963521,
+            7.955124659409183,
+            8.130644292723513,
+            6.10584318617091,
+            6.146580902001249,
+            6.104762720774385,
+            6.0732660167927115,
+            5.942542023989153,
+            6.143315437127855,
+            6.144244267257505,
+            5.985826015931176,
+            6.038755161161932,
+            6.098651204846468,
+            5.943238999478729,
+            6.136883943733114,
+            6.059987417382121,
+            6.068369672607626,
+            6.113820528330795,
+            6.118661043697729,
+            5.9687414522416455,
+            6.064050346492205,
+            5.940578258596708,
+            5.879033965963249,
+            5.8899898539135025
         ],
         "showlegend": true,
         "mode": "markers",
@@ -887,121 +900,121 @@ ul.task-list li input[type="checkbox"] {
             "Fabian Lienhard<br>Team: Tudor Pro Cycling Team<br>Class: Unclassed<br>Cost: 4<br>Points: 12<br>Value: 3.0"
         ],
         "x": [
-            11.893327884327562,
-            9.877730212081802,
-            8.12136091538764,
-            7.896379792290842,
-            8.080504782042233,
-            5.985930200963707,
-            5.858224322655387,
-            6.045854086325169,
-            6.034619852004243,
-            6.044187583999965,
-            5.944504448654236,
-            6.050584766748001,
-            5.871334320300695,
-            6.02800381865165,
-            5.980510714102961,
-            6.067446580129339,
-            6.100858550453169,
-            6.075239534003,
-            5.859054923075731,
-            6.148332159967381,
-            5.946971980431039,
-            5.980820910620396,
-            5.886769484761375,
-            6.019849208983291,
-            5.998218287195522,
-            5.892675029029941,
-            6.009353329518193,
-            5.952787863269309,
-            5.931962276753187,
-            5.906302194826736,
-            6.084278871951329,
-            5.874969764999548,
-            6.127584038872612,
-            6.115415276447064,
-            6.1171787505639434,
-            5.986125941827667,
-            5.952215635671381,
-            6.000667558720352,
-            5.879038220364971,
-            6.098290352303127,
-            6.044177840958213,
-            5.986129446256594,
-            5.9443926481965494,
-            5.899790381059334,
-            5.932375601953381,
-            6.035627680839316,
-            6.1266980924499235,
-            6.0527956925322215,
-            6.118569514488867,
-            6.0474488299422715,
-            5.942280025280515,
-            5.98928448143455,
-            6.079476034156249,
-            6.024329011482161,
-            6.021585407730418,
-            5.9480898852414015,
-            5.9707088505203165,
-            6.0953399036036275,
-            5.906447811201092,
-            6.104845113126315,
-            6.031410950212015,
-            5.913748008094994,
-            6.062781713118316,
-            5.986062442164805,
-            5.864423399686977,
-            5.997850391191009,
-            5.991501188356265,
-            5.984675183248197,
-            6.036848926012186,
-            6.01424019806865,
-            5.942288323108094,
-            5.862507221469669,
-            5.944389009464036,
-            6.085648225997224,
-            5.975189034500542,
-            5.854408002413894,
-            5.917289645888992,
-            6.09520288146302,
-            5.8732149964748315,
-            6.087934240472845,
-            6.1383904823387105,
-            5.870896995283474,
-            6.030338463932696,
-            6.074466152177401,
-            3.8822506488172577,
-            4.0061990723987435,
-            4.008453811488933,
-            4.024263333193041,
-            4.086910576730066,
-            4.118191892645076,
-            3.904689131941513,
-            3.969862581153615,
-            3.9513440206895574,
-            3.909661391220622,
-            4.050654300458348,
-            3.880198780318862,
-            3.993703443312302,
-            4.102382205049407,
-            3.963882076124638,
-            4.039170199564267,
-            3.969281148537205,
-            3.882139159492736,
-            3.854686928823645,
-            4.019841952849278,
-            3.9981482925641236,
-            3.9615882783265772,
-            4.089325275362083,
-            4.0457268034963665,
-            3.865559831436738,
-            4.033498738081898,
-            4.009186888464354,
-            4.01496623639834,
-            4.105376229204849,
-            4.080020227706781,
-            4.03178909766459
+            12.01342742321505,
+            9.91336851159854,
+            8.04798797719848,
+            8.118751326704452,
+            7.871798171594071,
+            5.927477912795607,
+            6.000850846475987,
+            5.862744769912907,
+            5.970666049082128,
+            6.048605421473316,
+            5.8990602321645635,
+            6.149494211927678,
+            5.878504522282423,
+            6.0033768670708,
+            5.955439260123025,
+            6.146167807524508,
+            5.9528855238916085,
+            5.912844359567163,
+            5.9254256218918515,
+            5.928944345769791,
+            6.076291395426899,
+            6.143422646365815,
+            6.149563168057609,
+            6.05957485163003,
+            5.917264020388031,
+            6.05946899425629,
+            6.00913854122744,
+            5.99159348440895,
+            5.892705854951828,
+            6.068013203202466,
+            6.149628096000578,
+            5.868133120809354,
+            6.0012061476893095,
+            6.102090422699072,
+            6.129950395253556,
+            6.098045329976903,
+            5.8901665606775175,
+            6.003451597036935,
+            5.904766922521472,
+            6.077289177398472,
+            5.88604762367382,
+            5.924874630984913,
+            5.934557280331789,
+            5.909728259258782,
+            6.008998835754279,
+            5.850214576411351,
+            6.1206961560951285,
+            6.03733418563705,
+            6.082205212435608,
+            5.934072889350172,
+            5.861090190557036,
+            6.131186532070205,
+            5.864545101479461,
+            5.885199340692999,
+            6.047552025456016,
+            6.04432972426163,
+            5.916038956386262,
+            5.965734554804518,
+            6.132590214926167,
+            5.951094872137931,
+            6.077190308295811,
+            6.045510910441397,
+            5.9297974079082785,
+            5.944938763352607,
+            6.145491786868758,
+            5.89119794703261,
+            5.920357128551259,
+            5.865395544932034,
+            5.974616112751952,
+            6.100639305040931,
+            6.12698279850984,
+            6.065452205995044,
+            6.075635628298583,
+            5.927451946167111,
+            5.900526321965471,
+            6.054089239516185,
+            6.056448550224755,
+            6.081200684595982,
+            6.035919645640045,
+            5.995690339473792,
+            6.138165249065421,
+            5.881487216213355,
+            5.922291016379475,
+            5.883628750066162,
+            4.134600667663072,
+            3.907381748553648,
+            4.1322867500501435,
+            4.08892249918383,
+            3.981226677473874,
+            4.025071192661089,
+            4.113470490004056,
+            4.0831909774877175,
+            3.953537378525103,
+            4.0076844376540945,
+            4.130550114062651,
+            4.0640931778158125,
+            3.936525178959315,
+            3.976857901193846,
+            3.90468924138862,
+            4.114611596790416,
+            4.122497358587234,
+            3.8676424897412387,
+            4.0554756548197375,
+            3.909765270760796,
+            3.8767220972339054,
+            3.9751897967965544,
+            3.974523371912628,
+            4.134855895404586,
+            3.9666909024989883,
+            4.0311976756932415,
+            4.117646827133067,
+            3.9080486745133087,
+            4.029099478790142,
+            3.885174631891296,
+            4.098322756831322
         ],
         "showlegend": true,
         "mode": "markers",
@@ -1151,8 +1164,8 @@ ul.task-list li input[type="checkbox"] {
             30.0
         ],
         "range": [
-            3.0144425753960107,
-            32.703076396505715
+            3.026609593251324,
+            32.743105269228266
         ],
         "domain": [
             0.06846292650918635,
@@ -1304,8 +1317,8 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <p>The table below shows the top 15 point scorers from the race, who form the top end of the chart above.</p>
-<div id="11ae7a98" class="cell" data-execution_count="6">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="53">
+<div id="ffe3969f" class="cell" data-execution_count="6">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="9">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 28%">
@@ -1454,9 +1467,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="value-vs-cost" class="level3">
 <h3 class="anchored" data-anchor-id="value-vs-cost">Value vs Cost</h3>
 <p>Next, we’ll examine rider value (points per credit) against their cost. This view is crucial for identifying the most efficient, value-for-money riders in the game.</p>
-<div id="1650124f" class="cell" data-cache="true" data-execution_count="7">
-<div class="cell-output cell-output-display" data-execution_count="54">
-    <div id="bbb160b1-1ea4-463a-ae9b-65213ac6b864" style="width:800px;height:600px;"></div>
+<div id="e5a2ad4b" class="cell" data-cache="true" data-execution_count="7">
+<div class="cell-output cell-output-display" data-execution_count="10">
+    <div id="319d2527-9468-4523-bfd1-15465da27f6e" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -1467,7 +1480,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('bbb160b1-1ea4-463a-ae9b-65213ac6b864', [
+        Plotly.newPlot('319d2527-9468-4523-bfd1-15465da27f6e', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -1497,28 +1510,31 @@ ul.task-list li input[type="checkbox"] {
             "Eddie Dunbar<br>Team: Team Jayco AlUla<br>Class: All rounder<br>Cost: 6<br>Points: 165<br>Value: 27.5"
         ],
         "x": [
-            31.862832043078082,
-            23.872673279369202,
-            18.135017514058156,
-            16.141205390028375,
-            14.1145437774871,
-            12.04428279277215,
-            12.1013873641156,
-            9.894321305207583,
-            9.922942998501378,
-            7.930562523403986,
-            8.046235831331227,
-            7.940873367043813,
-            6.030747260085247,
-            5.855111254970554,
-            5.901229723639624,
-            6.013881661029509,
-            5.871543619465805
+            31.902072372738353,
+            23.94649848574734,
+            17.927575640985946,
+            15.8999315932257,
+            14.00810450213267,
+            12.14422729670894,
+            11.878329434571425,
+            10.146793506238726,
+            9.866589467894526,
+            8.093605559344756,
+            8.024063492807576,
+            7.877475504192342,
+            5.912480768886205,
+            5.909423904272514,
+            6.137332209150697,
+            6.095167338390832,
+            6.09061559068703
         ],
         "showlegend": true,
         "mode": "markers",
         "name": "All rounder",
         "legendgroup": "All rounder",
+        "config": {
+            "staticPlot": true
+        },
         "marker": {
             "symbol": "circle",
             "color": "rgba(0, 154, 250, 0.700)",
@@ -1585,34 +1601,37 @@ ul.task-list li input[type="checkbox"] {
             "Clément Champoussin<br>Team: XDS Astana Team <br>Class: Climber<br>Cost: 6<br>Points: 16<br>Value: 2.7"
         ],
         "x": [
-            12.101859020139585,
-            11.945950486908831,
-            10.102846045385167,
-            10.071038524142372,
-            10.064709973709185,
-            9.911793654691689,
-            7.867679409969836,
-            7.866989105460625,
-            7.943827337383385,
-            7.944516349517869,
-            5.989332516382334,
-            6.04534913691519,
-            5.87696780473153,
-            5.999513001205808,
-            5.892622242082856,
-            5.882909452406587,
-            5.921021930381,
-            6.089229286965166,
-            6.120286013733738,
-            5.8887298005876305,
-            5.869189886471485,
-            6.10902913632846,
-            5.875663449771848
+            12.090828765383993,
+            11.980174265851293,
+            9.90502874646101,
+            9.95425251669273,
+            10.03679416150938,
+            9.85809542574999,
+            8.101200636266876,
+            8.115947064192726,
+            8.012878779840257,
+            7.9508231423005995,
+            5.854828500806132,
+            6.080781255166175,
+            6.131955757090222,
+            5.960802091127078,
+            5.970112041282345,
+            6.069717996130445,
+            6.041571387172496,
+            6.143678232074001,
+            5.907420245351822,
+            5.907564299039033,
+            6.004572902618653,
+            5.97682407294079,
+            5.962104709326931
         ],
         "showlegend": true,
         "mode": "markers",
         "name": "Climber",
         "legendgroup": "Climber",
+        "config": {
+            "staticPlot": true
+        },
         "marker": {
             "symbol": "circle",
             "color": "rgba(227, 111, 71, 0.700)",
@@ -1691,40 +1710,43 @@ ul.task-list li input[type="checkbox"] {
             "Søren Wærenskjold<br>Team: Uno-X Mobility<br>Class: Sprinter<br>Cost: 6<br>Points: 327<br>Value: 54.5"
         ],
         "x": [
-            12.127634079760167,
-            12.063886012908432,
-            9.889957105657986,
-            8.142904047503746,
-            7.9481927864157305,
-            7.917484738132201,
-            8.00756377994903,
-            7.873732950883878,
-            5.955490512836401,
-            5.945393412882037,
-            5.973509949377516,
-            5.9732984091758565,
-            5.870577693192847,
-            6.07948116892267,
-            6.134566712122237,
-            6.057215905477716,
-            6.070141017176707,
-            6.001266381025868,
-            5.884274336761204,
-            5.975224844008032,
-            6.105552333639928,
-            6.058624849074048,
-            5.947360192271297,
-            6.077552534641796,
-            6.061618500580014,
-            5.992870870389907,
-            5.97053240642205,
-            6.110642456533981,
-            6.146048675828822
+            11.994906641090536,
+            11.967199016725948,
+            10.14359156134873,
+            8.040494154854235,
+            8.001333071256886,
+            8.09692083963521,
+            7.955124659409183,
+            8.130644292723513,
+            6.10584318617091,
+            6.146580902001249,
+            6.104762720774385,
+            6.0732660167927115,
+            5.942542023989153,
+            6.143315437127855,
+            6.144244267257505,
+            5.985826015931176,
+            6.038755161161932,
+            6.098651204846468,
+            5.943238999478729,
+            6.136883943733114,
+            6.059987417382121,
+            6.068369672607626,
+            6.113820528330795,
+            6.118661043697729,
+            5.9687414522416455,
+            6.064050346492205,
+            5.940578258596708,
+            5.879033965963249,
+            5.8899898539135025
         ],
         "showlegend": true,
         "mode": "markers",
         "name": "Sprinter",
         "legendgroup": "Sprinter",
+        "config": {
+            "staticPlot": true
+        },
         "marker": {
             "symbol": "circle",
             "color": "rgba(62, 164, 78, 0.700)",
@@ -1895,126 +1917,129 @@ ul.task-list li input[type="checkbox"] {
             "Fabian Lienhard<br>Team: Tudor Pro Cycling Team<br>Class: Unclassed<br>Cost: 4<br>Points: 12<br>Value: 3.0"
         ],
         "x": [
-            11.893327884327562,
-            9.877730212081802,
-            8.12136091538764,
-            7.896379792290842,
-            8.080504782042233,
-            5.985930200963707,
-            5.858224322655387,
-            6.045854086325169,
-            6.034619852004243,
-            6.044187583999965,
-            5.944504448654236,
-            6.050584766748001,
-            5.871334320300695,
-            6.02800381865165,
-            5.980510714102961,
-            6.067446580129339,
-            6.100858550453169,
-            6.075239534003,
-            5.859054923075731,
-            6.148332159967381,
-            5.946971980431039,
-            5.980820910620396,
-            5.886769484761375,
-            6.019849208983291,
-            5.998218287195522,
-            5.892675029029941,
-            6.009353329518193,
-            5.952787863269309,
-            5.931962276753187,
-            5.906302194826736,
-            6.084278871951329,
-            5.874969764999548,
-            6.127584038872612,
-            6.115415276447064,
-            6.1171787505639434,
-            5.986125941827667,
-            5.952215635671381,
-            6.000667558720352,
-            5.879038220364971,
-            6.098290352303127,
-            6.044177840958213,
-            5.986129446256594,
-            5.9443926481965494,
-            5.899790381059334,
-            5.932375601953381,
-            6.035627680839316,
-            6.1266980924499235,
-            6.0527956925322215,
-            6.118569514488867,
-            6.0474488299422715,
-            5.942280025280515,
-            5.98928448143455,
-            6.079476034156249,
-            6.024329011482161,
-            6.021585407730418,
-            5.9480898852414015,
-            5.9707088505203165,
-            6.0953399036036275,
-            5.906447811201092,
-            6.104845113126315,
-            6.031410950212015,
-            5.913748008094994,
-            6.062781713118316,
-            5.986062442164805,
-            5.864423399686977,
-            5.997850391191009,
-            5.991501188356265,
-            5.984675183248197,
-            6.036848926012186,
-            6.01424019806865,
-            5.942288323108094,
-            5.862507221469669,
-            5.944389009464036,
-            6.085648225997224,
-            5.975189034500542,
-            5.854408002413894,
-            5.917289645888992,
-            6.09520288146302,
-            5.8732149964748315,
-            6.087934240472845,
-            6.1383904823387105,
-            5.870896995283474,
-            6.030338463932696,
-            6.074466152177401,
-            3.8822506488172577,
-            4.0061990723987435,
-            4.008453811488933,
-            4.024263333193041,
-            4.086910576730066,
-            4.118191892645076,
-            3.904689131941513,
-            3.969862581153615,
-            3.9513440206895574,
-            3.909661391220622,
-            4.050654300458348,
-            3.880198780318862,
-            3.993703443312302,
-            4.102382205049407,
-            3.963882076124638,
-            4.039170199564267,
-            3.969281148537205,
-            3.882139159492736,
-            3.854686928823645,
-            4.019841952849278,
-            3.9981482925641236,
-            3.9615882783265772,
-            4.089325275362083,
-            4.0457268034963665,
-            3.865559831436738,
-            4.033498738081898,
-            4.009186888464354,
-            4.01496623639834,
-            4.105376229204849,
-            4.080020227706781,
-            4.03178909766459
+            12.01342742321505,
+            9.91336851159854,
+            8.04798797719848,
+            8.118751326704452,
+            7.871798171594071,
+            5.927477912795607,
+            6.000850846475987,
+            5.862744769912907,
+            5.970666049082128,
+            6.048605421473316,
+            5.8990602321645635,
+            6.149494211927678,
+            5.878504522282423,
+            6.0033768670708,
+            5.955439260123025,
+            6.146167807524508,
+            5.9528855238916085,
+            5.912844359567163,
+            5.9254256218918515,
+            5.928944345769791,
+            6.076291395426899,
+            6.143422646365815,
+            6.149563168057609,
+            6.05957485163003,
+            5.917264020388031,
+            6.05946899425629,
+            6.00913854122744,
+            5.99159348440895,
+            5.892705854951828,
+            6.068013203202466,
+            6.149628096000578,
+            5.868133120809354,
+            6.0012061476893095,
+            6.102090422699072,
+            6.129950395253556,
+            6.098045329976903,
+            5.8901665606775175,
+            6.003451597036935,
+            5.904766922521472,
+            6.077289177398472,
+            5.88604762367382,
+            5.924874630984913,
+            5.934557280331789,
+            5.909728259258782,
+            6.008998835754279,
+            5.850214576411351,
+            6.1206961560951285,
+            6.03733418563705,
+            6.082205212435608,
+            5.934072889350172,
+            5.861090190557036,
+            6.131186532070205,
+            5.864545101479461,
+            5.885199340692999,
+            6.047552025456016,
+            6.04432972426163,
+            5.916038956386262,
+            5.965734554804518,
+            6.132590214926167,
+            5.951094872137931,
+            6.077190308295811,
+            6.045510910441397,
+            5.9297974079082785,
+            5.944938763352607,
+            6.145491786868758,
+            5.89119794703261,
+            5.920357128551259,
+            5.865395544932034,
+            5.974616112751952,
+            6.100639305040931,
+            6.12698279850984,
+            6.065452205995044,
+            6.075635628298583,
+            5.927451946167111,
+            5.900526321965471,
+            6.054089239516185,
+            6.056448550224755,
+            6.081200684595982,
+            6.035919645640045,
+            5.995690339473792,
+            6.138165249065421,
+            5.881487216213355,
+            5.922291016379475,
+            5.883628750066162,
+            4.134600667663072,
+            3.907381748553648,
+            4.1322867500501435,
+            4.08892249918383,
+            3.981226677473874,
+            4.025071192661089,
+            4.113470490004056,
+            4.0831909774877175,
+            3.953537378525103,
+            4.0076844376540945,
+            4.130550114062651,
+            4.0640931778158125,
+            3.936525178959315,
+            3.976857901193846,
+            3.90468924138862,
+            4.114611596790416,
+            4.122497358587234,
+            3.8676424897412387,
+            4.0554756548197375,
+            3.909765270760796,
+            3.8767220972339054,
+            3.9751897967965544,
+            3.974523371912628,
+            4.134855895404586,
+            3.9666909024989883,
+            4.0311976756932415,
+            4.117646827133067,
+            3.9080486745133087,
+            4.029099478790142,
+            3.885174631891296,
+            4.098322756831322
         ],
         "showlegend": true,
         "mode": "markers",
         "name": "Unclassed",
         "legendgroup": "Unclassed",
+        "config": {
+            "staticPlot": true
+        },
         "marker": {
             "symbol": "circle",
             "color": "rgba(195, 113, 210, 0.700)",
@@ -2159,8 +2184,8 @@ ul.task-list li input[type="checkbox"] {
             30.0
         ],
         "range": [
-            3.0144425753960107,
-            32.703076396505715
+            3.026609593251324,
+            32.743105269228266
         ],
         "domain": [
             0.05735181539807524,
@@ -2312,8 +2337,8 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <p>These riders have outperformed their cost expectations, delivering exceptional value over the entire Tour. The table below shows all riders who achieved a value of over 100 points per credit.</p>
-<div id="da57fdb2" class="cell" data-execution_count="8">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="55">
+<div id="c09b3140" class="cell" data-execution_count="8">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="11">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 28%">
@@ -2466,8 +2491,1647 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
+</section>
+<section id="vs-historical-performance" class="level2">
+<h2 class="anchored" data-anchor-id="vs-historical-performance">2025 vs historical performance</h2>
+<p>Some riders overperformed compared to their historical averages, while others underperformed. This section compares the 2025 Tour de France performance against riders’ VeloGames performances in 2024 and 2023.</p>
+<div id="a526a1ef" class="cell" data-cache="true" data-execution_count="9">
+<div class="cell-output cell-output-stdout">
+<pre><code>📊 Collecting historical Tour de France data for comparison...
+📥 Fetching 2024 Tour de France results...
+   ✅ 2024 Tour data: 176 riders</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>📥 Fetching 2023 Tour de France results...
+   ✅ 2023 Tour data: 176 riders
+   ✅ Added 2024 data to comparison</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>   ✅ Added 2023 data to comparison
+📈 Historical comparison complete: 111 riders with historical Tour data</code></pre>
+</div>
+</div>
+<section id="performance-vs-historical-average-above-average-riders" class="level3">
+<h3 class="anchored" data-anchor-id="performance-vs-historical-average-above-average-riders">Performance vs Historical Average: Above-Average Riders</h3>
+<p>These riders significantly exceeded their 2023-2024 Tour de France averages in 2025:</p>
+<div id="4b4f41ba" class="cell" data-execution_count="10">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="13">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 23%">
+<col style="width: 25%">
+<col style="width: 11%">
+<col style="width: 5%">
+<col style="width: 10%">
+<col style="width: 12%">
+<col style="width: 11%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Rider</th>
+<th>Team</th>
+<th>Class</th>
+<th>Cost</th>
+<th>Points2025</th>
+<th>HistoricalAvg</th>
+<th>Improvement</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Oscar Onley</td>
+<td>Team Picnic PostNL</td>
+<td>Climber</td>
+<td>8</td>
+<td>1789</td>
+<td>102</td>
+<td>1687</td>
+</tr>
+<tr class="even">
+<td>Kévin Vauquelin</td>
+<td>Arkéa - B&amp;B Hotels</td>
+<td>All rounder</td>
+<td>6</td>
+<td>1361</td>
+<td>202</td>
+<td>1158</td>
+</tr>
+<tr class="odd">
+<td>Ben Healy</td>
+<td>EF Education - EasyPost</td>
+<td>Climber</td>
+<td>6</td>
+<td>1269</td>
+<td>210</td>
+<td>1058</td>
+</tr>
+<tr class="even">
+<td>Mathieu Van Der Poel</td>
+<td>Alpecin - Deceuninck</td>
+<td>Unclassed</td>
+<td>10</td>
+<td>1059</td>
+<td>190</td>
+<td>870</td>
+</tr>
+<tr class="odd">
+<td>Primož Roglič</td>
+<td>Red Bull - BORA - hansgrohe</td>
+<td>All rounder</td>
+<td>14</td>
+<td>1156</td>
+<td>304</td>
+<td>852</td>
+</tr>
+<tr class="even">
+<td>Tadej Pogačar</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>32</td>
+<td>4153</td>
+<td>3410</td>
+<td>743</td>
+</tr>
+<tr class="odd">
+<td>Tobias Halland Johannessen</td>
+<td>Uno-X Mobility</td>
+<td>All rounder</td>
+<td>10</td>
+<td>1048</td>
+<td>436</td>
+<td>612</td>
+</tr>
+<tr class="even">
+<td>Jordan Jegat</td>
+<td>Team TotalEnergies</td>
+<td>Unclassed</td>
+<td>6</td>
+<td>664</td>
+<td>86</td>
+<td>578</td>
+</tr>
+<tr class="odd">
+<td>Ben O’Connor</td>
+<td>Team Jayco AlUla</td>
+<td>Climber</td>
+<td>8</td>
+<td>813</td>
+<td>253</td>
+<td>560</td>
+</tr>
+<tr class="even">
+<td>Lenny Martinez</td>
+<td>Bahrain - Victorious</td>
+<td>Climber</td>
+<td>10</td>
+<td>590</td>
+<td>36</td>
+<td>554</td>
+</tr>
+<tr class="odd">
+<td>Matteo Jorgenson</td>
+<td>Team Visma - Lease a Bike</td>
+<td>All rounder</td>
+<td>12</td>
+<td>1386</td>
+<td>864</td>
+<td>522</td>
+</tr>
+<tr class="even">
+<td>Tim Wellens</td>
+<td>UAE Team Emirates - XRG</td>
+<td>Unclassed</td>
+<td>6</td>
+<td>701</td>
+<td>186</td>
+<td>515</td>
+</tr>
+<tr class="odd">
+<td>Romain Grégoire</td>
+<td>Groupama - FDJ</td>
+<td>Unclassed</td>
+<td>8</td>
+<td>511</td>
+<td>84</td>
+<td>428</td>
+</tr>
+<tr class="even">
+<td>Davide Ballerini</td>
+<td>XDS Astana Team</td>
+<td>Unclassed</td>
+<td>6</td>
+<td>431</td>
+<td>44</td>
+<td>387</td>
+</tr>
+<tr class="odd">
+<td>Jonas Vingegaard</td>
+<td>Team Visma - Lease a Bike</td>
+<td>All rounder</td>
+<td>24</td>
+<td>3200</td>
+<td>2824</td>
+<td>376</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="performance-vs-historical-average-below-average-riders" class="level3">
+<h3 class="anchored" data-anchor-id="performance-vs-historical-average-below-average-riders">Performance vs Historical Average: Below-Average Riders</h3>
+<p>These riders fell well short of their 2023-2024 Tour de France averages:</p>
+<div id="ce2e56bf" class="cell" data-execution_count="11">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="14">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 18%">
+<col style="width: 27%">
+<col style="width: 12%">
+<col style="width: 5%">
+<col style="width: 11%">
+<col style="width: 14%">
+<col style="width: 8%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Rider</th>
+<th>Team</th>
+<th>Class</th>
+<th>Cost</th>
+<th>Points2025</th>
+<th>HistoricalAvg</th>
+<th>Decline</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Jasper Philipsen</td>
+<td>Alpecin - Deceuninck</td>
+<td>Sprinter</td>
+<td>12</td>
+<td>329</td>
+<td>1708</td>
+<td>-1380</td>
+</tr>
+<tr class="even">
+<td>Adam Yates</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>10</td>
+<td>511</td>
+<td>1618</td>
+<td>-1108</td>
+</tr>
+<tr class="odd">
+<td>Carlos Rodríguez</td>
+<td>INEOS Grenadiers</td>
+<td>Climber</td>
+<td>10</td>
+<td>277</td>
+<td>1238</td>
+<td>-961</td>
+</tr>
+<tr class="even">
+<td>Bryan Coquard</td>
+<td>Cofidis</td>
+<td>Sprinter</td>
+<td>6</td>
+<td>120</td>
+<td>814</td>
+<td>-694</td>
+</tr>
+<tr class="odd">
+<td>João Almeida</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>16</td>
+<td>348</td>
+<td>894</td>
+<td>-546</td>
+</tr>
+<tr class="even">
+<td>Dylan Groenewegen</td>
+<td>Team Jayco AlUla</td>
+<td>Sprinter</td>
+<td>8</td>
+<td>122</td>
+<td>656</td>
+<td>-534</td>
+</tr>
+<tr class="odd">
+<td>Remco Evenepoel</td>
+<td>Soudal Quick-Step</td>
+<td>All rounder</td>
+<td>18</td>
+<td>900</td>
+<td>1310</td>
+<td>-410</td>
+</tr>
+<tr class="even">
+<td>Simon Yates</td>
+<td>Team Visma - Lease a Bike</td>
+<td>Climber</td>
+<td>12</td>
+<td>860</td>
+<td>1229</td>
+<td>-369</td>
+</tr>
+<tr class="odd">
+<td>Alex Aranburu</td>
+<td>Cofidis</td>
+<td>Sprinter</td>
+<td>6</td>
+<td>58</td>
+<td>364</td>
+<td>-306</td>
+</tr>
+<tr class="even">
+<td>Wout Van Aert</td>
+<td>Team Visma - Lease a Bike</td>
+<td>Unclassed</td>
+<td>12</td>
+<td>990</td>
+<td>1291</td>
+<td>-301</td>
+</tr>
+<tr class="odd">
+<td>Phil Bauhaus</td>
+<td>Bahrain - Victorious</td>
+<td>Sprinter</td>
+<td>6</td>
+<td>339</td>
+<td>637</td>
+<td>-298</td>
+</tr>
+<tr class="even">
+<td>Biniam Girmay</td>
+<td>Intermarché - Wanty</td>
+<td>Sprinter</td>
+<td>8</td>
+<td>789</td>
+<td>1074</td>
+<td>-284</td>
+</tr>
+<tr class="odd">
+<td>Guillaume Martin</td>
+<td>Groupama - FDJ</td>
+<td>Climber</td>
+<td>6</td>
+<td>278</td>
+<td>516</td>
+<td>-238</td>
+</tr>
+<tr class="even">
+<td>Michael Woods</td>
+<td>Israel - Premier Tech</td>
+<td>Climber</td>
+<td>6</td>
+<td>101</td>
+<td>316</td>
+<td>-214</td>
+</tr>
+<tr class="odd">
+<td>Pascal Ackermann</td>
+<td>Israel - Premier Tech</td>
+<td>Sprinter</td>
+<td>6</td>
+<td>270</td>
+<td>478</td>
+<td>-208</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section id="performance-change-distribution" class="level3">
+<h3 class="anchored" data-anchor-id="performance-change-distribution">Performance Change Distribution</h3>
+<div id="8c0bfffd" class="cell" data-execution_count="12">
+<div class="cell-output cell-output-display" data-execution_count="15">
+    <div id="b8f46dba-1ba7-44d5-a475-cf02ccb15f21" style="width:800px;height:500px;"></div>
+    <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
+    <script>
+    function plots_jl_plotly_init() {
+            requirejs.config({
+        paths: {
+            plotly: 'https://cdn.plot.ly/plotly-2.6.3.min'
+        }
+    });
+    require(['plotly'], function (Plotly) {
+
+        Plotly.newPlot('b8f46dba-1ba7-44d5-a475-cf02ccb15f21', [
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -1400.0,
+            -1400.0,
+            -1300.0,
+            -1300.0,
+            -1400.0,
+            -1400.0
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -1300.0,
+            -1300.0,
+            -1200.0,
+            -1200.0,
+            -1300.0,
+            -1300.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -1200.0,
+            -1200.0,
+            -1100.0,
+            -1100.0,
+            -1200.0,
+            -1200.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -1100.0,
+            -1100.0,
+            -1000.0,
+            -1000.0,
+            -1100.0,
+            -1100.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -1000.0,
+            -1000.0,
+            -900.0,
+            -900.0,
+            -1000.0,
+            -1000.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -900.0,
+            -900.0,
+            -800.0,
+            -800.0,
+            -900.0,
+            -900.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -800.0,
+            -800.0,
+            -700.0,
+            -700.0,
+            -800.0,
+            -800.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -700.0,
+            -700.0,
+            -600.0,
+            -600.0,
+            -700.0,
+            -700.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -600.0,
+            -600.0,
+            -500.0,
+            -500.0,
+            -600.0,
+            -600.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            2.0,
+            0.0,
+            0.0,
+            2.0,
+            2.0,
+            2.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -500.0,
+            -500.0,
+            -400.0,
+            -400.0,
+            -500.0,
+            -500.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -400.0,
+            -400.0,
+            -300.0,
+            -300.0,
+            -400.0,
+            -400.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            3.0,
+            0.0,
+            0.0,
+            3.0,
+            3.0,
+            3.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -300.0,
+            -300.0,
+            -200.0,
+            -200.0,
+            -300.0,
+            -300.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            5.0,
+            0.0,
+            0.0,
+            5.0,
+            5.0,
+            5.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -200.0,
+            -200.0,
+            -100.0,
+            -100.0,
+            -200.0,
+            -200.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            17.0,
+            0.0,
+            0.0,
+            17.0,
+            17.0,
+            17.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            -100.0,
+            -100.0,
+            0.0,
+            0.0,
+            -100.0,
+            -100.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            28.0,
+            0.0,
+            0.0,
+            28.0,
+            28.0,
+            28.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            0.0,
+            0.0,
+            100.0,
+            100.0,
+            0.0,
+            0.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            20.0,
+            0.0,
+            0.0,
+            20.0,
+            20.0,
+            20.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            100.0,
+            100.0,
+            200.0,
+            200.0,
+            100.0,
+            100.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            10.0,
+            0.0,
+            0.0,
+            10.0,
+            10.0,
+            10.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            200.0,
+            200.0,
+            300.0,
+            300.0,
+            200.0,
+            200.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            4.0,
+            0.0,
+            0.0,
+            4.0,
+            4.0,
+            4.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            300.0,
+            300.0,
+            400.0,
+            400.0,
+            300.0,
+            300.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            4.0,
+            0.0,
+            0.0,
+            4.0,
+            4.0,
+            4.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            400.0,
+            400.0,
+            500.0,
+            500.0,
+            400.0,
+            400.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            500.0,
+            500.0,
+            600.0,
+            600.0,
+            500.0,
+            500.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            5.0,
+            0.0,
+            0.0,
+            5.0,
+            5.0,
+            5.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            600.0,
+            600.0,
+            700.0,
+            700.0,
+            600.0,
+            600.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            700.0,
+            700.0,
+            800.0,
+            800.0,
+            700.0,
+            700.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            800.0,
+            800.0,
+            900.0,
+            900.0,
+            800.0,
+            800.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            2.0,
+            0.0,
+            0.0,
+            2.0,
+            2.0,
+            2.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            900.0,
+            900.0,
+            1000.0,
+            1000.0,
+            900.0,
+            900.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1000.0,
+            1000.0,
+            1100.0,
+            1100.0,
+            1000.0,
+            1000.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1100.0,
+            1100.0,
+            1200.0,
+            1200.0,
+            1100.0,
+            1100.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1200.0,
+            1200.0,
+            1300.0,
+            1300.0,
+            1200.0,
+            1200.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1300.0,
+            1300.0,
+            1400.0,
+            1400.0,
+            1300.0,
+            1300.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1400.0,
+            1400.0,
+            1500.0,
+            1500.0,
+            1400.0,
+            1400.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1500.0,
+            1500.0,
+            1600.0,
+            1600.0,
+            1500.0,
+            1500.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x1",
+        "fill": "tozeroy",
+        "yaxis": "y1",
+        "x": [
+            1600.0,
+            1600.0,
+            1700.0,
+            1700.0,
+            1600.0,
+            1600.0
+        ],
+        "showlegend": false,
+        "mode": "lines",
+        "fillcolor": "rgba(0, 154, 250, 0.700)",
+        "name": "y1",
+        "legendgroup": "y1",
+        "line": {
+            "color": "rgba(0, 0, 0, 0.700)",
+            "dash": "solid",
+            "width": 1
+        },
+        "y": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5069444444444445,
+            "title": "",
+            "len": 0.8925853018372704,
+            "x": 0.9950787401574803
+        },
+        "yaxis": "y",
+        "x": [
+            -1350.0,
+            -1250.0,
+            -1150.0,
+            -1050.0,
+            -950.0,
+            -850.0,
+            -750.0,
+            -650.0,
+            -550.0,
+            -450.0,
+            -350.0,
+            -250.0,
+            -150.0,
+            -50.0,
+            50.0,
+            150.0,
+            250.0,
+            350.0,
+            450.0,
+            550.0,
+            650.0,
+            750.0,
+            850.0,
+            950.0,
+            1050.0,
+            1150.0,
+            1250.0,
+            1350.0,
+            1450.0,
+            1550.0,
+            1650.0
+        ],
+        "showlegend": false,
+        "mode": "markers",
+        "name": "y1",
+        "legendgroup": "y1",
+        "marker": {
+            "symbol": "circle",
+            "color": "rgba(0, 154, 250, 0.000)",
+            "line": {
+                "color": "rgba(0, 0, 0, 0.000)",
+                "width": 1
+            },
+            "size": 0
+        },
+        "y": [
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            2.0,
+            1.0,
+            3.0,
+            5.0,
+            17.0,
+            28.0,
+            20.0,
+            10.0,
+            4.0,
+            4.0,
+            1.0,
+            5.0,
+            1.0,
+            1.0,
+            2.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+        ],
+        "type": "scatter"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.5069444444444445,
+            "title": "",
+            "len": 0.8925853018372704,
+            "x": 0.9950787401574803
+        },
+        "yaxis": "y",
+        "x": [
+            0.0,
+            0.0
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "name": "No Change",
+        "legendgroup": "No Change",
+        "line": {
+            "color": "rgba(255, 0, 0, 1.000)",
+            "shape": "linear",
+            "dash": "dash",
+            "width": 2
+        },
+        "y": [
+            -2800.0,
+            2828.0
+        ],
+        "type": "scatter"
+    }
+]
+, {
+    "showlegend": false,
+    "xaxis": {
+        "showticklabels": true,
+        "gridwidth": 0.5,
+        "tickvals": [
+            -1500.0,
+            -1000.0,
+            -500.0,
+            0.0,
+            500.0,
+            1000.0,
+            1500.0
+        ],
+        "range": [
+            -1591.5800000000002,
+            1891.5800000000002
+        ],
+        "domain": [
+            0.046240704286964134,
+            0.9950787401574803
+        ],
+        "mirror": false,
+        "tickangle": 0,
+        "showline": true,
+        "ticktext": [
+            "−1500",
+            "−1000",
+            "−500",
+            "0",
+            "500",
+            "1000",
+            "1500"
+        ],
+        "zeroline": false,
+        "tickfont": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 11
+        },
+        "zerolinecolor": "rgba(0, 0, 0, 1.000)",
+        "anchor": "y",
+        "visible": true,
+        "ticks": "inside",
+        "tickmode": "array",
+        "linecolor": "rgba(0, 0, 0, 1.000)",
+        "showgrid": true,
+        "title": "Performance Change vs Historical Average (Points)",
+        "gridcolor": "rgba(0, 0, 0, 0.100)",
+        "titlefont": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 15
+        },
+        "tickcolor": "rgb(0, 0, 0)",
+        "type": "-"
+    },
+    "paper_bgcolor": "rgba(255, 255, 255, 1.000)",
+    "annotations": [
+        {
+            "yanchor": "top",
+            "xanchor": "center",
+            "rotation": -0.0,
+            "y": 1.0,
+            "font": {
+                "color": "rgba(0, 0, 0, 1.000)",
+                "family": "sans-serif",
+                "size": 20
+            },
+            "yref": "paper",
+            "showarrow": false,
+            "text": "2025 Tour Performance vs 2023-2024 Average",
+            "xref": "paper",
+            "x": 0.5206597222222222
+        }
+    ],
+    "height": 500,
+    "margin": {
+        "l": 0,
+        "b": 20,
+        "r": 0,
+        "t": 20
+    },
+    "plot_bgcolor": "rgba(255, 255, 255, 1.000)",
+    "yaxis": {
+        "showticklabels": true,
+        "gridwidth": 0.5,
+        "tickvals": [
+            0.0,
+            5.0,
+            10.0,
+            15.0,
+            20.0,
+            25.0
+        ],
+        "range": [
+            0.0,
+            28.0
+        ],
+        "domain": [
+            0.060651793525809315,
+            0.9532370953630797
+        ],
+        "mirror": false,
+        "tickangle": 0,
+        "showline": true,
+        "ticktext": [
+            "0",
+            "5",
+            "10",
+            "15",
+            "20",
+            "25"
+        ],
+        "zeroline": false,
+        "tickfont": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 11
+        },
+        "zerolinecolor": "rgba(0, 0, 0, 1.000)",
+        "anchor": "x",
+        "visible": true,
+        "ticks": "inside",
+        "tickmode": "array",
+        "linecolor": "rgba(0, 0, 0, 1.000)",
+        "showgrid": true,
+        "title": "Number of Riders",
+        "gridcolor": "rgba(0, 0, 0, 0.100)",
+        "titlefont": {
+            "color": "rgba(0, 0, 0, 1.000)",
+            "family": "sans-serif",
+            "size": 15
+        },
+        "tickcolor": "rgb(0, 0, 0)",
+        "type": "-"
+    },
+    "width": 800
+}
+);
+        });
+    }
+    </script>
+<p>Distribution of 2025 performance changes compared to 2023-2024 historical averages</p>
+</div>
+</div>
+</section>
+<section id="year-over-year-performance-matrix" class="level3">
+<h3 class="anchored" data-anchor-id="year-over-year-performance-matrix">Year-over-Year Performance Matrix</h3>
+<p>This table shows the three-year performance pattern for riders who participated in all three Tours:</p>
+<div id="425eace8" class="cell" data-execution_count="13">
+<div class="cell-output cell-output-stdout">
+<pre><code>
+📈 = Improving trend, 📉 = Declining trend, 📊 = Mixed performance</code></pre>
+</div>
+</div>
 
 
+</section>
 </section>
 </section>
 
@@ -2523,13 +4187,14 @@ ul.task-list li input[type="checkbox"] {
       e.clearSelection();
     }
     const getTextToCopy = function(trigger) {
-        const codeEl = trigger.previousElementSibling.cloneNode(true);
-        for (const childEl of codeEl.children) {
-          if (isCodeAnnotation(childEl)) {
-            childEl.remove();
-          }
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
         }
-        return codeEl.innerText;
+      }
+      return codeEl.innerText;
     }
     const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
       text: getTextToCopy

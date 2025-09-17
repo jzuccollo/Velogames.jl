@@ -1,0 +1,512 @@
+---
+title: "Stage Race Team Optimization"
+subtitle: "Flexible multi-source scoring with manual include/exclude"
+execute:
+    cache: false
+freeze: false
+---
+
+## Configuration
+
+```{julia}
+#| echo: false
+using Velogames, DataFrames, Statistics, StatsBase, Printf, Markdown, MarkdownTables
+
+# Base/current roster URL (race-agnostic)
+current_url = "https://www.velogames.com/spain/2025/riders.php"
+
+# Flexible list of scoring sources (any length). Each item: (name, kind, url, weight)
+# Supported kinds:
+#  - :vg_current (base roster; weight typically 0.0; url required)
+#  - :vg_past    (historical VG results; url required)
+#  - :pcs_current (PCS general ranking; url ignored)
+#  - :pcs_race    (PCS race-specific page; url required)
+sources = [
+    (name="current", kind=:vg_current, url=current_url, weight=0.0),
+    (name="vg_2024", kind=:vg_past, url="https://www.velogames.com/spain/2024/riders.php", weight=0.3),
+    (name="vg_2023", kind=:vg_past, url="https://www.velogames.com/spain/2023/riders.php", weight=0.3),
+    (name="pcs", kind=:pcs_current, url=nothing, weight=0.0),
+]
+
+# Manual rider controls
+include_riders = String[]   # exact rider names to force include
+exclude_riders = String[]   # exact rider names to exclude
+
+# Team size and budget (stage race defaults)
+TEAM_SIZE = 9
+TOTAL_BUDGET = 100
+
+# Derive race slug for dynamic cache directory
+function slugify(url::AbstractString)
+    s = lowercase(replace(url, r"[^a-zA-Z0-9]+" => "-"))
+    s = replace(s, r"^-+|-+$" => "")
+    return isempty(s) ? "stage-race" : s
+end
+race_slug = slugify(current_url)
+cache_dir = joinpath(tempdir(), "vg_stage_" * race_slug)
+race_cache = CacheConfig(cache_dir, 12, true)
+
+# Small helpers for pretty headings in notebook output (robust to env)
+function heading(txt)
+    try
+        display(Markdown.parse("## " * txt))
+    catch
+        println("## " * txt)
+    end
+end
+function note(txt)
+    try
+        display(Markdown.parse(txt))
+    catch
+        println(txt)
+    end
+end
+
+# Report configuration summary and sources table
+note("""
+**Config**  
+- Base roster: $(current_url)  
+- Team size: $(TEAM_SIZE)  
+- Budget: $(TOTAL_BUDGET)  
+- Includes: $(isempty(include_riders) ? "(none)" : join(include_riders, ", "))  
+- Excludes: $(isempty(exclude_riders) ? "(none)" : join(exclude_riders, ", "))
+""")
+
+display(markdown_table(DataFrame(
+    name=[s.name for s in sources],
+    kind=[String(s.kind) for s in sources],
+    url=[string(s.url) for s in sources],
+    weight=[s.weight for s in sources]
+)))
+```
+
+## Load and merge sources
+
+```{julia}
+#| echo: false
+heading("Sources and weights")
+
+# Validate presence of a base vg_current
+if all(src -> src.kind != :vg_current, sources)
+    error("At least one source with kind :vg_current is required as the base roster")
+end
+
+# Loaders per kind
+function load_source(src)
+    name, kind, url = src.name, src.kind, src.url
+    if kind == :vg_current
+        df = getvgriders(url; cache_config=race_cache)
+        rename!(df, :points => :current_points, :cost => :vg_cost)
+        return (name=name, kind=kind, ok=true, df=df)
+    elseif kind == :vg_past
+        df = getvgriders(url; cache_config=race_cache)
+        col = Symbol("points_", name)
+        df = select(df, :riderkey, :rider, :team, :classraw, :points => col)
+        return (name=name, kind=kind, ok=true, df=df)
+    elseif kind == :pcs_current
+        df = getpcsranking("me", "individual"; cache_config=race_cache)
+        col = Symbol("pcs_points_", name)
+        @assert :riderkey in Symbol.(names(df)) "pcs_current source missing riderkey"
+        df = select(df, :riderkey, :rider, :points => col)
+        return (name=name, kind=kind, ok=true, df=df)
+    elseif kind == :pcs_race
+        df = getpcsraceranking(url; cache_config=race_cache)
+        # Harmonize to pcs_points_<name>
+        col = Symbol("pcs_points_", name)
+        @assert :riderkey in Symbol.(names(df)) "pcs_race source missing riderkey"
+        if :pcspoints in names(df)
+            df = select(df, [:riderkey, :rider, :pcspoints])
+            rename!(df, :pcspoints => col)
+        elseif :points in names(df)
+            df = select(df, :riderkey, :rider, :points => col)
+        elseif :pcsrank in names(df)
+            df = select(df, :riderkey, :rider, :pcsrank)
+            df[!, col] = [ismissing(r) || r == 0 ? 0.0 : 1.0 / r for r in df.pcsrank]
+            select!(df, Not(:pcsrank))
+        else
+            # Unknown shape
+            return (name=name, kind=kind, ok=false, df=DataFrame(riderkey=String[], rider=String[]))
+        end
+        return (name=name, kind=kind, ok=true, df=df)
+    else
+        return (name=name, kind=kind, ok=false, df=DataFrame())
+    end
+end
+
+loaded = NamedTuple[]
+for src in sources
+    try
+        push!(loaded, (; src..., load_source(src)...))
+    catch e
+        push!(loaded, (; src..., ok=false, df=DataFrame()))
+    end
+end
+
+# Build base and join others
+base_src = findfirst(x -> x.kind == :vg_current && x.ok, loaded)
+@assert base_src !== nothing "Base :vg_current failed to load"
+team_data = loaded[base_src].df
+
+# Strict required columns (convert names to Symbols for checks)
+cols_syms = Symbol.(names(team_data))
+@assert :riderkey in cols_syms "Base :vg_current missing riderkey"
+@assert :rider in cols_syms "Base :vg_current missing rider"
+@assert :team in cols_syms "Base :vg_current missing team"
+@assert :classraw in cols_syms "Base :vg_current missing classraw"
+if :vg_cost ∉ cols_syms
+    @assert :cost ∈ cols_syms "Base :vg_current missing vg_cost and cost"
+    rename!(team_data, :cost => :vg_cost)
+    cols_syms = Symbol.(names(team_data))
+end
+
+# Ensure class column present for constraints
+@assert :class ∈ cols_syms "Base :vg_current missing class (normalized)"
+
+# Join all non-base sources
+joined_cols = String[]
+for (i, src) in enumerate(loaded)
+    if i == base_src
+        continue
+    end
+    if src.ok && nrow(src.df) > 0
+        before_cols = Set(names(team_data))
+        team_data = leftjoin(team_data, src.df, on=:riderkey, makeunique=true)
+        newcols = setdiff(names(team_data), collect(before_cols))
+        newcols_syms = Symbol.(newcols)
+        append!(joined_cols, String.(newcols_syms))
+        # Fill missings with zeros for scoring columns
+        for c in newcols_syms
+            if eltype(team_data[!, c]) <: Union{Missing,Real}
+                team_data[ismissing.(team_data[!, c]), c] .= 0.0
+                team_data[!, c] = Float64.(team_data[!, c])
+            end
+        end
+    end
+end
+
+# Merge duplicate team/classraw columns if joins created variants
+team_like = filter(n -> startswith(n, "team"), names(team_data))
+if length(team_like) > 1
+    base_sym = :team
+    if base_sym in Symbol.(team_like)
+        for n in setdiff(Symbol.(team_like), [:team])
+            team_data[!, base_sym] = ifelse.(ismissing.(team_data[!, base_sym]) .| (String.(coalesce.(team_data[!, base_sym], "")) .== ""), team_data[!, n], team_data[!, base_sym])
+        end
+    end
+end
+classraw_like = filter(n -> startswith(n, "classraw"), names(team_data))
+if length(classraw_like) > 1
+    base_sym = :classraw
+    if base_sym in Symbol.(classraw_like)
+        for n in setdiff(Symbol.(classraw_like), [:classraw])
+            team_data[!, base_sym] = ifelse.(ismissing.(team_data[!, base_sym]) .| (String.(coalesce.(team_data[!, base_sym], "")) .== ""), team_data[!, n], team_data[!, base_sym])
+        end
+    end
+end
+
+# Show a compact sources summary table
+summary_df = DataFrame(
+    name=[l.name for l in loaded],
+    kind=[String(l.kind) for l in loaded],
+    weight=[l.weight for l in loaded],
+    ok=[l.ok for l in loaded],
+    rows=[l.ok ? nrow(l.df) : 0 for l in loaded]
+)
+display(markdown_table(summary_df))
+for l in loaded
+    if l.weight > 0 && (!l.ok || nrow(l.df) == 0)
+        error("Weighted source '$(l.name)' failed to load or returned 0 rows")
+    end
+end
+note("> Base roster rows: $(nrow(team_data)) | Joined cols: $(join(joined_cols, ", "))")
+```
+
+## Composite scoring (arbitrary sources)
+
+```{julia}
+#| echo: false
+heading("Scoring setup and normalization")
+
+# Identify scoring columns and normalize weights across available ones
+weight_map = Dict{Symbol,Float64}()
+for l in loaded
+    if !l.ok
+        continue
+    end
+    if l.kind == :vg_current
+        continue
+    end
+    # Determine candidate source columns (names() returns Strings)
+    candidate_names = [c for c in names(team_data) if startswith(c, "points_") || startswith(c, "pcs_points_")]
+    candidate_syms = Symbol.(candidate_names)
+    # Prefer the column that ends with the source name if present
+    idx = findfirst(n -> endswith(n, l.name), candidate_names)
+    if idx !== nothing
+        weight_map[candidate_syms[idx]] = l.weight
+    else
+        # Fallback: last candidate
+        if !isempty(candidate_syms)
+            weight_map[candidate_syms[end]] = l.weight
+        end
+    end
+end
+
+# Normalize over positive weights
+active_cols = collect(keys(weight_map))
+total_w = sum(values(weight_map))
+if total_w <= 0
+    # Fallback to current points if no external weights
+    team_data[!, :composite_score] = StatsBase.zscore(Float64.(coalesce.(team_data.current_points, 0)))
+    normalized_weights = DataFrame(source_col=[:current_points], weight=[1.0])
+else
+    # Z-scores for each active column; guard zero variance
+    for col in active_cols
+        data = Float64.(coalesce.(team_data[!, col], 0.0))
+        if std(data) > 0
+            team_data[!, Symbol("z_", col)] = StatsBase.zscore(data)
+        else
+            team_data[!, Symbol("z_", col)] = zeros(Float64, nrow(team_data))
+        end
+    end
+    # Normalize weights
+    normalized = Dict(k => v / total_w for (k, v) in weight_map)
+    # Composite
+    comp = zeros(Float64, nrow(team_data))
+    for (col, w) in normalized
+        comp .+= w .* team_data[!, Symbol("z_", col)]
+    end
+    team_data[!, :composite_score] = comp
+    # Prepare a stable list of source cols for display
+    ordered_cols = collect(keys(normalized))
+    normalized_weights = DataFrame(source_col=String.(ordered_cols), weight=[normalized[c] for c in ordered_cols])
+end
+
+display(markdown_table(normalized_weights))
+note("> Active scoring columns: $(join([string(c) for c in active_cols], ", ")) | Total weight: $(round(total_w, digits=2))")
+```
+
+## Manual includes/excludes and optimization
+
+```{julia}
+#| echo: false
+heading("Optimization")
+
+# Exclude riders outright
+if !isempty(exclude_riders)
+    team_data = filter(:rider => r -> !(r in exclude_riders), team_data)
+end
+
+# Force-include riders by boosting their score extremely
+include_set = Set(include_riders)
+if !isempty(include_set)
+    # Feasibility quick check against typical class counts (2 AR, 2 C, 1 S, 4 U)
+    # Map classraw into normalized class keys used in constraints
+    class_map = Dict(
+        "allrounder" => :allrounder,
+        "climber" => :climber,
+        "sprinter" => :sprinter,
+        "unclassed" => :unclassed,
+    )
+    req = Dict(:allrounder => 2, :climber => 2, :sprinter => 1, :unclassed => 4)
+    counts = Dict(k => 0 for k in keys(req))
+    for row in eachrow(team_data)
+        if row.rider in include_set
+            cls = get(class_map, String(row.classraw), :unclassed)
+            counts[cls] += 1
+        end
+    end
+    infeasible = any(counts[k] > req[k] for k in keys(req))
+    if infeasible
+        note("> ⚠️ Some included riders exceed position limits (AR/C/S/U). Remove some includes or adjust selection.")
+    else
+        team_data[!, :composite_score] = team_data.composite_score .+ ifelse.(team_data.rider .∈ include_set, 1e6, 0.0)
+    end
+end
+
+# Value metric for reporting
+team_data[!, :value] = team_data.composite_score ./ team_data.vg_cost
+nothing
+
+# Report manual overrides
+note("Excluded riders: " * (isempty(exclude_riders) ? "(none)" : join(exclude_riders, ", ")))
+note("Force-included riders: " * (isempty(include_riders) ? "(none)" : join(include_riders, ", ")))
+```
+
+## Team Optimization
+
+```{julia}
+#| echo: false
+optimization_success = false
+optimal_team = DataFrame()
+
+# Use stage race constraints by default; fallback to one-day if class counts insufficient
+try
+    # Ensure core columns are present
+    required_cols = [:rider, :vg_cost, :composite_score]
+    missing_cols = setdiff(required_cols, Symbol.(names(team_data)))
+
+    if !isempty(missing_cols)
+        throw(ArgumentError("Missing required columns: $missing_cols"))
+    end
+
+    # Basic sanity: drop any rows with missing or non-finite values in key columns
+    team_data = filter(:vg_cost => x -> isfinite(x) && !ismissing(x), team_data)
+    team_data = filter(:composite_score => x -> isfinite(x) && !ismissing(x), team_data)
+    if nrow(team_data) < TEAM_SIZE
+        throw(ArgumentError("Insufficient riders after cleaning: $(nrow(team_data)) < TEAM_SIZE=$(TEAM_SIZE)"))
+    end
+
+    # Strict class minima check; fail fast if insufficient
+    req = Dict(:allrounder => 2, :climber => 2, :sprinter => 1, :unclassed => 3)
+    avail = Dict(k => (k in Symbol.(names(team_data)) ? sum(Bool.(team_data[!, k])) : 0) for k in keys(req))
+    insufficient = [k for k in keys(req) if avail[k] < req[k]]
+    @assert isempty(insufficient) "Insufficient classified riders: $(join([string(k)*":"*string(avail[k])*"<"*string(req[k]) for k in insufficient], ", "))"
+
+    # Call the stage optimization function
+    solution = buildmodelstage(team_data, TEAM_SIZE, :composite_score, :vg_cost; totalcost=TOTAL_BUDGET)
+
+    if solution !== nothing
+        # Convert JuMP DenseAxisArray or Vector to Boolean vector in DataFrame row order
+        chosen_values = Vector{Bool}(undef, nrow(team_data))
+        success = false
+        try
+            # Try DenseAxisArray indexed by rider name
+            chosen_values .= [solution[r] > 0.5 for r in team_data.rider]
+            success = true
+        catch
+            # Fallback: positionally if lengths match
+            if length(solution) == nrow(team_data)
+                chosen_values .= [solution[i] > 0.5 for i in 1:nrow(team_data)]
+                success = true
+            end
+        end
+        if !success
+            throw(ArgumentError("Unexpected solution shape; cannot map to riders."))
+        end
+        team_data[!, :chosen] = chosen_values
+        global optimal_team = filter(:chosen => ==(true), team_data)
+
+        global optimization_success = true
+    else
+        note("> ❌ No feasible solution found or invalid solution length")
+        global optimization_success = false
+    end
+
+catch e
+    note("> ❌ Optimization failed: $(e) ($(typeof(e)))")
+    global optimization_success = false
+end
+nothing
+```
+
+## Results
+
+```{julia}
+#| echo: false
+if optimization_success && @isdefined(optimal_team)
+    heading("Optimal team")
+
+    # Prepare display data
+    display_team = sort(optimal_team, [:classraw, :vg_cost], rev=[false, true])
+
+    # Clean team names
+    if hasproperty(display_team, :team)
+        display_team = transform(display_team, :team => ByRow(x -> Velogames.unpipe(x)) => :team)
+    end
+
+    # Select display columns (include up to two source columns if present)
+    display_cols = [:rider, :team, :classraw, :vg_cost, :composite_score]
+    src_cols_all = [c for c in names(display_team) if startswith(string(c), "points_") || startswith(string(c), "pcs_points_")]
+    src_cols = Symbol.(src_cols_all[1:min(2, length(src_cols_all))])
+
+    # Display the team
+    final_display = display_team[:, vcat(display_cols, src_cols)]
+    if :composite_score in names(final_display)
+        final_display[!, :composite_score] = round.(final_display.composite_score, digits=2)
+    end
+    for c in src_cols
+        if eltype(final_display[!, c]) <: Real
+            final_display[!, c] = round.(final_display[!, c])
+        end
+    end
+
+    display(markdown_table(final_display))
+
+    # Team statistics table
+    stats = DataFrame(
+        metric=["Total Cost", "Average Composite Score", "Average Value"],
+        value=[string(sum(optimal_team.vg_cost), " credits"),
+            string(round(mean(optimal_team.composite_score), digits=2)),
+            string(round(mean(optimal_team.value), digits=2))]
+    )
+    display(markdown_table(stats))
+
+    # Classification summary
+    class_cols = intersect(["allrounder", "sprinter", "climber", "unclassed"], names(optimal_team))
+    if !isempty(class_cols)
+        comp = DataFrame(class=String[], count=Int[])
+        for col in class_cols
+            push!(comp, (class=uppercasefirst(col), count=sum(optimal_team[:, col])))
+        end
+        display(markdown_table(comp))
+    end
+
+else
+    note("> ❌ Team optimization failed - no results to display")
+end
+```
+
+## Top Performers by Source
+
+```{julia}
+#| echo: false
+
+# how many riders to display in each top section
+top_riders_count = 10
+
+if @isdefined(team_data)
+    # heading("Top performers by source")  # Removed duplicate heading
+
+    # Show top by each active scoring column
+    for col in names(team_data)
+        if startswith(string(col), "pcs_points_") || startswith(string(col), "points_")
+            note("\n**Source: $(string(col))**")  # Added per-source heading
+            df = sort(team_data, col, rev=true)[1:min(top_riders_count, nrow(team_data)), :]
+            view_cols = intersect([:rider, :team, :vg_cost, col, :value], Symbol.(names(df)))
+            display(markdown_table(df[:, view_cols]))
+        end
+    end
+
+    # Top by value
+    note("\n**Top $(top_riders_count) by Value (Score/Cost):**")
+    top_value = sort(team_data, :value, rev=true)[1:min(top_riders_count, nrow(team_data)), :]
+    display(markdown_table(top_value[:, [:rider, :team, :vg_cost, :value]]))
+end
+```
+
+## Top Performers by Classification
+
+```{julia}
+#| echo: false
+if @isdefined(team_data) && :classraw in propertynames(team_data)
+    heading("Top performers by classification")
+    for class in unique(team_data.classraw)
+        note("\n**Top $(top_riders_count) in $(class):**")
+        class_df = filter(:classraw => ==(class), team_data)
+        top_class = sort(class_df, :composite_score, rev=true)[1:min(top_riders_count, nrow(class_df)), :]
+        # Round relevant columns to 0 decimal places
+        for c in names(top_class)
+            if startswith(string(c), "points_") || startswith(string(c), "pcs_points_")
+                if eltype(top_class[!, c]) <: Real
+                    top_class[!, c] = round.(top_class[!, c])
+                end
+            end
+        end
+        view_cols = intersect([:rider, :team, :vg_cost, :composite_score], Symbol.(names(top_class)))
+        # include up to two source columns for context
+        src_cols_all = [c for c in names(top_class) if startswith(string(c), "points_") || startswith(string(c), "pcs_points_")]
+        src_cols = Symbol.(src_cols_all[1:min(2, length(src_cols_all))])
+        display(markdown_table(top_class[:, vcat(view_cols, src_cols)]))
+    end
+end
+```
