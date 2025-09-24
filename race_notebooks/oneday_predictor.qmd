@@ -13,14 +13,15 @@ using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Race Configuration
 raceurl = "https://www.velogames.com/sixes-superclasico/2025/riders.php"
-racehash = "#Donostia"  # Leave empty if not available
+racestartlistquality = "https://www.procyclingstats.com/race/world-championship/2025/startlist/startlist-quality"
+racehash = "#WorldChamps"  # Leave empty if not available
 
 # Optimization Weights (must sum to 1.0)
 vg_weight = 0.5    # VeloGames current season performance
 pcs_weight = 0.5   # Professional rankings weight
 
 # Exclusions (add rider names to avoid)
-excluded_riders = String[]
+excluded_riders = String["Quinten Hermans"]
 
 # Cache Configuration
 race_cache = CacheConfig("/tmp/oneday_predictor_v2", 6, true)
@@ -46,10 +47,22 @@ else
     println("VeloGames: $(nrow(vgdata)) total riders (no race filter)")
 end
 
+# Remove any riders that have been explicitly excluded
+if !isempty(excluded_riders) && (:rider in propertynames(vgdata))
+    before_exclusions = nrow(vgdata)
+    vgdata = subset(vgdata, :rider => ByRow(r -> !(r in excluded_riders)))
+    removed = before_exclusions - nrow(vgdata)
+    if removed > 0
+        println("🚫 Excluded $removed rider(s) via configuration")
+    else
+        println("ℹ️ No riders matched the exclusion list")
+    end
+end
+
 # For race-specific PCS data, try getpcsraceranking if racehash is provided
 if !isempty(racehash) && racehash != ""
     try
-        pcsdata = getpcsraceranking("https://www.procyclingstats.com/race/san-sebastian/2025/startlist/startlist-quality"; cache_config=race_cache)
+        pcsdata = getpcsraceranking(racestartlistquality; cache_config=race_cache)
         pcsdata = select(pcsdata, :rider, :pcspoints, :pcsrank, :riderkey)
         # Use inverse of pcsrank as pcs points
         pcsdata[!, :pcspoints] = [ismissing(r) ? missing : 1.0 / r for r in pcsdata.pcsrank]
@@ -72,6 +85,15 @@ merged = leftjoin(vgdata, pcsdata, on=:riderkey, makeunique=true)
 complete_data = subset(merged,
     [:points, :cost, :pcspoints] => ByRow((p, c, p1) -> !any(ismissing, [p, c, p1])))
 println("Complete data: $(nrow(complete_data)) riders")
+
+if !isempty(excluded_riders) && (:rider in propertynames(complete_data))
+    before_complete_exclusions = nrow(complete_data)
+    complete_data = subset(complete_data, :rider => ByRow(r -> !(r in excluded_riders)))
+    removed_complete = before_complete_exclusions - nrow(complete_data)
+    if removed_complete > 0
+        println("🚫 Removed $removed_complete excluded rider(s) from optimization dataset")
+    end
+end
 
 if nrow(complete_data) >= 6
     # Z-score normalization
