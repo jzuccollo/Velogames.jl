@@ -27,6 +27,25 @@ function gettable(pageurl::String)
     # cast points column to number
     riderdf[!, :points] = parse.(Float64, riderdf[!, :points])
 
+
+    # Process 'selected' column as numeric proportion, if it exists
+    if hasproperty(riderdf, :selected)
+        riderdf.selected = [
+            try
+                s = strip(s)
+                if occursin("%", s)
+                    parse(Float64, replace(s, "%" => "")) / 100
+                elseif tryparse(Float64, s) !== nothing
+                    parse(Float64, s)
+                else
+                    missing
+                end
+            catch
+                missing
+            end for s in riderdf.selected
+        ]
+    end
+
     # add a riderkey column based on the name
     riderdf.riderkey = map(x -> createkey(x), riderdf.rider)
 

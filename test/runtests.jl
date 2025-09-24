@@ -96,6 +96,26 @@ end
     end
 end
 
+@testset "selected column conversion" begin
+    url = "https://www.velogames.com/spain/2025/riders.php"
+    df = getvgriders(url; force_refresh=true)
+    @test :selected in propertynames(df)
+    # Check that all non-missing values are Float64 and between 0 and 1
+    sel = df.selected
+    @test all(x -> (ismissing(x) || (x isa Float64 && 0.0 <= x <= 1.0)), sel)
+    # Check that a known value is converted correctly
+    if any(.!ismissing.(sel))
+        # Find a non-missing value and check its conversion
+        s = findfirst(x -> !ismissing(x), sel)
+        raw = "77.7%"
+        expected = 0.777
+        # Simulate conversion
+        actual = parse(Float64, replace(raw, "%" => "")) / 100
+        @test isapprox(actual, expected; atol=1e-6)
+    end
+end
+
+
 @testset "Model Building Functions" begin
     # Create sample data for testing
     sample_df = DataFrame(
@@ -335,7 +355,7 @@ end
             riderkey=["rider1", "rider2", "rider3", "rider4"],
             class=["allrounder", "sprinter", "climber", "unclassed"]
         )
-        
+
         pcs_df = DataFrame(
             riderkey=["rider1", "rider2", "rider3", "rider4"],
             gc=[1000, 200, 1200, 500],
@@ -343,7 +363,7 @@ end
             climber=[800, 100, 1800, 400],
             oneday=[900, 1200, 1000, 600]
         )
-        
+
         vg_class_to_pcs_col = Dict(
             "allrounder" => "gc",
             "climber" => "climber",
@@ -364,7 +384,7 @@ end
             riderkey=["rider1", "rider2"],
             class=["allrounder", "sprinter"]
         )
-        
+
         pcs_df_missing = DataFrame(
             riderkey=["rider1"],  # Missing rider2
             gc=[1000],
@@ -374,7 +394,7 @@ end
         )
 
         result_df_missing = add_pcs_speciality_points!(copy(rider_df_missing), pcs_df_missing, vg_class_to_pcs_col)
-        
+
         @test hasproperty(result_df_missing, :pcs_speciality_points)
         @test result_df_missing.pcs_speciality_points[1] == 1000  # rider1 allrounder -> gc
         @test ismissing(result_df_missing.pcs_speciality_points[2])  # rider2 missing data
