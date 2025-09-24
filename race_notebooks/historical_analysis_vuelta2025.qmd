@@ -363,3 +363,43 @@ markdown_table(class_summary)
     dpi=300
 )
 ```
+
+## Impact on League Rankings: Points For and Against
+
+The following sections show which riders had the biggest impact on league rankings, based on their points and ownership levels.
+
+### Riders Sorted by "Points For"
+
+Riders who delivered the most points to teams that owned them, weighted by the percentage of teams that did **not** own them. This highlights the riders who gave the biggest boost to their owners' league rankings.
+
+```{julia}
+#| echo: false
+#| output: asis
+
+# Calculate points_for = points * (1 - selected)
+allriderdata.points_for = allriderdata.points .* (1 .- allriderdata.selected)
+points_for_sorted = sort(allriderdata, :points_for, rev=true)[1:min(15, nrow(allriderdata)), :]
+points_for_display = select(points_for_sorted, :rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :Points, :selected => :Selected, :points_for => :PointsFor)
+points_for_display[!, :Points] = Int.(round.(points_for_display.Points))
+points_for_display[!, :PointsFor] = Int.(round.(points_for_display.PointsFor))
+points_for_display[!, :Selected] = string.(round.(points_for_display.Selected .* 100, digits=1), "%")
+markdown_table(points_for_display)
+```
+
+### Riders Sorted by "Points Against"
+
+Riders who, by combining high ownership with high points, did the most damage to your league rank if you **didn't** own them. This is calculated as points * selected.
+
+```{julia}
+#| echo: false
+#| output: asis
+
+# Calculate points_against = points * selected
+allriderdata.points_against = allriderdata.points .* allriderdata.selected
+points_against_sorted = sort(allriderdata, :points_against, rev=true)[1:min(15, nrow(allriderdata)), :]
+points_against_display = select(points_against_sorted, :rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :Points, :selected => :Selected, :points_against => :PointsAgainst)
+points_against_display[!, :Points] = Int.(round.(points_against_display.Points))
+points_against_display[!, :PointsAgainst] = Int.(round.(points_against_display.PointsAgainst))
+points_against_display[!, :Selected] = string.(round.(points_against_display.Selected .* 100, digits=1), "%")
+markdown_table(points_against_display)
+```

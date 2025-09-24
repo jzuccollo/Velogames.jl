@@ -144,6 +144,11 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#value-vs-cost" id="toc-value-vs-cost" class="nav-link" data-scroll-target="#value-vs-cost">Value vs Cost</a></li>
   <li><a href="#high-cost-underperformers" id="toc-high-cost-underperformers" class="nav-link" data-scroll-target="#high-cost-underperformers">High-Cost Underperformers</a></li>
   <li><a href="#distribution-by-classification" id="toc-distribution-by-classification" class="nav-link" data-scroll-target="#distribution-by-classification">Distribution by Classification</a></li>
+  <li><a href="#impact-on-league-rankings-points-for-and-against" id="toc-impact-on-league-rankings-points-for-and-against" class="nav-link" data-scroll-target="#impact-on-league-rankings-points-for-and-against">Impact on League Rankings: Points For and Against</a>
+  <ul class="collapse">
+  <li><a href="#riders-sorted-by-points-for" id="toc-riders-sorted-by-points-for" class="nav-link" data-scroll-target="#riders-sorted-by-points-for">Riders Sorted by “Points For”</a></li>
+  <li><a href="#riders-sorted-by-points-against" id="toc-riders-sorted-by-points-against" class="nav-link" data-scroll-target="#riders-sorted-by-points-against">Riders Sorted by “Points Against”</a></li>
+  </ul></li>
   </ul></li>
   </ul>
 </nav>
@@ -181,7 +186,7 @@ ul.task-list li input[type="checkbox"] {
 <p>Using complete race results, optimization analysis identifies the highest-scoring combination of nine riders within budget and classification constraints. The optimal team would have scored <strong>14364</strong> points at a cost of <strong>100</strong> credits.</p>
 <p>This represents a 3399-point improvement over the league winner.</p>
 <p>Here is the optimal team:</p>
-<div id="04cdd5b1" class="cell" data-execution_count="3">
+<div id="52fa1ccb" class="cell" data-execution_count="3">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="5">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
@@ -360,9 +365,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="rider-value-analysis" class="level1">
 <h1>Rider Value Analysis</h1>
 <p>This chart plots rider cost against points scored, showing the relationship between price and performance.</p>
-<div id="2fcbfce1" class="cell" data-execution_count="5">
+<div id="7c833037" class="cell" data-execution_count="5">
 <div class="cell-output cell-output-display" data-execution_count="7">
-    <div id="9586f2ec-a601-4386-9ba5-76899d6b1258" style="width:800px;height:600px;"></div>
+    <div id="224f8ef7-375c-4b28-875e-3c11b9fef81e" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -373,7 +378,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('9586f2ec-a601-4386-9ba5-76899d6b1258', [
+        Plotly.newPlot('224f8ef7-375c-4b28-875e-3c11b9fef81e', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -1214,7 +1219,7 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <p>The table below shows the top 15 point scorers from the race, who form the top end of the chart above.</p>
-<div id="33ee264b" class="cell" data-execution_count="6">
+<div id="2e511d5c" class="cell" data-execution_count="6">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="8">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
@@ -1363,9 +1368,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="value-vs-cost" class="level3">
 <h3 class="anchored" data-anchor-id="value-vs-cost">Value vs Cost</h3>
 <p>Next, we’ll examine rider value (points per credit) against their cost. This view is crucial for identifying the most efficient, value-for-money riders in the game.</p>
-<div id="c1eadfa4" class="cell" data-execution_count="7">
+<div id="bcf8408f" class="cell" data-execution_count="7">
 <div class="cell-output cell-output-display" data-execution_count="9">
-    <div id="5cd65bb6-4697-4079-8079-8304310d43e2" style="width:800px;height:600px;"></div>
+    <div id="45b27657-fd44-49c1-b830-b27619e1e5b2" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -1376,7 +1381,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('5cd65bb6-4697-4079-8079-8304310d43e2', [
+        Plotly.newPlot('45b27657-fd44-49c1-b830-b27619e1e5b2', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -2219,7 +2224,7 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <p>The table below shows the best value riders from the race - those who delivered the most points per credit spent.</p>
-<div id="89476aa6" class="cell" data-execution_count="8">
+<div id="407a95f7" class="cell" data-execution_count="8">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="10">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
@@ -2369,7 +2374,7 @@ ul.task-list li input[type="checkbox"] {
 <section id="high-cost-underperformers" class="level3">
 <h3 class="anchored" data-anchor-id="high-cost-underperformers">High-Cost Underperformers</h3>
 <p>Finally, let’s look at the riders who failed to deliver on their high costs - the biggest disappointments of the Vuelta a España 2025.</p>
-<div id="89d52551" class="cell" data-execution_count="9">
+<div id="138e2c56" class="cell" data-execution_count="9">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="11">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
@@ -2479,7 +2484,7 @@ ul.task-list li input[type="checkbox"] {
 <section id="distribution-by-classification" class="level3">
 <h3 class="anchored" data-anchor-id="distribution-by-classification">Distribution by Classification</h3>
 <p>Let’s examine how the different rider classifications performed:</p>
-<div id="e1df2290" class="cell" data-execution_count="10">
+<div id="4815b5f6" class="cell" data-execution_count="10">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="12">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
@@ -2537,9 +2542,9 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
-<div id="d41d37e4" class="cell" data-execution_count="11">
+<div id="3ffc10f6" class="cell" data-execution_count="11">
 <div class="cell-output cell-output-display" data-execution_count="13">
-    <div id="d6670f17-8395-4958-8d4f-0068ff223fca" style="width:800px;height:600px;"></div>
+    <div id="6c0f7a5d-dfc8-4474-bc4d-d11393d5e867" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -2550,7 +2555,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('d6670f17-8395-4958-8d4f-0068ff223fca', [
+        Plotly.newPlot('6c0f7a5d-dfc8-4474-bc4d-d11393d5e867', [
     {
         "xaxis": "x1",
         "fill": "tozeroy",
@@ -4006,8 +4011,338 @@ ul.task-list li input[type="checkbox"] {
 <p>Box plot showing the distribution of points by rider classification.</p>
 </div>
 </div>
+</section>
+<section id="impact-on-league-rankings-points-for-and-against" class="level2">
+<h2 class="anchored" data-anchor-id="impact-on-league-rankings-points-for-and-against">Impact on League Rankings: Points For and Against</h2>
+<p>The following sections show which riders had the biggest impact on league rankings, based on their points and ownership levels.</p>
+<section id="riders-sorted-by-points-for" class="level3">
+<h3 class="anchored" data-anchor-id="riders-sorted-by-points-for">Riders Sorted by “Points For”</h3>
+<p>Riders who delivered the most points to teams that owned them, weighted by the percentage of teams that did <strong>not</strong> own them. This highlights the riders who gave the biggest boost to their owners’ league rankings.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 19%">
+<col style="width: 32%">
+<col style="width: 12%">
+<col style="width: 5%">
+<col style="width: 7%">
+<col style="width: 9%">
+<col style="width: 10%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Rider</th>
+<th>Team</th>
+<th>Class</th>
+<th>Cost</th>
+<th>Points</th>
+<th>Selected</th>
+<th>PointsFor</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>João Almeida</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>20</td>
+<td>2686</td>
+<td>40.1%</td>
+<td>1609</td>
+</tr>
+<tr class="even">
+<td>Jay Vine</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>8</td>
+<td>1599</td>
+<td>7.0%</td>
+<td>1487</td>
+</tr>
+<tr class="odd">
+<td>Jai Hindley</td>
+<td>Red Bull - BORA - hansgrohe</td>
+<td>Climber</td>
+<td>10</td>
+<td>1796</td>
+<td>18.7%</td>
+<td>1460</td>
+</tr>
+<tr class="even">
+<td>Thomas Pidcock</td>
+<td>Q36.5 Pro Cycling Team</td>
+<td>Unclassed</td>
+<td>12</td>
+<td>1858</td>
+<td>29.8%</td>
+<td>1304</td>
+</tr>
+<tr class="odd">
+<td>Sepp Kuss</td>
+<td>Team Visma - Lease a Bike</td>
+<td>Climber</td>
+<td>8</td>
+<td>1325</td>
+<td>10.9%</td>
+<td>1181</td>
+</tr>
+<tr class="even">
+<td>Matthew Riccitello</td>
+<td>Israel - Premier Tech</td>
+<td>Climber</td>
+<td>8</td>
+<td>1034</td>
+<td>5.3%</td>
+<td>979</td>
+</tr>
+<tr class="odd">
+<td>Matteo Jorgenson</td>
+<td>Team Visma - Lease a Bike</td>
+<td>All rounder</td>
+<td>10</td>
+<td>1172</td>
+<td>20.6%</td>
+<td>931</td>
+</tr>
+<tr class="even">
+<td>Giulio Pellizzari</td>
+<td>Red Bull - BORA - hansgrohe</td>
+<td>Climber</td>
+<td>10</td>
+<td>1141</td>
+<td>22.1%</td>
+<td>889</td>
+</tr>
+<tr class="odd">
+<td>Marc Soler</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>6</td>
+<td>989</td>
+<td>10.5%</td>
+<td>885</td>
+</tr>
+<tr class="even">
+<td>Felix Gall</td>
+<td>Decathlon AG2R La Mondiale Team</td>
+<td>Climber</td>
+<td>10</td>
+<td>1193</td>
+<td>29.4%</td>
+<td>842</td>
+</tr>
+<tr class="odd">
+<td>Juan Ayuso</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>18</td>
+<td>1061</td>
+<td>20.9%</td>
+<td>839</td>
+</tr>
+<tr class="even">
+<td>Egan Bernal</td>
+<td>INEOS Grenadiers</td>
+<td>Climber</td>
+<td>12</td>
+<td>995</td>
+<td>17.4%</td>
+<td>822</td>
+</tr>
+<tr class="odd">
+<td>Torstein Træen</td>
+<td>Bahrain - Victorious</td>
+<td>Unclassed</td>
+<td>4</td>
+<td>909</td>
+<td>10.1%</td>
+<td>817</td>
+</tr>
+<tr class="even">
+<td>Ethan Vernon</td>
+<td>Israel - Premier Tech</td>
+<td>Sprinter</td>
+<td>8</td>
+<td>832</td>
+<td>2.1%</td>
+<td>815</td>
+</tr>
+<tr class="odd">
+<td>Giulio Ciccone</td>
+<td>Lidl - Trek</td>
+<td>Climber</td>
+<td>14</td>
+<td>1268</td>
+<td>36.3%</td>
+<td>808</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="riders-sorted-by-points-against" class="level3">
+<h3 class="anchored" data-anchor-id="riders-sorted-by-points-against">Riders Sorted by “Points Against”</h3>
+<p>Riders who, by combining high ownership with high points, did the most damage to your league rank if you <strong>didn’t</strong> own them. This is calculated as points * selected.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 18%">
+<col style="width: 31%">
+<col style="width: 12%">
+<col style="width: 5%">
+<col style="width: 7%">
+<col style="width: 9%">
+<col style="width: 14%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Rider</th>
+<th>Team</th>
+<th>Class</th>
+<th>Cost</th>
+<th>Points</th>
+<th>Selected</th>
+<th>PointsAgainst</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Jonas Vingegaard</td>
+<td>Team Visma - Lease a Bike</td>
+<td>All rounder</td>
+<td>28</td>
+<td>3387</td>
+<td>77.7%</td>
+<td>2632</td>
+</tr>
+<tr class="even">
+<td>João Almeida</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>20</td>
+<td>2686</td>
+<td>40.1%</td>
+<td>1077</td>
+</tr>
+<tr class="odd">
+<td>Mads Pedersen</td>
+<td>Lidl - Trek</td>
+<td>Sprinter</td>
+<td>16</td>
+<td>1510</td>
+<td>56.5%</td>
+<td>853</td>
+</tr>
+<tr class="even">
+<td>Thomas Pidcock</td>
+<td>Q36.5 Pro Cycling Team</td>
+<td>Unclassed</td>
+<td>12</td>
+<td>1858</td>
+<td>29.8%</td>
+<td>554</td>
+</tr>
+<tr class="odd">
+<td>Giulio Ciccone</td>
+<td>Lidl - Trek</td>
+<td>Climber</td>
+<td>14</td>
+<td>1268</td>
+<td>36.3%</td>
+<td>460</td>
+</tr>
+<tr class="even">
+<td>Felix Gall</td>
+<td>Decathlon AG2R La Mondiale Team</td>
+<td>Climber</td>
+<td>10</td>
+<td>1193</td>
+<td>29.4%</td>
+<td>351</td>
+</tr>
+<tr class="odd">
+<td>Jai Hindley</td>
+<td>Red Bull - BORA - hansgrohe</td>
+<td>Climber</td>
+<td>10</td>
+<td>1796</td>
+<td>18.7%</td>
+<td>336</td>
+</tr>
+<tr class="even">
+<td>Jasper Philipsen</td>
+<td>Alpecin - Deceuninck</td>
+<td>Sprinter</td>
+<td>12</td>
+<td>1065</td>
+<td>31.5%</td>
+<td>335</td>
+</tr>
+<tr class="odd">
+<td>Giulio Pellizzari</td>
+<td>Red Bull - BORA - hansgrohe</td>
+<td>Climber</td>
+<td>10</td>
+<td>1141</td>
+<td>22.1%</td>
+<td>252</td>
+</tr>
+<tr class="even">
+<td>Matteo Jorgenson</td>
+<td>Team Visma - Lease a Bike</td>
+<td>All rounder</td>
+<td>10</td>
+<td>1172</td>
+<td>20.6%</td>
+<td>241</td>
+</tr>
+<tr class="odd">
+<td>Juan Ayuso</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>18</td>
+<td>1061</td>
+<td>20.9%</td>
+<td>222</td>
+</tr>
+<tr class="even">
+<td>Egan Bernal</td>
+<td>INEOS Grenadiers</td>
+<td>Climber</td>
+<td>12</td>
+<td>995</td>
+<td>17.4%</td>
+<td>173</td>
+</tr>
+<tr class="odd">
+<td>Sepp Kuss</td>
+<td>Team Visma - Lease a Bike</td>
+<td>Climber</td>
+<td>8</td>
+<td>1325</td>
+<td>10.9%</td>
+<td>144</td>
+</tr>
+<tr class="even">
+<td>Jay Vine</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>8</td>
+<td>1599</td>
+<td>7.0%</td>
+<td>112</td>
+</tr>
+<tr class="odd">
+<td>Marc Soler</td>
+<td>UAE Team Emirates - XRG</td>
+<td>All rounder</td>
+<td>6</td>
+<td>989</td>
+<td>10.5%</td>
+<td>104</td>
+</tr>
+</tbody>
+</table>
 
 
+</section>
 </section>
 </section>
 
