@@ -44,28 +44,16 @@ function buildmodelstage(inputdf::DataFrame, n::Integer=9, points::Symbol=:calcs
     # Create a working copy to avoid modifying the original data
     df = copy(inputdf)
 
-    # Check if binary classification columns exist, if not create them from 'class' column
-    required_cols = ["allrounder", "sprinter", "climber", "unclassed"]
-    missing_cols = setdiff(required_cols, names(df))
+    # Use centralized classification logic
+    if !ensure_classification_columns!(df)
+        @warn "Missing required columns for stage race. Using one-day model instead."
+        return buildmodeloneday(inputdf, n, points, cost; totalcost=totalcost)
+    end
 
-    if !isempty(missing_cols)
-        # Try to create binary columns from 'class' column
-        if hasproperty(df, :class)
-            for class_name in required_cols
-                col_name = Symbol(class_name)
-                if !(string(col_name) in names(df))
-                    df[!, col_name] = (df.class .== class_name)
-                end
-            end
-            # Re-check if we successfully created all required columns
-            missing_cols = setdiff(required_cols, names(df))
-        end
-
-        # If still missing columns, fall back to one-day model
-        if !isempty(missing_cols)
-            @warn "Missing required columns for stage race: $missing_cols. Using one-day model instead."
-            return buildmodeloneday(inputdf, n, points, cost; totalcost=totalcost)
-        end
+    # Validate constraints are satisfiable
+    if !validate_classification_constraints(df)
+        @warn "Not enough riders in each class to satisfy constraints. Using one-day model instead."
+        return buildmodeloneday(inputdf, n, points, cost; totalcost=totalcost)
     end
 
     model = JuMP.Model(HiGHS.Optimizer)
@@ -104,22 +92,16 @@ function buildmodelhistorical(inputdf::DataFrame, n::Integer=9, points::Symbol=:
     # Create a working copy to avoid modifying the original data
     df = copy(inputdf)
 
-    # Check if binary classification columns exist, if not create them from 'class' column
-    required_cols = ["allrounder", "sprinter", "climber", "unclassed"]
-    missing_cols = setdiff(required_cols, names(df))
+    # Use centralized classification logic
+    if !ensure_classification_columns!(df)
+        @warn "Cannot create classification columns for historical analysis"
+        return nothing
+    end
 
-    if !isempty(missing_cols)
-        for col in missing_cols
-            if col == "allrounder"
-                df[!, col] = df[!, :class] .== "All rounder"
-            elseif col == "sprinter"
-                df[!, col] = df[!, :class] .== "Sprinter"
-            elseif col == "climber"
-                df[!, col] = df[!, :class] .== "Climber"
-            elseif col == "unclassed"
-                df[!, col] = df[!, :class] .== "Unclassed"
-            end
-        end
+    # Validate constraints are satisfiable
+    if !validate_classification_constraints(df)
+        @warn "Not enough riders in each class to satisfy constraints"
+        return nothing
     end
 
     model = JuMP.Model(HiGHS.Optimizer)
@@ -158,22 +140,16 @@ function minimizecostforstage(inputdf::DataFrame, target_score::Real, n::Integer
     # Create a working copy to avoid modifying the original data
     df = copy(inputdf)
 
-    # Check if binary classification columns exist, if not create them from 'class' column
-    required_cols = ["allrounder", "sprinter", "climber", "unclassed"]
-    missing_cols = setdiff(required_cols, names(df))
+    # Use centralized classification logic
+    if !ensure_classification_columns!(df)
+        @warn "Cannot create classification columns for cost minimization"
+        return nothing
+    end
 
-    if !isempty(missing_cols)
-        for col in missing_cols
-            if col == "allrounder"
-                df[!, col] = df[!, :class] .== "All rounder"
-            elseif col == "sprinter"
-                df[!, col] = df[!, :class] .== "Sprinter"
-            elseif col == "climber"
-                df[!, col] = df[!, :class] .== "Climber"
-            elseif col == "unclassed"
-                df[!, col] = df[!, :class] .== "Unclassed"
-            end
-        end
+    # Validate constraints are satisfiable
+    if !validate_classification_constraints(df)
+        @warn "Not enough riders in each class to satisfy constraints"
+        return nothing
     end
 
     model = JuMP.Model(HiGHS.Optimizer)

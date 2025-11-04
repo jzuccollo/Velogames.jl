@@ -4,29 +4,102 @@
 This function downloads and parses the rider data from the Velogames and PCS websites.
 
 The function returns a DataFrame with the columns of the first table on the page. It also adds a (hopefully) unique key for each rider based on their name.
+
+Now includes smart table detection to handle pages with multiple tables.
 """
 function gettable(pageurl::String)
     page = TableScraper.scrape_tables(pageurl)
-    riderdf = DataFrames.DataFrame(page[1])
 
+    if isempty(page)
+        error("""
+        ❌ No tables found at: $pageurl
+
+        Possible causes:
+          1. The page doesn't exist or URL is incorrect
+          2. The page structure has changed
+          3. Network/connection issues
+
+        🔍 Check the URL in your browser to verify it loads correctly.
+        """)
+    end
+
+    # Try to find the table with rider data using heuristics
+    riderdf = nothing
+    for (i, tbl) in enumerate(page)
+        try
+            df = DataFrame(tbl)
+
+            # Normalize column names for checking
+            cols_lower = lowercase.(names(df))
+
+            # Does this look like rider data?
+            has_rider = any(occursin("rider", c) || occursin("name", c) for c in cols_lower)
+            has_points = any(occursin("point", c) || occursin("score", c) for c in cols_lower)
+            has_cost = any(occursin("cost", c) || occursin("price", c) for c in cols_lower)
+            reasonable_size = nrow(df) >= 10 && nrow(df) <= 500
+
+            if has_rider && (has_points || has_cost) && reasonable_size
+                @debug "Using table $i from $pageurl ($(nrow(df)) rows)"
+                riderdf = df
+                break
+            end
+        catch e
+            @debug "Failed to check table $i" exception=e
+            continue
+        end
+    end
+
+    # Fallback to first table if heuristics fail
+    if riderdf === nothing
+        @warn "Couldn't identify rider table using heuristics, using first table from $pageurl"
+        riderdf = DataFrame(page[1])
+    end
+
+    # Validate minimum size
+    if nrow(riderdf) < 5
+        error("""
+        ❌ Table has suspiciously few rows ($(nrow(riderdf)))
+
+        Source: $pageurl
+
+        This might not be the correct table. Check the page manually and verify:
+          1. The correct table exists
+          2. The page loaded completely
+          3. You're not being rate-limited
+        """)
+    end
+
+    # Process the table
+    return process_rider_table(riderdf)
+end
+
+
+"""
+Process a rider table DataFrame with standard transformations.
+
+This is the core table processing logic extracted from gettable() for reusability.
+"""
+function process_rider_table(riderdf::DataFrame)
     # lowercase the column names and remove spaces
     rename!(
         riderdf,
         lowercase.(replace.(names(riderdf), " " => "", "#" => "rank"))
     )
+
     # rename score to points if it exists
     if hasproperty(riderdf, :score)
         rename!(riderdf, :score => :points)
     end
+
     # cast the cost and rank columns to Int64 if they exist
     for col in [:cost, :rank]
         if hasproperty(riderdf, col)
             riderdf[!, col] = parse.(Int64, riderdf[!, col])
         end
     end
+
     # cast points column to number
     riderdf[!, :points] = parse.(Float64, riderdf[!, :points])
-
 
     # Process 'selected' column as numeric proportion, if it exists
     if hasproperty(riderdf, :selected)
@@ -207,7 +280,36 @@ function getpcsriderpts(ridername::String;
         # Try new PCS structure: .xvalue class
         value_elements = eachmatch(sel".xvalue", page.root)
         if length(value_elements) < 5
-            error("Could not find expected points data structure on PCS page for $ridername")
+            # Format rider name for suggestions
+            name_with_spaces = replace(ridername, "-" => " ")
+            name_titlecase = titlecase(name_with_spaces)
+
+            error("""
+            ❌ PCS scraping failed for: $ridername
+
+            Expected 5 point values (One-day, GC, TT, Sprint, Climber)
+            Found: $(length(value_elements)) values
+
+            🔍 Troubleshooting:
+
+            1. Check the page manually: $url
+
+            2. Try alternative name spellings:
+               - "$name_with_spaces"
+               - "$name_titlecase"
+               - Check rider's full name on PCS
+
+            3. If the page structure changed:
+               - The CSS selector may be outdated
+               - Current selector: ".xvalue"
+               - Update in: src/get_data.jl (line ~210)
+
+            4. If the rider doesn't exist on PCS:
+               - Add to exclude_riders list in your notebook
+               - Or accept missing PCS data (will use VG data only)
+
+            💡 Quick fix: Set force_refresh=true if this is a caching issue
+            """)
         end
         rawpts = map(x -> parse(Int, nodeText(x)), value_elements[1:5])
         return DataFrame(
