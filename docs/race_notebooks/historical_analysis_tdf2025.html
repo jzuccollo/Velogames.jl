@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.8.24">
+<meta name="generator" content="quarto-1.8.25">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -37,7 +37,7 @@ ul.task-list li input[type="checkbox"] {
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dc55a5b9e770e841cd82e46aadbfb9b0.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-7b89279ff1a6dce999919e0e67d4d9ec.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="../site_libs/bootstrap/bootstrap-4d8b594121dd52e54118692cc759f5c0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -136,7 +136,8 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#the-benefit-of-hindsight" id="toc-the-benefit-of-hindsight" class="nav-link active" data-scroll-target="#the-benefit-of-hindsight">The benefit of hindsight</a>
+  <li><a href="#executive-summary" id="toc-executive-summary" class="nav-link active" data-scroll-target="#executive-summary">Executive Summary</a></li>
+  <li><a href="#the-benefit-of-hindsight" id="toc-the-benefit-of-hindsight" class="nav-link" data-scroll-target="#the-benefit-of-hindsight">The benefit of hindsight</a>
   <ul class="collapse">
   <li><a href="#optimal-team-composition" id="toc-optimal-team-composition" class="nav-link" data-scroll-target="#optimal-team-composition">Optimal team composition</a></li>
   <li><a href="#minimum-winning-cost" id="toc-minimum-winning-cost" class="nav-link" data-scroll-target="#minimum-winning-cost">Minimum winning cost</a></li>
@@ -181,23 +182,33 @@ ul.task-list li input[type="checkbox"] {
 
 
 <p>The Tour de France 2025 has concluded. This analysis examines the fantasy competition results, identifying the highest-performing riders and the optimal team composition using complete race data.</p>
+<section id="executive-summary" class="level2">
+<h2 class="anchored" data-anchor-id="executive-summary">Executive Summary</h2>
+<ul>
+<li><strong>Optimal team score</strong>: 14216 points for 100 credits.</li>
+<li><strong>Margin vs league winner</strong>: 3168 points.</li>
+<li><strong>Top scorer</strong>: Tadej Pogačar amassed 4153 points.</li>
+<li><strong>Best value pick</strong>: Kévin Vauquelin at 226.8 points per credit.</li>
+<li><strong>Model status</strong>: Direct optimisation succeeded.</li>
+</ul>
 <p>At the end of three weeks of racing, <strong>Marc Rediot</strong> won our fantasy league with <strong>11048</strong> points.</p>
+</section>
 <section id="the-benefit-of-hindsight" class="level1">
 <h1>The benefit of hindsight</h1>
 <section id="optimal-team-composition" class="level2">
 <h2 class="anchored" data-anchor-id="optimal-team-composition">Optimal team composition</h2>
 <p>Using complete race results, optimization analysis identifies the highest-scoring combination of nine riders within budget and classification constraints.</p>
 <p>The optimal team would have scored 14216.0 points at a cost of 100 credits—3168.0 points above the league winner.</p>
-<div id="30bcb967" class="cell" data-execution_count="2">
+<div id="cc84c2df" class="cell" data-execution_count="2">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="4">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 21%">
-<col style="width: 32%">
-<col style="width: 15%">
-<col style="width: 7%">
-<col style="width: 15%">
-<col style="width: 8%">
+<col style="width: 19%">
+<col style="width: 29%">
+<col style="width: 13%">
+<col style="width: 6%">
+<col style="width: 13%">
+<col style="width: 17%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -206,7 +217,7 @@ ul.task-list li input[type="checkbox"] {
 <th>Class</th>
 <th>Cost</th>
 <th>FinalPoints</th>
-<th>Value</th>
+<th>ValuePerCredit</th>
 </tr>
 </thead>
 <tbody>
@@ -216,7 +227,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>32</td>
 <td>4153</td>
-<td>130</td>
+<td>129.8</td>
 </tr>
 <tr class="even">
 <td>Jonas Vingegaard</td>
@@ -224,7 +235,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>24</td>
 <td>3200</td>
-<td>133</td>
+<td>133.3</td>
 </tr>
 <tr class="odd">
 <td>Biniam Girmay</td>
@@ -232,7 +243,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Sprinter</td>
 <td>8</td>
 <td>789</td>
-<td>99</td>
+<td>98.6</td>
 </tr>
 <tr class="even">
 <td>Oscar Onley</td>
@@ -240,7 +251,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>8</td>
 <td>1789</td>
-<td>224</td>
+<td>223.6</td>
 </tr>
 <tr class="odd">
 <td>Kévin Vauquelin</td>
@@ -248,7 +259,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>6</td>
 <td>1361</td>
-<td>227</td>
+<td>226.8</td>
 </tr>
 <tr class="even">
 <td>Ben Healy</td>
@@ -256,7 +267,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>6</td>
 <td>1269</td>
-<td>212</td>
+<td>211.5</td>
 </tr>
 <tr class="odd">
 <td>Jordan Jegat</td>
@@ -264,7 +275,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>6</td>
 <td>664</td>
-<td>111</td>
+<td>110.7</td>
 </tr>
 <tr class="even">
 <td>Tim Wellens</td>
@@ -272,7 +283,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>6</td>
 <td>701</td>
-<td>117</td>
+<td>116.8</td>
 </tr>
 <tr class="odd">
 <td>Pascal Eenkhoorn</td>
@@ -280,27 +291,28 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>4</td>
 <td>290</td>
-<td>72</td>
+<td>72.5</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
+<p>Top contributors to the margin: Tadej Pogačar (+4153 pts), Jonas Vingegaard (+3200 pts), Oscar Onley (+1789 pts)</p>
 </section>
 <section id="minimum-winning-cost" class="level2">
 <h2 class="anchored" data-anchor-id="minimum-winning-cost">Minimum winning cost</h2>
 <p>Analysis of the lowest-cost team capable of defeating the league winner.</p>
 <p>This team scores 11141.0 points and costs just 76 credits.</p>
-<div id="71e79825" class="cell" data-execution_count="3">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="6">
+<div id="a76368bb" class="cell" data-execution_count="4">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="7">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 23%">
-<col style="width: 35%">
-<col style="width: 13%">
-<col style="width: 6%">
-<col style="width: 13%">
-<col style="width: 7%">
+<col style="width: 21%">
+<col style="width: 32%">
+<col style="width: 12%">
+<col style="width: 5%">
+<col style="width: 12%">
+<col style="width: 15%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -309,7 +321,7 @@ ul.task-list li input[type="checkbox"] {
 <th>Class</th>
 <th>Cost</th>
 <th>FinalPoints</th>
-<th>Value</th>
+<th>ValuePerCredit</th>
 </tr>
 </thead>
 <tbody>
@@ -319,7 +331,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Sprinter</td>
 <td>12</td>
 <td>1343</td>
-<td>112</td>
+<td>111.9</td>
 </tr>
 <tr class="even">
 <td>Florian Lipowitz</td>
@@ -327,7 +339,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>12</td>
 <td>1683</td>
-<td>140</td>
+<td>140.2</td>
 </tr>
 <tr class="odd">
 <td>Mathieu Van Der Poel</td>
@@ -335,7 +347,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>10</td>
 <td>1059</td>
-<td>106</td>
+<td>105.9</td>
 </tr>
 <tr class="even">
 <td>Felix Gall</td>
@@ -343,7 +355,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>10</td>
 <td>1272</td>
-<td>127</td>
+<td>127.2</td>
 </tr>
 <tr class="odd">
 <td>Oscar Onley</td>
@@ -351,7 +363,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>8</td>
 <td>1789</td>
-<td>224</td>
+<td>223.6</td>
 </tr>
 <tr class="even">
 <td>Kévin Vauquelin</td>
@@ -359,7 +371,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>6</td>
 <td>1361</td>
-<td>227</td>
+<td>226.8</td>
 </tr>
 <tr class="odd">
 <td>Ben Healy</td>
@@ -367,7 +379,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>6</td>
 <td>1269</td>
-<td>212</td>
+<td>211.5</td>
 </tr>
 <tr class="even">
 <td>Jordan Jegat</td>
@@ -375,7 +387,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>6</td>
 <td>664</td>
-<td>111</td>
+<td>110.7</td>
 </tr>
 <tr class="odd">
 <td>Tim Wellens</td>
@@ -383,7 +395,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>6</td>
 <td>701</td>
-<td>117</td>
+<td>116.8</td>
 </tr>
 </tbody>
 </table>
@@ -393,16 +405,16 @@ ul.task-list li input[type="checkbox"] {
 <section id="high-cost-underperformers" class="level2">
 <h2 class="anchored" data-anchor-id="high-cost-underperformers">High-cost underperformers</h2>
 <p>These high-cost riders didn’t deliver the points their price tags demanded over the three weeks of racing:</p>
-<div id="74b5f597" class="cell" data-execution_count="4">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="7">
+<div id="bd1fddac" class="cell" data-execution_count="5">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="8">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 25%">
-<col style="width: 23%">
-<col style="width: 17%">
+<col style="width: 22%">
+<col style="width: 21%">
+<col style="width: 15%">
 <col style="width: 7%">
-<col style="width: 17%">
-<col style="width: 9%">
+<col style="width: 15%">
+<col style="width: 18%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -411,7 +423,7 @@ ul.task-list li input[type="checkbox"] {
 <th>Class</th>
 <th>Cost</th>
 <th>FinalPoints</th>
-<th>Value</th>
+<th>ValuePerCredit</th>
 </tr>
 </thead>
 <tbody>
@@ -421,7 +433,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>8</td>
 <td>0</td>
-<td>0</td>
+<td>0.0</td>
 </tr>
 <tr class="even">
 <td>Geraint Thomas</td>
@@ -429,7 +441,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>8</td>
 <td>48</td>
-<td>6</td>
+<td>6.0</td>
 </tr>
 <tr class="odd">
 <td>Thibau Nys</td>
@@ -437,7 +449,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>8</td>
 <td>87</td>
-<td>11</td>
+<td>10.9</td>
 </tr>
 <tr class="even">
 <td>Dylan Groenewegen</td>
@@ -445,7 +457,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Sprinter</td>
 <td>8</td>
 <td>122</td>
-<td>15</td>
+<td>15.2</td>
 </tr>
 </tbody>
 </table>
@@ -459,9 +471,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="points-vs-cost" class="level3">
 <h3 class="anchored" data-anchor-id="points-vs-cost">Points vs Cost</h3>
 <p>First, let’s look at the raw performance: how many points each rider scored versus their cost. This helps us identify the high-scorers at every price point.</p>
-<div id="72c7973d" class="cell" data-cache="true" data-execution_count="5">
-<div class="cell-output cell-output-display" data-execution_count="8">
-    <div id="7c9df915-4c96-4f72-9922-fb5712244805" style="width:800px;height:600px;"></div>
+<div id="fd1150d0" class="cell" data-cache="true" data-execution_count="6">
+<div class="cell-output cell-output-display" data-execution_count="9">
+    <div id="4fefe62a-2566-466b-baf0-52ccc24c7dab" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -472,7 +484,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('7c9df915-4c96-4f72-9922-fb5712244805', [
+        Plotly.newPlot('4fefe62a-2566-466b-baf0-52ccc24c7dab', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -1148,6 +1160,35 @@ ul.task-list li input[type="checkbox"] {
         ],
         "type": "scatter",
         "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.505787037037037,
+            "title": "",
+            "len": 0.9104877515310585,
+            "x": 0.9950787401574803
+        },
+        "yaxis": "y",
+        "x": [
+            -2968.6229580044433,
+            3004.3926728669226
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "name": "Average points",
+        "legendgroup": "Average points",
+        "line": {
+            "color": "rgba(128, 128, 128, 1.000)",
+            "shape": "linear",
+            "dash": "dash",
+            "width": 1
+        },
+        "y": [
+            289.8097826086956,
+            289.8097826086956
+        ],
+        "type": "scatter"
     }
 ]
 , {
@@ -1317,16 +1358,16 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <p>The table below shows the top 15 point scorers from the race, who form the top end of the chart above.</p>
-<div id="ffe3969f" class="cell" data-execution_count="6">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="9">
+<div id="6f05e3e7" class="cell" data-execution_count="7">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="10">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 28%">
-<col style="width: 33%">
-<col style="width: 13%">
-<col style="width: 6%">
-<col style="width: 13%">
-<col style="width: 7%">
+<col style="width: 25%">
+<col style="width: 30%">
+<col style="width: 11%">
+<col style="width: 5%">
+<col style="width: 11%">
+<col style="width: 14%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -1335,7 +1376,7 @@ ul.task-list li input[type="checkbox"] {
 <th>Class</th>
 <th>Cost</th>
 <th>FinalPoints</th>
-<th>Value</th>
+<th>ValuePerCredit</th>
 </tr>
 </thead>
 <tbody>
@@ -1345,7 +1386,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>32</td>
 <td>4153</td>
-<td>130</td>
+<td>129.8</td>
 </tr>
 <tr class="even">
 <td>Jonas Vingegaard</td>
@@ -1353,7 +1394,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>24</td>
 <td>3200</td>
-<td>133</td>
+<td>133.3</td>
 </tr>
 <tr class="odd">
 <td>Oscar Onley</td>
@@ -1361,7 +1402,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>8</td>
 <td>1789</td>
-<td>224</td>
+<td>223.6</td>
 </tr>
 <tr class="even">
 <td>Florian Lipowitz</td>
@@ -1369,7 +1410,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>12</td>
 <td>1683</td>
-<td>140</td>
+<td>140.2</td>
 </tr>
 <tr class="odd">
 <td>Matteo Jorgenson</td>
@@ -1377,7 +1418,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>12</td>
 <td>1386</td>
-<td>116</td>
+<td>115.5</td>
 </tr>
 <tr class="even">
 <td>Kévin Vauquelin</td>
@@ -1385,7 +1426,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>6</td>
 <td>1361</td>
-<td>227</td>
+<td>226.8</td>
 </tr>
 <tr class="odd">
 <td>Jonathan Milan</td>
@@ -1393,7 +1434,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Sprinter</td>
 <td>12</td>
 <td>1343</td>
-<td>112</td>
+<td>111.9</td>
 </tr>
 <tr class="even">
 <td>Felix Gall</td>
@@ -1401,7 +1442,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>10</td>
 <td>1272</td>
-<td>127</td>
+<td>127.2</td>
 </tr>
 <tr class="odd">
 <td>Ben Healy</td>
@@ -1409,7 +1450,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>6</td>
 <td>1269</td>
-<td>212</td>
+<td>211.5</td>
 </tr>
 <tr class="even">
 <td>Primož Roglič</td>
@@ -1417,7 +1458,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>14</td>
 <td>1156</td>
-<td>83</td>
+<td>82.6</td>
 </tr>
 <tr class="odd">
 <td>Thymen Arensman</td>
@@ -1425,7 +1466,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>8</td>
 <td>1129</td>
-<td>141</td>
+<td>141.1</td>
 </tr>
 <tr class="even">
 <td>Mathieu Van Der Poel</td>
@@ -1433,7 +1474,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>10</td>
 <td>1059</td>
-<td>106</td>
+<td>105.9</td>
 </tr>
 <tr class="odd">
 <td>Tobias Halland Johannessen</td>
@@ -1441,7 +1482,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>10</td>
 <td>1048</td>
-<td>105</td>
+<td>104.8</td>
 </tr>
 <tr class="even">
 <td>Wout Van Aert</td>
@@ -1449,7 +1490,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>12</td>
 <td>990</td>
-<td>82</td>
+<td>82.5</td>
 </tr>
 <tr class="odd">
 <td>Remco Evenepoel</td>
@@ -1457,7 +1498,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>18</td>
 <td>900</td>
-<td>50</td>
+<td>50.0</td>
 </tr>
 </tbody>
 </table>
@@ -1467,9 +1508,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="value-vs-cost" class="level3">
 <h3 class="anchored" data-anchor-id="value-vs-cost">Value vs Cost</h3>
 <p>Next, we’ll examine rider value (points per credit) against their cost. This view is crucial for identifying the most efficient, value-for-money riders in the game.</p>
-<div id="e5a2ad4b" class="cell" data-cache="true" data-execution_count="7">
-<div class="cell-output cell-output-display" data-execution_count="10">
-    <div id="319d2527-9468-4523-bfd1-15465da27f6e" style="width:800px;height:600px;"></div>
+<div id="42163665" class="cell" data-cache="true" data-execution_count="8">
+<div class="cell-output cell-output-display" data-execution_count="11">
+    <div id="d74ebb26-f948-4578-90be-c430ced39da2" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -1480,7 +1521,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('319d2527-9468-4523-bfd1-15465da27f6e', [
+        Plotly.newPlot('d74ebb26-f948-4578-90be-c430ced39da2', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -2168,6 +2209,35 @@ ul.task-list li input[type="checkbox"] {
         ],
         "type": "scatter",
         "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.505787037037037,
+            "title": "",
+            "len": 0.9104877515310585,
+            "x": 0.9950787401574802
+        },
+        "yaxis": "y",
+        "x": [
+            -2968.6229580044433,
+            3004.3926728669226
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "name": "Average value",
+        "legendgroup": "Average value",
+        "line": {
+            "color": "rgba(128, 128, 128, 1.000)",
+            "shape": "linear",
+            "dash": "dash",
+            "width": 1
+        },
+        "y": [
+            35.49539499223602,
+            35.49539499223602
+        ],
+        "type": "scatter"
     }
 ]
 , {
@@ -2337,16 +2407,16 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <p>These riders have outperformed their cost expectations, delivering exceptional value over the entire Tour. The table below shows all riders who achieved a value of over 100 points per credit.</p>
-<div id="c09b3140" class="cell" data-execution_count="8">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="11">
+<div id="dd8a343d" class="cell" data-execution_count="9">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="12">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 28%">
-<col style="width: 33%">
-<col style="width: 13%">
-<col style="width: 6%">
-<col style="width: 13%">
-<col style="width: 7%">
+<col style="width: 25%">
+<col style="width: 30%">
+<col style="width: 11%">
+<col style="width: 5%">
+<col style="width: 11%">
+<col style="width: 14%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -2355,7 +2425,7 @@ ul.task-list li input[type="checkbox"] {
 <th>Class</th>
 <th>Cost</th>
 <th>FinalPoints</th>
-<th>Value</th>
+<th>ValuePerCredit</th>
 </tr>
 </thead>
 <tbody>
@@ -2365,7 +2435,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>6</td>
 <td>1361</td>
-<td>227</td>
+<td>226.8</td>
 </tr>
 <tr class="even">
 <td>Oscar Onley</td>
@@ -2373,7 +2443,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>8</td>
 <td>1789</td>
-<td>224</td>
+<td>223.6</td>
 </tr>
 <tr class="odd">
 <td>Ben Healy</td>
@@ -2381,7 +2451,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>6</td>
 <td>1269</td>
-<td>212</td>
+<td>211.5</td>
 </tr>
 <tr class="even">
 <td>Thymen Arensman</td>
@@ -2389,7 +2459,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>8</td>
 <td>1129</td>
-<td>141</td>
+<td>141.1</td>
 </tr>
 <tr class="odd">
 <td>Florian Lipowitz</td>
@@ -2397,7 +2467,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>12</td>
 <td>1683</td>
-<td>140</td>
+<td>140.2</td>
 </tr>
 <tr class="even">
 <td>Jonas Vingegaard</td>
@@ -2405,7 +2475,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>24</td>
 <td>3200</td>
-<td>133</td>
+<td>133.3</td>
 </tr>
 <tr class="odd">
 <td>Tadej Pogačar</td>
@@ -2413,7 +2483,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>32</td>
 <td>4153</td>
-<td>130</td>
+<td>129.8</td>
 </tr>
 <tr class="even">
 <td>Felix Gall</td>
@@ -2421,7 +2491,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>10</td>
 <td>1272</td>
-<td>127</td>
+<td>127.2</td>
 </tr>
 <tr class="odd">
 <td>Tim Wellens</td>
@@ -2429,7 +2499,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>6</td>
 <td>701</td>
-<td>117</td>
+<td>116.8</td>
 </tr>
 <tr class="even">
 <td>Matteo Jorgenson</td>
@@ -2437,7 +2507,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>12</td>
 <td>1386</td>
-<td>116</td>
+<td>115.5</td>
 </tr>
 <tr class="odd">
 <td>Jonathan Milan</td>
@@ -2445,7 +2515,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Sprinter</td>
 <td>12</td>
 <td>1343</td>
-<td>112</td>
+<td>111.9</td>
 </tr>
 <tr class="even">
 <td>Jordan Jegat</td>
@@ -2453,7 +2523,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>6</td>
 <td>664</td>
-<td>111</td>
+<td>110.7</td>
 </tr>
 <tr class="odd">
 <td>Jhonatan Narváez</td>
@@ -2461,7 +2531,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>6</td>
 <td>653</td>
-<td>109</td>
+<td>108.8</td>
 </tr>
 <tr class="even">
 <td>Mathieu Van Der Poel</td>
@@ -2469,7 +2539,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Unclassed</td>
 <td>10</td>
 <td>1059</td>
-<td>106</td>
+<td>105.9</td>
 </tr>
 <tr class="odd">
 <td>Tobias Halland Johannessen</td>
@@ -2477,7 +2547,7 @@ ul.task-list li input[type="checkbox"] {
 <td>All rounder</td>
 <td>10</td>
 <td>1048</td>
-<td>105</td>
+<td>104.8</td>
 </tr>
 <tr class="even">
 <td>Ben O’Connor</td>
@@ -2485,7 +2555,7 @@ ul.task-list li input[type="checkbox"] {
 <td>Climber</td>
 <td>8</td>
 <td>813</td>
-<td>102</td>
+<td>101.6</td>
 </tr>
 </tbody>
 </table>
@@ -2495,27 +2565,16 @@ ul.task-list li input[type="checkbox"] {
 <section id="vs-historical-performance" class="level2">
 <h2 class="anchored" data-anchor-id="vs-historical-performance">2025 vs historical performance</h2>
 <p>Some riders overperformed compared to their historical averages, while others underperformed. This section compares the 2025 Tour de France performance against riders’ VeloGames performances in 2024 and 2023.</p>
-<div id="a526a1ef" class="cell" data-cache="true" data-execution_count="9">
-<div class="cell-output cell-output-stdout">
-<pre><code>📊 Collecting historical Tour de France data for comparison...
-📥 Fetching 2024 Tour de France results...
-   ✅ 2024 Tour data: 176 riders</code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code>📥 Fetching 2023 Tour de France results...
-   ✅ 2023 Tour data: 176 riders
-   ✅ Added 2024 data to comparison</code></pre>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code>   ✅ Added 2023 data to comparison
-📈 Historical comparison complete: 111 riders with historical Tour data</code></pre>
+<div id="ef928045" class="cell" data-cache="true" data-execution_count="10">
+<div class="cell-output cell-output-display" data-execution_count="13">
+<pre><code>false</code></pre>
 </div>
 </div>
 <section id="performance-vs-historical-average-above-average-riders" class="level3">
 <h3 class="anchored" data-anchor-id="performance-vs-historical-average-above-average-riders">Performance vs Historical Average: Above-Average Riders</h3>
 <p>These riders significantly exceeded their 2023-2024 Tour de France averages in 2025:</p>
-<div id="4b4f41ba" class="cell" data-execution_count="10">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="13">
+<div id="a6a15590" class="cell" data-execution_count="11">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="14">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 23%">
@@ -2681,8 +2740,8 @@ ul.task-list li input[type="checkbox"] {
 <section id="performance-vs-historical-average-below-average-riders" class="level3">
 <h3 class="anchored" data-anchor-id="performance-vs-historical-average-below-average-riders">Performance vs Historical Average: Below-Average Riders</h3>
 <p>These riders fell well short of their 2023-2024 Tour de France averages:</p>
-<div id="ce2e56bf" class="cell" data-execution_count="11">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="14">
+<div id="4f49a02e" class="cell" data-execution_count="12">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="15">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 18%">
@@ -2847,9 +2906,9 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="performance-change-distribution" class="level3">
 <h3 class="anchored" data-anchor-id="performance-change-distribution">Performance Change Distribution</h3>
-<div id="8c0bfffd" class="cell" data-execution_count="12">
-<div class="cell-output cell-output-display" data-execution_count="15">
-    <div id="b8f46dba-1ba7-44d5-a475-cf02ccb15f21" style="width:800px;height:500px;"></div>
+<div id="cb37e5ac" class="cell" data-execution_count="13">
+<div class="cell-output cell-output-display" data-execution_count="16">
+    <div id="c4ca6a46-e59f-4f66-984a-e0b5ff932f4d" style="width:800px;height:500px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -2860,7 +2919,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('b8f46dba-1ba7-44d5-a475-cf02ccb15f21', [
+        Plotly.newPlot('c4ca6a46-e59f-4f66-984a-e0b5ff932f4d', [
     {
         "xaxis": "x1",
         "fill": "tozeroy",
@@ -4123,10 +4182,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="year-over-year-performance-matrix" class="level3">
 <h3 class="anchored" data-anchor-id="year-over-year-performance-matrix">Year-over-Year Performance Matrix</h3>
 <p>This table shows the three-year performance pattern for riders who participated in all three Tours:</p>
-<div id="425eace8" class="cell" data-execution_count="13">
-<div class="cell-output cell-output-stdout">
-<pre><code>
-📈 = Improving trend, 📉 = Declining trend, 📊 = Mixed performance</code></pre>
+<div id="31904306" class="cell" data-execution_count="14">
+<div class="cell-output cell-output-display cell-output-markdown">
+<p>📈 = Improving trend, 📉 = Declining trend, 📊 = Mixed performance</p>
 </div>
 </div>
 

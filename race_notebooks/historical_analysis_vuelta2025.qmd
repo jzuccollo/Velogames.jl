@@ -14,9 +14,12 @@ The Vuelta a España 2025 has concluded. This analysis examines the fantasy comp
 #| output: false
 #| cache: true
 
-using Velogames, DataFrames, MarkdownTables, Plots, Printf, JuMP, HiGHS, StatsPlots, Statistics, Random
+using Velogames, DataFrames, MarkdownTables, Markdown, Plots, StatsPlots, Statistics, Random
 
 plotly() # Use Plotly backend for interactive plots
+
+diagnostics_enabled = false
+log_if_enabled(msg) = diagnostics_enabled && println(msg)
 
 # Race configuration - Vuelta a España 2025 Final analysis
 ridersurl = "https://www.velogames.com/spain/2025/riders.php"
@@ -34,148 +37,101 @@ vg_class_to_pcs_col = Dict(
     "allrounder" => "gc",
     "climber" => "climber",
     "sprinter" => "sprint",
-    "unclassed" => "oneday"
+    "unclassed" => "oneday",
 )
 add_pcs_speciality_points!(allriderdata, pcs_df, vg_class_to_pcs_col)
 
-# Set up the optimization model for the best possible team using final results
-println("Starting optimization with $(nrow(allriderdata)) riders")
-println("Total points available: $(sum(allriderdata.points))")
-println("Riders with points > 0: $(sum(allriderdata.points .> 0))")
-println("Cost range: $(minimum(allriderdata.cost)) - $(maximum(allriderdata.cost))")
+log_if_enabled("Starting optimization with $(nrow(allriderdata)) riders")
+log_if_enabled("Total points available: $(sum(allriderdata.points))")
+log_if_enabled("Riders with points > 0: $(sum(allriderdata.points .> 0))")
+log_if_enabled("Cost range: $(minimum(allriderdata.cost)) - $(maximum(allriderdata.cost))")
 
-# Check data quality before optimization
 if any(ismissing.(allriderdata.points)) || any(ismissing.(allriderdata.cost))
-    println("⚠️ Warning: Missing values detected in points or cost columns")
+    log_if_enabled("⚠️ Warning: Missing values detected in points or cost columns")
 end
 
-# Let's also try to understand the optimization problem better
-println("\nDebug: Examining class structure...")
-println("Unique classes in data: $(unique(allriderdata.class))")
-
-# Fix class name mismatch - the optimization function expects title case
 class_mapping = Dict(
     "allrounder" => "All rounder",
     "climber" => "Climber",
     "sprinter" => "Sprinter",
-    "unclassed" => "Unclassed"
+    "unclassed" => "Unclassed",
 )
-
-println("Fixing class names for optimization...")
 allriderdata.class = [get(class_mapping, class, class) for class in allriderdata.class]
-println("Updated classes: $(unique(allriderdata.class))")
+log_if_enabled("Classes after normalisation: $(unique(allriderdata.class))")
 
 solution = buildmodelhistorical(allriderdata, 9, :points, :cost; totalcost=100)
-if solution !== nothing
-    chosen_values = [solution[rider] > 0.5 for rider in allriderdata.rider]
-    allriderdata.chosen = chosen_values
-    chosenteam = filter(row -> row.chosen, allriderdata)
-    println("✅ Optimization successful: Found team with $(sum(chosenteam.points)) points, costing $(sum(chosenteam.cost)) credits")
-else
-    # More detailed diagnostic information if optimization fails
-    println("❌ Optimization failed.")
-    println("\nDetailed diagnostic information:")
-    println("Data summary:")
-    println("- Total riders: $(nrow(allriderdata))")
-    println("- Points range: $(minimum(allriderdata.points)) - $(maximum(allriderdata.points))")
-    println("- Cost range: $(minimum(allriderdata.cost)) - $(maximum(allriderdata.cost))")
-    println("- Unique classes: $(unique(allriderdata.class))")
+optimization_status = solution === nothing ? "fallback" : "optimal"
 
-    # Check if we have riders in each required class (use actual class names from data)
-    class_counts = combine(groupby(allriderdata, :class), nrow => :count)
-    println("\nClass distribution:")
-    for row in eachrow(class_counts)
-        println("  - $(row.class): $(row.count) riders")
-    end
-
-    # The issue might be that the class names don't match what the function expects
-    # Let's manually check what classes we actually have
-    expected_classes = ["All rounder", "Climber", "Sprinter", "Unclassed"]
-    actual_classes = unique(allriderdata.class)
-    println("\nClass name matching:")
-    println("Expected classes: $(expected_classes)")
-    println("Actual classes: $(actual_classes)")
-
-    missing_classes = setdiff(expected_classes, actual_classes)
-    if !isempty(missing_classes)
-        println("❌ Missing expected classes: $(missing_classes)")
-        println("This is likely why optimization failed!")
-    end
-
-    # Proceed with fallback analysis without optimization
-    println("\nProceeding with analysis using top performers instead of optimal team...")
+if solution === nothing
+    log_if_enabled("❌ Optimization failed, reverting to points-based selection.")
     chosenteam = sort(allriderdata, :points, rev=true)[1:9, :]
     allriderdata.chosen = [rider in chosenteam.rider for rider in allriderdata.rider]
-    println("Fallback team total points: $(sum(chosenteam.points))")
-end
-
-# Calculate current value and identify standout performers
-
-# Let's also check constraint feasibility for debugging
-println("Constraint feasibility check:")
-println("Can we form a valid team?")
-
-# Check if we can satisfy class constraints with budget - using corrected class names
-allrounder_riders = filter(row -> row.class == "All rounder", allriderdata)
-climber_riders = filter(row -> row.class == "Climber", allriderdata)
-sprinter_riders = filter(row -> row.class == "Sprinter", allriderdata)
-unclassed_riders = filter(row -> row.class == "Unclassed", allriderdata)
-
-println("Available riders by class:")
-println("- All rounders: $(nrow(allrounder_riders))")
-if nrow(allrounder_riders) >= 2
-    println("  Cheapest 2: $(sort(allrounder_riders.cost)[1:2])")
-end
-println("- Climbers: $(nrow(climber_riders))")
-if nrow(climber_riders) >= 2
-    println("  Cheapest 2: $(sort(climber_riders.cost)[1:2])")
-end
-println("- Sprinters: $(nrow(sprinter_riders))")
-if nrow(sprinter_riders) >= 1
-    println("  Cheapest: $(minimum(sprinter_riders.cost))")
-end
-println("- Unclassed: $(nrow(unclassed_riders))")
-if nrow(unclassed_riders) >= 4
-    println("  Cheapest 4: $(sort(unclassed_riders.cost)[1:4])")
-end
-
-# Check minimum cost for a valid team (2 AR, 2 C, 1 S, 4 U)
-if nrow(allrounder_riders) >= 2 && nrow(climber_riders) >= 2 && nrow(sprinter_riders) >= 1 && nrow(unclassed_riders) >= 4
-    min_cost = sum(sort(allrounder_riders.cost)[1:2]) + sum(sort(climber_riders.cost)[1:2]) + minimum(sprinter_riders.cost) + sum(sort(unclassed_riders.cost)[1:4])
-    println("Minimum cost for a valid team: $(min_cost)")
 else
-    println("❌ Insufficient riders in one or more classes!")
+    chosen_values = [solution[rider] > 0.5 for rider in allriderdata.rider]
+    allriderdata.chosen = chosen_values
+    chosenteam = subset(allriderdata, :chosen => ByRow(identity))
 end
 
-# Find the cheapest team that would have won the league (if winning_score > 0)
+class_summary = class_availability_summary(allriderdata)
+class_summary_lines = describe_class_availability(class_summary)
+
+if diagnostics_enabled
+    log_if_enabled("Constraint feasibility snapshot:")
+    foreach(line -> log_if_enabled(line), class_summary_lines)
+end
+
 if winning_score > 0
     costsolution = minimizecostforstage(allriderdata, winning_score, 9, :cost; totalcost=100)
     if costsolution !== nothing
         chosen2_values = [costsolution[rider] > 0.5 for rider in allriderdata.rider]
         allriderdata.chosen2 = chosen2_values
-        chosen2team = filter(row -> row.chosen2, allriderdata)
+        chosen2team = subset(allriderdata, :chosen2 => ByRow(identity))
     else
-        println("Cost minimization failed")
+        log_if_enabled("Cost minimization failed")
         chosen2team = DataFrame()
     end
 else
-    chosen2team = DataFrame() # No cost minimization analysis without a target score
+    chosen2team = DataFrame()
 end
 
-# Calculate value for each rider
 allriderdata.value = allriderdata.points ./ allriderdata.cost
 
-# Add some jitter to cost for better visualization
 Random.seed!(42)
 jitter_amount = 0.5
 allriderdata.jittered_cost = allriderdata.cost .+ (rand(nrow(allriderdata)) .- 0.5) .* jitter_amount
 
-# Create hover text for plots
 allriderdata.hover_text = [
     "$(row.rider)\n$(row.team)\n$(row.class)\nCost: $(row.cost)\nPoints: $(round(row.points, digits=1))\nValue: $(round(row.value, digits=2))"
     for row in eachrow(allriderdata)
 ]
+
+optimal_points = sum(chosenteam.points)
+optimal_cost = sum(chosenteam.cost)
+margin_to_winner = winning_score > 0 ? optimal_points - winning_score : missing
+
+top_scorer = sort(chosenteam, :points, rev=true)[1, :]
+value_leader = sort(allriderdata, [:value, :points], rev=true)[1, :]
+
+summary_stats = (
+    optimization_status=optimization_status,
+    optimal_points=round(Int, optimal_points),
+    optimal_cost=round(Int, optimal_cost),
+    margin=margin_to_winner === missing ? missing : round(Int, margin_to_winner),
+    top_scorer=(top_scorer.rider, round(Int, top_scorer.points)),
+    value_leader=(value_leader.rider, round(value_leader.value; digits=2)),
+)
+
+summary_margin_label = summary_stats.margin === missing ? "Not applicable" : string(summary_stats.margin, " points")
+summary_status_label = summary_stats.optimization_status == "optimal" ? "Direct optimisation succeeded." : "Fallback to top-nine points due to solver constraints."
 ```
+
+## Executive Summary
+
+- **Optimal team score**: `{julia} summary_stats.optimal_points` points for `{julia} summary_stats.optimal_cost` credits.
+- **Margin vs league winner**: `{julia} summary_margin_label`.
+- **Top scorer**: `{julia} summary_stats.top_scorer[1]` delivered `{julia} summary_stats.top_scorer[2]` points.
+- **Best value pick**: `{julia} summary_stats.value_leader[1]` at `{julia} summary_stats.value_leader[2]` points per credit.
+- **Model status**: `{julia} summary_status_label`
 
 ## League Performance Benchmark
 
@@ -189,12 +145,17 @@ Using complete race results, optimization analysis identifies the highest-scorin
 #| echo: false
 #| output: asis
 
+message = nothing
 if winning_score > 0 && sum(chosenteam.points) > winning_score
     margin = Int(round(sum(chosenteam.points) - winning_score))
-    println("This represents a $(margin)-point improvement over the league winner.")
+    message = "This represents a $(margin)-point improvement over the league winner."
 elseif winning_score > 0
     margin = Int(round(sum(chosenteam.points) - winning_score))
-    println("This would have been sufficient to win by $(margin) points.")
+    message = "This would have been sufficient to win by $(margin) points."
+end
+
+if message !== nothing
+    display(Markdown.parse(message))
 end
 ```
 
@@ -204,11 +165,26 @@ Here is the optimal team:
 #| echo: false
 
 # Create and display the optimal team table
-displaytable = select(chosenteam, :rider => :Rider, :team => :Team,
-    :class => :Class, :cost => :Cost, :points => :Score)
-displaytable[!, :Score] = Int.(round.(displaytable.Score))
+displaytable = format_display_table(
+    chosenteam;
+    columns=[:rider, :team, :class, :cost, :points],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :Score),
+    round_to_int=[:points, :cost],
+    sort_by=(:points, true),
+)
 markdown_table(displaytable)
+# Close table chunk before printing summary
 ```
+
+```{julia}
+#| echo: false
+#| output: asis
+
+top_contributors = sort(chosenteam, :points, rev=true)[1:min(3, nrow(chosenteam)), :]
+contributor_summary = join([string(row.rider, " (+", round(Int, row.points), " pts)") for row in eachrow(top_contributors)], ", ")
+display(Markdown.parse("Top contributors to the margin: " * contributor_summary))
+```
+
 
 ```{julia}
 #| echo: false
@@ -218,17 +194,24 @@ if !isempty(chosen2team) && winning_score > 0
     cost_points = Int(round(sum(chosen2team.points)))
     cost_credits = Int(sum(chosen2team.cost))
 
-    println("## Minimum Winning Cost")
-    println()
-    println("Analysis of the lowest-cost team capable of defeating the league winner. This team would have scored $(cost_points) points at a cost of $(cost_credits) credits.")
-    println()
-    println("Minimum cost winning team:")
-    println()
+    section_text = join([
+            "## Minimum Winning Cost",
+            "",
+            "Analysis of the lowest-cost team capable of defeating the league winner. This team would have scored $(cost_points) points at a cost of $(cost_credits) credits.",
+            "",
+            "Minimum cost winning team:"
+        ], "\n")
+    display(Markdown.parse(section_text))
 
-    displaytable2 = select(chosen2team, :rider => :Rider, :team => :Team,
-        :class => :Class, :cost => :Cost, :points => :Score)
-    displaytable2[!, :Score] = Int.(round.(displaytable2.Score))
-    markdown_table(displaytable2)
+    displaytable2 = format_display_table(
+        chosen2team;
+        columns=[:rider, :team, :class, :cost, :points],
+        rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :Score),
+        round_to_int=[:points, :cost],
+        sort_by=(:points, true),
+    )
+    table_md = sprint(io -> show(io, MIME"text/markdown"(), markdown_table(displaytable2)))
+    display(Markdown.parse(table_md))
 end
 ```
 
@@ -241,7 +224,8 @@ This chart plots rider cost against points scored, showing the relationship betw
 #| fig-cap: "Plot of final race points versus rider cost, coloured by rider classification."
 
 # Create the scatter plot for points vs cost
-@df allriderdata Plots.scatter(
+avg_points = mean(allriderdata.points)
+points_vs_cost_plot = @df allriderdata Plots.scatter(
     :jittered_cost,
     :points,
     group=:class,
@@ -255,6 +239,8 @@ This chart plots rider cost against points scored, showing the relationship betw
     size=(800, 600),
     dpi=300
 )
+Plots.hline!(points_vs_cost_plot, [avg_points]; color=:gray, linestyle=:dash, label="Average points")
+points_vs_cost_plot
 ```
 
 The table below shows the top 15 point scorers from the race, who form the top end of the chart above.
@@ -264,10 +250,14 @@ The table below shows the top 15 point scorers from the race, who form the top e
 
 # Show top 15 point scorers from the whole race
 top_scorers = sort(allriderdata, :points, rev=true)[1:15, :]
-top_scorers_display = select(top_scorers, :rider => :Rider, :team => :Team,
-    :class => :Class, :cost => :Cost, :points => :FinalPoints)
-top_scorers_display[!, :FinalPoints] = Int.(round.(top_scorers_display.FinalPoints))
-top_scorers_display[!, :Value] = round.(top_scorers_display.FinalPoints ./ top_scorers_display.Cost, digits=2)
+top_scorers_display = format_display_table(
+    top_scorers;
+    columns=[:rider, :team, :class, :cost, :points, :value],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :Value),
+    round_to_int=[:points, :cost],
+    round_digits=Dict(:value => 2),
+    sort_by=(:points, true),
+)
 markdown_table(top_scorers_display)
 ```
 
@@ -280,7 +270,8 @@ Next, we'll examine rider value (points per credit) against their cost. This vie
 #| fig-cap: "Plot of rider value (points per credit) versus cost, coloured by rider classification."
 
 # Create the scatter plot for value vs cost
-@df allriderdata Plots.scatter(
+avg_value = mean(allriderdata.value)
+value_vs_cost_plot = @df allriderdata Plots.scatter(
     :jittered_cost,
     :value,
     group=:class,
@@ -294,6 +285,8 @@ Next, we'll examine rider value (points per credit) against their cost. This vie
     size=(800, 600),
     dpi=300
 )
+Plots.hline!(value_vs_cost_plot, [avg_value]; color=:gray, linestyle=:dash, label="Average value")
+value_vs_cost_plot
 ```
 
 The table below shows the best value riders from the race - those who delivered the most points per credit spent.
@@ -302,12 +295,16 @@ The table below shows the best value riders from the race - those who delivered 
 #| echo: false
 
 # Show top 15 value riders (minimum 50 points to avoid noise from very cheap riders)
-value_riders = filter(row -> row.points >= 50, allriderdata)
+value_riders = subset(allriderdata, :points => ByRow(x -> x >= 50))
 top_value = sort(value_riders, :value, rev=true)[1:min(15, nrow(value_riders)), :]
-top_value_display = select(top_value, :rider => :Rider, :team => :Team,
-    :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :Value)
-top_value_display[!, :FinalPoints] = Int.(round.(top_value_display.FinalPoints))
-top_value_display[!, :Value] = round.(top_value_display.Value, digits=2)
+top_value_display = format_display_table(
+    top_value;
+    columns=[:rider, :team, :class, :cost, :points, :value],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :Value),
+    round_to_int=[:points, :cost],
+    round_digits=Dict(:value => 2),
+    sort_by=(:value, true),
+)
 markdown_table(top_value_display)
 ```
 
@@ -319,12 +316,16 @@ Finally, let's look at the riders who failed to deliver on their high costs - th
 #| echo: false
 
 # Show the worst value riders among expensive picks (cost >= 8)
-expensive_riders = filter(row -> row.cost >= 8, allriderdata)
+expensive_riders = subset(allriderdata, :cost => ByRow(x -> x >= 8))
 worst_value = sort(expensive_riders, :value)[1:min(10, nrow(expensive_riders)), :]
-worst_value_display = select(worst_value, :rider => :Rider, :team => :Team,
-    :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :Value)
-worst_value_display[!, :FinalPoints] = Int.(round.(worst_value_display.FinalPoints))
-worst_value_display[!, :Value] = round.(worst_value_display.Value, digits=2)
+worst_value_display = format_display_table(
+    worst_value;
+    columns=[:rider, :team, :class, :cost, :points, :value],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :Value),
+    round_to_int=[:points, :cost],
+    round_digits=Dict(:value => 2),
+    sort_by=(:value, false),
+)
 markdown_table(worst_value_display)
 ```
 
@@ -336,7 +337,7 @@ Let's examine how the different rider classifications performed:
 #| echo: false
 
 # Summary statistics by class
-class_summary = combine(groupby(allriderdata, :class),
+class_stats = combine(groupby(allriderdata, :class),
     :points => (x -> round(mean(x), digits=1)) => :AvgPoints,
     :points => (x -> round(median(x), digits=1)) => :MedianPoints,
     :cost => (x -> round(mean(x), digits=1)) => :AvgCost,
@@ -344,8 +345,8 @@ class_summary = combine(groupby(allriderdata, :class),
     nrow => :Count
 )
 
-rename!(class_summary, :class => :Classification)
-markdown_table(class_summary)
+rename!(class_stats, :class => :Classification)
+markdown_table(class_stats)
 ```
 
 ```{julia}
@@ -379,12 +380,28 @@ Riders who delivered the most points to teams that owned them, weighted by the p
 # Calculate points_for = points * (1 - selected)
 allriderdata.points_for = allriderdata.points .* (1 .- allriderdata.selected)
 points_for_sorted = sort(allriderdata, :points_for, rev=true)[1:min(15, nrow(allriderdata)), :]
-points_for_display = select(points_for_sorted, :rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :Points, :selected => :Selected, :points_for => :PointsFor)
-points_for_display[!, :Points] = Int.(round.(points_for_display.Points))
-points_for_display[!, :PointsFor] = Int.(round.(points_for_display.PointsFor))
-points_for_display[!, :Selected] = string.(round.(points_for_display.Selected .* 100, digits=1), "%")
+points_for_display = format_display_table(
+    points_for_sorted;
+    columns=[:rider, :team, :class, :cost, :points, :selected, :points_for],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :Points, :selected => :Selected, :points_for => :PointsFor),
+    round_to_int=[:points, :cost, :points_for],
+    sort_by=(:points_for, true),
+)
+selected_percentages = string.(round.(points_for_sorted.selected .* 100; digits=1), "%")
+points_for_display[!, :Selected] = selected_percentages[1:nrow(points_for_display)]
 markdown_table(points_for_display)
+
 ```
+
+```{julia}
+#| echo: false
+#| output: asis
+
+top_for = points_for_sorted[1:min(3, nrow(points_for_sorted)), :]
+boost_summary = join([string(row.rider, " (+", round(Int, row.points_for), " pts)") for row in eachrow(top_for)], ", ")
+display(Markdown.parse("Key boosts: " * boost_summary))
+```
+
 
 ### Riders Sorted by "Points Against"
 
@@ -397,9 +414,25 @@ Riders who, by combining high ownership with high points, did the most damage to
 # Calculate points_against = points * selected
 allriderdata.points_against = allriderdata.points .* allriderdata.selected
 points_against_sorted = sort(allriderdata, :points_against, rev=true)[1:min(15, nrow(allriderdata)), :]
-points_against_display = select(points_against_sorted, :rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :Points, :selected => :Selected, :points_against => :PointsAgainst)
-points_against_display[!, :Points] = Int.(round.(points_against_display.Points))
-points_against_display[!, :PointsAgainst] = Int.(round.(points_against_display.PointsAgainst))
-points_against_display[!, :Selected] = string.(round.(points_against_display.Selected .* 100, digits=1), "%")
+points_against_display = format_display_table(
+    points_against_sorted;
+    columns=[:rider, :team, :class, :cost, :points, :selected, :points_against],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :Points, :selected => :Selected, :points_against => :PointsAgainst),
+    round_to_int=[:points, :cost, :points_against],
+    sort_by=(:points_against, true),
+)
+selected_against = string.(round.(points_against_sorted.selected .* 100; digits=1), "%")
+points_against_display[!, :Selected] = selected_against[1:nrow(points_against_display)]
 markdown_table(points_against_display)
+
 ```
+
+```{julia}
+#| echo: false
+#| output: asis
+
+top_against = points_against_sorted[1:min(3, nrow(points_against_sorted)), :]
+pressure_summary = join([string(row.rider, " (", round(Int, row.points_against), " pts, ", round(row.selected * 100; digits=1), "% owned)") for row in eachrow(top_against)], ", ")
+display(Markdown.parse("League pressure points: " * pressure_summary))
+```
+

@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.8.24">
+<meta name="generator" content="quarto-1.8.25">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -37,7 +37,7 @@ ul.task-list li input[type="checkbox"] {
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dc55a5b9e770e841cd82e46aadbfb9b0.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-7b89279ff1a6dce999919e0e67d4d9ec.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="../site_libs/bootstrap/bootstrap-4d8b594121dd52e54118692cc759f5c0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
@@ -136,7 +136,8 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#league-performance-benchmark" id="toc-league-performance-benchmark" class="nav-link active" data-scroll-target="#league-performance-benchmark">League Performance Benchmark</a></li>
+  <li><a href="#executive-summary" id="toc-executive-summary" class="nav-link active" data-scroll-target="#executive-summary">Executive Summary</a></li>
+  <li><a href="#league-performance-benchmark" id="toc-league-performance-benchmark" class="nav-link" data-scroll-target="#league-performance-benchmark">League Performance Benchmark</a></li>
   <li><a href="#optimal-team-composition" id="toc-optimal-team-composition" class="nav-link" data-scroll-target="#optimal-team-composition">Optimal Team Composition</a></li>
   <li><a href="#minimum-winning-cost" id="toc-minimum-winning-cost" class="nav-link" data-scroll-target="#minimum-winning-cost">Minimum Winning Cost</a></li>
   <li><a href="#rider-value-analysis" id="toc-rider-value-analysis" class="nav-link" data-scroll-target="#rider-value-analysis">Rider Value Analysis</a>
@@ -177,6 +178,16 @@ ul.task-list li input[type="checkbox"] {
 
 
 <p>The Vuelta a España 2025 has concluded. This analysis examines the fantasy competition results, identifying the highest-performing riders and the optimal team composition using complete race data.</p>
+<section id="executive-summary" class="level2">
+<h2 class="anchored" data-anchor-id="executive-summary">Executive Summary</h2>
+<ul>
+<li><strong>Optimal team score</strong>: 14364 points for 100 credits.</li>
+<li><strong>Margin vs league winner</strong>: 3399 points.</li>
+<li><strong>Top scorer</strong>: Jonas Vingegaard delivered 3387 points.</li>
+<li><strong>Best value pick</strong>: Torstein Træen at 227.25 points per credit.</li>
+<li><strong>Model status</strong>: Direct optimisation succeeded.</li>
+</ul>
+</section>
 <section id="league-performance-benchmark" class="level2">
 <h2 class="anchored" data-anchor-id="league-performance-benchmark">League Performance Benchmark</h2>
 <p>The winning team in our league, <strong>Salsa Tequila</strong>, scored <strong>10965</strong> points. This is the benchmark for our retrospective analysis.</p>
@@ -186,7 +197,7 @@ ul.task-list li input[type="checkbox"] {
 <p>Using complete race results, optimization analysis identifies the highest-scoring combination of nine riders within budget and classification constraints. The optimal team would have scored <strong>14364</strong> points at a cost of <strong>100</strong> credits.</p>
 <p>This represents a 3399-point improvement over the league winner.</p>
 <p>Here is the optimal team:</p>
-<div id="52fa1ccb" class="cell" data-execution_count="3">
+<div id="2ef6786d" class="cell" data-execution_count="3">
 <div class="cell-output cell-output-display cell-output-markdown" data-execution_count="5">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
@@ -273,6 +284,7 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
+<p>Top contributors to the margin: Jonas Vingegaard (+3387 pts), João Almeida (+2686 pts), Thomas Pidcock (+1858 pts)</p>
 </section>
 <section id="minimum-winning-cost" class="level2">
 <h2 class="anchored" data-anchor-id="minimum-winning-cost">Minimum Winning Cost</h2>
@@ -281,83 +293,83 @@ ul.task-list li input[type="checkbox"] {
 <table class="caption-top table">
 <colgroup>
 <col style="width: 21%">
-<col style="width: 44%">
+<col style="width: 45%">
 <col style="width: 17%">
+<col style="width: 7%">
 <col style="width: 8%">
-<col style="width: 9%">
 </colgroup>
 <thead>
 <tr class="header">
-<th>Rider</th>
-<th>Team</th>
-<th>Class</th>
-<th>Cost</th>
-<th>Score</th>
+<th style="text-align: right;">Rider</th>
+<th style="text-align: right;">Team</th>
+<th style="text-align: right;">Class</th>
+<th style="text-align: right;">Cost</th>
+<th style="text-align: right;">Score</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>Thomas Pidcock</td>
-<td>Q36.5 Pro Cycling Team</td>
-<td>Unclassed</td>
-<td>12</td>
-<td>1858</td>
+<td style="text-align: right;">Thomas Pidcock</td>
+<td style="text-align: right;">Q36.5 Pro Cycling Team</td>
+<td style="text-align: right;">Unclassed</td>
+<td style="text-align: right;">12</td>
+<td style="text-align: right;">1858</td>
 </tr>
 <tr class="even">
-<td>Felix Gall</td>
-<td>Decathlon AG2R La Mondiale Team</td>
-<td>Climber</td>
-<td>10</td>
-<td>1193</td>
+<td style="text-align: right;">Felix Gall</td>
+<td style="text-align: right;">Decathlon AG2R La Mondiale Team</td>
+<td style="text-align: right;">Climber</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">1193</td>
 </tr>
 <tr class="odd">
-<td>Jai Hindley</td>
-<td>Red Bull - BORA - hansgrohe</td>
-<td>Climber</td>
-<td>10</td>
-<td>1796</td>
+<td style="text-align: right;">Jai Hindley</td>
+<td style="text-align: right;">Red Bull - BORA - hansgrohe</td>
+<td style="text-align: right;">Climber</td>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">1796</td>
 </tr>
 <tr class="even">
-<td>Ethan Vernon</td>
-<td>Israel - Premier Tech</td>
-<td>Sprinter</td>
-<td>8</td>
-<td>832</td>
+<td style="text-align: right;">Ethan Vernon</td>
+<td style="text-align: right;">Israel - Premier Tech</td>
+<td style="text-align: right;">Sprinter</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">832</td>
 </tr>
 <tr class="odd">
-<td>Sepp Kuss</td>
-<td>Team Visma - Lease a Bike</td>
-<td>Climber</td>
-<td>8</td>
-<td>1325</td>
+<td style="text-align: right;">Sepp Kuss</td>
+<td style="text-align: right;">Team Visma - Lease a Bike</td>
+<td style="text-align: right;">Climber</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">1325</td>
 </tr>
 <tr class="even">
-<td>Jay Vine</td>
-<td>UAE Team Emirates - XRG</td>
-<td>All rounder</td>
-<td>8</td>
-<td>1599</td>
+<td style="text-align: right;">Jay Vine</td>
+<td style="text-align: right;">UAE Team Emirates - XRG</td>
+<td style="text-align: right;">All rounder</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">1599</td>
 </tr>
 <tr class="odd">
-<td>Marc Soler</td>
-<td>UAE Team Emirates - XRG</td>
-<td>All rounder</td>
-<td>6</td>
-<td>989</td>
+<td style="text-align: right;">Marc Soler</td>
+<td style="text-align: right;">UAE Team Emirates - XRG</td>
+<td style="text-align: right;">All rounder</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">989</td>
 </tr>
 <tr class="even">
-<td>Torstein Træen</td>
-<td>Bahrain - Victorious</td>
-<td>Unclassed</td>
-<td>4</td>
-<td>909</td>
+<td style="text-align: right;">Torstein Træen</td>
+<td style="text-align: right;">Bahrain - Victorious</td>
+<td style="text-align: right;">Unclassed</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">909</td>
 </tr>
 <tr class="odd">
-<td>Louis Vervaeke</td>
-<td>Soudal Quick-Step</td>
-<td>Unclassed</td>
-<td>4</td>
-<td>542</td>
+<td style="text-align: right;">Louis Vervaeke</td>
+<td style="text-align: right;">Soudal Quick-Step</td>
+<td style="text-align: right;">Unclassed</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">542</td>
 </tr>
 </tbody>
 </table>
@@ -365,9 +377,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="rider-value-analysis" class="level1">
 <h1>Rider Value Analysis</h1>
 <p>This chart plots rider cost against points scored, showing the relationship between price and performance.</p>
-<div id="7c833037" class="cell" data-execution_count="5">
-<div class="cell-output cell-output-display" data-execution_count="7">
-    <div id="224f8ef7-375c-4b28-875e-3c11b9fef81e" style="width:800px;height:600px;"></div>
+<div id="33105a17" class="cell" data-execution_count="6">
+<div class="cell-output cell-output-display" data-execution_count="8">
+    <div id="bcd46d3b-3098-4e46-8851-6db9fe9e21f0" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -378,7 +390,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('224f8ef7-375c-4b28-875e-3c11b9fef81e', [
+        Plotly.newPlot('bcd46d3b-3098-4e46-8851-6db9fe9e21f0', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -1054,6 +1066,35 @@ ul.task-list li input[type="checkbox"] {
         ],
         "type": "scatter",
         "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.505787037037037,
+            "title": "",
+            "len": 0.9104877515310585,
+            "x": 0.9950787401574803
+        },
+        "yaxis": "y",
+        "x": [
+            -2547.425747512286,
+            2579.0381940417365
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "name": "Average points",
+        "legendgroup": "Average points",
+        "line": {
+            "color": "rgba(128, 128, 128, 1.000)",
+            "shape": "linear",
+            "dash": "dash",
+            "width": 1
+        },
+        "y": [
+            278.1576086956522,
+            278.1576086956522
+        ],
+        "type": "scatter"
     }
 ]
 , {
@@ -1219,8 +1260,8 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <p>The table below shows the top 15 point scorers from the race, who form the top end of the chart above.</p>
-<div id="2e511d5c" class="cell" data-execution_count="6">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="8">
+<div id="6ca28772" class="cell" data-execution_count="7">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="9">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 21%">
@@ -1368,9 +1409,9 @@ ul.task-list li input[type="checkbox"] {
 <section id="value-vs-cost" class="level3">
 <h3 class="anchored" data-anchor-id="value-vs-cost">Value vs Cost</h3>
 <p>Next, we’ll examine rider value (points per credit) against their cost. This view is crucial for identifying the most efficient, value-for-money riders in the game.</p>
-<div id="bcf8408f" class="cell" data-execution_count="7">
-<div class="cell-output cell-output-display" data-execution_count="9">
-    <div id="45b27657-fd44-49c1-b830-b27619e1e5b2" style="width:800px;height:600px;"></div>
+<div id="6f947c44" class="cell" data-execution_count="8">
+<div class="cell-output cell-output-display" data-execution_count="10">
+    <div id="6f2bc837-137a-4c8d-adbb-8ed97656499e" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -1381,7 +1422,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('45b27657-fd44-49c1-b830-b27619e1e5b2', [
+        Plotly.newPlot('6f2bc837-137a-4c8d-adbb-8ed97656499e', [
     {
         "xaxis": "x",
         "colorbar": {
@@ -2057,6 +2098,35 @@ ul.task-list li input[type="checkbox"] {
         ],
         "type": "scatter",
         "hoverinfo": "text"
+    },
+    {
+        "xaxis": "x",
+        "colorbar": {
+            "y": 0.505787037037037,
+            "title": "",
+            "len": 0.9104877515310585,
+            "x": 0.9950787401574802
+        },
+        "yaxis": "y",
+        "x": [
+            -2547.425747512286,
+            2579.0381940417365
+        ],
+        "showlegend": true,
+        "mode": "lines",
+        "name": "Average value",
+        "legendgroup": "Average value",
+        "line": {
+            "color": "rgba(128, 128, 128, 1.000)",
+            "shape": "linear",
+            "dash": "dash",
+            "width": 1
+        },
+        "y": [
+            37.09327984817116,
+            37.09327984817116
+        ],
+        "type": "scatter"
     }
 ]
 , {
@@ -2224,8 +2294,8 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <p>The table below shows the best value riders from the race - those who delivered the most points per credit spent.</p>
-<div id="407a95f7" class="cell" data-execution_count="8">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="10">
+<div id="da3650fe" class="cell" data-execution_count="9">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="11">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 21%">
@@ -2374,8 +2444,8 @@ ul.task-list li input[type="checkbox"] {
 <section id="high-cost-underperformers" class="level3">
 <h3 class="anchored" data-anchor-id="high-cost-underperformers">High-Cost Underperformers</h3>
 <p>Finally, let’s look at the riders who failed to deliver on their high costs - the biggest disappointments of the Vuelta a España 2025.</p>
-<div id="138e2c56" class="cell" data-execution_count="9">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="11">
+<div id="0de28784" class="cell" data-execution_count="10">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="12">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 26%">
@@ -2484,8 +2554,8 @@ ul.task-list li input[type="checkbox"] {
 <section id="distribution-by-classification" class="level3">
 <h3 class="anchored" data-anchor-id="distribution-by-classification">Distribution by Classification</h3>
 <p>Let’s examine how the different rider classifications performed:</p>
-<div id="4815b5f6" class="cell" data-execution_count="10">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="12">
+<div id="18b5893a" class="cell" data-execution_count="11">
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="13">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
 <col style="width: 23%">
@@ -2542,9 +2612,9 @@ ul.task-list li input[type="checkbox"] {
 </table>
 </div>
 </div>
-<div id="3ffc10f6" class="cell" data-execution_count="11">
-<div class="cell-output cell-output-display" data-execution_count="13">
-    <div id="6c0f7a5d-dfc8-4474-bc4d-d11393d5e867" style="width:800px;height:600px;"></div>
+<div id="13bc5ec1" class="cell" data-execution_count="12">
+<div class="cell-output cell-output-display" data-execution_count="14">
+    <div id="31766aa5-454c-4006-81b3-032a0052e7a4" style="width:800px;height:600px;"></div>
     <script src="https://requirejs.org/docs/release/2.3.7/minified/require.js" onload="plots_jl_plotly_init()"></script>
     <script>
     function plots_jl_plotly_init() {
@@ -2555,7 +2625,7 @@ ul.task-list li input[type="checkbox"] {
     });
     require(['plotly'], function (Plotly) {
 
-        Plotly.newPlot('6c0f7a5d-dfc8-4474-bc4d-d11393d5e867', [
+        Plotly.newPlot('31766aa5-454c-4006-81b3-032a0052e7a4', [
     {
         "xaxis": "x1",
         "fill": "tozeroy",
@@ -4177,6 +4247,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 </tbody>
 </table>
+<p>Key boosts: João Almeida (+1609 pts), Jay Vine (+1487 pts), Jai Hindley (+1460 pts)</p>
 </section>
 <section id="riders-sorted-by-points-against" class="level3">
 <h3 class="anchored" data-anchor-id="riders-sorted-by-points-against">Riders Sorted by “Points Against”</h3>
@@ -4340,6 +4411,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 </tbody>
 </table>
+<p>League pressure points: Jonas Vingegaard (2632 pts, 77.7% owned), João Almeida (1077 pts, 40.1% owned), Mads Pedersen (853 pts, 56.5% owned)</p>
 
 
 </section>

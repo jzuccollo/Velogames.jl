@@ -14,9 +14,12 @@ The Tour de France 2025 has concluded. This analysis examines the fantasy compet
 #| output: false
 #| cache: true
 
-using Velogames, DataFrames, MarkdownTables, Plots, Printf, JuMP, HiGHS, StatsPlots, Statistics, Random
+using Velogames, DataFrames, MarkdownTables, Markdown, Plots, StatsPlots, Statistics, Random
 
 plotly() # Use Plotly backend for interactive plots
+
+diagnostics_enabled = false
+log_if_enabled(msg) = diagnostics_enabled && println(msg)
 
 # Race configuration - Tour de France 2025 Final analysis
 ridersurl = "https://www.velogames.com/velogame/2025/riders.php"
@@ -34,135 +37,102 @@ vg_class_to_pcs_col = Dict(
     "allrounder" => "gc",
     "climber" => "climber",
     "sprinter" => "sprint",
-    "unclassed" => "oneday"
+    "unclassed" => "oneday",
 )
 add_pcs_speciality_points!(allriderdata, pcs_df, vg_class_to_pcs_col)
 
-# Set up the optimization model for the best possible team using final results
-println("Starting optimization with $(nrow(allriderdata)) riders")
-println("Total points available: $(sum(allriderdata.points))")
-println("Riders with points > 0: $(sum(allriderdata.points .> 0))")
-println("Cost range: $(minimum(allriderdata.cost)) - $(maximum(allriderdata.cost))")
+log_if_enabled("Starting optimization with $(nrow(allriderdata)) riders")
+log_if_enabled("Total points available: $(sum(allriderdata.points))")
+log_if_enabled("Riders with points > 0: $(sum(allriderdata.points .> 0))")
+log_if_enabled("Cost range: $(minimum(allriderdata.cost)) - $(maximum(allriderdata.cost))")
 
-# Check data quality before optimization
 if any(ismissing.(allriderdata.points)) || any(ismissing.(allriderdata.cost))
-    println("⚠️ Warning: Missing values detected in points or cost columns")
+    log_if_enabled("⚠️ Warning: Missing values detected in points or cost columns")
 end
 
-# Let's also try to understand the optimization problem better
-println("\nDebug: Examining class structure...")
-println("Unique classes in data: $(unique(allriderdata.class))")
-
-# Fix class name mismatch - the optimization function expects title case
 class_mapping = Dict(
     "allrounder" => "All rounder",
     "climber" => "Climber",
     "sprinter" => "Sprinter",
-    "unclassed" => "Unclassed"
+    "unclassed" => "Unclassed",
 )
-
-println("Fixing class names for optimization...")
 allriderdata.class = [get(class_mapping, class, class) for class in allriderdata.class]
-println("Updated classes: $(unique(allriderdata.class))")
+log_if_enabled("Classes after normalisation: $(unique(allriderdata.class))")
 
 solution = buildmodelhistorical(allriderdata, 9, :points, :cost; totalcost=100)
-if solution !== nothing
-    chosen_values = [solution[rider] > 0.5 for rider in allriderdata.rider]
-    allriderdata.chosen = chosen_values
-    chosenteam = filter(row -> row.chosen, allriderdata)
-    println("✅ Optimization successful: Found team with $(sum(chosenteam.points)) points, costing $(sum(chosenteam.cost)) credits")
-else
-    # More detailed diagnostic information if optimization fails
-    println("❌ Optimization failed.")
-    println("\nDetailed diagnostic information:")
-    println("Data summary:")
-    println("- Total riders: $(nrow(allriderdata))")
-    println("- Points range: $(minimum(allriderdata.points)) - $(maximum(allriderdata.points))")
-    println("- Cost range: $(minimum(allriderdata.cost)) - $(maximum(allriderdata.cost))")
-    println("- Unique classes: $(unique(allriderdata.class))")
+optimization_status = solution === nothing ? "fallback" : "optimal"
 
-    # Check if we have riders in each required class (use actual class names from data)
-    class_counts = combine(groupby(allriderdata, :class), nrow => :count)
-    println("\nClass distribution:")
-    for row in eachrow(class_counts)
-        println("  - $(row.class): $(row.count) riders")
-    end
-
-    # The issue might be that the class names don't match what the function expects
-    # Let's manually check what classes we actually have
-    expected_classes = ["All rounder", "Climber", "Sprinter", "Unclassed"]
-    actual_classes = unique(allriderdata.class)
-    println("\nClass name matching:")
-    println("Expected classes: $(expected_classes)")
-    println("Actual classes: $(actual_classes)")
-
-    missing_classes = setdiff(expected_classes, actual_classes)
-    if !isempty(missing_classes)
-        println("❌ Missing expected classes: $(missing_classes)")
-        println("This is likely why optimization failed!")
-    end
-
-    # Proceed with fallback analysis without optimization
-    println("\nProceeding with analysis using top performers instead of optimal team...")
+if solution === nothing
+    log_if_enabled("❌ Optimization failed, reverting to points-based selection.")
     chosenteam = sort(allriderdata, :points, rev=true)[1:9, :]
     allriderdata.chosen = [rider in chosenteam.rider for rider in allriderdata.rider]
-    println("Fallback team total points: $(sum(chosenteam.points))")
-end
-
-# Calculate current value and identify standout performers
-
-# Let's also check constraint feasibility for debugging
-println("Constraint feasibility check:")
-println("Can we form a valid team?")
-
-# Check if we can satisfy class constraints with budget - using corrected class names
-allrounder_riders = filter(row -> row.class == "All rounder", allriderdata)
-climber_riders = filter(row -> row.class == "Climber", allriderdata)
-sprinter_riders = filter(row -> row.class == "Sprinter", allriderdata)
-unclassed_riders = filter(row -> row.class == "Unclassed", allriderdata)
-
-println("Available riders by class:")
-println("- All rounders: $(nrow(allrounder_riders))")
-if nrow(allrounder_riders) >= 2
-    println("  Cheapest 2: $(sort(allrounder_riders.cost)[1:2])")
-end
-println("- Climbers: $(nrow(climber_riders))")
-if nrow(climber_riders) >= 2
-    println("  Cheapest 2: $(sort(climber_riders.cost)[1:2])")
-end
-println("- Sprinters: $(nrow(sprinter_riders))")
-if nrow(sprinter_riders) >= 1
-    println("  Cheapest: $(minimum(sprinter_riders.cost))")
-end
-println("- Unclassed: $(nrow(unclassed_riders))")
-if nrow(unclassed_riders) >= 4
-    println("  Cheapest 4: $(sort(unclassed_riders.cost)[1:4])")
-end
-
-# Check minimum cost for a valid team (2 AR, 2 C, 1 S, 4 U)
-if nrow(allrounder_riders) >= 2 && nrow(climber_riders) >= 2 && nrow(sprinter_riders) >= 1 && nrow(unclassed_riders) >= 4
-    min_cost = sum(sort(allrounder_riders.cost)[1:2]) + sum(sort(climber_riders.cost)[1:2]) + minimum(sprinter_riders.cost) + sum(sort(unclassed_riders.cost)[1:4])
-    println("Minimum cost for a valid team: $(min_cost)")
 else
-    println("❌ Insufficient riders in one or more classes!")
+    chosen_values = [solution[rider] > 0.5 for rider in allriderdata.rider]
+    allriderdata.chosen = chosen_values
+    chosenteam = subset(allriderdata, :chosen => ByRow(identity))
 end
 
-# Find the cheapest team that would have won the league (if winning_score > 0)
+class_summary = class_availability_summary(allriderdata)
+class_summary_lines = describe_class_availability(class_summary)
+
+if diagnostics_enabled
+    log_if_enabled("Constraint feasibility snapshot:")
+    foreach(line -> log_if_enabled(line), class_summary_lines)
+end
+
 if winning_score > 0
     costsolution = minimizecostforstage(allriderdata, winning_score, 9, :cost; totalcost=100)
     if costsolution !== nothing
         chosen2_values = [costsolution[rider] > 0.5 for rider in allriderdata.rider]
         allriderdata.chosen2 = chosen2_values
-        chosen2team = filter(row -> row.chosen2, allriderdata)
+        chosen2team = subset(allriderdata, :chosen2 => ByRow(identity))
     else
-        println("Cost minimization failed")
+        log_if_enabled("Cost minimization failed")
         chosen2team = DataFrame()
     end
 else
-    chosen2team = DataFrame() # No cost minimization analysis without a target score
+    chosen2team = DataFrame()
 end
+
+allriderdata.value = allriderdata.points ./ allriderdata.cost
+
+Random.seed!(42)
+jitter_amount = 0.3
+allriderdata.jittered_cost = allriderdata.cost .+ (rand(nrow(allriderdata)) .- 0.5) .* jitter_amount
+
+hover_text = [
+    "$(row.rider)<br>Team: $(unpipe(row.team))<br>Class: $(row.class)<br>Cost: $(row.cost)<br>Points: $(round(Int, row.points))<br>Value: $(round(row.value; digits=1))"
+    for row in eachrow(allriderdata)
+]
+allriderdata.hover_text = hover_text
+
+optimal_points = sum(chosenteam.points)
+optimal_cost = sum(chosenteam.cost)
+margin_to_winner = winning_score > 0 ? optimal_points - winning_score : missing
+
+top_scorer = sort(chosenteam, :points, rev=true)[1, :]
+value_leader = sort(allriderdata, [:value, :points], rev=true)[1, :]
+
+summary_stats = (
+    optimization_status=optimization_status,
+    optimal_points=round(Int, optimal_points),
+    optimal_cost=round(Int, optimal_cost),
+    margin=margin_to_winner === missing ? missing : round(Int, margin_to_winner),
+    top_scorer=(top_scorer.rider, round(Int, top_scorer.points)),
+    value_leader=(value_leader.rider, round(value_leader.value; digits=1)),
+)
+
+summary_margin_label = summary_stats.margin === missing ? "Not applicable" : string(summary_stats.margin, " points")
+summary_status_label = summary_stats.optimization_status == "optimal" ? "Direct optimisation succeeded." : "Fallback to top-nine points due to solver constraints."
 ```
 
+## Executive Summary
+
+- **Optimal team score**: `{julia} summary_stats.optimal_points` points for `{julia} summary_stats.optimal_cost` credits.
+- **Margin vs league winner**: `{julia} summary_margin_label`.
+- **Top scorer**: `{julia} summary_stats.top_scorer[1]` amassed `{julia} summary_stats.top_scorer[2]` points.
+- **Best value pick**: `{julia} summary_stats.value_leader[1]` at `{julia} summary_stats.value_leader[2]` points per credit.
+- **Model status**: `{julia} summary_status_label`
 
 At the end of three weeks of racing, **`{julia} league_winner`** won our fantasy league with **`{julia} winning_score`** points.
 
@@ -178,11 +148,25 @@ The optimal team would have scored `{julia} (sum(chosenteam.points))` points at 
 #| echo: false
 
 # Create and display the team table
-perfect_team_display = rename(chosenteam, :rider => :Rider, :team => :Team,
-    :cost => :Cost, :points => :FinalPoints, :class => :Class)
-perfect_team_display[!, :FinalPoints] = Int.(round.(perfect_team_display.FinalPoints))
-perfect_team_display[!, :Value] = Int.(round.(perfect_team_display.FinalPoints ./ perfect_team_display.Cost))
-markdown_table(perfect_team_display[:, [:Rider, :Team, :Class, :Cost, :FinalPoints, :Value]])
+perfect_team_display = format_display_table(
+    chosenteam;
+    columns=[:rider, :team, :class, :cost, :points, :value],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :ValuePerCredit),
+    round_to_int=[:points, :cost],
+    round_digits=Dict(:value => 1),
+    sort_by=(:points, true),
+)
+markdown_table(perfect_team_display)
+```
+
+```{julia}
+#| echo: false
+#| output: asis
+
+top_contributors = sort(chosenteam, :points, rev=true)[1:min(3, nrow(chosenteam)), :]
+contributor_summary = join([string(row.rider, " (+", round(Int, row.points), " pts)") for row in eachrow(top_contributors)], ", ")
+contributor_text = "Top contributors to the margin: " * contributor_summary
+display(Markdown.parse(contributor_text))
 ```
 
 ## Minimum winning cost
@@ -196,13 +180,17 @@ This team scores `{julia} sum(chosen2team.points)` points and costs just `{julia
 
 if nrow(chosen2team) > 0
     # Create and display the cheapest winning team table
-    cheapest_team_display = rename(chosen2team, :rider => :Rider, :team => :Team,
-        :cost => :Cost, :points => :FinalPoints, :class => :Class)
-    cheapest_team_display[!, :FinalPoints] = Int.(round.(cheapest_team_display.FinalPoints))
-    cheapest_team_display[!, :Value] = Int.(round.(cheapest_team_display.FinalPoints ./ cheapest_team_display.Cost))
-    markdown_table(cheapest_team_display[:, [:Rider, :Team, :Class, :Cost, :FinalPoints, :Value]])
+    cheapest_team_display = format_display_table(
+        chosen2team;
+        columns=[:rider, :team, :class, :cost, :points, :value],
+        rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :ValuePerCredit),
+        round_to_int=[:points, :cost],
+        round_digits=Dict(:value => 1),
+        sort_by=(:points, true),
+    )
+    markdown_table(cheapest_team_display)
 else
-    println("Could not determine the cheapest winning team.")
+    display(Markdown.parse("Could not determine the cheapest winning team."))
 end
 ```
 
@@ -214,17 +202,21 @@ These high-cost riders didn't deliver the points their price tags demanded over 
 #| echo: false
 
 # Show expensive riders (8+ credits) with low points (under 200)
-expensive_riders = filter(row -> row.cost >= 8, allriderdata)
-disappointments = filter(row -> row.points < 200, expensive_riders)
-disappointments_display = select(disappointments, :rider => :Rider, :team => :Team,
-    :class => :Class, :cost => :Cost, :points => :FinalPoints)
-disappointments_display[!, :FinalPoints] = Int.(round.(disappointments_display.FinalPoints))
-disappointments_display[!, :Value] = Int.(round.(disappointments_display.FinalPoints ./ disappointments_display.Cost))
+expensive_riders = subset(allriderdata, :cost => ByRow(x -> x >= 8))
+disappointments = subset(expensive_riders, :points => ByRow(x -> x < 200))
 
 if nrow(disappointments) > 0
+    disappointments_display = format_display_table(
+        disappointments;
+        columns=[:rider, :team, :class, :cost, :points, :value],
+        rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :ValuePerCredit),
+        round_to_int=[:points, :cost],
+        round_digits=Dict(:value => 1),
+        sort_by=(:points, false),
+    )
     markdown_table(disappointments_display)
 else
-    println("All expensive riders performed well!")
+    display(Markdown.parse("All expensive riders performed well!"))
 end
 ```
 
@@ -241,24 +233,15 @@ First, let's look at the raw performance: how many points each rider scored vers
 #| fig-cap: "Plot of final points versus rider cost, coloured by rider classification."
 #| cache: true
 
-# Jitter cost for better visibility
-Random.seed!(42)
-allriderdata.jittered_cost = allriderdata.cost .+ (rand(nrow(allriderdata)) .- 0.5) .* 0.3
-
-# Create hover text with original cost
-hover_text = [
-    "$(row.rider)<br>Team: $(row.team)<br>Class: $(row.class)<br>Cost: $(row.cost)<br>Points: $(@sprintf("%.0f", row.points))<br>Value: $(@sprintf("%.1f", row.value))"
-    for row in eachrow(allriderdata)
-]
-
 # Create the scatter plot for points vs cost
-@df allriderdata Plots.scatter(
+avg_points = mean(allriderdata.points)
+points_vs_cost_plot = @df allriderdata Plots.scatter(
     :jittered_cost,
     :points,
     group=:class,
     markerstrokewidth=0,
     alpha=0.7,
-    hover=hover_text,
+    hover=:hover_text,
     xlabel="Cost (Jittered)",
     ylabel="Final Points",
     title="Final Performance: Points vs Cost",
@@ -266,6 +249,8 @@ hover_text = [
     size=(800, 600),
     dpi=300
 )
+Plots.hline!(points_vs_cost_plot, [avg_points]; color=:gray, linestyle=:dash, label="Average points")
+points_vs_cost_plot
 ```
 
 The table below shows the top 15 point scorers from the race, who form the top end of the chart above.
@@ -275,10 +260,14 @@ The table below shows the top 15 point scorers from the race, who form the top e
 
 # Show top 15 point scorers from the whole race
 top_scorers = sort(allriderdata, :points, rev=true)[1:15, :]
-top_scorers_display = select(top_scorers, :rider => :Rider, :team => :Team,
-    :class => :Class, :cost => :Cost, :points => :FinalPoints)
-top_scorers_display[!, :FinalPoints] = Int.(round.(top_scorers_display.FinalPoints))
-top_scorers_display[!, :Value] = Int.(round.(top_scorers_display.FinalPoints ./ top_scorers_display.Cost))
+top_scorers_display = format_display_table(
+    top_scorers;
+    columns=[:rider, :team, :class, :cost, :points, :value],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :ValuePerCredit),
+    round_to_int=[:points, :cost],
+    round_digits=Dict(:value => 1),
+    sort_by=(:points, true),
+)
 markdown_table(top_scorers_display)
 ```
 
@@ -292,13 +281,14 @@ Next, we'll examine rider value (points per credit) against their cost. This vie
 #| cache: true
 
 # Create the scatter plot for value vs cost and make it static
+avg_value = mean(allriderdata.value)
 p_value = @df allriderdata Plots.scatter(
     :jittered_cost,
     :value,
     group=:class,
     markerstrokewidth=0,
     alpha=0.7,
-    hover=hover_text,
+    hover=:hover_text,
     xlabel="Cost (Jittered)",
     ylabel="Value (Points per Credit)",
     title="Final Value: Points/Cost vs Cost",
@@ -307,6 +297,7 @@ p_value = @df allriderdata Plots.scatter(
     dpi=300,
     config=Dict("staticPlot" => true)
 )
+p_value = Plots.hline!(p_value, [avg_value]; color=:gray, linestyle=:dash, label="Average value")
 p_value
 ```
 
@@ -316,13 +307,16 @@ These riders have outperformed their cost expectations, delivering exceptional v
 #| echo: false
 
 # Calculate value and show all riders with a value over 100
-allriderdata.value = allriderdata.points ./ allriderdata.cost
-high_value_performers = filter(row -> row.value > 100, allriderdata)
+high_value_performers = subset(allriderdata, :value => ByRow(x -> x > 100))
 top_value = sort(high_value_performers, :value, rev=true)
-top_value_display = select(top_value, :rider => :Rider, :team => :Team,
-    :class => :Class, :cost => :Cost, :points => :FinalPoints)
-top_value_display[!, :FinalPoints] = Int.(round.(top_value_display.FinalPoints))
-top_value_display[!, :Value] = Int.(round.(top_value_display.FinalPoints ./ top_value_display.Cost))
+top_value_display = format_display_table(
+    top_value;
+    columns=[:rider, :team, :class, :cost, :points, :value],
+    rename_map=Dict(:rider => :Rider, :team => :Team, :class => :Class, :cost => :Cost, :points => :FinalPoints, :value => :ValuePerCredit),
+    round_to_int=[:points, :cost],
+    round_digits=Dict(:value => 1),
+    sort_by=(:value, true),
+)
 markdown_table(top_value_display)
 ```
 
@@ -334,33 +328,33 @@ Some riders overperformed compared to their historical averages, while others un
 #| echo: false
 #| cache: true
 
-println("📊 Collecting historical Tour de France data for comparison...")
+log_if_enabled("📊 Collecting historical Tour de France data for comparison...")
 
 # Historical Tour de France data sources (from stage race predictor)
 tdf_2024_url = "https://www.velogames.com/velogame/2024/riders.php"
 tdf_2023_url = "https://www.velogames.com/velogame/2023/riders.php"
 
 # Get historical data
-println("📥 Fetching 2024 Tour de France results...")
+log_if_enabled("📥 Fetching 2024 Tour de France results...")
 try
     global tdf_2024_historical = getvgriders(tdf_2024_url; cache_config=tdf_final_cache)
     tdf_2024_historical = select(tdf_2024_historical, :riderkey, :rider, :points => :points_2024)
-    println("   ✅ 2024 Tour data: $(nrow(tdf_2024_historical)) riders")
+    log_if_enabled("   ✅ 2024 Tour data: $(nrow(tdf_2024_historical)) riders")
     global has_2024_historical = true
 catch e
-    println("   ⚠️ 2024 Tour data unavailable: $e")
+    log_if_enabled("   ⚠️ 2024 Tour data unavailable: $(string(e))")
     global tdf_2024_historical = DataFrame(riderkey=String[], rider=String[], points_2024=Float64[])
     global has_2024_historical = false
 end
 
-println("📥 Fetching 2023 Tour de France results...")
+log_if_enabled("📥 Fetching 2023 Tour de France results...")
 try
     global tdf_2023_historical = getvgriders(tdf_2023_url; cache_config=tdf_final_cache)
     tdf_2023_historical = select(tdf_2023_historical, :riderkey, :rider, :points => :points_2023)
-    println("   ✅ 2023 Tour data: $(nrow(tdf_2023_historical)) riders")
+    log_if_enabled("   ✅ 2023 Tour data: $(nrow(tdf_2023_historical)) riders")
     global has_2023_historical = true
 catch e
-    println("   ⚠️ 2023 Tour data unavailable: $e")
+    log_if_enabled("   ⚠️ 2023 Tour data unavailable: $(string(e))")
     global tdf_2023_historical = DataFrame(riderkey=String[], rider=String[], points_2023=Float64[])
     global has_2023_historical = false
 end
@@ -371,18 +365,18 @@ rename!(historical_comparison, :points => :points_2025)
 
 if has_2024_historical
     historical_comparison = leftjoin(historical_comparison, tdf_2024_historical, on=:riderkey, makeunique=true)
-    println("   ✅ Added 2024 data to comparison")
+    log_if_enabled("   ✅ Added 2024 data to comparison")
 else
     historical_comparison[!, :points_2024] = zeros(Float64, nrow(historical_comparison))
-    println("   ⚠️ Using zeros for 2024 data")
+    log_if_enabled("   ⚠️ Using zeros for 2024 data")
 end
 
 if has_2023_historical
     historical_comparison = leftjoin(historical_comparison, tdf_2023_historical, on=:riderkey, makeunique=true)
-    println("   ✅ Added 2023 data to comparison")
+    log_if_enabled("   ✅ Added 2023 data to comparison")
 else
     historical_comparison[!, :points_2023] = zeros(Float64, nrow(historical_comparison))
-    println("   ⚠️ Using zeros for 2023 data")
+    log_if_enabled("   ⚠️ Using zeros for 2023 data")
 end
 
 # Handle missing values
@@ -401,9 +395,9 @@ historical_comparison[!, :performance_change] = historical_comparison.points_202
 historical_comparison[!, :performance_ratio] = historical_comparison.points_2025 ./ (historical_comparison.historical_avg .+ 1e-6)  # Avoid division by zero
 
 # Filter to riders with meaningful historical data (participated in at least one previous Tour)
-meaningful_riders = filter(row -> (row.points_2024 + row.points_2023) > 0, historical_comparison)
+meaningful_riders = subset(historical_comparison, [:points_2024, :points_2023] => ByRow((p2024, p2023) -> (p2024 + p2023) > 0))
 
-println("📈 Historical comparison complete: $(nrow(meaningful_riders)) riders with historical Tour data")
+log_if_enabled("📈 Historical comparison complete: $(nrow(meaningful_riders)) riders with historical Tour data")
 ```
 
 ### Performance vs Historical Average: Above-Average Riders
@@ -415,29 +409,31 @@ These riders significantly exceeded their 2023-2024 Tour de France averages in 2
 
 if nrow(meaningful_riders) > 0
     # Top overperformers (minimum 100 point improvement to filter noise)
-    overperformers = filter(row -> row.performance_change >= 100, meaningful_riders)
+    overperformers = subset(meaningful_riders, :performance_change => ByRow(x -> x >= 100))
     top_overperformers = sort(overperformers, :performance_change, rev=true)[1:min(15, nrow(overperformers)), :]
 
     if nrow(top_overperformers) > 0
-        overperform_display = select(top_overperformers,
-            :rider => :Rider,
-            :team => :Team,
-            :class => :Class,
-            :cost => :Cost,
-            :points_2025 => :Points2025,
-            :historical_avg => :HistoricalAvg,
-            :performance_change => :Improvement
+        overperform_display = format_display_table(
+            top_overperformers;
+            columns=[:rider, :team, :class, :cost, :points_2025, :historical_avg, :performance_change],
+            rename_map=Dict(
+                :rider => :Rider,
+                :team => :Team,
+                :class => :Class,
+                :cost => :Cost,
+                :points_2025 => :Points2025,
+                :historical_avg => :HistoricalAvg,
+                :performance_change => :Improvement,
+            ),
+            round_to_int=[:points_2025, :historical_avg, :performance_change, :cost],
+            sort_by=(:performance_change, true),
         )
-        overperform_display[!, :Points2025] = Int.(round.(overperform_display.Points2025))
-        overperform_display[!, :HistoricalAvg] = Int.(round.(overperform_display.HistoricalAvg))
-        overperform_display[!, :Improvement] = Int.(round.(overperform_display.Improvement))
-
         markdown_table(overperform_display)
     else
-        println("No riders with significant overperformance (≥100 points) found.")
+        display(Markdown.parse("No riders with significant overperformance (≥100 points) found."))
     end
 else
-    println("No riders with historical data available for comparison.")
+    display(Markdown.parse("No riders with historical data available for comparison."))
 end
 ```
 
@@ -450,29 +446,31 @@ These riders fell well short of their 2023-2024 Tour de France averages:
 
 if nrow(meaningful_riders) > 0
     # Top underperformers (minimum -100 point decline to filter noise)
-    underperformers = filter(row -> row.performance_change <= -100, meaningful_riders)
+    underperformers = subset(meaningful_riders, :performance_change => ByRow(x -> x <= -100))
     top_underperformers = sort(underperformers, :performance_change)[1:min(15, nrow(underperformers)), :]
 
     if nrow(top_underperformers) > 0
-        underperform_display = select(top_underperformers,
-            :rider => :Rider,
-            :team => :Team,
-            :class => :Class,
-            :cost => :Cost,
-            :points_2025 => :Points2025,
-            :historical_avg => :HistoricalAvg,
-            :performance_change => :Decline
+        underperform_display = format_display_table(
+            top_underperformers;
+            columns=[:rider, :team, :class, :cost, :points_2025, :historical_avg, :performance_change],
+            rename_map=Dict(
+                :rider => :Rider,
+                :team => :Team,
+                :class => :Class,
+                :cost => :Cost,
+                :points_2025 => :Points2025,
+                :historical_avg => :HistoricalAvg,
+                :performance_change => :Decline,
+            ),
+            round_to_int=[:points_2025, :historical_avg, :performance_change, :cost],
+            sort_by=(:performance_change, false),
         )
-        underperform_display[!, :Points2025] = Int.(round.(underperform_display.Points2025))
-        underperform_display[!, :HistoricalAvg] = Int.(round.(underperform_display.HistoricalAvg))
-        underperform_display[!, :Decline] = Int.(round.(underperform_display.Decline))
-
         markdown_table(underperform_display)
     else
-        println("No riders with significant underperformance (≤-100 points) found.")
+        display(Markdown.parse("No riders with significant underperformance (≤-100 points) found."))
     end
 else
-    println("No riders with historical data available for comparison.")
+    display(Markdown.parse("No riders with historical data available for comparison."))
 end
 ```
 
@@ -498,7 +496,7 @@ if nrow(meaningful_riders) > 0
     # Add vertical line at zero
     vline!([0], color=:red, linestyle=:dash, linewidth=2, label="No Change")
 else
-    println("No historical data available for performance change analysis.")
+    display(Markdown.parse("No historical data available for performance change analysis."))
 end
 ```
 
@@ -511,47 +509,48 @@ This table shows the three-year performance pattern for riders who participated 
 
 if nrow(meaningful_riders) > 0
     # Filter to riders who participated in all three years (non-zero points)
-    three_year_riders = filter(row -> row.points_2023 > 0 && row.points_2024 > 0 && row.points_2025 > 0, meaningful_riders)
+    three_year_riders = subset(meaningful_riders, [:points_2023, :points_2024, :points_2025] => ByRow((p2023, p2024, p2025) -> p2023 > 0 && p2024 > 0 && p2025 > 0))
 
     if nrow(three_year_riders) > 0
         # Sort by 2025 performance and show top performers
         three_year_top = sort(three_year_riders, :points_2025, rev=true)[1:min(20, nrow(three_year_riders)), :]
 
-        three_year_display = select(three_year_top,
-            :rider => :Rider,
-            :team => :Team,
-            :class => :Class,
-            :cost => :Cost,
-            :points_2023 => :Tour2023,
-            :points_2024 => :Tour2024,
-            :points_2025 => :Tour2025
+        three_year_table = format_display_table(
+            three_year_top;
+            columns=[:rider, :team, :class, :points_2023, :points_2024, :points_2025, :historical_avg, :performance_change],
+            rename_map=Dict(
+                :rider => :Rider,
+                :team => :Team,
+                :class => :Class,
+                :points_2023 => :Tour2023,
+                :points_2024 => :Tour2024,
+                :points_2025 => :Tour2025,
+                :historical_avg => :HistoricalAvg,
+                :performance_change => Symbol("Change vs Avg"),
+            ),
+            round_to_int=[:points_2023, :points_2024, :points_2025, :historical_avg, :performance_change],
+            sort_by=(:points_2025, true),
         )
 
-        # Round all point columns
-        for col in [:Tour2023, :Tour2024, :Tour2025]
-            three_year_display[!, col] = Int.(round.(three_year_display[!, col]))
-        end
-
-        # Calculate trend indicators
-        three_year_display[!, :Trend] = ["📈" for _ in 1:nrow(three_year_display)]  # Default upward
-        for i in 1:nrow(three_year_display)
-            if three_year_display[i, :Tour2025] < three_year_display[i, :Tour2024] < three_year_display[i, :Tour2023]
-                three_year_display[i, :Trend] = "📉"  # Declining
-            elseif three_year_display[i, :Tour2025] > three_year_display[i, :Tour2024] > three_year_display[i, :Tour2023]
-                three_year_display[i, :Trend] = "📈"  # Improving
+        trend_flags = Vector{String}(undef, nrow(three_year_top))
+        for (idx, row) in enumerate(eachrow(three_year_top))
+            if row.points_2025 < row.points_2024 < row.points_2023
+                trend_flags[idx] = "📉"
+            elseif row.points_2025 > row.points_2024 > row.points_2023
+                trend_flags[idx] = "📈"
             else
-                three_year_display[i, :Trend] = "📊"  # Mixed
+                trend_flags[idx] = "📊"
             end
         end
 
-        markdown_table(three_year_display)
-
-        println("\n📈 = Improving trend, 📉 = Declining trend, 📊 = Mixed performance")
+        three_year_table[!, :Trend] = trend_flags
+        markdown_table(three_year_table)
+        display(Markdown.parse("📈 = Improving trend, 📉 = Declining trend, 📊 = Mixed performance"))
     else
-        println("No riders found who participated in all three Tours (2023, 2024, 2025).")
+        display(Markdown.parse("No riders found who participated in all three Tours (2023, 2024, 2025)."))
     end
 else
-    println("Insufficient historical data for three-year comparison.")
+    display(Markdown.parse("Insufficient historical data for three-year comparison."))
 end
 ```
 
