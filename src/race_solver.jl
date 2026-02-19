@@ -1,4 +1,176 @@
 """
+## `solverace_sixes`
+
+Construct an optimal team for a Superclassico Sixes one-day race using Monte Carlo
+simulation of expected Velogames points.
+
+This is the recommended solver for one-day classics. It replaces the simple
+weighted-average approach with a proper expected VG points model that accounts
+for finish position scoring, teammate assists, and breakaway points.
+
+## Pipeline:
+1. Fetch VG rider data (costs, season points, teams)
+2. Fetch PCS specialty ratings for each rider
+3. Fetch PCS race-specific history (past editions)
+4. Optionally fetch betting odds
+5. Estimate rider strength via Bayesian updating
+6. Monte Carlo simulate finishing positions
+7. Compute expected VG points per rider
+8. Optimize team selection to maximize expected VG points
+
+## Arguments
+- `config::RaceConfig` - race configuration (from `setup_race`)
+- `racehash::String` - VG startlist hash filter (default: "" for all riders)
+- `history_years::Int` - how many years of race history to use (default: 5)
+- `odds_url::String` - Betfair odds URL (default: "" for no odds)
+- `n_sims::Int` - Monte Carlo simulations (default: 10000)
+- `excluded_riders::Vector{String}` - rider names to exclude
+
+## Returns
+A DataFrame with the selected team and prediction details including
+expected VG points, strength estimates, and component breakdowns.
+"""
+function solverace_sixes(config::RaceConfig;
+    racehash::String="",
+    history_years::Int=5,
+    odds_url::String="",
+    n_sims::Int=10000,
+    excluded_riders::Vector{String}=String[],
+    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool=false)
+
+    # --- 1. Fetch VG rider data ---
+    @info "Fetching VG rider data from $(config.current_url)..."
+    riderdf = getvgriders(config.current_url; cache_config=cache_config, force_refresh=force_refresh)
+
+    # Filter by startlist hash if provided
+    if !isempty(racehash)
+        riderdf = filter(row -> hasproperty(row, :startlist) ? row.startlist == racehash : true, riderdf)
+        @info "Filtered to $(nrow(riderdf)) riders for startlist: $racehash"
+    end
+
+    # Exclude riders
+    if !isempty(excluded_riders)
+        before = nrow(riderdf)
+        riderdf = filter(row -> !(row.rider in excluded_riders), riderdf)
+        @info "Excluded $(before - nrow(riderdf)) riders"
+    end
+
+    if nrow(riderdf) < 6
+        @warn "Not enough riders ($(nrow(riderdf))) for team selection"
+        return DataFrame()
+    end
+
+    # --- 2. Fetch PCS specialty ratings ---
+    @info "Fetching PCS specialty ratings for $(nrow(riderdf)) riders..."
+    rider_names = String.(riderdf.rider)
+    pcsriderpts = getpcsriderpts_batch(rider_names; cache_config=cache_config, force_refresh=force_refresh)
+
+    # Join PCS data onto rider data
+    pcs_cols = intersect(names(pcsriderpts), ["riderkey", "oneday", "gc", "tt", "sprint", "climber"])
+    if !isempty(pcs_cols)
+        riderdf = leftjoin(riderdf, pcsriderpts[:, pcs_cols], on=:riderkey, makeunique=true)
+        # Fill missing PCS values with 0
+        for col in [:oneday, :gc, :tt, :sprint, :climber]
+            if col in propertynames(riderdf)
+                riderdf[!, col] = coalesce.(riderdf[!, col], 0)
+            end
+        end
+    end
+
+    # --- 3. Fetch PCS race history ---
+    race_history_df = nothing
+    if !isempty(config.pcs_slug) && history_years > 0
+        current_year = config.year
+        years = collect((current_year - history_years):(current_year - 1))
+        @info "Fetching race history for $(config.pcs_slug): $years..."
+        try
+            race_history_df = getpcsracehistory(config.pcs_slug, years;
+                cache_config=cache_config, force_refresh=force_refresh)
+            @info "Got $(nrow(race_history_df)) historical results"
+        catch e
+            @warn "Failed to fetch race history: $e"
+        end
+    end
+
+    # --- 4. Fetch odds (optional) ---
+    odds_df = nothing
+    if !isempty(odds_url)
+        try
+            odds_df = getodds(odds_url; cache_config=cache_config, force_refresh=force_refresh)
+            @info "Got odds for $(nrow(odds_df)) riders"
+        catch e
+            @warn "Failed to fetch odds: $e"
+        end
+    end
+
+    # --- Data quality summary ---
+    n_total = nrow(riderdf)
+    n_pcs_specialty = if :oneday in propertynames(riderdf)
+        count(row -> !ismissing(row.oneday) && row.oneday > 0, eachrow(riderdf))
+    else
+        0
+    end
+    n_history = if race_history_df !== nothing
+        length(intersect(riderdf.riderkey, unique(race_history_df.riderkey)))
+    else
+        0
+    end
+    n_odds = if odds_df !== nothing
+        length(intersect(riderdf.riderkey, odds_df.riderkey))
+    else
+        0
+    end
+
+    @info "📊 Data quality summary" riders=n_total pcs_specialty="$n_pcs_specialty/$n_total" race_history="$n_history/$n_total" odds="$n_odds/$n_total"
+    if n_pcs_specialty == 0
+        @warn "No riders have PCS specialty data — strength estimates will rely on VG season points only"
+    end
+    if race_history_df !== nothing && n_history == 0
+        @warn "No riders matched to race history — historical finishing positions won't inform predictions"
+    end
+
+    # --- 5-7. Predict expected VG points ---
+    scoring = get_scoring(config.category > 0 ? config.category : 2)  # default Cat 2 if unknown
+
+    @info "Predicting expected VG points (Cat $(config.category), $n_sims sims)..."
+    predicted = predict_expected_points(riderdf, scoring;
+        race_history_df=race_history_df,
+        odds_df=odds_df,
+        n_sims=n_sims)
+
+    # --- 8. Optimize team selection ---
+    @info "Optimizing team selection..."
+
+    # The cost column may be :cost or :vgcost depending on processing
+    cost_col = :vgcost in propertynames(predicted) ? :vgcost :
+               :cost in propertynames(predicted) ? :cost : nothing
+    if cost_col === nothing
+        error("No cost column found in rider data")
+    end
+
+    results = buildmodeloneday(predicted, config.team_size, :expected_vg_points, cost_col;
+        totalcost=100)
+
+    if results === nothing
+        @warn "Optimization failed - no feasible solution found"
+        return DataFrame()
+    end
+
+    # Extract chosen riders
+    chosen_vec = [results[r] for r in predicted.rider]
+    predicted[!, :chosen] = chosen_vec .> 0.5
+    chosenteam = filter(:chosen => ==(true), predicted)
+
+    total_cost = sum(chosenteam[!, cost_col])
+    total_evg = sum(chosenteam.expected_vg_points)
+    @info "Selected $(nrow(chosenteam)) riders | Cost: $total_cost | Expected VG points: $(round(total_evg, digits=1))"
+
+    return predicted, chosenteam
+end
+
+
+"""
 ## `solverace`
 
 This function constructs a team for the specified race.

@@ -4,6 +4,8 @@ using Test
 using JuMP
 using HTTP
 using Dates
+using Random
+using Statistics
 
 @testset "Functions are defined" begin
     # test that functions are defined
@@ -513,5 +515,196 @@ end
 
         result2 = minimizecostforstage(insufficient_data, 100, 9, :cost; totalcost=100)
         @test result2 === nothing
+    end
+end
+
+# =========================================================================
+# Scoring, simulation, and race configuration
+# =========================================================================
+
+@testset "Scoring System" begin
+    # Spot-check key scoring values from the VG site
+    @test SCORING_CAT1.finish_points[1] == 600   # 1st place Cat 1
+    @test SCORING_CAT2.finish_points[1] == 450   # 1st place Cat 2
+    @test SCORING_CAT3.finish_points[1] == 300   # 1st place Cat 3
+    @test SCORING_CAT1.finish_points[30] == 12   # 30th place Cat 1
+    @test SCORING_CAT1.assist_points[1] == 90    # Mate of winner Cat 1
+    @test SCORING_CAT1.breakaway_points == 60    # Per sector Cat 1
+    @test length(SCORING_CAT1.finish_points) == 30
+    @test SCORING_CAT1.finish_points[1] > SCORING_CAT2.finish_points[1] > SCORING_CAT3.finish_points[1]
+
+    # get_scoring lookup and edge cases
+    @test get_scoring(1) === SCORING_CAT1
+    @test get_scoring(3) === SCORING_CAT3
+    @test_throws ArgumentError get_scoring(0)
+    @test_throws ArgumentError get_scoring(4)
+
+    # finish_points_for_position edge cases
+    @test finish_points_for_position(1, SCORING_CAT1) == 600
+    @test finish_points_for_position(31, SCORING_CAT1) == 0
+    @test finish_points_for_position(0, SCORING_CAT1) == 0
+
+    # Expected points from probability distributions
+    probs_certain_win = zeros(30); probs_certain_win[1] = 1.0
+    @test expected_finish_points(probs_certain_win, SCORING_CAT1) == 600.0
+    @test expected_finish_points(zeros(30), SCORING_CAT1) == 0.0
+    @test expected_assist_points([1.0, 0.0, 0.0], SCORING_CAT1) == 90.0
+    @test expected_assist_points([0.0, 0.0, 0.0], SCORING_CAT1) == 0.0
+end
+
+@testset "Race Configuration" begin
+    # Race schedule integrity
+    @test length(SUPERCLASICO_RACES_2025) == 44
+    @test count(r -> r.category == 1, SUPERCLASICO_RACES_2025) == 6  # 5 monuments + worlds
+    @test all(r -> r.category in [1, 2, 3], SUPERCLASICO_RACES_2025)
+
+    # find_race
+    omloop = find_race("Omloop")
+    @test omloop !== nothing && omloop.category == 2 && omloop.pcs_slug == "omloop-het-nieuwsblad"
+    @test find_race("Paris-Roubaix").category == 1
+    @test find_race("NonExistentRace") === nothing
+
+    # RaceConfig new fields
+    config = RaceConfig("test", 2025, :oneday, "test-slug", "http://example.com", 6,
+        CacheConfig("/tmp/test", 12, true), 2, "omloop-het-nieuwsblad")
+    @test config.category == 2 && config.pcs_slug == "omloop-het-nieuwsblad"
+
+    # get_url_pattern returns category and pcs_slug
+    pattern = get_url_pattern("omloop")
+    @test pattern.category == 2 && pattern.pcs_slug == "omloop-het-nieuwsblad"
+    @test get_url_pattern("roubaix").category == 1
+    @test get_url_pattern("tdf").category == 0  # Grand tours have no Superclassico category
+end
+
+@testset "Bayesian Strength Estimation" begin
+    # bayesian_update: posterior is pulled toward observation, variance shrinks
+    prior = BayesianPosterior(0.0, 4.0)
+    posterior = bayesian_update(prior, 2.0, 1.0)
+    @test 0.0 < posterior.mean < 2.0
+    @test posterior.variance < min(prior.variance, 1.0)
+
+    # Precise observation dominates; imprecise observation ignored
+    @test isapprox(bayesian_update(prior, 2.0, 0.01).mean, 2.0; atol=0.1)
+    @test isapprox(bayesian_update(prior, 2.0, 1000.0).mean, 0.0; atol=0.1)
+
+    # estimate_rider_strength: stronger PCS = higher mean, more signals = lower variance
+    strong = estimate_rider_strength(pcs_score=2.0)
+    weak = estimate_rider_strength(pcs_score=-2.0)
+    @test strong.mean > weak.mean
+
+    precise = estimate_rider_strength(pcs_score=1.5, vg_points=1.5,
+        race_history=[1.5, 1.3], race_history_years_ago=[1, 2])
+    @test precise.variance < estimate_rider_strength(pcs_score=1.5).variance
+
+    # Odds integration
+    @test estimate_rider_strength(pcs_score=0.0, odds_implied_prob=0.1, n_starters=150).mean > 0.0
+
+    # position_to_strength: monotonically decreasing, crosses zero
+    @test position_to_strength(1, 150) > position_to_strength(50, 150) > position_to_strength(100, 150)
+    @test position_to_strength(1, 150) > 0 && position_to_strength(100, 150) < 0
+end
+
+@testset "Monte Carlo Simulation" begin
+    rng = Random.MersenneTwister(42)
+    strengths = [2.0, 1.0, 0.0, -1.0, -2.0]
+    uncertainties = fill(0.5, 5)
+
+    # simulate_race: valid permutations, strongest rider wins most
+    positions = simulate_race(strengths, uncertainties; n_sims=10000, rng=rng)
+    @test size(positions) == (5, 10000)
+    @test sort(positions[:, 1]) == 1:5  # each sim is a valid permutation
+    @test count(positions[1, :] .== 1) > count(positions[5, :] .== 1)
+    @test mean(positions[1, :]) < mean(positions[5, :])
+
+    # position_probabilities: rows sum to ~1, strongest has highest P(1st)
+    rng2 = Random.MersenneTwister(123)
+    pos2 = simulate_race([3.0, 1.0, 0.0, -1.0, -3.0], uncertainties; n_sims=10000, rng=rng2)
+    probs = position_probabilities(pos2; max_position=5)
+    @test size(probs) == (5, 5)
+    @test all(sum(probs, dims=2) .> 0.99)
+    @test probs[1, 1] > probs[5, 1]
+
+    # expected_vg_points: strongest scores most, all non-negative, assists work
+    teams = ["TeamA", "TeamA", "TeamB", "TeamB", "TeamC"]
+    rng3 = Random.MersenneTwister(456)
+    pos3 = simulate_race([3.0, 1.0, 0.0, -1.0, -3.0], uncertainties; n_sims=10000, rng=rng3)
+    evg = expected_vg_points(pos3, teams, SCORING_CAT2)
+    @test evg[1] > evg[5] && all(evg .>= 0)
+    @test evg[2] > 0  # TeamA rider 2 gets assist points from strong rider 1
+end
+
+@testset "predict_expected_points end-to-end" begin
+    rider_df = DataFrame(
+        rider=["Strong", "Medium", "Weak", "Also Weak", "Very Weak", "Last"],
+        team=["A", "A", "B", "B", "C", "C"],
+        cost=[20, 15, 10, 8, 6, 4],
+        points=[500.0, 300.0, 150.0, 100.0, 50.0, 20.0],
+        riderkey=["strong", "medium", "weak", "alsoweak", "veryweak", "last"],
+        oneday=[2000, 1200, 800, 500, 200, 50]
+    )
+
+    result = predict_expected_points(rider_df, SCORING_CAT2; n_sims=5000)
+
+    # Output columns exist
+    for col in [:expected_vg_points, :strength, :uncertainty,
+                :expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
+        @test col in propertynames(result)
+    end
+
+    # Ordering and sanity
+    @test result.expected_vg_points[1] > result.expected_vg_points[6]
+    @test result.strength[1] > result.strength[6]
+    @test all(result.expected_vg_points .>= 0)
+
+    # Race history reduces uncertainty
+    history_df = DataFrame(riderkey=["strong", "strong", "medium"],
+        position=[1, 3, 10], year=[2024, 2023, 2024])
+    result_hist = predict_expected_points(rider_df, SCORING_CAT2;
+        race_history_df=history_df, n_sims=5000)
+    @test result_hist.uncertainty[1] <= result.uncertainty[1]
+end
+
+@testset "PCS Scraper Infrastructure" begin
+    @testset "find_column alias resolution" begin
+        df = DataFrame("h2hRider" => ["Pogačar"], "Points" => [4852], "Team" => ["UAE"])
+
+        # Case-insensitive alias matching
+        @test find_column(df, PCS_RIDER_ALIASES) == Symbol("h2hRider")
+        @test find_column(df, PCS_POINTS_ALIASES) == :Points
+        @test find_column(df, PCS_TEAM_ALIASES) == :Team
+
+        # Returns nothing when no alias matches
+        @test find_column(df, ["nonexistent", "missing"]) === nothing
+
+        # First matching alias wins
+        df2 = DataFrame("Name" => ["A"], "Rider" => ["B"])
+        @test find_column(df2, ["rider", "name"]) == :Rider
+
+        # Empty DataFrame still works
+        df_empty = DataFrame("Rider" => String[])
+        @test find_column(df_empty, PCS_RIDER_ALIASES) == :Rider
+    end
+
+    @testset "PCS alias constants" begin
+        # Verify aliases include the known renamed columns
+        @test "h2hrider" in PCS_RIDER_ALIASES
+        @test "rider" in PCS_RIDER_ALIASES
+        @test "points" in PCS_POINTS_ALIASES
+        @test "rank" in PCS_RANK_ALIASES
+        @test "#" in PCS_RANK_ALIASES
+        @test "team" in PCS_TEAM_ALIASES
+    end
+end
+
+@testset "New function exports" begin
+    new_symbols = [:solverace_sixes, :ScoringTable, :RaceInfo, :SCORING_CAT1,
+        :get_scoring, :find_race, :expected_finish_points, :expected_assist_points,
+        :BayesianPosterior, :bayesian_update, :estimate_rider_strength,
+        :simulate_race, :position_probabilities, :expected_vg_points,
+        :predict_expected_points, :getpcsraceresults, :getpcsracestartlist, :getpcsracehistory,
+        :find_column, :scrape_pcs_table, :scrape_html_tables,
+        :PCS_RIDER_ALIASES, :PCS_POINTS_ALIASES, :PCS_RANK_ALIASES, :PCS_TEAM_ALIASES]
+    for sym in new_symbols
+        @test isdefined(Velogames, sym)
     end
 end

@@ -6,7 +6,18 @@ standard URL patterns and configurations for common races.
 """
 
 """
-Race configuration data structure
+Race configuration data structure.
+
+Fields:
+- `name`: Race identifier used for setup
+- `year`: Race year
+- `type`: `:stage` or `:oneday`
+- `slug`: VG URL slug
+- `current_url`: Full VG riders page URL
+- `team_size`: Number of riders to select (6 for one-day, 9 for stage)
+- `cache`: Cache configuration
+- `category`: VG scoring category (1, 2, or 3). 0 = unknown/not applicable.
+- `pcs_slug`: PCS race identifier for historical lookups. Empty string if unknown.
 """
 struct RaceConfig
     name::String
@@ -16,6 +27,8 @@ struct RaceConfig
     current_url::String
     team_size::Int
     cache::CacheConfig
+    category::Int
+    pcs_slug::String
 end
 
 """
@@ -62,14 +75,30 @@ function setup_race(race_name::String, year::Int, race_type::Symbol=:stage; cach
     cache_dir = joinpath(tempdir(), "vg_$(pattern.slug)_$year")
     cache = CacheConfig(cache_dir, cache_hours, true)
 
-    # Create and display config
-    config = RaceConfig(race_name, year, race_type, pattern.slug, current_url, team_size, cache)
+    # Look up scoring category and PCS slug from the Superclassico schedule
+    category = get(pattern, :category, 0)
+    pcs_slug = get(pattern, :pcs_slug, "")
 
-    println("📋 Race Setup: $(titlecase(race_name)) $year")
-    println("🏁 Type: $(race_type == :stage ? "Stage Race" : "One-Day Race")")
-    println("👥 Team size: $team_size riders")
-    println("🔗 Riders URL: $current_url")
-    println("💾 Cache: $cache_dir ($(cache_hours)h TTL)")
+    # Also try to find in the race schedule if not in the pattern
+    if category == 0
+        race_info = find_race(race_name; year=year)
+        if race_info !== nothing
+            category = race_info.category
+            pcs_slug = race_info.pcs_slug
+        end
+    end
+
+    # Create and display config
+    config = RaceConfig(race_name, year, race_type, pattern.slug, current_url, team_size, cache, category, pcs_slug)
+
+    println("Race Setup: $(titlecase(race_name)) $year")
+    println("Type: $(race_type == :stage ? "Stage Race" : "One-Day Race")")
+    println("Team size: $team_size riders")
+    println("Riders URL: $current_url")
+    if category > 0
+        println("Scoring: Category $category | PCS: $pcs_slug")
+    end
+    println("Cache: $cache_dir ($(cache_hours)h TTL)")
     println()
 
     return config
@@ -87,41 +116,72 @@ function get_url_pattern(race_name::String)
     # Normalize race name
     race_lower = lowercase(strip(race_name))
 
-    # Known race patterns
+    # Known race patterns. NamedTuples include optional category and pcs_slug for Superclassico races.
+    # All Superclassico races use the same VG URL: sixes-superclasico/{year}/riders.php
+    superclasico_tpl = "https://www.velogames.com/sixes-superclasico/{year}/riders.php"
+
     patterns = Dict(
-        # Grand Tours
-        "tdf" => (slug="velogame", template="https://www.velogames.com/velogame/{year}/riders.php"),
-        "tour" => (slug="velogame", template="https://www.velogames.com/velogame/{year}/riders.php"),
-        "tourdefrance" => (slug="velogame", template="https://www.velogames.com/velogame/{year}/riders.php"),
+        # Grand Tours (no scoring category -- different competition)
+        "tdf" => (slug="velogame", template="https://www.velogames.com/velogame/{year}/riders.php", category=0, pcs_slug=""),
+        "tour" => (slug="velogame", template="https://www.velogames.com/velogame/{year}/riders.php", category=0, pcs_slug=""),
+        "tourdefrance" => (slug="velogame", template="https://www.velogames.com/velogame/{year}/riders.php", category=0, pcs_slug=""),
 
-        "vuelta" => (slug="spain", template="https://www.velogames.com/spain/{year}/riders.php"),
-        "spain" => (slug="spain", template="https://www.velogames.com/spain/{year}/riders.php"),
+        "vuelta" => (slug="spain", template="https://www.velogames.com/spain/{year}/riders.php", category=0, pcs_slug=""),
+        "spain" => (slug="spain", template="https://www.velogames.com/spain/{year}/riders.php", category=0, pcs_slug=""),
 
-        "giro" => (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php"),
-        "giroditalia" => (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php"),
+        "giro" => (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php", category=0, pcs_slug=""),
+        "giroditalia" => (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php", category=0, pcs_slug=""),
 
-        # Monuments / Classics
-        "liege" => (slug="sixes-liege", template="https://www.velogames.com/sixes-liege/{year}/riders.php"),
-        "liegebastogneliege" => (slug="sixes-liege", template="https://www.velogames.com/sixes-liege/{year}/riders.php"),
+        # Monuments (Cat 1 in Superclassico)
+        "liege" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="liege-bastogne-liege"),
+        "liegebastogneliege" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="liege-bastogne-liege"),
+        "roubaix" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="paris-roubaix"),
+        "parisroubaix" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="paris-roubaix"),
+        "flanders" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="ronde-van-vlaanderen"),
+        "ronde" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="ronde-van-vlaanderen"),
+        "lombardia" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="il-lombardia"),
+        "ilombardia" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="il-lombardia"),
+        "sanremo" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="milano-sanremo"),
+        "milansanremo" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="milano-sanremo"),
 
-        "roubaix" => (slug="sixes-roubaix", template="https://www.velogames.com/sixes-roubaix/{year}/riders.php"),
-        "parisroubaix" => (slug="sixes-roubaix", template="https://www.velogames.com/sixes-roubaix/{year}/riders.php"),
+        # Belgian Opening Weekend (Cat 2 + Cat 3)
+        "omloop" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="omloop-het-nieuwsblad"),
+        "omloopnieuwsblad" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="omloop-het-nieuwsblad"),
+        "kuurne" => (slug="sixes-superclasico", template=superclasico_tpl, category=3, pcs_slug="kuurne-brussel-kuurne"),
+        "kuurnebrussels" => (slug="sixes-superclasico", template=superclasico_tpl, category=3, pcs_slug="kuurne-brussel-kuurne"),
 
-        "flanders" => (slug="sixes-flanders", template="https://www.velogames.com/sixes-flanders/{year}/riders.php"),
-        "ronde" => (slug="sixes-flanders", template="https://www.velogames.com/sixes-flanders/{year}/riders.php"),
+        # Cobbled Classics (Cat 2)
+        "stradebianche" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="strade-bianche"),
+        "strade" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="strade-bianche"),
+        "bruggepanne" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="classic-brugge-de-panne"),
+        "e3" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="e3-harelbeke"),
+        "gentwevelgem" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="gent-wevelgem"),
+        "dwars" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="dwars-door-vlaanderen"),
+        "scheldeprijs" => (slug="sixes-superclasico", template=superclasico_tpl, category=3, pcs_slug="scheldeprijs"),
 
-        "lombardia" => (slug="sixes-lombardia", template="https://www.velogames.com/sixes-lombardia/{year}/riders.php"),
-        "ilombardia" => (slug="sixes-lombardia", template="https://www.velogames.com/sixes-lombardia/{year}/riders.php"),
+        # Ardennes Classics (Cat 2)
+        "amstel" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="amstel-gold-race"),
+        "amstelgoldrace" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="amstel-gold-race"),
+        "fleche" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="la-fleche-wallonne"),
+        "flechewallonne" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="la-fleche-wallonne"),
 
-        "sanremo" => (slug="sixes-sanremo", template="https://www.velogames.com/sixes-sanremo/{year}/riders.php"),
-        "milansanremo" => (slug="sixes-sanremo", template="https://www.velogames.com/sixes-sanremo/{year}/riders.php"),
+        # Other Cat 2 races
+        "eschborn" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="eschborn-frankfurt"),
+        "brussels" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="brussels-cycling-classic"),
+        "sansebastian" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="donostia-san-sebastian-klasikoa"),
+        "hamburg" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="cyclassics-hamburg"),
+        "bretagne" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="bretagne-classic"),
+        "quebec" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="gp-quebec"),
+        "montreal" => (slug="sixes-superclasico", template=superclasico_tpl, category=2, pcs_slug="gp-montreal"),
 
-        # Ardennes Classics
-        "amstel" => (slug="sixes-amstel", template="https://www.velogames.com/sixes-amstel/{year}/riders.php"),
-        "amstelgoldrace" => (slug="sixes-amstel", template="https://www.velogames.com/sixes-amstel/{year}/riders.php"),
+        # Cat 3 races
+        "laigueglia" => (slug="sixes-superclasico", template=superclasico_tpl, category=3, pcs_slug="trofeo-laigueglia"),
+        "milanoTorino" => (slug="sixes-superclasico", template=superclasico_tpl, category=3, pcs_slug="milano-torino"),
+        "brabantse" => (slug="sixes-superclasico", template=superclasico_tpl, category=3, pcs_slug="de-brabantse-pijl"),
+        "paristours" => (slug="sixes-superclasico", template=superclasico_tpl, category=3, pcs_slug="paris-tours"),
 
-        "fleche" => (slug="sixes-fleche", template="https://www.velogames.com/sixes-fleche/{year}/riders.php"),
-        "flechewallonne" => (slug="sixes-fleche", template="https://www.velogames.com/sixes-fleche/{year}/riders.php"),
+        # Worlds (Cat 1)
+        "worlds" => (slug="sixes-superclasico", template=superclasico_tpl, category=1, pcs_slug="world-championship"),
     )
 
     if haskey(patterns, race_lower)
@@ -139,7 +199,7 @@ function get_url_pattern(race_name::String)
 
         # Return a generic pattern with the race name as slug
         sanitized = replace(race_lower, r"[^a-z0-9]" => "-")
-        return (slug=sanitized, template="https://www.velogames.com/$sanitized/{year}/riders.php")
+        return (slug=sanitized, template="https://www.velogames.com/$sanitized/{year}/riders.php", category=0, pcs_slug="")
     end
 end
 
@@ -183,6 +243,10 @@ function print_race_info(config::RaceConfig)
     println("Type:       $(config.type)")
     println("Team Size:  $(config.team_size) riders")
     println("Slug:       $(config.slug)")
+    if config.category > 0
+        println("Category:   $(config.category)")
+        println("PCS Slug:   $(config.pcs_slug)")
+    end
     println()
     println("URLs:")
     println("  Current:  $(config.current_url)")
