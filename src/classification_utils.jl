@@ -26,7 +26,10 @@ ensure_classification_columns!(df)
 # df now has columns: :allrounder, :sprinter, :climber, :unclassed
 ```
 """
-function ensure_classification_columns!(df::DataFrame; required_classes::Vector{String}=["allrounder", "sprinter", "climber", "unclassed"])
+function ensure_classification_columns!(
+    df::DataFrame;
+    required_classes::Vector{String} = ["allrounder", "sprinter", "climber", "unclassed"],
+)
     for class_name in required_classes
         col_name = Symbol(class_name)
 
@@ -37,11 +40,13 @@ function ensure_classification_columns!(df::DataFrame; required_classes::Vector{
 
         # Try to create from :class column
         if hasproperty(df, :class)
-            df[!, col_name] = lowercase.(replace.(df.class, " " => "")) .== lowercase(class_name)
-        # Try to create from :classraw column
+            df[!, col_name] =
+                lowercase.(replace.(df.class, " " => "")) .== lowercase(class_name)
+            # Try to create from :classraw column
         elseif hasproperty(df, :classraw)
             # Handle both "All Rounder" and "allrounder" formats
-            df[!, col_name] = lowercase.(replace.(df.classraw, " " => "")) .== lowercase(class_name)
+            df[!, col_name] =
+                lowercase.(replace.(df.classraw, " " => "")) .== lowercase(class_name)
         else
             @warn "Cannot create classification column '$col_name' - no :class or :classraw column found"
             return false
@@ -78,11 +83,13 @@ df = DataFrame(
 validate_classification_constraints(df)  # returns true
 ```
 """
-function validate_classification_constraints(df::DataFrame;
-                                            min_allrounder::Int=2,
-                                            min_sprinter::Int=1,
-                                            min_climber::Int=2,
-                                            min_unclassed::Int=3)::Bool
+function validate_classification_constraints(
+    df::DataFrame;
+    min_allrounder::Int = 2,
+    min_sprinter::Int = 1,
+    min_climber::Int = 2,
+    min_unclassed::Int = 3,
+)::Bool
     # Check each required column exists
     required_cols = [:allrounder, :sprinter, :climber, :unclassed]
     for col in required_cols
@@ -94,10 +101,15 @@ function validate_classification_constraints(df::DataFrame;
 
     # Count riders in each class
     checks = [
-        (sum(df.allrounder) >= min_allrounder, "all-rounders", sum(df.allrounder), min_allrounder),
+        (
+            sum(df.allrounder) >= min_allrounder,
+            "all-rounders",
+            sum(df.allrounder),
+            min_allrounder,
+        ),
         (sum(df.sprinter) >= min_sprinter, "sprinters", sum(df.sprinter), min_sprinter),
         (sum(df.climber) >= min_climber, "climbers", sum(df.climber), min_climber),
-        (sum(df.unclassed) >= min_unclassed, "unclassed", sum(df.unclassed), min_unclassed)
+        (sum(df.unclassed) >= min_unclassed, "unclassed", sum(df.unclassed), min_unclassed),
     ]
 
     all_satisfied = true
