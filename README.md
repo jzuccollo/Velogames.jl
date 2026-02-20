@@ -4,25 +4,30 @@ Hacky, personal Julia package to pick a Velogames team. Always in progress, alwa
 
 ## Approach
 
-Solve a linear programme to maximise expected points, constrained by budget and rider limits. Rider points are hacked together from a combination of PCS points and current Velogames standings and presently need manual attention for every race. This is probably the biggest thing that needs fixing before predictions can be trusted and automated.
+Estimate expected Velogames points for each rider via Monte Carlo simulation, then solve a linear programme to maximise expected points constrained by budget and rider limits.
+
+The prediction pipeline combines multiple data sources through Bayesian strength estimation: PCS specialty ratings provide a prior, updated by VG season points, race-specific history from past editions, and optionally betting odds. Monte Carlo simulation converts these strength estimates into probability distributions over finishing positions, which map to expected VG points through the scoring tables.
+
+For stage races, PCS specialty scores are blended according to each rider's VG classification (all-rounder, climber, sprinter, unclassed) to produce a single strength estimate reflecting their likely contribution across the whole race.
 
 ## Usage
 
-Outputs calculated in the Quarto files in the `race_notebooks/` directory. Quarto files are locally rendered to `docs/` with `quarto render` and [served with Pages](https://jzuccollo.github.io/Velogames.jl).
+Outputs calculated in the Quarto files in the `race_notebooks/` directory:
+
+- `oneday_predictor.qmd` - Pre-race team selection for Superclassico Sixes one-day races
+- `stagerace_predictor.qmd` - Pre-race team selection for grand tours and stage races
+- `historical_analysis.qmd` - Retrospective analysis of completed races (both types)
 
 No guarantee they'll re-render because they pull from the moving target of velogames.com rider pages, so URLs typically need to be updated for every render.
 
 ## Features
 
-The analysis notebooks demonstrate several key features of the `Velogames.jl` package:
-
-- **Multi-source data integration**: Combining VeloGames results, ProCyclingStats (PCS) rankings, and potentially other data sources like betting odds to create a comprehensive rider profile.
-- **Automated race optimization**: The `solverace()` function can be used for different race types:
-  - `:stage`: Automatically applies classification constraints for stage races (e.g., 2 all-rounders, 1 sprinter, 2 climbers, 3+ unclassed).
-  - `:one_day`: Solves for a one-day race with no classification constraints.
-- **Robust caching**: A flexible caching system (`CacheConfig`) stores downloaded data to speed up subsequent runs and handle historical analysis. Caches are timestamped and have a configurable expiry.
-- **Strategy comparison**: The framework allows for easy testing of different data source weightings to see how predictions change based on how much you trust VG vs. PCS data.
+- **Monte Carlo prediction**: Bayesian strength estimation and race simulation to compute expected VG points per rider
+- **Multi-source data integration**: Combines VG costs/season points, PCS specialty ratings, race history, and optional betting odds
+- **One-day and stage race support**: `solve_oneday()` for Superclassico Sixes, `solve_stage()` for grand tours with classification constraints
+- **Robust caching**: Feather-based caching (`CacheConfig`) with configurable TTL to avoid hammering external sites
+- **Historical analysis**: Deterministic optimisation on actual results to find optimal and cheapest-winning teams
 
 ## Testing
 
-Errr, not much. `Pkg.test()` should run the few tests that exist.
+`julia --project -e "using Pkg; Pkg.test()"` should run the tests.

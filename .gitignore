@@ -36,3 +36,6 @@ _site/
 *.ipynb
 
 **/*.quarto_ipynb
+
+# LLM permissions
+.claude/settings.local.json
