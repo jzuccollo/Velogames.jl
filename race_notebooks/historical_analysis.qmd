@@ -1,363 +1,258 @@
 ---
-title: "Historical analysis (MODERNIZED)"
-subtitle: "Olympic Games men's road race 2024 - Multi-Source Approach"
+title: "Historical analysis"
+subtitle: "Retrospective optimal team selection from actual race results"
+format: html
 ---
 
-Looking back on the race, what's the best team you could have picked? This modernized version uses the new VeloGames package capabilities for robust multi-source data integration and automated optimization.
+# Configuration
+
+Set the race details and competition benchmark to analyse:
 
 ```{julia}
-using Velogames, DataFrames, MarkdownTables, Printf
+using Velogames, DataFrames, MarkdownTables, Printf, Statistics
 
-# Race configuration  
-riderseriesurl = "https://www.velogames.com/sixes-superclasico/2024/riders.php"
+# Race configuration
+race_name = "liege"  # Short name from get_url_pattern (e.g. "omloop", "tdf", "vuelta")
+race_year = 2024
+racehash = "#LiegeBastogneLiege"  # VG startlist hash filter (leave empty for all riders)
+
+# Race results URL (the ridescore page for the specific race)
 riderraceurl = "https://www.velogames.com/sixes-superclasico/2024/ridescore.php?ga=13&st=21"
-racehash = "#LiegeBastogneLiege"
 
-# Competition benchmark
-winnername = "James"
-bestteamscore = 1074
+# Competition benchmark (optional: set to compare against a league winner)
+winner_name = "James"
+winner_score = 1074
 
-# Create analysis-specific cache
-historical_cache = CacheConfig("/tmp/historical_analysis", 6, true)
-
-println("🕰️ Historical Analysis: $racehash")
-println("🎯 Target to beat: $bestteamscore points (by $winnername)")
-println("💾 Using cache: $(historical_cache.cache_dir)")
+# Cache configuration
+analysis_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 168, true)
 ```
 
-# 🚀 Best team using NEW automated approach
-
-Using the new `solverace()` function that automatically combines multiple data sources:
+# Race setup
 
 ```{julia}
-println("🤖 Attempting automated multi-source historical optimization...")
+#| echo: false
+config = setup_race(race_name, race_year; cache_config=analysis_cache)
+print_race_info(config)
 
-try
-    # This automatically combines VG data with PCS rankings for optimal team selection
-    # Using balanced 50/50 weighting between VG race results and PCS professional rankings
-    optimal_team_auto = solverace(riderseriesurl, :oneday, racehash, 0.5; cache_config=historical_cache)
-    
-    if nrow(optimal_team_auto) > 0
-        auto_score = sum(optimal_team_auto.vgpoints)
-        auto_cost = sum(optimal_team_auto.vgcost)
-        improvement = auto_score - bestteamscore
-        
-        println("✅ Automated optimization successful!")
-        println("📈 Team score: $auto_score points")
-        println("💰 Team cost: $auto_cost credits")
-        println("🚀 Improvement over target: $improvement points")
-        
-        # Display the team
-        display_team_auto = select(optimal_team_auto, :rider, :team, :vgcost, :vgpoints)
-        rename!(display_team_auto, :rider => :Rider, :team => :Team, :vgcost => :Cost, :vgpoints => :Score)
-        
-        println("\n🏆 OPTIMAL TEAM (Automated Multi-Source):")
-        markdown_table(display_team_auto)
-        
-        automated_success = true
+is_stage = config.type == :stage
+println("Analysis type: $(is_stage ? "Stage race" : "One-day race")")
+if !isempty(winner_name)
+    println("Benchmark: $winner_name scored $winner_score points")
+end
+```
+
+# Data loading
+
+```{julia}
+#| echo: false
+# Fetch rider costs and actual race results
+ridervg = getvgriders(config.current_url; cache_config=analysis_cache)
+riderrace = getvgracepoints(riderraceurl; cache_config=analysis_cache)
+
+# Filter to startlist if hash provided
+if !isempty(racehash)
+    filtered = filter(row -> row.startlist == racehash, ridervg)
+    if nrow(filtered) > 0
+        ridervg = filtered
+        println("Filtered to $(nrow(ridervg)) riders for startlist: $racehash")
     else
-        println("⚠️ Automated approach: No riders found for racehash $racehash")
-        automated_success = false
+        println("No riders found for hash $racehash, using all $(nrow(ridervg)) riders")
     end
-    
-catch e
-    println("⚠️ Automated approach failed: $e")
-    println("🔄 Falling back to enhanced manual approach...")
-    automated_success = false
 end
+
+# Join race results with rider costs
+allriders = leftjoin(riderrace, ridervg, on=:riderkey, makeunique=true)
+allriders = coalesce.(allriders, 0)
+
+# Clean team names for display
+if hasproperty(allriders, :team)
+    allriders[!, :team] = replace.(allriders[!, :team], r"\|" => "-")
+end
+
+println("Loaded $(nrow(allriders)) riders with race results")
+scoring_riders = count(allriders.score .> 0)
+println("Scoring riders: $scoring_riders")
 ```
 
-# 🔧 Enhanced manual approach (FALLBACK)
+# Optimal team
 
-If automated approach fails, use enhanced manual method with new caching and optimization functions:
+The best team you could have picked, with hindsight:
 
 ```{julia}
-#| output: false
+#| echo: false
+# Build the appropriate optimisation model based on race type
+if is_stage
+    results = build_model_stage(allriders, config.team_size, :score, :cost; totalcost=100)
+else
+    results = build_model_oneday(allriders, config.team_size, :score, :cost; totalcost=100)
+end
 
-if !@isdefined(automated_success) || !automated_success
-    println("🔍 Running enhanced manual historical analysis...")
-    
-    try
-        # NEW: Advanced caching system
-        ridervgpost = getvgriders(riderseriesurl; cache_config=historical_cache)
-        riderracepoints = getvgracepoints(riderraceurl; cache_config=historical_cache)
-        
-        # Filter to race participants if hash specified
-        if !isempty(racehash)
-            ridervgpost_filtered = filter(row -> row.startlist == racehash, ridervgpost)
-            if nrow(ridervgpost_filtered) > 0
-                ridervgpost = ridervgpost_filtered
-                println("   📊 Filtered to $(nrow(ridervgpost)) riders for $racehash")
-            else
-                println("   ⚠️ No riders found for $racehash, using all riders")
-            end
-        end
-        
-        # Join datasets with better error handling  
-        allriderdata = leftjoin(riderracepoints, ridervgpost, on=:riderkey, makeunique=true)
-        allriderdata = coalesce.(allriderdata, 0)
-        
-        # Clean team names for display
-        allriderdata.team = replace.(allriderdata.team, r"\|" => "-")
-        
-        # NEW: Use optimized model building function
-        if nrow(allriderdata) > 0
-            # Use the new buildmodeloneday function instead of manual JuMP
-            results = buildmodeloneday(allriderdata, 6, :score, :cost; totalcost=100)
-            
-            if results !== nothing
-                allriderdata.chosen = results .> 0.5
-                chosenteampost = filter(row -> row.chosen, allriderdata)
-                
-                manual_score = sum(chosenteampost.score)
-                manual_cost = sum(chosenteampost.cost)
-                manual_improvement = manual_score - bestteamscore
-                
-                println("   ✅ Manual optimization successful!")
-                println("   📈 Team score: $manual_score points")  
-                println("   💰 Team cost: $manual_cost credits")
-                println("   🚀 Improvement over target: $manual_improvement points")
-                
-                manual_success = true
-            else
-                println("   ⚠️ Manual optimization failed - no feasible solution")
-                chosenteampost = DataFrame()
-                manual_success = false
-            end
-        else
-            println("   ⚠️ No rider data available")
-            chosenteampost = DataFrame()
-            manual_success = false
-        end
-        
-    catch e
-        println("   ❌ Manual approach failed: $e")
-        chosenteampost = DataFrame()
-        manual_success = false
+if results !== nothing
+    chosen_vec = [results[r] for r in allriders.riderkey]
+    allriders[!, :chosen] = chosen_vec .> 0.5
+    optimal_team = filter(:chosen => ==(true), allriders)
+
+    optimal_score = sum(optimal_team.score)
+    optimal_cost = sum(optimal_team.cost)
+
+    println("OPTIMAL TEAM")
+    println("="^40)
+    println("Total score: $optimal_score points")
+    println("Total cost: $optimal_cost / 100 credits")
+    println("Team size: $(nrow(optimal_team)) riders")
+
+    if !isempty(winner_name) && winner_score > 0
+        improvement = optimal_score - winner_score
+        println("vs $winner_name: $(improvement > 0 ? "+" : "")$improvement points")
     end
+    println()
+
+    # Display columns depend on race type
+    display_cols = [:rider, :team, :cost, :score]
+    if is_stage && hasproperty(optimal_team, :classraw)
+        insert!(display_cols, 3, :classraw)
+    end
+
+    team_display = sort(optimal_team[:, display_cols], :score, rev=true)
+    display(markdown_table(team_display))
 else
-    println("✅ Using automated results - manual approach not needed")
-    manual_success = false
+    println("Optimisation failed - no feasible solution found")
 end
 ```
 
-## Manual Analysis Results
-
 ```{julia}
-if @isdefined(manual_success) && manual_success && nrow(chosenteampost) > 0
-    displaytable1 = rename(chosenteampost, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Score)
-    println("🏆 OPTIMAL TEAM (Enhanced Manual Approach):")
-    markdown_table(displaytable1[:, [:Rider, :Team, :Cost, :Score]])
-    
-    manual_final_score = sum(chosenteampost.score)
-    manual_final_cost = sum(chosenteampost.cost)
-else
-    println("Manual analysis results not available")
-    manual_final_score = 0
-    manual_final_cost = 0
+#| echo: false
+# Classification breakdown for stage races
+if is_stage && @isdefined(optimal_team) && hasproperty(optimal_team, :classraw)
+    println("\nClassification breakdown:")
+    for class in sort(unique(optimal_team.classraw))
+        n = count(optimal_team.classraw .== class)
+        pts = sum(optimal_team[optimal_team.classraw .== class, :score])
+        println("  $class: $n riders, $pts points")
+    end
 end
 ```
 
-# 💰 Cheapest team to beat the target
+# Cheapest winning team
 
-Finding the minimum cost team that beats the target score using new optimization capabilities:
+The minimum cost team that would have beaten the benchmark:
 
 ```{julia}
-#| output: false
-
-# Use the best available dataset (automated or manual)
-if @isdefined(automated_success) && automated_success && @isdefined(optimal_team_auto)
-    # Use data from automated approach
-    source_data = leftjoin(
-        getvgracepoints(riderraceurl; cache_config=historical_cache),
-        getvgriders(riderseriesurl; cache_config=historical_cache),
-        on=:riderkey, makeunique=true
-    )
-    analysis_source = "automated"
-elseif @isdefined(allriderdata) && nrow(allriderdata) > 0
-    # Use manual analysis data
-    source_data = allriderdata
-    analysis_source = "manual"
-else
-    println("⚠️ No data available for cheapest team analysis")
-    source_data = DataFrame()
-    analysis_source = "none"
-end
-
-if nrow(source_data) > 0
-    println("🔍 Finding cheapest team to beat $bestteamscore points...")
-    println("📊 Using $analysis_source analysis data ($(nrow(source_data)) riders)")
-    
-    try
-        # Clean data
-        source_data = coalesce.(source_data, 0)
-        source_data.team = replace.(source_data.team, r"\|" => "-")
-        
-        # Build custom minimization model
-        # We'll create our own minimal model since we need custom objective
+#| echo: false
+if !isempty(winner_name) && winner_score > 0
+    if is_stage
+        # Use minimise_cost_stage for stage races (has classification constraints)
+        cheap_results = minimise_cost_stage(allriders, winner_score, config.team_size, :score, :cost; totalcost=100)
+    else
+        # For one-day races, build a custom min-cost model
         using HiGHS, JuMP
-        
-        cheapest_model = JuMP.Model(HiGHS.Optimizer)
-        JuMP.set_silent(cheapest_model)
-        JuMP.@variable(cheapest_model, x[source_data.rider], Bin)
-        JuMP.@objective(cheapest_model, Min, source_data.cost' * x)  # Minimize cost
-        JuMP.@constraint(cheapest_model, source_data.score' * x >= bestteamscore)  # Must beat target
-        JuMP.@constraint(cheapest_model, sum(x) == 6)  # Exactly 6 riders
-        
-        JuMP.optimize!(cheapest_model)
-        
-        if JuMP.termination_status(cheapest_model) == MOI.OPTIMAL
-            cheapest_results = JuMP.value.(x)
-            source_data.chosen2 = cheapest_results .> 0.5
-            chosen2teampost = filter(row -> row.chosen2, source_data)
-            
-            cheapest_score = sum(chosen2teampost.score)
-            cheapest_cost = sum(chosen2teampost.cost)
-            
-            println("   ✅ Cheapest team optimization successful!")
-            println("   💰 Minimum cost: $cheapest_cost credits")
-            println("   📈 Team score: $cheapest_score points")
-            println("   🎯 Beat target by: $(cheapest_score - bestteamscore) points")
-            
-            cheapest_success = true
+        cheap_model = JuMP.Model(HiGHS.Optimizer)
+        JuMP.set_silent(cheap_model)
+        JuMP.@variable(cheap_model, x[allriders.rider], Bin)
+        JuMP.@objective(cheap_model, Min, allriders.cost' * x)
+        JuMP.@constraint(cheap_model, allriders.score' * x >= winner_score + 1)
+        JuMP.@constraint(cheap_model, sum(x) == config.team_size)
+        JuMP.optimize!(cheap_model)
+
+        if JuMP.termination_status(cheap_model) == MOI.OPTIMAL
+            cheap_results = JuMP.value.(x)
         else
-            println("   ⚠️ No feasible cheapest team solution found")
-            chosen2teampost = DataFrame()
-            cheapest_success = false
+            cheap_results = nothing
         end
-        
-    catch e
-        println("   ❌ Cheapest team analysis failed: $e")
-        chosen2teampost = DataFrame()
-        cheapest_success = false
+    end
+
+    if cheap_results !== nothing
+        cheap_chosen = [cheap_results[r] for r in allriders.riderkey] .> 0.5
+        cheapest_team = allriders[cheap_chosen, :]
+
+        cheapest_score = sum(cheapest_team.score)
+        cheapest_cost = sum(cheapest_team.cost)
+
+        println("CHEAPEST TEAM TO BEAT $winner_name ($winner_score pts)")
+        println("="^50)
+        println("Total score: $cheapest_score points")
+        println("Total cost: $cheapest_cost / 100 credits")
+        println("Budget saved: $(100 - cheapest_cost) credits")
+        println()
+
+        display_cols = [:rider, :team, :cost, :score]
+        if is_stage && hasproperty(cheapest_team, :classraw)
+            insert!(display_cols, 3, :classraw)
+        end
+
+        cheap_display = sort(cheapest_team[:, display_cols], :score, rev=true)
+        display(markdown_table(cheap_display))
+    else
+        println("No feasible team found that beats $winner_name's $winner_score points")
     end
 else
-    cheapest_success = false
+    println("No benchmark set - skip this section by leaving winner_name and winner_score empty")
 end
 ```
 
-## Cheapest Winning Team
+# Rider value analysis
+
+Points scored per credit of cost, showing which riders delivered the best value:
 
 ```{julia}
-if @isdefined(cheapest_success) && cheapest_success && nrow(chosen2teampost) > 0
-    displaytable2 = rename(chosen2teampost, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Score)
-    
-    println("🏆 CHEAPEST TEAM TO BEAT TARGET:")
-    println("Target: $winnername scored $bestteamscore points")
-    println("Result: This team scored $(sum(chosen2teampost.score)) points for $(sum(chosen2teampost.cost)) credits")
-    
-    markdown_table(displaytable2[:, [:Rider, :Team, :Cost, :Score]])
-else
-    println("Cheapest team analysis not available")
-end
-```
+#| echo: false
+scorers = filter(row -> row.score > 0, allriders)
 
-# 📊 Rider Value Analysis
+if nrow(scorers) > 0
+    scorers[!, :value] = round.(scorers.score ./ scorers.cost, digits=1)
+    sort!(scorers, :value, rev=true)
 
-## Top Value Riders
+    # Top 20 value riders
+    top_n = min(20, nrow(scorers))
+    println("TOP $top_n VALUE RIDERS")
+    println("="^40)
 
-Using the best available dataset to analyze rider value (points per cost):
-
-```{julia}
-# Use the most complete dataset available
-value_data = DataFrame()
-
-if @isdefined(source_data) && nrow(source_data) > 0
-    value_data = copy(source_data)
-    data_source = "combined analysis"
-elseif @isdefined(allriderdata) && nrow(allriderdata) > 0
-    value_data = copy(allriderdata)
-    data_source = "manual analysis"
-else
-    # Fallback: try to get fresh data
-    try
-        race_results = getvgracepoints(riderraceurl; cache_config=historical_cache)
-        rider_data = getvgriders(riderseriesurl; cache_config=historical_cache)
-        value_data = leftjoin(race_results, rider_data, on=:riderkey, makeunique=true)
-        value_data = coalesce.(value_data, 0)
-        data_source = "fresh fetch"
-    catch e
-        println("⚠️ Could not fetch data for value analysis: $e")
+    display_cols = [:rider, :team, :cost, :score, :value]
+    if is_stage && hasproperty(scorers, :classraw)
+        insert!(display_cols, 3, :classraw)
     end
-end
 
-if nrow(value_data) > 0
-    println("📈 Analyzing rider value using $data_source ($(nrow(value_data)) riders)")
-    
-    # Calculate value (points per cost)
-    value_data[!, :value] = value_data[!, :score] ./ value_data[!, :cost]
-    
-    # Clean and sort
-    value_data = filter(row -> row.score > 0, value_data)  # Only scoring riders
-    sort!(value_data, :value, rev=true)
-    
-    # Prepare display table
-    displaytable3 = rename(value_data, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Score, :value => :Value)
-    displaytable3[!, :Value] = round.(displaytable3[!, :Value], digits=1)
-    displaytable3[!, :Rank] = 1:nrow(displaytable3)
-    
-    # Clean team names
-    displaytable3.Team = replace.(displaytable3.Team, r"\|" => "-")
-    
-    # Show top 20 value riders
-    top_count = min(20, nrow(displaytable3))
-    println("\n💎 Top $top_count Value Riders (Points per Credit):")
-    top_riders = displaytable3[1:top_count, [:Rank, :Rider, :Team, :Cost, :Score, :Value]]
-    markdown_table(top_riders)
-    
-    # Show bottom performers (riders who scored but had poor value)
-    if nrow(displaytable3) > 15
-        bottom_count = min(15, nrow(displaytable3))
-        println("\n📉 Lowest Value Riders (Who Still Scored):")
-        worst_riders = displaytable3[end-bottom_count+1:end, [:Rank, :Rider, :Team, :Cost, :Score, :Value]]
-        worst_riders_sorted = sort(worst_riders, :Value, rev=false)
-        markdown_table(worst_riders_sorted)
-    end
-    
+    display(markdown_table(scorers[1:top_n, display_cols]))
+
     # Summary statistics
-    avg_value = round(mean(displaytable3.Value), digits=2)
-    max_value = round(maximum(displaytable3.Value), digits=2)
-    min_value = round(minimum(displaytable3.Value), digits=2)
-    
-    println("\n📊 Value Analysis Summary:")
-    println("   🏆 Best value: $max_value points/credit")
-    println("   📊 Average value: $avg_value points/credit") 
-    println("   📉 Worst value: $min_value points/credit")
-    println("   🎯 Total scoring riders: $(nrow(displaytable3))")
-    
+    println()
+    println("Value summary:")
+    println("  Best: $(maximum(scorers.value)) pts/credit")
+    println("  Average: $(round(mean(scorers.value), digits=1)) pts/credit")
+    println("  Scoring riders: $(nrow(scorers)) / $(nrow(allriders))")
 else
-    println("⚠️ No data available for rider value analysis")
+    println("No riders scored points in this race")
 end
 ```
 
-# 🎯 Analysis Summary
+```{julia}
+#| echo: false
+# Stage race class value analysis
+if is_stage && nrow(scorers) > 0 && hasproperty(scorers, :classraw)
+    println("\nVALUE BY CLASSIFICATION")
+    println("="^40)
+    for class in sort(unique(scorers.classraw))
+        class_riders = filter(row -> row.classraw == class, scorers)
+        avg_val = round(mean(class_riders.value), digits=1)
+        avg_pts = round(mean(class_riders.score), digits=0)
+        println("  $class: $(nrow(class_riders)) riders, avg $(avg_pts) pts, avg value $(avg_val)")
+    end
+end
+```
 
-This modernized historical analysis demonstrates the new VeloGames capabilities:
+# How to use this notebook
 
-## ✅ **Improvements Implemented**
+**Quick start:**
 
-1. **Automated Multi-Source Optimization**: `solverace()` function handles everything automatically
-2. **Advanced Caching**: Configurable, parameter-aware caching reduces redundant API calls  
-3. **Enhanced Manual Approach**: Uses `buildmodeloneday()` instead of manual JuMP modeling
-4. **Robust Error Handling**: Graceful fallbacks when data sources or optimization fails
-5. **Efficient Data Operations**: Leverages new batch processing and smart joins
+1. Update `race_name` and `race_year` for the race you want to analyse
+2. Set `riderraceurl` to the VG results page URL for that race
+3. Set `racehash` if the race uses startlist filtering
+4. Optionally set `winner_name` and `winner_score` to compare against a league benchmark
+5. Run all cells
 
-## 📊 **Key Benefits**
+The notebook auto-detects whether the race is one-day or stage from `RaceConfig` and uses the appropriate optimisation model:
 
-- **90% Code Reduction**: From ~50 lines of manual optimization to ~5 lines automated
-- **Better Performance**: Intelligent caching and batch operations
-- **More Reliable**: Comprehensive error handling and fallback mechanisms  
-- **Easier Maintenance**: Standard functions instead of custom JuMP models
-- **Multi-Source Ready**: Easy integration of PCS rankings and betting odds
+- **One-day races**: `build_model_oneday` with 6 riders, no classification constraints
+- **Stage races**: `build_model_stage` with 9 riders and classification constraints (2 all-rounders, 2 climbers, 1 sprinter, 3+ unclassed)
 
-## 🔄 **Migration Summary**
-
-| Old Approach | New Approach |
-|--------------|-------------|
-| `fetchagain=true` | `cache_config=custom_cache` |
-| Manual `leftjoin()` | Automatic data integration |
-| Custom JuMP models | `buildmodeloneday()` function |
-| No error handling | Robust try-catch with fallbacks |
-| Single data source | Multi-source integration |
-
-The analysis is now more robust, maintainable, and ready for production use with real-time data sources.
+Both use deterministic optimisation on actual race results rather than Monte Carlo prediction. For pre-race predictions, use `oneday_predictor.qmd` or `stagerace_predictor.qmd` instead.
