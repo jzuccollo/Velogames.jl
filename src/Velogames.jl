@@ -1,11 +1,48 @@
 module Velogames
 
-using HTTP, DataFrames, TableScraper, Cascadia, Gumbo, CategoricalArrays, Unicode, HiGHS, JuMP, Feather, Downloads, Dates, JSON3, SHA
+using HTTP,
+    DataFrames,
+    TableScraper,
+    Cascadia,
+    Gumbo,
+    CategoricalArrays,
+    Unicode,
+    HiGHS,
+    JuMP,
+    Feather,
+    Downloads,
+    Dates,
+    JSON3,
+    SHA
 using Random, Statistics
 
 # Export core functions
-export solverace, solverace_sixes, getvgriders, getvgracepoints, getpcsriderpts, getpcsriderpts_batch, getpcsriderhistory, getpcsranking, getpcsraceranking, getodds, buildmodeloneday, buildmodelstage, buildmodelhistorical, minimizecostforstage, createkey, CacheConfig, clear_cache, DEFAULT_CACHE, cache_key, add_pcs_speciality_points!, minimisecostforteam,
-    unpipe, format_display_table, clean_team_names!, class_availability_summary, describe_class_availability, DEFAULT_CLASS_REQUIREMENTS
+export solve_oneday,
+    solve_stage,
+    solve_stage_legacy,
+    getvgriders,
+    getvgracepoints,
+    getpcsriderpts,
+    getpcsriderpts_batch,
+    getpcsriderhistory,
+    getpcsranking,
+    getpcsraceranking,
+    getodds,
+    build_model_oneday,
+    build_model_stage,
+    minimise_cost_stage,
+    createkey,
+    CacheConfig,
+    clear_cache,
+    DEFAULT_CACHE,
+    cache_key,
+    add_pcs_speciality_points!,
+    unpipe,
+    format_display_table,
+    clean_team_names!,
+    class_availability_summary,
+    describe_class_availability,
+    DEFAULT_CLASS_REQUIREMENTS
 
 # Export classification helpers
 export ensure_classification_columns!, validate_classification_constraints
@@ -17,19 +54,41 @@ export setup_race, get_url_pattern, get_historical_url, print_race_info, RaceCon
 export getpcsraceresults, getpcsracestartlist, getpcsracehistory
 
 # Export PCS scraper infrastructure
-export find_column, scrape_pcs_table, scrape_html_tables,
-    PCS_RIDER_ALIASES, PCS_POINTS_ALIASES, PCS_RANK_ALIASES, PCS_TEAM_ALIASES
+export find_column,
+    scrape_pcs_table,
+    scrape_html_tables,
+    PCS_RIDER_ALIASES,
+    PCS_POINTS_ALIASES,
+    PCS_RANK_ALIASES,
+    PCS_TEAM_ALIASES
 
 # Export scoring system
-export ScoringTable, RaceInfo, SCORING_CAT1, SCORING_CAT2, SCORING_CAT3,
-    get_scoring, find_race, SUPERCLASICO_RACES_2025,
-    expected_finish_points, expected_assist_points, expected_breakaway_points,
+export ScoringTable,
+    RaceInfo,
+    SCORING_CAT1,
+    SCORING_CAT2,
+    SCORING_CAT3,
+    SCORING_STAGE,
+    get_scoring,
+    find_race,
+    SUPERCLASICO_RACES_2025,
+    expected_finish_points,
+    expected_assist_points,
+    expected_breakaway_points,
     finish_points_for_position
 
 # Export simulation and prediction
-export BayesianPosterior, bayesian_update, estimate_rider_strength,
-    position_to_strength, simulate_race, position_probabilities,
-    expected_vg_points, estimate_breakaway_points, predict_expected_points
+export BayesianPosterior,
+    bayesian_update,
+    estimate_rider_strength,
+    position_to_strength,
+    simulate_race,
+    position_probabilities,
+    expected_vg_points,
+    estimate_breakaway_points,
+    predict_expected_points,
+    STAGE_RACE_PCS_WEIGHTS,
+    compute_stage_race_pcs_score
 
 # Include all modules (order matters for dependencies)
 include("cache_utils.jl")
