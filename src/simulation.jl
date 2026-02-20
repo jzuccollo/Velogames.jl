@@ -32,23 +32,26 @@ The posterior mean is a precision-weighted average of the prior mean and the
 observation. The posterior variance is the harmonic mean of the prior and
 observation variances.
 """
-function bayesian_update(prior::BayesianPosterior, observation::Float64, obs_variance::Float64)
+function bayesian_update(
+    prior::BayesianPosterior,
+    observation::Float64,
+    obs_variance::Float64,
+)
     prior_precision = 1.0 / prior.variance
     obs_precision = 1.0 / obs_variance
     post_precision = prior_precision + obs_precision
-    post_mean = (prior_precision * prior.mean + obs_precision * observation) / post_precision
+    post_mean =
+        (prior_precision * prior.mean + obs_precision * observation) / post_precision
     post_variance = 1.0 / post_precision
     return BayesianPosterior(post_mean, post_variance)
 end
 
 """
     estimate_rider_strength(;
-        pcs_score::Float64=0.0,
-        race_history::Vector{Float64}=Float64[],
-        race_history_years_ago::Vector{Int}=Int[],
-        vg_points::Float64=0.0,
-        odds_implied_prob::Float64=0.0,
-        n_starters::Int=150
+        pcs_score, race_history, race_history_years_ago, vg_points,
+        odds_implied_prob, n_starters,
+        pcs_variance, vg_variance, hist_base_variance, hist_decay_rate,
+        odds_variance, odds_normalisation
     ) -> BayesianPosterior
 
 Estimate a rider's strength for a specific race using Bayesian updating.
@@ -61,43 +64,57 @@ Returns a `BayesianPosterior` with mean (strength) and variance (uncertainty).
 3. **Race history** (specific): historical results in this exact race
 4. **Betting odds** (market consensus): if available, the most precise signal
 
-## Arguments
-- `pcs_score`: normalized PCS specialty score (z-scored, mean 0, std 1)
-- `race_history`: vector of normalized finishing positions from past editions
+## Data arguments
+- `pcs_score`: normalised PCS specialty score (z-scored, mean 0, std 1)
+- `race_history`: vector of normalised finishing positions from past editions
   (lower = better; converted to strength via negative rank mapping)
 - `race_history_years_ago`: how many years ago each history entry is (for recency weighting)
-- `vg_points`: normalized VG season points (z-scored)
+- `vg_points`: normalised VG season points (z-scored)
 - `odds_implied_prob`: implied win probability from betting odds (0-1, 0 = not available)
 - `n_starters`: expected number of starters (used to scale odds to strength)
+
+## Variance hyperparameters (for calibration/sensitivity analysis)
+- `pcs_variance`: prior variance for PCS specialty score (default: 4.0)
+- `vg_variance`: observation variance for VG season points (default: 3.0)
+- `hist_base_variance`: base variance for race history observations (default: 1.0)
+- `hist_decay_rate`: additional variance per year of age (default: 0.5, so 1yr ago = 1.5, 2yr = 2.0)
+- `odds_variance`: observation variance for betting odds signal (default: 0.5)
+- `odds_normalisation`: divisor to scale log-odds to z-score range (default: 2.0, heuristic)
 """
 function estimate_rider_strength(;
-    pcs_score::Float64=0.0,
-    race_history::Vector{Float64}=Float64[],
-    race_history_years_ago::Vector{Int}=Int[],
-    vg_points::Float64=0.0,
-    odds_implied_prob::Float64=0.0,
-    n_starters::Int=150
+    pcs_score::Float64 = 0.0,
+    race_history::Vector{Float64} = Float64[],
+    race_history_years_ago::Vector{Int} = Int[],
+    vg_points::Float64 = 0.0,
+    odds_implied_prob::Float64 = 0.0,
+    n_starters::Int = 150,
+    pcs_variance::Float64 = 4.0,
+    vg_variance::Float64 = 3.0,
+    hist_base_variance::Float64 = 1.0,
+    hist_decay_rate::Float64 = 0.5,
+    odds_variance::Float64 = 0.5,
+    odds_normalisation::Float64 = 2.0,
 )
     # --- Prior from PCS ---
     # PCS score is our broadest signal. Wide variance reflects general uncertainty.
-    prior_variance = 4.0  # wide prior: PCS is informative but not specific
-    posterior = BayesianPosterior(pcs_score, prior_variance)
+    posterior = BayesianPosterior(pcs_score, pcs_variance)
 
     # --- Update with VG season points ---
     # VG points reflect current season form. Moderate precision.
     if vg_points != 0.0
-        vg_variance = 3.0  # less precise than PCS for race-specific prediction
         posterior = bayesian_update(posterior, vg_points, vg_variance)
     end
 
     # --- Update with race-specific history ---
     # Each past result in this specific race is a strong signal.
     # More recent results are more informative (lower variance).
-    for (i, hist_strength) in enumerate(race_history)
-        years_ago = i <= length(race_history_years_ago) ? race_history_years_ago[i] : i
+    if length(race_history) != length(race_history_years_ago)
+        @warn "race_history ($(length(race_history))) and race_history_years_ago ($(length(race_history_years_ago))) have different lengths; using pairwise minimum"
+    end
+    for (hist_strength, years_ago) in zip(race_history, race_history_years_ago)
         # Variance increases with age: recent result is precise, old result is fuzzy
-        hist_variance = 1.0 + 0.5 * years_ago  # 1.5 for 1yr ago, 2.0 for 2yr, etc.
-        posterior = bayesian_update(posterior, hist_strength, hist_variance)
+        hist_var = hist_base_variance + hist_decay_rate * years_ago
+        posterior = bayesian_update(posterior, hist_strength, hist_var)
     end
 
     # --- Update with betting odds ---
@@ -105,13 +122,11 @@ function estimate_rider_strength(;
     if odds_implied_prob > 0.0
         # Convert implied win probability to a strength score.
         # Use log-odds as a natural strength scale: strong riders have high log-odds.
-        # Baseline: uniform probability = 1/n_starters
         baseline_prob = 1.0 / n_starters
         # Strength relative to average: positive = stronger than average
         odds_strength = log(odds_implied_prob / baseline_prob)
-        # Normalize to roughly the same scale as z-scores (divide by typical spread)
-        odds_strength = odds_strength / 2.0
-        odds_variance = 0.5  # high precision: the market is well-informed
+        # Normalise to roughly the same scale as z-scores
+        odds_strength = odds_strength / odds_normalisation
         posterior = bayesian_update(posterior, odds_strength, odds_variance)
     end
 
@@ -151,21 +166,25 @@ to their strength score, then ranks riders by noisy strength (highest = 1st plac
 Returns a `n_riders x n_sims` matrix where entry [i, s] is rider i's finishing
 position in simulation s.
 """
-function simulate_race(strengths::Vector{Float64}, uncertainties::Vector{Float64};
-                       n_sims::Int=10000, rng::AbstractRNG=Random.default_rng())
+function simulate_race(
+    strengths::Vector{Float64},
+    uncertainties::Vector{Float64};
+    n_sims::Int = 10000,
+    rng::AbstractRNG = Random.default_rng(),
+)
     n_riders = length(strengths)
     @assert length(uncertainties) == n_riders "Length mismatch: strengths and uncertainties"
 
     positions = Matrix{Int}(undef, n_riders, n_sims)
     noisy_strengths = Vector{Float64}(undef, n_riders)
 
-    for s in 1:n_sims
+    for s = 1:n_sims
         # Add noise to each rider's strength
-        for i in 1:n_riders
+        for i = 1:n_riders
             noisy_strengths[i] = strengths[i] + uncertainties[i] * randn(rng)
         end
         # Rank: highest noisy strength = position 1
-        order = sortperm(noisy_strengths, rev=true)
+        order = sortperm(noisy_strengths, rev = true)
         for (pos, rider_idx) in enumerate(order)
             positions[rider_idx, s] = pos
         end
@@ -182,12 +201,12 @@ Convert simulation results to probability distributions over positions.
 Returns a `n_riders x max_position` matrix where entry [i, k] is the probability
 that rider i finishes in position k.
 """
-function position_probabilities(sim_positions::Matrix{Int}; max_position::Int=30)
+function position_probabilities(sim_positions::Matrix{Int}; max_position::Int = 30)
     n_riders, n_sims = size(sim_positions)
     probs = zeros(Float64, n_riders, max_position)
 
-    for i in 1:n_riders
-        for s in 1:n_sims
+    for i = 1:n_riders
+        for s = 1:n_sims
             pos = sim_positions[i, s]
             if 1 <= pos <= max_position
                 probs[i, pos] += 1.0
@@ -215,16 +234,19 @@ Includes:
 
 Returns a vector of expected VG points per rider.
 """
-function expected_vg_points(sim_positions::Matrix{Int}, rider_teams::Vector{String},
-                            scoring::ScoringTable)
+function expected_vg_points(
+    sim_positions::Matrix{Int},
+    rider_teams::Vector{String},
+    scoring::ScoringTable,
+)
     n_riders, n_sims = size(sim_positions)
     @assert length(rider_teams) == n_riders "Length mismatch: rider_teams"
 
     total_points = zeros(Float64, n_riders)
 
-    for s in 1:n_sims
+    for s = 1:n_sims
         # --- Finish points ---
-        for i in 1:n_riders
+        for i = 1:n_riders
             pos = sim_positions[i, s]
             total_points[i] += finish_points_for_position(pos, scoring)
         end
@@ -233,7 +255,7 @@ function expected_vg_points(sim_positions::Matrix{Int}, rider_teams::Vector{Stri
         # Find which riders finished 1st, 2nd, 3rd in this simulation
         top3_riders = Int[]
         top3_positions = Int[]
-        for i in 1:n_riders
+        for i = 1:n_riders
             pos = sim_positions[i, s]
             if pos <= 3
                 push!(top3_riders, i)
@@ -244,7 +266,7 @@ function expected_vg_points(sim_positions::Matrix{Int}, rider_teams::Vector{Stri
         # Award assist points to teammates of top-3 finishers
         for (top_rider, top_pos) in zip(top3_riders, top3_positions)
             top_team = rider_teams[top_rider]
-            for i in 1:n_riders
+            for i = 1:n_riders
                 if i != top_rider && rider_teams[i] == top_team
                     total_points[i] += scoring.assist_points[top_pos]
                 end
@@ -273,20 +295,33 @@ Heuristic approach:
   riders (strong enough to be in the race, but not favourites who sit in the peloton).
   Use a heuristic based on strength rank.
 
-This is necessarily approximate -- breakaway behaviour is hard to predict from
-historical data alone.
+Sector allocation per simulated finishing position:
+- Position 1-14:  2 late sectors (20km, 10km)                   = 2 sectors
+- Position 15-19: 2 late + 1 early sector (50% distance)        = 3 sectors
+- Position 20:    2 late + 2 early sectors (50% + 50km)          = 4 sectors max
+- Position 21-30: 1 late (20km) + 2 early sectors (50% + 50km)  = 3 sectors
+- Position 31-50: 2 early sectors (50% + 50km)                   = 2 sectors
+- Position 51-60: 1 early sector (50% distance)                  = 1 sector
+- Position 61+:   0 sectors
+
+Note the sharp jump at position 20, where riders gain a 4th sector. This is a known
+simplification; actual breakaway behaviour is hard to predict from historical data alone.
 """
-function estimate_breakaway_points(strengths::Vector{Float64}, uncertainties::Vector{Float64},
-                                    scoring::ScoringTable; n_sims::Int=10000,
-                                    rng::AbstractRNG=Random.default_rng())
+function estimate_breakaway_points(
+    strengths::Vector{Float64},
+    uncertainties::Vector{Float64},
+    scoring::ScoringTable;
+    n_sims::Int = 10000,
+    rng::AbstractRNG = Random.default_rng(),
+)
     n_riders = length(strengths)
-    sim = simulate_race(strengths, uncertainties; n_sims=n_sims, rng=rng)
+    sim = simulate_race(strengths, uncertainties; n_sims = n_sims, rng = rng)
 
     breakaway_pts = zeros(Float64, n_riders)
     points_per_sector = scoring.breakaway_points
 
-    for s in 1:n_sims
-        for i in 1:n_riders
+    for s = 1:n_sims
+        for i = 1:n_riders
             pos = sim[i, s]
             sectors_in = 0
 
@@ -316,60 +351,99 @@ function estimate_breakaway_points(strengths::Vector{Float64}, uncertainties::Ve
 end
 
 # ---------------------------------------------------------------------------
+# Class-aware strength estimation for stage races
+# ---------------------------------------------------------------------------
+
+"""
+Class-aware PCS specialty blending weights for stage races.
+
+Each rider classification maps to a weighted blend of PCS specialty columns,
+reflecting how that type of rider contributes VG points across a grand tour.
+"""
+const STAGE_RACE_PCS_WEIGHTS = Dict(
+    "allrounder" =>
+        Dict(:gc => 0.5, :tt => 0.25, :climber => 0.25, :sprint => 0.0, :oneday => 0.0),
+    "climber" =>
+        Dict(:gc => 0.15, :tt => 0.15, :climber => 0.7, :sprint => 0.0, :oneday => 0.0),
+    "sprinter" =>
+        Dict(:gc => 0.2, :tt => 0.2, :climber => 0.0, :sprint => 0.3, :oneday => 0.3),
+    "unclassed" =>
+        Dict(:gc => 0.3, :tt => 0.15, :climber => 0.15, :sprint => 0.0, :oneday => 0.4),
+)
+
+"""
+    compute_stage_race_pcs_score(row, class::String) -> Float64
+
+Compute a blended PCS score for a rider based on their classification and the
+stage race weighting scheme. Falls back to the one-day score if classification
+is unknown.
+"""
+function compute_stage_race_pcs_score(row, class::String)
+    weights =
+        get(STAGE_RACE_PCS_WEIGHTS, lowercase(class), STAGE_RACE_PCS_WEIGHTS["unclassed"])
+    score = 0.0
+    for (col, w) in weights
+        if w > 0 && col in propertynames(row)
+            val = getproperty(row, col)
+            score += w * Float64(coalesce(val, 0.0))
+        end
+    end
+    return score
+end
+
+# ---------------------------------------------------------------------------
 # High-level prediction pipeline
 # ---------------------------------------------------------------------------
 
 """
     predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
-                            race_history_df::Union{DataFrame, Nothing}=nothing,
-                            odds_df::Union{DataFrame, Nothing}=nothing,
-                            n_sims::Int=10000,
+                            race_history_df=nothing, odds_df=nothing,
+                            n_sims::Int=10000, race_type::Symbol=:oneday,
                             rng::AbstractRNG=Random.default_rng()) -> DataFrame
 
 Full prediction pipeline: takes rider data, computes expected VG points for each rider.
 
+## Race types
+- `:oneday` — uses PCS one-day specialty as the prior, includes breakaway heuristic
+- `:stage` — uses class-aware PCS blending as the prior, higher base uncertainty,
+  no breakaway heuristic (stage race points already include these implicitly)
+
 ## Required columns in `rider_df`:
-- `rider::String` - rider name
-- `team::String` - trade team name
-- `riderkey::String` - unique rider key
+- `rider::String`, `team::String`, `riderkey::String`
 - `cost::Int` or `vgcost::Int` - VG cost
 - `points::Float64` or `vgpoints::Float64` - VG season points
 
 ## Optional PCS columns (from `getpcsriderpts_batch`):
-- `oneday::Float64` - PCS one-day rating
-- `gc::Float64`, `tt::Float64`, `sprint::Float64`, `climber::Float64`
+- `oneday`, `gc`, `tt`, `sprint`, `climber` (all Float64)
 
-## Optional `race_history_df` columns:
-- `riderkey::String`
-- `position::Int` - historical finishing position
-- `year::Int` - year of the result
+## Optional columns for stage races:
+- `classraw::String` or `class::String` - rider classification
 
-## Optional `odds_df` columns:
-- `riderkey::String`
-- `odds::Float64` - decimal odds
-
-Returns the input DataFrame with additional columns:
-- `strength::Float64` - estimated strength (posterior mean)
-- `uncertainty::Float64` - estimation uncertainty (posterior std dev)
-- `expected_vg_points::Float64` - expected total VG points
-- `expected_finish_pts::Float64` - expected finish points component
-- `expected_assist_pts::Float64` - expected assist points component
-- `expected_breakaway_pts::Float64` - expected breakaway points component
+## Returns
+The input DataFrame augmented with:
+- `strength`, `uncertainty` - posterior estimates
+- `expected_vg_points` - total expected VG points
+- `expected_finish_pts`, `expected_assist_pts`, `expected_breakaway_pts` - components
 """
-function predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
-                                  race_history_df::Union{DataFrame, Nothing}=nothing,
-                                  odds_df::Union{DataFrame, Nothing}=nothing,
-                                  n_sims::Int=10000,
-                                  rng::AbstractRNG=Random.default_rng())
+function predict_expected_points(
+    rider_df::DataFrame,
+    scoring::ScoringTable;
+    race_history_df::Union{DataFrame,Nothing} = nothing,
+    odds_df::Union{DataFrame,Nothing} = nothing,
+    n_sims::Int = 10000,
+    race_type::Symbol = :oneday,
+    rng::AbstractRNG = Random.default_rng(),
+)
     df = copy(rider_df)
     n_riders = nrow(df)
 
-    # --- Normalize input columns ---
-    # Find the points column
-    pts_col = :points in propertynames(df) ? :points :
-              :vgpoints in propertynames(df) ? :vgpoints : nothing
-    cost_col = :cost in propertynames(df) ? :cost :
-               :vgcost in propertynames(df) ? :vgcost : nothing
+    # --- Normalise input columns ---
+    pts_col =
+        :points in propertynames(df) ? :points :
+        :vgpoints in propertynames(df) ? :vgpoints : nothing
+    cost_col =
+        :cost in propertynames(df) ? :cost :
+        :vgcost in propertynames(df) ? :vgcost : nothing
 
     if pts_col === nothing || cost_col === nothing
         error("rider_df must contain :points or :vgpoints, and :cost or :vgcost columns")
@@ -378,24 +452,42 @@ function predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
     vg_pts = Float64.(coalesce.(df[!, pts_col], 0.0))
     n_starters = n_riders
 
-    # Z-score normalize VG points
+    # Z-score normalise VG points
     vg_mean = mean(vg_pts)
     vg_std = std(vg_pts)
     vg_z = vg_std > 0 ? (vg_pts .- vg_mean) ./ vg_std : zeros(n_riders)
 
-    # Z-score normalize PCS one-day score if available
+    # --- Compute PCS z-scores (race-type-dependent) ---
     pcs_z = zeros(n_riders)
-    if :oneday in propertynames(df)
-        pcs_raw = Float64.(coalesce.(df.oneday, 0.0))
+    if race_type == :stage
+        # Class-aware blended PCS score for stage races
+        class_col =
+            :classraw in propertynames(df) ? :classraw :
+            :class in propertynames(df) ? :class : nothing
+        pcs_raw = zeros(n_riders)
+        for i = 1:n_riders
+            rider_class =
+                class_col !== nothing ? lowercase(string(df[i, class_col])) : "unclassed"
+            pcs_raw[i] = compute_stage_race_pcs_score(df[i, :], rider_class)
+        end
         pcs_mean = mean(pcs_raw)
         pcs_std = std(pcs_raw)
         pcs_z = pcs_std > 0 ? (pcs_raw .- pcs_mean) ./ pcs_std : zeros(n_riders)
+    else
+        # One-day: use PCS one-day specialty directly
+        if :oneday in propertynames(df)
+            pcs_raw = Float64.(coalesce.(df.oneday, 0.0))
+            pcs_mean = mean(pcs_raw)
+            pcs_std = std(pcs_raw)
+            pcs_z = pcs_std > 0 ? (pcs_raw .- pcs_mean) ./ pcs_std : zeros(n_riders)
+        end
     end
 
     # --- Build odds lookup ---
-    odds_lookup = Dict{String, Float64}()
-    if odds_df !== nothing && :riderkey in propertynames(odds_df) && :odds in propertynames(odds_df)
-        # Convert decimal odds to implied probability with overround removal
+    odds_lookup = Dict{String,Float64}()
+    if odds_df !== nothing &&
+       :riderkey in propertynames(odds_df) &&
+       :odds in propertynames(odds_df)
         raw_probs = 1.0 ./ Float64.(odds_df.odds)
         overround = sum(raw_probs)
         for (i, row) in enumerate(eachrow(odds_df))
@@ -404,17 +496,13 @@ function predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
     end
 
     # --- Build race history lookup ---
-    # Group by riderkey: for each rider, collect (position, years_ago) pairs
     current_year = Dates.year(Dates.today())
-    history_lookup = Dict{String, Vector{Tuple{Float64, Int}}}()
+    history_lookup = Dict{String,Vector{Tuple{Float64,Int}}}()
     if race_history_df !== nothing &&
        :riderkey in propertynames(race_history_df) &&
        :position in propertynames(race_history_df) &&
        :year in propertynames(race_history_df)
-        # Use a realistic field size for converting historical positions to strength.
-        # One-day classics typically have 150-200 starters. Using the current rider
-        # count (which may be filtered) would give wrong strength values for riders
-        # who historically finished outside the current field size.
+        # Field size for strength conversion: classics ~175, grand tours ~175 finishers
         history_field_size = max(n_starters, 175)
         for row in eachrow(race_history_df)
             key = row.riderkey
@@ -422,10 +510,9 @@ function predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
             yr = row.year
             if !ismissing(pos) && !ismissing(yr) && pos > 0 && pos < 900
                 years_ago = current_year - yr
-                # Convert position to strength score using realistic field size
                 strength = position_to_strength(pos, history_field_size)
                 if !haskey(history_lookup, key)
-                    history_lookup[key] = Tuple{Float64, Int}[]
+                    history_lookup[key] = Tuple{Float64,Int}[]
                 end
                 push!(history_lookup[key], (strength, years_ago))
             end
@@ -436,24 +523,22 @@ function predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
     strengths = Vector{Float64}(undef, n_riders)
     uncertainties = Vector{Float64}(undef, n_riders)
 
-    for i in 1:n_riders
+    for i = 1:n_riders
         key = df.riderkey[i]
 
-        # Race history for this rider
-        hist = get(history_lookup, key, Tuple{Float64, Int}[])
+        hist = get(history_lookup, key, Tuple{Float64,Int}[])
         hist_strengths = Float64[h[1] for h in hist]
         hist_years = Int[h[2] for h in hist]
 
-        # Odds for this rider
         odds_prob = get(odds_lookup, key, 0.0)
 
         posterior = estimate_rider_strength(
-            pcs_score=pcs_z[i],
-            race_history=hist_strengths,
-            race_history_years_ago=hist_years,
-            vg_points=vg_z[i],
-            odds_implied_prob=odds_prob,
-            n_starters=n_starters
+            pcs_score = pcs_z[i],
+            race_history = hist_strengths,
+            race_history_years_ago = hist_years,
+            vg_points = vg_z[i],
+            odds_implied_prob = odds_prob,
+            n_starters = n_starters,
         )
 
         strengths[i] = posterior.mean
@@ -462,7 +547,7 @@ function predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
 
     # --- Monte Carlo simulation ---
     @info "Running Monte Carlo simulation ($n_sims iterations, $n_riders riders)..."
-    sim_positions = simulate_race(strengths, uncertainties; n_sims=n_sims, rng=rng)
+    sim_positions = simulate_race(strengths, uncertainties; n_sims = n_sims, rng = rng)
 
     # --- Compute expected points ---
     teams = String.(df.team)
@@ -470,25 +555,33 @@ function predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
     # Finish + assist points from main simulation
     evg = expected_vg_points(sim_positions, teams, scoring)
 
-    # Breakaway points (uses separate simulation for independence)
-    breakaway = estimate_breakaway_points(strengths, uncertainties, scoring;
-                                           n_sims=n_sims, rng=rng)
+    # Breakaway points: only for one-day races (stage race scoring already includes these)
+    breakaway = zeros(n_riders)
+    if race_type == :oneday
+        breakaway = estimate_breakaway_points(
+            strengths,
+            uncertainties,
+            scoring;
+            n_sims = n_sims,
+            rng = rng,
+        )
+    end
 
     # Decompose finish and assist points for reporting
-    pos_probs = position_probabilities(sim_positions; max_position=30)
-    finish_pts = [expected_finish_points(pos_probs[i, :], scoring) for i in 1:n_riders]
-    assist_pts = evg .- finish_pts  # assist component is the difference
+    pos_probs = position_probabilities(sim_positions; max_position = 30)
+    finish_pts = [expected_finish_points(pos_probs[i, :], scoring) for i = 1:n_riders]
+    assist_pts = evg .- finish_pts
 
     # Total expected VG points
     total_evg = evg .+ breakaway
 
     # --- Add results to DataFrame ---
-    df[!, :strength] = round.(strengths, digits=3)
-    df[!, :uncertainty] = round.(uncertainties, digits=3)
-    df[!, :expected_vg_points] = round.(total_evg, digits=1)
-    df[!, :expected_finish_pts] = round.(finish_pts, digits=1)
-    df[!, :expected_assist_pts] = round.(assist_pts, digits=1)
-    df[!, :expected_breakaway_pts] = round.(breakaway, digits=1)
+    df[!, :strength] = round.(strengths, digits = 3)
+    df[!, :uncertainty] = round.(uncertainties, digits = 3)
+    df[!, :expected_vg_points] = round.(total_evg, digits = 1)
+    df[!, :expected_finish_pts] = round.(finish_pts, digits = 1)
+    df[!, :expected_assist_pts] = round.(assist_pts, digits = 1)
+    df[!, :expected_breakaway_pts] = round.(breakaway, digits = 1)
 
     return df
 end
