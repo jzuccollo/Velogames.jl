@@ -20,7 +20,7 @@ racehash = ""  # VG startlist hash filter (leave empty for all riders)
 odds_url = ""
 
 # Simulation Parameters
-n_sims = 10000  # Monte Carlo simulations (more = smoother, slower)
+n_sims = 1000  # Monte Carlo simulations (more = smoother, slower)
 history_years = 5  # How many years of race history to use
 
 # Exclusions (add rider names to avoid)
@@ -51,14 +51,13 @@ println("Simulations: $n_sims")
 println("BUILDING OPTIMAL TEAM")
 println("="^40)
 
-# Run the full prediction pipeline
-predicted, chosenteam = solverace_sixes(config;
+# Run the full prediction pipeline (cache_config inherited from config)
+predicted, chosenteam = solve_oneday(config;
     racehash=racehash,
     history_years=history_years,
     odds_url=odds_url,
     n_sims=n_sims,
-    excluded_riders=excluded_riders,
-    cache_config=race_cache)
+    excluded_riders=excluded_riders)
 
 println()
 println("Pipeline complete: $(nrow(predicted)) riders analysed")
@@ -94,7 +93,7 @@ if @isdefined(chosenteam) && nrow(chosenteam) > 0
 
     # Round numeric columns for display
     for col in names(team_display)
-        if eltype(team_display[!, col]) <: Union{Missing, Number}
+        if eltype(team_display[!, col]) <: Union{Missing,Number}
             team_display[!, col] = round.(team_display[!, col], digits=1)
         end
     end
@@ -138,7 +137,7 @@ if @isdefined(predicted) && nrow(predicted) > 0
 
     # Round for display
     for col in names(ranking_display)
-        if eltype(ranking_display[!, col]) <: Union{Missing, Number}
+        if eltype(ranking_display[!, col]) <: Union{Missing,Number}
             ranking_display[!, col] = round.(ranking_display[!, col], digits=1)
         end
     end
@@ -172,7 +171,7 @@ if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
         top_value = sort(not_chosen, :value, rev=true)[1:min(10, nrow(not_chosen)), :]
         value_display = top_value[:, [:rider, :team, cost_col, :expected_vg_points, :value]]
         for col in names(value_display)
-            if eltype(value_display[!, col]) <: Union{Missing, Number}
+            if eltype(value_display[!, col]) <: Union{Missing,Number}
                 value_display[!, col] = round.(value_display[!, col], digits=1)
             end
         end
@@ -187,7 +186,7 @@ if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
         upside = sort(not_chosen, :upside, rev=true)[1:min(5, nrow(not_chosen)), :]
         upside_display = upside[:, [:rider, :team, cost_col, :expected_vg_points, :strength, :uncertainty]]
         for col in names(upside_display)
-            if eltype(upside_display[!, col]) <: Union{Missing, Number}
+            if eltype(upside_display[!, col]) <: Union{Missing,Number}
                 upside_display[!, col] = round.(upside_display[!, col], digits=1)
             end
         end
@@ -203,7 +202,7 @@ if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
             cheap_sorted = sort(cheap_options, :expected_vg_points, rev=true)[1:min(5, nrow(cheap_options)), :]
             cheap_display = cheap_sorted[:, [:rider, :team, cost_col, :expected_vg_points]]
             for col in names(cheap_display)
-                if eltype(cheap_display[!, col]) <: Union{Missing, Number}
+                if eltype(cheap_display[!, col]) <: Union{Missing,Number}
                     cheap_display[!, col] = round.(cheap_display[!, col], digits=1)
                 end
             end
