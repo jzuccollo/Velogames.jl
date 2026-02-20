@@ -15,13 +15,13 @@ end
 const DEFAULT_CACHE = CacheConfig(
     joinpath(homedir(), ".velogames_cache"),
     24,  # 24 hours default cache lifetime
-    true
+    true,
 )
 
 """
 Generate a cache key from URL and parameters
 """
-function cache_key(url::String, params::Dict=Dict())::String
+function cache_key(url::String, params::Dict = Dict())::String
     content = url * string(params)
     return bytes2hex(sha256(content))[1:16]  # Use first 16 chars of hash
 end
@@ -70,7 +70,13 @@ end
 """
 Save DataFrame data to cache with metadata
 """
-function save_to_cache(data::DataFrame, key::String, url::String, cache_dir::String, params::Dict=Dict())
+function save_to_cache(
+    data::DataFrame,
+    key::String,
+    url::String,
+    cache_dir::String,
+    params::Dict = Dict(),
+)
     data_file, meta_file = cache_paths(key, cache_dir)
 
     # Save data
@@ -102,8 +108,14 @@ end
 """
 Generic cached data fetcher
 """
-function cached_fetch(fetch_func::Function, url::String, params::Dict=Dict();
-    cache_config::CacheConfig=DEFAULT_CACHE, force_refresh::Bool=false, verbose::Bool=true)
+function cached_fetch(
+    fetch_func::Function,
+    url::String,
+    params::Dict = Dict();
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    verbose::Bool = true,
+)
     if !cache_config.enabled
         return fetch_func(url, params)
     end
@@ -111,7 +123,8 @@ function cached_fetch(fetch_func::Function, url::String, params::Dict=Dict();
     key = cache_key(url, params)
 
     # Check cache first (unless force refresh)
-    if !force_refresh && is_cache_valid(key, cache_config.max_age_hours, cache_config.cache_dir)
+    if !force_refresh &&
+       is_cache_valid(key, cache_config.max_age_hours, cache_config.cache_dir)
         cached_data = load_from_cache(key, cache_config.cache_dir)
         if cached_data !== nothing
             verbose && @info "Loading from cache: $url"
@@ -132,11 +145,11 @@ end
 """
 Clear cache (all files or specific key)
 """
-function clear_cache(cache_dir::String=DEFAULT_CACHE.cache_dir, key::String="")
+function clear_cache(cache_dir::String = DEFAULT_CACHE.cache_dir, key::String = "")
     if isempty(key)
         # Clear all cache files
         if isdir(cache_dir)
-            rm(cache_dir, recursive=true)
+            rm(cache_dir, recursive = true)
             @info "Cleared all cache files from $cache_dir"
         end
     else

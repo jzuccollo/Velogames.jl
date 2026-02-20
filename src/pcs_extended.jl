@@ -35,16 +35,19 @@ Returns a DataFrame with the following columns:
 getpcsraceresults("tour-de-france", 2023)
 ```
 """
-function getpcsraceresults(pcs_race_slug::String, year::Int;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getpcsraceresults(
+    pcs_race_slug::String,
+    year::Int;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
     # The main race page only shows a 10-row summary; full results are at /result
     pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/result"
 
     function fetch_race_results(url, params)
         # Use min_rows=20 to skip any small summary/nav tables
-        df = scrape_pcs_table(url; min_rows=20)
+        df = scrape_pcs_table(url; min_rows = 20)
 
         rider_col = find_column(df, PCS_RIDER_ALIASES)
         rank_col = find_column(df, PCS_RANK_ALIASES)
@@ -53,7 +56,8 @@ function getpcsraceresults(pcs_race_slug::String, year::Int;
         rider_col === nothing && error(
             "No rider column found in race results from $url. " *
             "Columns: $(names(df)). " *
-            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl")
+            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl",
+        )
 
         # Build standardized result DataFrame
         result = DataFrame()
@@ -101,8 +105,13 @@ function getpcsraceresults(pcs_race_slug::String, year::Int;
     end
 
     params = Dict("slug" => pcs_race_slug, "year" => string(year))
-    return cached_fetch(fetch_race_results, pageurl, params;
-        cache_config=cache_config, force_refresh=force_refresh)
+    return cached_fetch(
+        fetch_race_results,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 end
 
 
@@ -139,9 +148,12 @@ Returns a DataFrame with the following columns:
 getpcsracestartlist("tour-de-france", 2024)
 ```
 """
-function getpcsracestartlist(pcs_race_slug::String, year::Int;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getpcsracestartlist(
+    pcs_race_slug::String,
+    year::Int;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
     pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/startlist/startlist-quality"
 
@@ -150,14 +162,15 @@ function getpcsracestartlist(pcs_race_slug::String, year::Int;
 
         rider_col = find_column(df, PCS_RIDER_ALIASES)
         points_col = find_column(df, PCS_POINTS_ALIASES)
-        rank_col = find_column(df, ["pcs-ranking", "pcsranking", "pcsrank",
-                                     PCS_RANK_ALIASES...])
+        rank_col =
+            find_column(df, ["pcs-ranking", "pcsranking", "pcsrank", PCS_RANK_ALIASES...])
         team_col = find_column(df, PCS_TEAM_ALIASES)
 
         rider_col === nothing && error(
             "No rider column found in startlist from $url. " *
             "Columns: $(names(df)). " *
-            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl")
+            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl",
+        )
 
         # Build standardized result DataFrame
         result = DataFrame()
@@ -199,8 +212,13 @@ function getpcsracestartlist(pcs_race_slug::String, year::Int;
     end
 
     params = Dict("slug" => pcs_race_slug, "year" => string(year))
-    return cached_fetch(fetch_startlist, pageurl, params;
-        cache_config=cache_config, force_refresh=force_refresh)
+    return cached_fetch(
+        fetch_startlist,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 end
 
 
@@ -230,18 +248,25 @@ Returns a DataFrame with all columns from `getpcsraceresults` plus:
 getpcsracehistory("paris-roubaix", [2021, 2022, 2023, 2024])
 ```
 """
-function getpcsracehistory(pcs_race_slug::String, years::Vector{Int};
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getpcsracehistory(
+    pcs_race_slug::String,
+    years::Vector{Int};
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
     all_results = DataFrame()
 
     for year in years
         try
-            year_df = getpcsraceresults(pcs_race_slug, year;
-                force_refresh=force_refresh, cache_config=cache_config)
+            year_df = getpcsraceresults(
+                pcs_race_slug,
+                year;
+                force_refresh = force_refresh,
+                cache_config = cache_config,
+            )
             year_df[!, :year] = fill(year, nrow(year_df))
-            all_results = vcat(all_results, year_df; cols=:union)
+            all_results = vcat(all_results, year_df; cols = :union)
         catch e
             @warn "Failed to fetch results for $pcs_race_slug $year: $e"
         end

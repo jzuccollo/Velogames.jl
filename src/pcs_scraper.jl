@@ -43,7 +43,7 @@ find_column(df, PCS_RIDER_ALIASES)  # => Symbol("h2hRider")
 find_column(df, ["nonexistent"])     # => nothing
 ```
 """
-function find_column(df::DataFrame, aliases::Vector{String})::Union{Symbol, Nothing}
+function find_column(df::DataFrame, aliases::Vector{String})::Union{Symbol,Nothing}
     cols_lower = Dict(lowercase(n) => Symbol(n) for n in names(df))
     for alias in aliases
         key = lowercase(alias)
@@ -63,8 +63,10 @@ This is the lowest-level scraping function, shared by both VG and PCS paths.
 function scrape_html_tables(pageurl::String)::Vector{DataFrame}
     page = TableScraper.scrape_tables(pageurl)
     if isempty(page)
-        error("No tables found at: $pageurl. " *
-              "Check the URL in your browser to verify it loads correctly.")
+        error(
+            "No tables found at: $pageurl. " *
+            "Check the URL in your browser to verify it loads correctly.",
+        )
     end
     return [DataFrame(tbl) for tbl in page]
 end
@@ -88,11 +90,15 @@ Table selection strategy:
 - `min_rows::Int=5` — minimum rows for a table to be considered (use 20+ to skip summary tables)
 - `prefer_largest::Bool=true` — prefer the largest table on the page
 """
-function scrape_pcs_table(url::String; min_rows::Int=5, prefer_largest::Bool=true)::DataFrame
+function scrape_pcs_table(
+    url::String;
+    min_rows::Int = 5,
+    prefer_largest::Bool = true,
+)::DataFrame
     tables = scrape_html_tables(url)
 
     if prefer_largest
-        sorted = sort(tables, by=nrow, rev=true)
+        sorted = sort(tables, by = nrow, rev = true)
         for tbl in sorted
             if nrow(tbl) >= min_rows
                 return tbl
@@ -108,7 +114,7 @@ function scrape_pcs_table(url::String; min_rows::Int=5, prefer_largest::Bool=tru
     end
 
     # Last resort: return the largest table regardless
-    largest = sort(tables, by=nrow, rev=true)[1]
+    largest = sort(tables, by = nrow, rev = true)[1]
     table_sizes = join(string.(nrow.(tables)), ", ")
     @warn "No table with ≥ $min_rows rows found at $url. " *
           "Using largest table ($(nrow(largest)) rows). " *

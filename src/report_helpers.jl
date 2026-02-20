@@ -1,9 +1,5 @@
-const DEFAULT_CLASS_REQUIREMENTS = Dict(
-    "All rounder" => 2,
-    "Climber" => 2,
-    "Sprinter" => 1,
-    "Unclassed" => 4,
-)
+const DEFAULT_CLASS_REQUIREMENTS =
+    Dict("All rounder" => 2, "Climber" => 2, "Sprinter" => 1, "Unclassed" => 4)
 
 """
     clean_team_names!(df, team_columns)
@@ -38,11 +34,11 @@ applies an optional sort.
 function format_display_table(
     df::DataFrame;
     columns::Vector{Symbol},
-    rename_map::Dict{Symbol,Symbol}=Dict{Symbol,Symbol}(),
-    round_to_int::Vector{Symbol}=Symbol[],
-    round_digits::Dict{Symbol,Int}=Dict{Symbol,Int}(),
-    team_columns::Vector{Symbol}=Symbol[:team],
-    sort_by::Union{Nothing,Tuple{Symbol,Bool}}=nothing,
+    rename_map::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(),
+    round_to_int::Vector{Symbol} = Symbol[],
+    round_digits::Dict{Symbol,Int} = Dict{Symbol,Int}(),
+    team_columns::Vector{Symbol} = Symbol[:team],
+    sort_by::Union{Nothing,Tuple{Symbol,Bool}} = nothing,
 )
     table = select(df, columns)
 
@@ -54,7 +50,7 @@ function format_display_table(
 
     for (col, digits) in round_digits
         if col in propertynames(table)
-            table[!, col] = round.(table[!, col]; digits=digits)
+            table[!, col] = round.(table[!, col]; digits = digits)
         end
     end
 
@@ -67,7 +63,7 @@ function format_display_table(
     if sort_by !== nothing
         column, rev = sort_by
         if column in propertynames(table)
-            table = sort(table, column; rev=rev)
+            table = sort(table, column; rev = rev)
         end
     end
 
@@ -91,9 +87,9 @@ A named tuple with keys `requirements`, `counts`, `cheapest`, `feasible`, and
 """
 function class_availability_summary(
     df::DataFrame;
-    requirements::Dict{String,Int}=DEFAULT_CLASS_REQUIREMENTS,
-    class_col::Symbol=:class,
-    cost_col::Symbol=:cost,
+    requirements::Dict{String,Int} = DEFAULT_CLASS_REQUIREMENTS,
+    class_col::Symbol = :class,
+    cost_col::Symbol = :cost,
 )
     counts = Dict{String,Int}()
     cheapest = Dict{String,Vector{Float64}}()
@@ -128,11 +124,11 @@ function class_availability_summary(
     minimum_cost = feasible ? sum(sum(values) for values in values(cheapest)) : missing
 
     return (
-        requirements=requirements,
-        counts=counts,
-        cheapest=cheapest,
-        feasible=feasible,
-        minimum_cost=minimum_cost,
+        requirements = requirements,
+        counts = counts,
+        cheapest = cheapest,
+        feasible = feasible,
+        minimum_cost = minimum_cost,
     )
 end
 
@@ -154,7 +150,10 @@ function describe_class_availability(summary)
     end
 
     if summary.feasible && summary.minimum_cost !== missing
-        push!(lines, "Minimum cost for a valid roster: $(round(summary.minimum_cost; digits=1)) credits")
+        push!(
+            lines,
+            "Minimum cost for a valid roster: $(round(summary.minimum_cost; digits=1)) credits",
+        )
     else
         push!(lines, "❌ Insufficient riders in one or more classes")
     end
