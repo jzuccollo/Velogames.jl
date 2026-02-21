@@ -2,60 +2,51 @@
 title: "Velogames solver"
 ---
 
-Building on the work of [GraemeHawker](https://github.com/GraemeHawker/velogames_solver), this is a simple set of functions to pick a team for the [Velogames Fantasy Cycling](https://www.velogames.com/) competition.
+Fantasy cycling team optimisation for [Velogames](https://www.velogames.com/). The package scrapes rider data from Velogames and ProCyclingStats, estimates expected Velogames points via Monte Carlo simulation, and selects optimal teams using JuMP/HiGHS linear programming. Building on the work of [GraemeHawker](https://github.com/GraemeHawker/velogames_solver).
 
-# Outline
+# Notebooks
 
-The Julia package uses the [Gumbo](https://github.com/JuliaWeb/Gumbo.jl) and [Cascadia](https://github.com/Algocircle/Cascadia.jl) libraries to scrape rider data, and the [JuMP](https://jump.dev/JuMP.jl/stable/) optimisation library / [HiGHS](https://highs.dev/) solver to construct and solve a mixed-integer program described below.
+Three notebooks cover the main use cases:
 
-At the end of the race, each rider will have accumulated a score based on their performance, and the aim is to pick a team with the highest combined score at the end of the race. The rules are slightly difference for each type of race.
+- **[One-day predictor](oneday_predictor.qmd)**: Pre-race team selection for Superclassico Sixes one-day races. Monte Carlo simulation converts rider strength estimates into expected VG points, then optimises a 6-rider team.
+- **[Stage race predictor](stagerace_predictor.qmd)**: Pre-race team selection for grand tours and stage races. Class-aware strength estimation blends PCS specialties according to each rider's VG classification (all-rounder, climber, sprinter, unclassed), then optimises a 9-rider team with classification constraints.
+- **[Historical analysis](historical_analysis.qmd)**: Retrospective analysis of completed races. Uses actual race results to find the optimal team you could have picked, the cheapest team that beats a benchmark, and rider value analysis. Works for both one-day and stage races.
 
-# One-day races and short tours
+# Prediction pipeline
 
-For short races, riders are all unclassed and teams are 6-9 riders, depending upon the competition.
+Both predictors follow the same pipeline:
 
-The optimisation problem can be stated as:
+1. Fetch VG rider data (costs, season points, and classifications for stage races)
+2. Fetch PCS specialty ratings (one-day, GC, TT, sprint, climber)
+3. Fetch PCS race-specific history from past editions
+4. Optionally fetch betting odds
+5. Estimate rider strength via Bayesian updating of all signals
+6. Run Monte Carlo simulation to get finishing position probabilities
+7. Compute expected VG points (finish + assists + breakaway)
+8. Optimise team selection to maximise total expected VG points
 
-$maximise \sum_{j=1}^{n} x_j y_j$
+The key difference between one-day and stage race prediction is how PCS specialty scores are combined. One-day races use the single relevant specialty (e.g. one-day points for a classic). Stage races blend specialties according to each rider's classification, so an all-rounder's strength reflects GC, TT, and climbing ability whilst a sprinter's reflects sprint and one-day points.
 
-$s.t.$
+# Optimisation models
 
-$\sum_{j=1}^{n} x_j= maxriders$
+## One-day races
 
-$\sum_{j=1}^{n} x_j z_j \leq 100$
+For Superclassico Sixes one-day races, teams are 6 riders with no classification constraints:
 
-where $j=1...n$ is the set of all riders
+$$\max \sum_{j=1}^{n} x_j y_j$$
 
-$x_j\in[0,1]$ is a binary decision variable denoting if rider $j$ is chosen (1 for chosen, 0 for not chosen)
+$$\text{s.t.} \quad \sum_{j=1}^{n} x_j = 6, \quad \sum_{j=1}^{n} x_j z_j \leq 100$$
 
-$z_j\in Z^+$ and $y_j\in Z^+$ are the cost and score parameters of rider $j$ respectively
+where $x_j \in \{0,1\}$ is whether rider $j$ is selected, $y_j$ is expected VG points, and $z_j$ is cost.
 
-# Grand tours
+## Stage races
 
-For grand tours each rider is classed as either an All-Rounder, a Climber, a Sprinter or is Unclassed. A team must contain 2 All-Rounders, 2 Climbers, 1 Sprinter and 3 Unclassed riders. The 9th selection can be from any of these categories.
+For grand tours, teams are 9 riders with classification constraints:
 
-The optimisation problem then becomes:
+$$\max \sum_{j=1}^{n} x_j y_j$$
 
-$maximise \sum_{j=1}^{n} x_j y_j$
+$$\text{s.t.} \quad \sum x_j = 9, \quad \sum x_j z_j \leq 100$$
 
-$s.t.$
+$$\sum x_j a_j \geq 2, \quad \sum x_j c_j \geq 2, \quad \sum x_j s_j \geq 1, \quad \sum x_j u_j \geq 3$$
 
-$\sum_{j=1}^{n} x_j=9$
-
-$\sum_{j=1}^{n} x_j z_j \leq 100$
-
-$\sum_{j=1}^{n} x_j a_j \geq 2$
-
-$\sum_{j=1}^{n} x_j c_j \geq 2$
-
-$\sum_{j=1}^{n} x_j s_j \geq 1$
-
-$\sum_{j=1}^{n} x_j u_j \geq 3$
-
-where $j=1...n$ is the set of all riders
-
-$x_j\in[0,1]$ is a binary decision variable denoting if rider $j$ is chosen (1 for chosen, 0 for not chosen)
-
-$z_j\in Z^+$ and $y_j\in Z^+$ are the cost and score parameters of rider $j$ respectively
-
-$a_j\in[0,1]$, $c_j\in[0,1]$, $s_j\in[0,1]$ and $u_j\in[0,1]$ are binary parameters denoting if rider $j$ is an All-Rounder, Climber, Sprinter or Unclassed respectively, with the further parameter constraint that $a_i+c_i+s_i+u_i=1$ $\forall i=1...n$ (i.e. each rider is allocated to one and only one of the 4 categories) and by implication $\sum_{j=1}^{n} a_j+\sum_{j=1}^{n} c_j+\sum_{j=1}^{n} s_j+\sum_{j=1}^{n} u_j=n$ (i.e. the sum of the number of riders in each category is equal to the total number of riders)
+where $a_j, c_j, s_j, u_j \in \{0,1\}$ indicate rider $j$'s classification (all-rounder, climber, sprinter, unclassed) with $a_j + c_j + s_j + u_j = 1$ for all $j$.

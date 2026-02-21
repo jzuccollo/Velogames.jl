@@ -1,40 +1,23 @@
 """
 ## `gettable`
 
-This function downloads and parses the rider data from the Velogames and PCS websites.
+Downloads and parses rider data from a **VeloGames** page. Uses VG-specific
+heuristics to select the right table (looks for rider/points/cost columns)
+and applies VG-specific column processing via `process_vg_table()`.
 
-The function returns a DataFrame with the columns of the first table on the page. It also adds a (hopefully) unique key for each rider based on their name.
-
-Now includes smart table detection to handle pages with multiple tables.
+For PCS pages, use `scrape_pcs_table()` from pcs_scraper.jl instead.
 """
 function gettable(pageurl::String)
-    page = TableScraper.scrape_tables(pageurl)
+    tables = scrape_html_tables(pageurl)
 
-    if isempty(page)
-        error("""
-        ❌ No tables found at: $pageurl
-
-        Possible causes:
-          1. The page doesn't exist or URL is incorrect
-          2. The page structure has changed
-          3. Network/connection issues
-
-        🔍 Check the URL in your browser to verify it loads correctly.
-        """)
-    end
-
-    # Try to find the table with rider data using heuristics
+    # Try to find the table with VG rider data using heuristics
     riderdf = nothing
-    for (i, tbl) in enumerate(page)
+    for (i, df) in enumerate(tables)
         try
-            df = DataFrame(tbl)
-
-            # Normalize column names for checking
             cols_lower = lowercase.(names(df))
-
-            # Does this look like rider data?
             has_rider = any(occursin("rider", c) || occursin("name", c) for c in cols_lower)
-            has_points = any(occursin("point", c) || occursin("score", c) for c in cols_lower)
+            has_points =
+                any(occursin("point", c) || occursin("score", c) for c in cols_lower)
             has_cost = any(occursin("cost", c) || occursin("price", c) for c in cols_lower)
             reasonable_size = nrow(df) >= 10 && nrow(df) <= 500
 
@@ -52,39 +35,31 @@ function gettable(pageurl::String)
     # Fallback to first table if heuristics fail
     if riderdf === nothing
         @warn "Couldn't identify rider table using heuristics, using first table from $pageurl"
-        riderdf = DataFrame(page[1])
+        riderdf = tables[1]
     end
 
-    # Validate minimum size
     if nrow(riderdf) < 5
-        error("""
-        ❌ Table has suspiciously few rows ($(nrow(riderdf)))
-
-        Source: $pageurl
-
-        This might not be the correct table. Check the page manually and verify:
-          1. The correct table exists
-          2. The page loaded completely
-          3. You're not being rate-limited
-        """)
+        error(
+            "Table has suspiciously few rows ($(nrow(riderdf))) from $pageurl. " *
+            "Check the URL in your browser.",
+        )
     end
 
-    # Process the table
-    return process_rider_table(riderdf)
+    return process_vg_table(riderdf)
 end
 
 
 """
-Process a rider table DataFrame with standard transformations.
+    process_vg_table(riderdf::DataFrame) -> DataFrame
 
-This is the core table processing logic extracted from gettable() for reusability.
+VeloGames-specific table processing. Lowercases column names, renames score→points,
+casts cost/rank/points to numeric types, and adds a riderkey column.
+
+This is for VG pages only. PCS pages use `find_column()` + caller-specific processing.
 """
-function process_rider_table(riderdf::DataFrame)
+function process_vg_table(riderdf::DataFrame)
     # lowercase the column names and remove spaces
-    rename!(
-        riderdf,
-        lowercase.(replace.(names(riderdf), " " => "", "#" => "rank"))
-    )
+    rename!(riderdf, lowercase.(replace.(names(riderdf), " " => "", "#" => "rank")))
 
     # rename score to points if it exists
     if hasproperty(riderdf, :score)
@@ -138,89 +113,159 @@ end
 
 
 """
-## `getpcsraceriders`
-
-This function downloads and parses the rider data from the PCS website for a specified race.
-
-The function returns a DataFrame with the following columns:
-
-    * `name` - the name of the rider
-    * `team` - the team the rider rides for
-    * `placing` - the placing of the rider on the race
-    * `score` - the number of points scored by the rider
-"""
-function getpcsraceriders(pageurl::String)
-    riderdf = scrape_tables(pageurl)
-
-    return riderdf
-
-end
-
-"""
 ## `getpcsranking`
 
-This function downloads and parses the rider rankings for a specific category from the PCS website.
+Downloads and parses rider rankings for a specific category from PCS.
 
-Returns a DataFrame with cached data retrieval.
+Uses alias-based column resolution (see `PCS_RIDER_ALIASES` etc. in pcs_scraper.jl)
+so that PCS column renames are handled by adding one string to the alias list.
+
+Returns a DataFrame with columns: `rank`, `rider`, `team`, `points`, `riderkey`.
 """
-function getpcsranking(gender::String, category::String;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getpcsranking(
+    gender::String,
+    category::String;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
-    # Input validation
     @assert gender in ["we", "me"] "Invalid gender: $gender. Must be 'we' or 'me'."
-    @assert category in ["individual", "one-day-races", "gc-ranking", "sprinters", "climbers", "time-trial"] "Invalid category: $category. Must be one of: 'individual', 'one-day-races', 'gc-ranking', 'sprinters', 'climbers', 'time-trial'."
+    @assert category in [
+        "individual",
+        "one-day-races",
+        "gc-ranking",
+        "sprinters",
+        "climbers",
+        "time-trial",
+    ] "Invalid category: $category."
 
-    # Build URL
     baseurl = "https://www.procyclingstats.com/rankings/"
     rankingurl = joinpath(baseurl, gender, category)
 
     function fetch_pcs_ranking(url, params)
-        page = gettable(url)
-        return page[:, [:rank, :rider, :team, :points, :riderkey]]
+        df = scrape_pcs_table(url)
+
+        rider_col = find_column(df, PCS_RIDER_ALIASES)
+        points_col = find_column(df, PCS_POINTS_ALIASES)
+        rank_col = find_column(df, PCS_RANK_ALIASES)
+        team_col = find_column(df, PCS_TEAM_ALIASES)
+
+        rider_col === nothing && error(
+            "No rider column found in PCS rankings from $url. " *
+            "Columns: $(names(df)). " *
+            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl",
+        )
+        points_col === nothing && error(
+            "No points column found in PCS rankings from $url. " *
+            "Columns: $(names(df)). " *
+            "Add the new column name to PCS_POINTS_ALIASES in src/pcs_scraper.jl",
+        )
+
+        result = DataFrame()
+        result.rider = String.(df[!, rider_col])
+        result.points = map(df[!, points_col]) do val
+            parsed = tryparse(Float64, strip(string(val)))
+            parsed !== nothing ? parsed : 0.0
+        end
+        result.team = team_col !== nothing ? String.(df[!, team_col]) : fill("", nrow(df))
+        result.rank = if rank_col !== nothing
+            map(df[!, rank_col]) do val
+                parsed = tryparse(Int, strip(string(val)))
+                parsed !== nothing ? parsed : 9999
+            end
+        else
+            fill(9999, nrow(df))
+        end
+        result.riderkey = createkey.(result.rider)
+        result = unique(result, :riderkey)
+
+        return result[:, [:rank, :rider, :team, :points, :riderkey]]
     end
 
-    # Parameters for cache key
     params = Dict("gender" => gender, "category" => category)
-
-    return cached_fetch(fetch_pcs_ranking, rankingurl, params;
-        cache_config=cache_config, force_refresh=force_refresh)
+    return cached_fetch(
+        fetch_pcs_ranking,
+        rankingurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 end
 
 """
 ## `getpcsraceranking`
 
-This function downloads and parses the rider rankings for a specific race from the PCS website.
+Downloads and parses rider rankings for a specific race from PCS
+(typically a startlist-quality page).
 
-Returns a DataFrame with cached data retrieval.
+Uses alias-based column resolution for resilience to PCS changes.
+
+Returns a DataFrame with columns including `rider`, `pcsrank`, `pcspoints`, `riderkey`.
 """
-function getpcsraceranking(pageurl::String;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getpcsraceranking(
+    pageurl::String;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
     function fetch_race_ranking(url, params)
-        # download the page and parse the table
-        riderdf = gettable(url)
+        df = scrape_pcs_table(url)
 
-        # drop any rows with missing or empty values in the riderkey column
-        riderdf = dropmissing(riderdf, :riderkey)
-        riderdf = filter(row -> !isempty(row.riderkey), riderdf)
+        rider_col = find_column(df, PCS_RIDER_ALIASES)
+        points_col = find_column(df, PCS_POINTS_ALIASES)
+        rank_col =
+            find_column(df, ["pcs-ranking", "pcsranking", "pcsrank", PCS_RANK_ALIASES...])
+        team_col = find_column(df, PCS_TEAM_ALIASES)
 
-        # rename columns
-        rename!(riderdf, "pcs-ranking" => :pcsrank)
-        rename!(riderdf, "points" => :pcspoints)
+        rider_col === nothing && error(
+            "No rider column found in PCS race ranking from $url. " *
+            "Columns: $(names(df)). " *
+            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl",
+        )
 
-        # convert pcsrank to Int64, assigning 1000 if value is "-" or ""
-        riderdf[!, :pcsrank] = [x == "-" || x == "" ? 1000 : parse(Int64, x) for x in riderdf[!, :pcsrank]]
+        result = DataFrame()
+        result.rider = String.(df[!, rider_col])
+        result.riderkey = createkey.(result.rider)
 
-        # add 1/pcs-ranking to points to avoid ties
-        riderdf[!, :pcspoints] = riderdf[!, :pcspoints] .+ 1 ./ riderdf[!, :pcsrank]
+        # PCS ranking
+        result.pcsrank = if rank_col !== nothing
+            map(df[!, rank_col]) do val
+                s = strip(string(val))
+                parsed = tryparse(Int, s)
+                parsed !== nothing ? parsed : 1000
+            end
+        else
+            fill(1000, nrow(df))
+        end
 
-        return riderdf
+        # PCS points + tiebreaker from rank
+        result.pcspoints = if points_col !== nothing
+            map(df[!, points_col]) do val
+                val isa Float64 && return val
+                parsed = tryparse(Float64, strip(string(val)))
+                parsed !== nothing ? parsed : 0.0
+            end
+        else
+            fill(0.0, nrow(df))
+        end
+        result.pcspoints .+= 1.0 ./ result.pcsrank
+
+        result.team = team_col !== nothing ? String.(df[!, team_col]) : fill("", nrow(df))
+
+        # Drop rows with missing/empty riderkey
+        result = filter(row -> !isempty(row.riderkey), result)
+        result = unique(result, :riderkey)
+
+        return result
     end
 
-    return cached_fetch(fetch_race_ranking, pageurl, Dict();
-        cache_config=cache_config, force_refresh=force_refresh)
+    return cached_fetch(
+        fetch_race_ranking,
+        pageurl,
+        Dict();
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 end
 
 
@@ -231,10 +276,12 @@ This function downloads and parses the rider listing for a specific race from th
 
 Returns a DataFrame with cached data retrieval.
 """
-function getvgriders(pageurl::String;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
-    verbose::Bool=true)
+function getvgriders(
+    pageurl::String;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    verbose::Bool = true,
+)
 
     function fetch_vg_data(url, params)
         riderdf = gettable(url)
@@ -256,8 +303,14 @@ function getvgriders(pageurl::String;
         return riderdf
     end
 
-    return cached_fetch(fetch_vg_data, pageurl, Dict();
-        cache_config=cache_config, force_refresh=force_refresh, verbose=verbose)
+    return cached_fetch(
+        fetch_vg_data,
+        pageurl,
+        Dict();
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+        verbose = verbose,
+    )
 end
 
 
@@ -268,64 +321,74 @@ This function downloads and parses the rider points for a specific rider from th
 
 Returns a DataFrame with columns: rider, oneday, gc, tt, sprint, climber, riderkey
 """
-function getpcsriderpts(ridername::String;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getpcsriderpts(
+    ridername::String;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
     regularisedname = normalisename(ridername)
     pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
+    _missing_rider_df() = DataFrame(
+        rider = [ridername],
+        oneday = Union{Int,Missing}[missing],
+        gc = Union{Int,Missing}[missing],
+        tt = Union{Int,Missing}[missing],
+        sprint = Union{Int,Missing}[missing],
+        climber = Union{Int,Missing}[missing],
+        riderkey = [createkey(ridername)],
+    )
+
     function fetch_rider_pts(url, params)
-        page = parsehtml(read(Downloads.download(url), String))
-        # Try new PCS structure: .xvalue class
-        value_elements = eachmatch(sel".xvalue", page.root)
-        if length(value_elements) < 5
-            # Format rider name for suggestions
-            name_with_spaces = replace(ridername, "-" => " ")
-            name_titlecase = titlecase(name_with_spaces)
-
-            error("""
-            ❌ PCS scraping failed for: $ridername
-
-            Expected 5 point values (One-day, GC, TT, Sprint, Climber)
-            Found: $(length(value_elements)) values
-
-            🔍 Troubleshooting:
-
-            1. Check the page manually: $url
-
-            2. Try alternative name spellings:
-               - "$name_with_spaces"
-               - "$name_titlecase"
-               - Check rider's full name on PCS
-
-            3. If the page structure changed:
-               - The CSS selector may be outdated
-               - Current selector: ".xvalue"
-               - Update in: src/get_data.jl (line ~210)
-
-            4. If the rider doesn't exist on PCS:
-               - Add to exclude_riders list in your notebook
-               - Or accept missing PCS data (will use VG data only)
-
-            💡 Quick fix: Set force_refresh=true if this is a caching issue
-            """)
+        # Handle HTTP errors (400 for bad URL encoding, 404 for missing page).
+        # Return missing values so the negative result is cached.
+        response = try
+            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+        catch e
+            if e isa HTTP.Exceptions.StatusError && e.status in (400, 403, 404)
+                return _missing_rider_df()
+            end
+            rethrow()
         end
+
+        page = parsehtml(String(response.body))
+
+        # Check for PCS "page not found" (returns HTTP 200 with error page)
+        h1_elements = eachmatch(sel"h1", page.root)
+        is_not_found =
+            any(occursin("not found", lowercase(nodeText(h))) for h in h1_elements)
+
+        value_elements = eachmatch(sel".xvalue", page.root)
+
+        if is_not_found || length(value_elements) < 5
+            if !is_not_found && length(value_elements) > 0
+                # Page exists but structure is unexpected — likely a PCS redesign
+                @warn "PCS page structure may have changed for $ridername: found $(length(value_elements)) .xvalue elements, expected 5. Check $url"
+            end
+            return _missing_rider_df()
+        end
+
         rawpts = map(x -> parse(Int, nodeText(x)), value_elements[1:5])
         return DataFrame(
-            rider=[ridername],
-            oneday=[rawpts[1]],
-            gc=[rawpts[2]],
-            tt=[rawpts[3]],
-            sprint=[rawpts[4]],
-            climber=[rawpts[5]],
-            riderkey=[createkey(ridername)]
+            rider = [ridername],
+            oneday = [rawpts[1]],
+            gc = [rawpts[2]],
+            tt = [rawpts[3]],
+            sprint = [rawpts[4]],
+            climber = [rawpts[5]],
+            riderkey = [createkey(ridername)],
         )
     end
 
     params = Dict("rider" => ridername)
-    return cached_fetch(fetch_rider_pts, pageurl, params;
-        cache_config=cache_config, force_refresh=force_refresh)
+    return cached_fetch(
+        fetch_rider_pts,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 end
 
 
@@ -336,9 +399,11 @@ This function downloads and parses the rider points for a specific rider for eac
 
 Returns a DataFrame with cached data retrieval.
 """
-function getpcsriderhistory(ridername::String;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getpcsriderhistory(
+    ridername::String;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
     regularisedname = normalisename(ridername)
     pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
@@ -350,21 +415,37 @@ function getpcsriderhistory(ridername::String;
     end
 
     params = Dict("rider" => ridername)
-    return cached_fetch(fetch_rider_history, pageurl, params;
-        cache_config=cache_config, force_refresh=force_refresh)
+    return cached_fetch(
+        fetch_rider_history,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 end
 
 """
 ## `getodds`
 
-This function retrieves the odds listings from the Betfair website.
+Retrieve odds listings from the Betfair website.
 
-Returns a DataFrame with cached data retrieval.
+**Warning**: This scraper uses hardcoded CSS selectors (`.runner-info`,
+`.ui-display-fraction-price`) that are fragile and may not work if Betfair
+has changed their page structure. The pipeline handles failure gracefully
+(continues without odds). See the roadmap for planned Oddschecker integration.
+
+Returns a DataFrame with columns: `rider`, `odds`, `riderkey`.
 """
-function getodds(pageurl::String;
-    headers::Dict=Dict("User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"),
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getodds(
+    pageurl::String;
+    headers::Dict = Dict(
+        "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+    ),
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
+
+    @warn "getodds: Betfair scraper uses fragile CSS selectors and may not work. See roadmap for planned alternatives."
 
     function fetch_odds(url, params)
         used_headers = get(params, "headers", headers)
@@ -377,12 +458,15 @@ function getodds(pageurl::String;
         ridernames = [Cascadia.nodeText(r) for r in ridertable[1]]
         riderodds = [Cascadia.nodeText(r) for r in ridertable[2]]
 
-        # Process odds
+        # Process fractional odds (e.g. "5/2") to decimal (e.g. 3.5)
         riderodds = replace.(riderodds, "\n" => "")
-        riderodds = map(x -> 1 + parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]), riderodds)
+        riderodds = map(
+            x ->
+                1 + parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]),
+            riderodds,
+        )
 
-        betfairodds = DataFrame(rider=ridernames, odds=riderodds)
-        betfairodds.rider = replace.(betfairodds.rider, "Tom Pidcock" => "Thomas Pidcock")
+        betfairodds = DataFrame(rider = ridernames, odds = riderodds)
         betfairodds.riderkey = map(x -> createkey(x), betfairodds.rider)
 
         @assert length(unique(betfairodds.riderkey)) == length(betfairodds.riderkey) "Rider keys are not unique"
@@ -390,10 +474,14 @@ function getodds(pageurl::String;
         return betfairodds
     end
 
-    # Include headers in cache key since they affect the result
     params = Dict("headers" => headers)
-    return cached_fetch(fetch_odds, pageurl, params;
-        cache_config=cache_config, force_refresh=force_refresh)
+    return cached_fetch(
+        fetch_odds,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 end
 
 """
@@ -403,15 +491,17 @@ This function retrieves the points scored by riders for a single event.
 
 Returns a DataFrame with cached data retrieval.
 """
-function getvgracepoints(pageurl::String;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getvgracepoints(
+    pageurl::String;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
     function fetch_race_points(url, params)
         page = HTTP.get(url)
         pagehtml = Gumbo.parsehtml(String(page.body))
 
-        resultsdf = DataFrame(rider=[], team=[], score=[])
+        resultsdf = DataFrame(rider = [], team = [], score = [])
 
         for entry in eachmatch(Selector("#users li"), pagehtml.root)
             rider = nodeText(eachmatch(Selector(".name"), entry)[1])
@@ -419,7 +509,7 @@ function getvgracepoints(pageurl::String;
             points = parse(Int, match(r"\d+", pointsstr).match)
             team = nodeText(eachmatch(Selector(".born"), entry)[2])
 
-            rowdf = DataFrame(rider=[rider], team=[team], score=[points])
+            rowdf = DataFrame(rider = [rider], team = [team], score = [points])
             resultsdf = vcat(resultsdf, rowdf)
         end
 
@@ -427,8 +517,13 @@ function getvgracepoints(pageurl::String;
         return resultsdf
     end
 
-    return cached_fetch(fetch_race_points, pageurl, Dict();
-        cache_config=cache_config, force_refresh=force_refresh)
+    return cached_fetch(
+        fetch_race_points,
+        pageurl,
+        Dict();
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 end
 
 """
@@ -437,30 +532,47 @@ end
 Batch version - get points for multiple riders efficiently.
 Returns a DataFrame with all riders' points, including rows with missing values for failed requests.
 """
-function getpcsriderpts_batch(ridernames::Vector{String};
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE)
+function getpcsriderpts_batch(
+    ridernames::Vector{String};
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
 
     all_pts = DataFrame()
+    failed_riders = String[]
 
     for rider in ridernames
         try
-            rider_pts = getpcsriderpts(rider; force_refresh=force_refresh, cache_config=cache_config)
+            rider_pts = getpcsriderpts(
+                rider;
+                force_refresh = force_refresh,
+                cache_config = cache_config,
+            )
             all_pts = vcat(all_pts, rider_pts)
         catch e
-            @warn "Failed to get points for $rider: $e"
+            push!(failed_riders, rider)
             # Add row with missing values
             missing_row = DataFrame(
-                rider=[rider],
-                oneday=[missing],
-                gc=[missing],
-                tt=[missing],
-                sprint=[missing],
-                climber=[missing],
-                riderkey=[createkey(rider)]
+                rider = [rider],
+                oneday = [missing],
+                gc = [missing],
+                tt = [missing],
+                sprint = [missing],
+                climber = [missing],
+                riderkey = [createkey(rider)],
             )
             all_pts = vcat(all_pts, missing_row)
         end
+    end
+
+    if !isempty(failed_riders)
+        @warn "PCS fetch failed for $(length(failed_riders))/$(length(ridernames)) riders (network/parse errors)" failed_riders
+    end
+
+    # Summary of riders not found on PCS (returned missing from cache or fetch)
+    n_missing = count(row -> ismissing(row.oneday), eachrow(all_pts))
+    if n_missing > 0
+        @info "PCS data: $(length(ridernames) - n_missing)/$(length(ridernames)) riders found, $n_missing missing (not on PCS or fetch error)"
     end
 
     # Remove any empty column name (fixes join issues)

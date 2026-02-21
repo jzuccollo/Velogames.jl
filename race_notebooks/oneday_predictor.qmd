@@ -1,6 +1,6 @@
 ---
-title: "One-day Race Team Builder"
-subtitle: "Practical fantasy cycling team optimizer"
+title: "Superclassico Sixes Team Builder"
+subtitle: "Monte Carlo simulation-based fantasy cycling team optimizer"
 format: html
 ---
 
@@ -12,144 +12,141 @@ Set up the race details and optimization parameters:
 using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Race Configuration
-raceurl = "https://www.velogames.com/sixes-superclasico/2025/riders.php"
-racestartlistquality = "https://www.procyclingstats.com/race/world-championship/2025/startlist/startlist-quality"
-racehash = "#WorldChamps"  # Leave empty if not available
+race_name = "omloop"  # Short name from get_url_pattern (e.g. "omloop", "kuurne", "roubaix", "flanders")
+race_year = 2025
+racehash = ""  # VG startlist hash filter (leave empty for all riders)
 
-# Optimization Weights (must sum to 1.0)
-vg_weight = 0.5    # VeloGames current season performance
-pcs_weight = 0.5   # Professional rankings weight
+# Optional: Betfair odds URL (leave empty to skip)
+odds_url = ""
+
+# Simulation Parameters
+n_sims = 1000  # Monte Carlo simulations (more = smoother, slower)
+history_years = 5  # How many years of race history to use
 
 # Exclusions (add rider names to avoid)
-excluded_riders = String["Quinten Hermans"]
+excluded_riders = String[]
 
 # Cache Configuration
-race_cache = CacheConfig("/tmp/oneday_predictor_v2", 6, true)
+race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6, true)
+```
+
+# Race Setup
+
+```{julia}
+#| echo: false
+# Set up race configuration from the short name
+config = setup_race(race_name, race_year; cache_config=race_cache)
+
+print_race_info(config)
+scoring = get_scoring(config.category > 0 ? config.category : 2)
+println("Scoring: Category $(config.category)")
+println("PCS slug: $(config.pcs_slug)")
+println("Simulations: $n_sims")
 ```
 
 # Team Optimization
 
 ```{julia}
 #| echo: false
-println("🎯 BUILDING OPTIMAL ONE-DAY TEAM")
+println("BUILDING OPTIMAL TEAM")
 println("="^40)
 
-# Get and merge data sources
-println("📊 Collecting data...")
-vgdata = getvgriders(raceurl; cache_config=race_cache)
+# Run the full prediction pipeline (cache_config inherited from config)
+predicted, chosenteam = solve_oneday(config;
+    racehash=racehash,
+    history_years=history_years,
+    odds_url=odds_url,
+    n_sims=n_sims,
+    excluded_riders=excluded_riders)
 
-# Filter to riders in the specific race if racehash is provided
-if !isempty(racehash) && racehash != ""
-    # Use subset instead of filter! to avoid Arrow format issues
-    vgdata = subset(vgdata, :startlist => ByRow(x -> x == racehash))
-    println("VeloGames: $(nrow(vgdata)) riders for race $racehash")
-else
-    println("VeloGames: $(nrow(vgdata)) total riders (no race filter)")
-end
-
-# Remove any riders that have been explicitly excluded
-if !isempty(excluded_riders) && (:rider in propertynames(vgdata))
-    before_exclusions = nrow(vgdata)
-    vgdata = subset(vgdata, :rider => ByRow(r -> !(r in excluded_riders)))
-    removed = before_exclusions - nrow(vgdata)
-    if removed > 0
-        println("🚫 Excluded $removed rider(s) via configuration")
-    else
-        println("ℹ️ No riders matched the exclusion list")
-    end
-end
-
-# For race-specific PCS data, try getpcsraceranking if racehash is provided
-if !isempty(racehash) && racehash != ""
-    try
-        pcsdata = getpcsraceranking(racestartlistquality; cache_config=race_cache)
-        pcsdata = select(pcsdata, :rider, :pcspoints, :pcsrank, :riderkey)
-        # Use inverse of pcsrank as pcs points
-        pcsdata[!, :pcspoints] = [ismissing(r) ? missing : 1.0 / r for r in pcsdata.pcsrank]
-        println("PCS Race Rankings: $(nrow(pcsdata)) riders")
-    catch e
-        println("⚠️ PCS race data unavailable, using general rankings: $e")
-        pcsdata = getpcsranking("me", "individual"; cache_config=race_cache)
-        pcsdata = select(pcsdata, :rider, :points)
-        println("PCS General Rankings: $(nrow(pcsdata)) riders")
-    end
-else
-    pcsdata = getpcsranking("me", "individual"; cache_config=race_cache)
-    pcsdata = select(pcsdata, :rider, :points)
-    println("PCS General Rankings: $(nrow(pcsdata)) riders")
-end
-
-# Merge datasets
-merged = leftjoin(vgdata, pcsdata, on=:riderkey, makeunique=true)
-# Use subset instead of filter to avoid Arrow format issues
-complete_data = subset(merged,
-    [:points, :cost, :pcspoints] => ByRow((p, c, p1) -> !any(ismissing, [p, c, p1])))
-println("Complete data: $(nrow(complete_data)) riders")
-
-if !isempty(excluded_riders) && (:rider in propertynames(complete_data))
-    before_complete_exclusions = nrow(complete_data)
-    complete_data = subset(complete_data, :rider => ByRow(r -> !(r in excluded_riders)))
-    removed_complete = before_complete_exclusions - nrow(complete_data)
-    if removed_complete > 0
-        println("🚫 Removed $removed_complete excluded rider(s) from optimization dataset")
-    end
-end
-
-if nrow(complete_data) >= 6
-    # Z-score normalization
-    println("🧮 Normalizing scores...")
-    vg_mean, vg_std = mean(complete_data.points), std(complete_data.points)
-    pcs_mean, pcs_std = mean(complete_data.pcspoints), std(complete_data.pcspoints)
-
-    complete_data[!, :vg_zscore] = (complete_data.points .- vg_mean) ./ vg_std
-    complete_data[!, :pcs_zscore] = (complete_data.pcspoints .- pcs_mean) ./ pcs_std
-    complete_data[!, :composite_score] = vg_weight .* complete_data.vg_zscore .+ pcs_weight .* complete_data.pcs_zscore
-
-    # Build optimal team
-    println("⚡ Running optimization...")
-    optimal_team = buildmodeloneday(complete_data, 6, :composite_score, :cost)
-
-    if optimal_team !== nothing
-        # Convert JuMP DenseAxisArray to Boolean vector in DataFrame row order
-        chosen_values = [optimal_team[rider] > 0.5 for rider in complete_data.rider]
-        complete_data[!, :chosen] = chosen_values
-        global team_data = subset(complete_data, :chosen => ByRow(x -> x == true))
-        println("✅ Team built successfully!")
-    else
-        println("❌ No valid team found")
-    end
-else
-    println("❌ Insufficient data for optimization")
-end
+println()
+println("Pipeline complete: $(nrow(predicted)) riders analysed")
 ```
 
 # Your Optimal Team
 
 ```{julia}
 #| echo: false
-if @isdefined(team_data) && nrow(team_data) > 0
-    println("🏆 YOUR OPTIMAL TEAM")
-    println("="^25)
+if @isdefined(chosenteam) && nrow(chosenteam) > 0
+    cost_col = :vgcost in propertynames(chosenteam) ? :vgcost : :cost
+    total_cost = sum(chosenteam[!, cost_col])
+    total_evg = sum(chosenteam.expected_vg_points)
 
-    total_cost = sum(team_data.cost)
-    total_vg_points = sum(team_data.points)
-
-    println("💰 Total Cost: $total_cost credits")
-    println("🏆 Expected VG Points: $(round(total_vg_points)) points")
-    println("💳 Budget Remaining: $(100 - total_cost) credits")
-    println("👥 Team Size: $(nrow(team_data)) riders")
+    println("YOUR OPTIMAL TEAM")
+    println("="^40)
+    println("Total Cost: $total_cost / 100 credits")
+    println("Expected VG Points: $(round(total_evg, digits=1))")
+    println("Budget Remaining: $(100 - total_cost) credits")
+    println("Team Size: $(nrow(chosenteam)) riders")
     println()
 
-    # Clean display
-    team_display = team_data[:, [:rider, :team, :cost, :points]]
-    team_display[!, :points] = round.(team_display.points)
+    # Display team with key columns
+    display_cols = [:rider, :team, cost_col, :expected_vg_points, :strength, :uncertainty]
+    # Add component breakdown if available
+    for col in [:expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
+        if col in propertynames(chosenteam)
+            push!(display_cols, col)
+        end
+    end
+
+    team_display = chosenteam[:, display_cols]
+
+    # Round numeric columns for display
+    for col in names(team_display)
+        if eltype(team_display[!, col]) <: Union{Missing,Number}
+            team_display[!, col] = round.(team_display[!, col], digits=1)
+        end
+    end
+
+    # Clean team names
     if hasproperty(team_display, :team)
         team_display = transform(team_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
     end
 
-    display(markdown_table(team_display))
+    display(markdown_table(sort(team_display, :expected_vg_points, rev=true)))
 else
-    println("⚠️ No optimal team generated - check configuration and try again")
+    println("No optimal team generated - check configuration and try again")
+end
+```
+
+# Full Prediction Rankings
+
+Top 30 riders by expected VG points:
+
+```{julia}
+#| echo: false
+if @isdefined(predicted) && nrow(predicted) > 0
+    cost_col = :vgcost in propertynames(predicted) ? :vgcost : :cost
+
+    # Show top 30 riders
+    ranking_cols = [:rider, :team, cost_col, :expected_vg_points, :strength, :uncertainty]
+    for col in [:expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
+        if col in propertynames(predicted)
+            push!(ranking_cols, col)
+        end
+    end
+
+    # Add chosen indicator
+    if :chosen in propertynames(predicted)
+        push!(ranking_cols, :chosen)
+    end
+
+    ranking = sort(predicted[:, ranking_cols], :expected_vg_points, rev=true)
+    top_n = min(30, nrow(ranking))
+    ranking_display = ranking[1:top_n, :]
+
+    # Round for display
+    for col in names(ranking_display)
+        if eltype(ranking_display[!, col]) <: Union{Missing,Number}
+            ranking_display[!, col] = round.(ranking_display[!, col], digits=1)
+        end
+    end
+
+    if hasproperty(ranking_display, :team)
+        ranking_display = transform(ranking_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
+    end
+
+    display(markdown_table(ranking_display))
 end
 ```
 
@@ -157,47 +154,67 @@ end
 
 ```{julia}
 #| echo: false
-if @isdefined(team_data) && nrow(team_data) > 0
-    println("\n🔄 ALTERNATIVE CONSIDERATIONS")
+if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
+    cost_col = :vgcost in propertynames(predicted) ? :vgcost : :cost
+
+    println("ALTERNATIVE CONSIDERATIONS")
     println("="^45)
 
-    # Get all riders from complete_data for comparison
-    if @isdefined(complete_data)
-        # Best value riders not in optimal team
-        not_chosen = subset(complete_data, :chosen => ByRow(x -> x == false))
+    # Get riders not in optimal team
+    not_chosen = filter(:chosen => ==(false), predicted)
 
-        if nrow(not_chosen) > 0
-            not_chosen[!, :value] = not_chosen.composite_score ./ not_chosen.cost
+    if nrow(not_chosen) > 0
+        not_chosen[!, :value] = not_chosen.expected_vg_points ./ not_chosen[!, cost_col]
 
-            # Top 5 value picks not selected
-            println("\n💎 Top Value Riders Not Selected:")
-            top_value = sort(not_chosen, :value, rev=true)[1:min(5, nrow(not_chosen)), :]
-            value_display = top_value[:, [:rider, :team, :cost, :points]]
-            value_display[!, :points] = round.(value_display.points)
-            if hasproperty(value_display, :team)
-                value_display = transform(value_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
+        # Top 10 value picks not selected
+        println("\nTop Value Riders Not Selected:")
+        top_value = sort(not_chosen, :value, rev=true)[1:min(10, nrow(not_chosen)), :]
+        value_display = top_value[:, [:rider, :team, cost_col, :expected_vg_points, :value]]
+        for col in names(value_display)
+            if eltype(value_display[!, col]) <: Union{Missing,Number}
+                value_display[!, col] = round.(value_display[!, col], digits=1)
             end
-            display(markdown_table(value_display))
+        end
+        if hasproperty(value_display, :team)
+            value_display = transform(value_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
+        end
+        display(markdown_table(value_display))
 
-            # Cheap options for budget considerations
-            println("\n💰 Budget Options (≤6 credits):")
-            cheap_options = subset(not_chosen, :cost => ByRow(x -> x <= 6))
-            if nrow(cheap_options) > 0
-                cheap_sorted = sort(cheap_options, :composite_score, rev=true)[1:min(5, nrow(cheap_options)), :]
-                cheap_display = cheap_sorted[:, [:rider, :team, :cost, :points]]
-                cheap_display[!, :points] = round.(cheap_display.points)
-                if hasproperty(cheap_display, :team)
-                    cheap_display = transform(cheap_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
+        # High-upside picks (high strength, high uncertainty)
+        println("\nHigh Upside Picks (strong but uncertain):")
+        not_chosen[!, :upside] = not_chosen.strength .+ not_chosen.uncertainty
+        upside = sort(not_chosen, :upside, rev=true)[1:min(5, nrow(not_chosen)), :]
+        upside_display = upside[:, [:rider, :team, cost_col, :expected_vg_points, :strength, :uncertainty]]
+        for col in names(upside_display)
+            if eltype(upside_display[!, col]) <: Union{Missing,Number}
+                upside_display[!, col] = round.(upside_display[!, col], digits=1)
+            end
+        end
+        if hasproperty(upside_display, :team)
+            upside_display = transform(upside_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
+        end
+        display(markdown_table(upside_display))
+
+        # Budget options
+        println("\nBudget Options (cost <= 6):")
+        cheap_options = filter(row -> row[cost_col] <= 6, not_chosen)
+        if nrow(cheap_options) > 0
+            cheap_sorted = sort(cheap_options, :expected_vg_points, rev=true)[1:min(5, nrow(cheap_options)), :]
+            cheap_display = cheap_sorted[:, [:rider, :team, cost_col, :expected_vg_points]]
+            for col in names(cheap_display)
+                if eltype(cheap_display[!, col]) <: Union{Missing,Number}
+                    cheap_display[!, col] = round.(cheap_display[!, col], digits=1)
                 end
-                display(markdown_table(cheap_display))
-            else
-                println("No riders ≤6 credits available")
             end
+            if hasproperty(cheap_display, :team)
+                cheap_display = transform(cheap_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
+            end
+            display(markdown_table(cheap_display))
         else
-            println("All available riders were selected in the optimal team!")
+            println("No riders at cost <= 6 available")
         end
     else
-        println("Complete data not available for alternative analysis")
+        println("All available riders were selected!")
     end
 end
 ```
@@ -205,16 +222,32 @@ end
 # How to Use This Tool
 
 **Quick Start:**
-1. Update the `raceurl` and `racehash` at the top of this notebook
-2. Run all cells to get your optimal team
-3. Copy the team into VeloGames
+
+1. Update `race_name` to the short name of the race (e.g. `"omloop"`, `"kuurne"`, `"roubaix"`, `"flanders"`)
+2. Update `race_year` to the current year
+3. Optionally set `racehash` if the VG site uses startlist filtering
+4. Run all cells to get your optimal team
+5. Copy the team into VeloGames
+
+**Available Race Names:**
+Use `get_url_pattern("name")` to check. Examples: `omloop`, `kuurne`, `strade`, `sanremo`, `roubaix`, `flanders`, `agr`, `fleche`, `ljl`, `eschborn`, `worlds`.
+
+**Prediction Pipeline:**
+The optimizer now uses Monte Carlo simulation to estimate **expected Velogames points** for each rider:
+
+1. Fetches VG rider costs and season points
+2. Fetches PCS specialty ratings (one-day, GC, sprint, climb, TT)
+3. Fetches PCS race-specific history (past editions of this race)
+4. Optionally fetches betting odds from Betfair
+5. Estimates rider strength via Bayesian updating of all signals
+6. Runs Monte Carlo simulation to get finishing position probabilities
+7. Computes expected VG points (finish + assists + breakaway)
+8. Optimizes team selection to maximize total expected VG points
 
 **Customization:**
-- Adjust `pcs_weight` and `vg_weight` to emphasize current form vs. season performance
-- Add rider names to `excluded_riders` to avoid specific riders
-- Consider the "Alternative Picks" for manual adjustments
 
-**Data Sources:**
-- VeloGames: Current season points and costs
-- PCS Rankings: Recent professional race performance
-- Optimization: Mathematical team selection within budget constraints
+- Set `odds_url` to a Betfair market URL for odds integration (strongest single signal when available)
+- Adjust `n_sims` for speed vs accuracy (10000 is a good default)
+- Adjust `history_years` for how much race history to consider
+- Add rider names to `excluded_riders` to avoid specific riders
+- Review "Alternative Picks" for high-upside or value swaps

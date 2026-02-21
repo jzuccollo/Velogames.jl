@@ -3,10 +3,11 @@ project:
   output-dir: docs
   render:
     - "race_notebooks/index.qmd"
-    - "race_notebooks/historical_analysis_vuelta2025.qmd"
-    - "race_notebooks/historical_analysis_tdf2025.qmd"
+    - "race_notebooks/oneday_predictor.qmd"
+    - "race_notebooks/stagerace_predictor.qmd"
+    - "race_notebooks/historical_analysis.qmd"
 
-jupyter: julia-1.11
+jupyter: julia-1.12
 
 website:
   title: "Velogames"
@@ -15,16 +16,12 @@ website:
     contents:
       - href: race_notebooks/index.qmd
         text: "Overview"
-      # - href: race_notebooks/oneday.qmd
-      #   text: "One day races"
-      # - href: race_notebooks/stagerace_predictor.qmd
-      #   text: "Stage race team selection"
-      - href: race_notebooks/historical_analysis_tdf2025.qmd
-        text: "Tour de France 2025"
-      - href: race_notebooks/historical_analysis_vuelta2025.qmd
-        text: "Vuelta a España 2025"
-      # - href: race_notebooks/historical_analysis.qmd
-      #   text: "Olympic road race 2024"
+      - href: race_notebooks/oneday_predictor.qmd
+        text: "One-day predictor"
+      - href: race_notebooks/stagerace_predictor.qmd
+        text: "Stage race predictor"
+      - href: race_notebooks/historical_analysis.qmd
+        text: "Historical analysis"
 
 format:
   html:
