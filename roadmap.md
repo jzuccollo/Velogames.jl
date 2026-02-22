@@ -103,33 +103,73 @@ Breakaway points are estimated heuristically from simulated finishing positions,
 
 There is no systematic evaluation of prediction quality. We cannot currently measure whether the MC predictions are well-calibrated or whether the model improvements are actually helping.
 
-## Phase 2: Better feature engineering
+---
 
-### Race-level history (implemented)
+## Improvement phases (ordered by expected impact)
 
-`getpcsracehistory()` fetches multi-year results for a specific race from PCS. This is already integrated into the Bayesian strength model as the "race history" signal, with recency weighting via the `hist_base_variance` and `hist_decay_rate` parameters.
+The phases below are ordered by expected return on selection quality and win probability, drawing on the evidence reviewed in the appendix. The original phase numbering has been replaced with a priority ranking.
 
-### Recent form (not yet implemented)
+### Phase 1: Fix odds integration (high impact, low effort)
 
-- `getpcsrecentresults(rider_name; months=3)` - scrape rider's recent results from PCS
-- Compute: race days, average position in similar races, recent PCS points, win/podium count
-- Feed as additional signal into Bayesian strength model
+Betting odds are the strongest single predictive signal because they aggregate private information from many informed participants. The current model already treats odds as the highest-precision observation (variance 0.5), but the Betfair scraper is broken. Restoring this signal is the highest-ROI item because the Bayesian infrastructure already exists.
 
-### Course profile matching (not yet implemented)
-
-- PCS profile icons (p0-p5 difficulty) and race climb data
-- `getpcsraceprofile(pcs_slug, year)` - scrape profile data
-- `course_similarity(race_a, race_b)` - similarity metric
-- Weight specialty scores based on course fit; use results from similar courses as evidence
-
-### Improved odds integration
+**Implementation:**
 
 - Multiple sources: Betfair Exchange + Oddschecker for resilience
 - Implied probability with overround removal: `implied_prob = 1/odds`, normalise to sum = 1
 - Treat as high-precision observation in Bayesian model
 - Graceful fallback when sources are down
 
-## Phase 3: Stage-by-stage simulation
+**Evidence:** Betting markets consistently outperform public statistical models across sports prediction research. In cycling specifically, odds were not tested by Kholkine et al. (2021) but are widely regarded in the DFS community as the strongest single signal because they aggregate private information (team tactics, form, injury knowledge) unavailable in public data. The current variance of 0.5 (vs 3.0-4.0 for other signals) is directionally correct.
+
+### Phase 2: Historical backtesting (high indirect impact)
+
+Every other improvement is flying blind without systematic evaluation. We cannot currently measure whether the MC predictions are well-calibrated, whether variance hyperparameters are optimal, or whether model changes actually improve selection quality. The cycling prediction literature (Kholkine et al., 2021) and FPL research (Baronchelli et al., 2025) both emphasise that ablation studies are essential for confident iteration.
+
+**Pipeline:**
+
+For each past Superclassico race:
+
+1. Reconstruct pre-race available data
+2. Run prediction pipeline
+3. Compare predicted team vs actual optimal team (from `build_model_oneday` / `build_model_stage`)
+4. Metrics: points captured, rank vs optimal, prediction correlation
+
+**Calibration:**
+
+- Tune variance hyperparameters exposed in `estimate_rider_strength()` (PCS, VG, history, odds variances and odds normalisation divisor)
+- Ablation study: which features improve predictions?
+- Requires: systematically scraping VG historical results for all Superclassico races (2+ seasons)
+
+**Additional metrics to consider:**
+
+- Spearman rank correlation between predicted and actual VG points
+- Fraction of optimal team points captured by predicted team
+- Calibration plots: predicted win probability vs observed win frequency
+- Expected points of predicted team as a percentile of the actual leaderboard
+
+### Phase 3: Course profile matching (high impact)
+
+Academic evidence strongly supports terrain-aware prediction. Kholkine et al. (2021) found that for Liege-Bastogne-Liege, results from Fleche Wallonne (a similar hilly Ardennes race) were more predictive than overall PCS performance. The VeloRost paper (Rize, Saldanha & Moskovitch, 2025) achieved its best results partly by clustering races by elevation and surface type before applying TrueSkill ratings, outperforming approaches that used a single global skill rating.
+
+**Implementation:**
+
+- PCS profile icons (p0-p5 difficulty) and race climb data
+- `getpcsraceprofile(pcs_slug, year)` - scrape profile data
+- `course_similarity(race_a, race_b)` - similarity metric based on terrain cluster
+- Weight specialty scores based on course fit; use results from similar courses as evidence in the Bayesian model
+
+**Terrain clustering approach (from VeloRost):**
+
+Rather than a continuous similarity metric, cluster races into discrete terrain types (flat sprint, cobbled, hilly classics, mountainous, time trial) and estimate separate skill ratings per cluster. PCS already provides profile scores: below 50 for flat/sprint, 50-100 for hilly, above 100 for mountain. This two-stage approach (cluster then estimate) outperformed single-skill models in the VeloRost study.
+
+**Impact on race history signal:**
+
+Course profile matching would primarily improve the race history signal by expanding the evidence base. Instead of relying solely on results from the exact same race in prior years, we could include results from terrain-similar races with appropriately increased variance. For a rider with no history in a specific race, results from similar courses would provide useful signal where currently there is none.
+
+### Phase 4: Stage-by-stage simulation (high impact for grand tours)
+
+The current aggregate approach (simulating overall GC position and mapping to total VG points) is a reasonable placeholder but misses important dynamics. Top VG players emphasise analysing the parcours to calibrate sprinter/climber allocation, and the stage composition directly determines which rider types accumulate the most points.
 
 PCS provides stage profile data at `/race/{slug}/{year}/route/stage-profiles` with difficulty, distance, elevation, and finish type. A proper stage race predictor would:
 
@@ -139,62 +179,217 @@ PCS provides stage profile data at `/race/{slug}/{year}/route/stage-profiles` wi
 4. Accumulate VG points across all stages for each rider
 5. Optimise team selection over total accumulated expected points
 
-This is a significant extension warranting its own PR. The current aggregate approach (simulating overall finishing positions) serves as a reasonable placeholder.
+This is a significant extension warranting its own PR. The current aggregate approach serves as a reasonable placeholder for one-day races but is the weakest part of the model for grand tours.
 
-## Phase 4: Ownership-adjusted optimisation
+**Stage-level correlation considerations:**
 
-### Leverage scoring
+Within a single stage, independent simulation is a reasonable approximation (the main correlation effect, assists, is already handled per-simulation). Across stages, however, outcomes are correlated: a rider who crashes in stage 3 is more likely to abandon or lose time in subsequent stages. A simple approach would be to add a per-rider "race survival" probability that attenuates expected points from later stages.
+
+### Phase 5: Ownership-adjusted optimisation (high impact, contest-dependent)
+
+The impact of ownership adjustment depends entirely on the contest type. Haugh & Singal (2021, *Management Science*) demonstrated a 7x return differential (350% vs 50%) from ownership-adjusted play in large-field GPP tournaments. However, for the small private leagues typical of VG, the effect is substantially smaller.
+
+**Leverage scoring:**
 
 - VG `selected` column gives ownership percentages
 - `leverage = E[VG_points] * (1 - ownership)` for tournament differentiation
-- From DFS literature: in large tournaments, maximise P(winning) not E[points]
+- From DFS literature: in large tournaments, maximise $P(\text{winning})$ not $E[\text{points}]$
 
-### Variance-aware optimisation
+**Variance-aware optimisation:**
 
 - MC framework enables this: for each sim, compute team score vs estimated field
-- Optimise for P(your_team > field)
+- Optimise for $P(\text{your\_team} > \text{field})$
 - Favours high-variance, low-correlation picks
 
-### Team correlation / stacking
+**Team correlation / stacking:**
 
 - Same-team riders have correlated outcomes AND generate assist points
 - Optimiser could prefer same-team stacking when assist bonus outweighs diversification
 
-## Phase 5: Historical backtesting
+**When to use ownership adjustment:**
 
-### Pipeline
+| Contest type | Field size | Ownership impact | Recommended objective |
+| --- | --- | --- | --- |
+| Head-to-head | 2 | None | Maximise $E[\text{points}]$ |
+| Small league | 5-20 | Low | Maximise $E[\text{points}]$, mild leverage tilt |
+| Medium league | 20-100 | Moderate | Leverage-weighted $E[\text{points}]$ |
+| Large GPP | 100+ | Very high | Maximise $P(\text{winning})$ via simulation |
 
-For each past Superclassico race:
+### Phase 6: Leader/domestique role modelling (moderate impact)
 
-1. Reconstruct pre-race available data
-2. Run prediction pipeline
-3. Compare predicted team vs actual optimal team (from `build_model_oneday` / `build_model_stage`)
-4. Metrics: points captured, rank vs optimal, prediction correlation
+The VeloRost paper (Rize, Saldanha & Moskovitch, 2025) found that separately modelling leader skill and helper/domestique contributions "significantly outperforms" approaches that treat riders independently. The current model already computes assist points per-simulation (the correct approach for capturing teammate correlation), but does not account for domestiques sacrificing individual results for their leader.
 
-### Calibration
+**Implementation options:**
 
-- Tune variance hyperparameters exposed in `estimate_rider_strength()` (PCS, VG, history, odds variances and odds normalisation divisor)
-- Ablation study: which features improve predictions?
-- Requires: systematically scraping VG historical results for all Superclassico races (2+ seasons)
+- Identify designated leaders from PCS startlist data or pre-race analysis
+- Apply a strength discount to domestiques (reflecting reduced individual ambition)
+- Cap the number of riders from a single team in the optimiser to limit concentration risk
+- Use historical data on team role allocation to estimate leader/helper probability
 
-## Phase 6: Machine learning
+**Why this matters for VG:**
 
-### Prerequisites
+A domestique on a strong team can outscore a weaker independent rider because of assist points, but the current model treats them as equivalent to a rider of similar raw strength. Modelling team roles would improve predictions for riders in supporting roles and better estimate the assist point component.
+
+### Phase 7: Recent form signal (moderate-low impact)
+
+Academic evidence on recent form is surprisingly lukewarm. Kholkine et al. (2021) found that 6-week pre-race form features received "minimal weight" in their learn-to-rank models for spring classics — overall PCS performance and race-specific history dominated. FPL research (Baronchelli et al., 2025) found the optimal hybrid model placed roughly two-thirds weight on model-based scores and one-third on realised recent points, suggesting form is informative but should not dominate.
+
+**Implementation:**
+
+- `getpcsrecentresults(rider_name; months=3)` - scrape rider's recent results from PCS
+- Compute: race days, average position in similar races, recent PCS points, win/podium count
+- Feed as additional signal into Bayesian strength model with moderate precision (variance ~3.5)
+
+**Recommended approach:**
+
+A 3-month window of results in terrain-similar race types would be the best formulation, combining the form signal with course profile matching rather than treating them independently. Early-season races (February/March) will have limited form data, so the signal should degrade gracefully to the prior.
+
+### Phase 8: Correlated position simulation (low-moderate impact)
+
+The current approach of independent position simulation with per-simulation assist computation already captures the most important correlation effect (teammate assists). Adding explicit rider-rider correlation via Cholesky decomposition would produce more realistic variance profiles but the incremental gain is modest.
+
+The Sharpstack paper and DFS community research shows that ignoring correlation can approximately double the standard deviation of simulation outputs in team sports (NFL, NBA). However, cycling correlation structure differs from team sports: the main correlation is through team tactics and race dynamics rather than through mechanical scoring links (like quarterback-receiver in NFL). For one-day classics, independent position simulation is a reasonable approximation.
+
+**Where correlation matters more:**
+
+- Stage races: crash/illness correlations persist across stages
+- Team-heavy strategies: when stacking 3+ riders from one team, correlated simulation better estimates the variance profile
+- Weather-dependent races: cobbled classics where rain creates correlated outcomes for specialists
+
+**Implementation if pursued:**
+
+- Estimate pairwise correlation from historical results (same-team bonus, race-type clustering)
+- Use Cholesky decomposition to generate correlated noise vectors in `simulate_race()`
+- The assist computation already runs per-simulation, so it would automatically benefit from correlated positions
+
+### Phase 9: Machine learning (unknown impact, requires prerequisites)
+
+Replacing the Bayesian strength model with a trained ML model requires a backtesting dataset of 90-135+ races (2-3 full Superclassico seasons), which does not yet exist. Academic results in cycling prediction show marginal gains from ML over well-tuned baselines: Kholkine et al. (2021) achieved 0.82 NDCG@10 with learn-to-rank, but this was only ~3% above a tuned logistic regression baseline. The FPL literature confirms that Bayesian approaches provide "strong and stable baselines" and that ML augmentation yields "modest but consistent improvements."
+
+**Prerequisites:**
 
 - Backtesting dataset of 90-135+ races (2-3 full Superclassico seasons)
-- Feature engineering pipeline from Phases 2-4
+- Feature engineering pipeline from Phases 1-7
 
-### Approach
+**Approach:**
 
 - Train XGBoost or Random Forest: features -> actual VG points
 - Julia's MLJ.jl ecosystem
 - Cross-validate by race to avoid overfitting
 - Features: PCS specialty, race history, recent form, course profile similarity, VG cost/points, odds, ownership %
-- Replaces Bayesian strength model
+- Could augment rather than replace Bayesian model (ML predictions as an additional signal)
 
-## DFS techniques (from DraftKings/FanDuel literature)
+**Alternative: ensemble approach:**
 
-- **Leverage**: E[pts] * (1 - ownership) for differentiation
-- **Ceiling vs floor**: high-variance for GPPs, consistent for cash
-- **Correlation stacking**: same-team for correlated upside
-- **Contrarian plays**: fade heavily-owned in large fields
+Rather than replacing the Bayesian model entirely, use ML predictions as an additional signal in the Bayesian framework. This preserves the principled uncertainty quantification whilst allowing ML to capture nonlinear feature interactions. The FPL literature found this hybrid approach consistently outperformed either pure Bayesian or pure ML.
+
+---
+
+## Additional ideas from the literature
+
+### VG cost model exploitation
+
+Top VG community players (The Pelotonian, Sicycle, ProCyclingUK) consistently emphasise that value identification is more important than picking the race winner. VG costs are set by an algorithm based on historical performance, creating systematic mispricings:
+
+- **Young riders on upward trajectories** are underpriced because the cost model is backward-looking
+- **Classification category mispricings**: the mandatory class constraints (2 AR, 2 CL, 1 SP, 3+ UN) create within-category pricing inefficiencies that the optimiser already exploits, but identifying which categories are systematically cheaper in a given race could inform pre-optimisation analysis
+- **Rider returning from injury**: riders whose cost reflects a period of absence but who are now fully fit
+
+An explicit "value model" that predicts VG cost based on current ability (and compares to actual cost) would highlight where the pricing algorithm is most wrong.
+
+### Startlist-adjusted strength
+
+The current model does not account for who else is in the race when estimating strength. A Cat 1 monument with a full WorldTour field is substantially harder than a Cat 3 semi-classic. PCS startlist quality data (already available via `getpcsracestartlist()`) could adjust the prior: a rider's expected position in a weak field should be higher than in a strong field, even with the same underlying strength.
+
+**Implementation:** Compute field strength as the mean or median PCS points of the startlist, then adjust the position-to-strength mapping accordingly. Alternatively, use field strength as a scaling factor on the simulation noise (stronger fields compress the position distribution).
+
+### Weather-dependent race modelling
+
+Cobbled classics (Flanders, Roubaix) have dramatically different dynamics in wet vs dry conditions. Rain on cobbles amplifies the advantage of specialists and increases attrition. The roadmap already lists OpenWeatherMap as a potential source. The impact is narrow (only a handful of races per season) but the signal is strong for those races.
+
+### Multi-objective optimisation
+
+The current optimiser maximises a single objective (expected points or leverage-weighted points). An alternative is to present the Pareto frontier between expected points and variance (or between expected points and ownership differentiation), allowing the user to choose their preferred risk profile. JuMP supports multi-objective optimisation, and the MC framework already produces the variance estimates needed.
+
+### Transfer learning from team sports DFS
+
+The NFL/NBA DFS literature is substantially more developed than cycling-specific research. Key transferable concepts not yet in the roadmap:
+
+- **Late swap / news integration**: incorporating last-minute information (DNS, weather changes, tactical announcements) just before the lock. The current pipeline could be re-run with updated data but there is no structured workflow for this.
+- **Opponent modelling**: estimating the distribution of opponent teams from ownership data, then optimising against that distribution rather than in isolation. This is the sophisticated version of ownership-adjusted optimisation.
+- **Bankroll management**: Kelly criterion or fractional Kelly for sizing bets across multiple contests. Not directly relevant to VG (no monetary stakes) but the underlying principle of diversifying across races (entering multiple leagues with different strategies) applies.
+
+### Bayesian model extensions
+
+The current normal-normal conjugate model could be extended in several directions without moving to full ML:
+
+- **Heavy-tailed distributions**: Replace Gaussian noise in `simulate_race()` with Student-t distributions to better model the long tails of cycling results (crashes, breakaways, exceptional performances). This would naturally produce higher-variance predictions for less predictable riders.
+- **Hierarchical priors**: Share information across riders of the same team, nationality, or specialty class. A strong Ineos GC result could partially inform expectations for other Ineos GC riders.
+- **Time-varying strength**: Allow rider strength to drift over the season rather than treating it as static. This partially addresses the recent form question without requiring a separate form signal.
+
+---
+
+## Evidence appendix
+
+### Key academic references
+
+**Kholkine et al. (2021) - "A machine learning approach to predict the outcome of professional cycling races"**
+*Frontiers in Sports and Active Living* (also PMC8527032)
+
+Tested 15 feature categories for predicting top-10 finishers in six spring classics using learn-to-rank (LambdaMART). Key findings for this project:
+
+- Overall PCS performance (career and season-long points) was important across all six races
+- Best historical result in the specific race was the single most important feature for Tour of Flanders and Paris-Roubaix
+- Results from related races were strongly predictive for some events: LBL relied heavily on Fleche Wallonne results rather than overall performance, demonstrating that course-type matching carries significant weight
+- 6-week pre-race form received minimal weight — the model "does not seem to learn a lot from" short-term form features
+- Achieved 0.82 NDCG@10, approximately 3% above a tuned logistic regression baseline
+
+**Rize, Saldanha & Moskovitch (2025) - "VeloRost: a Bayesian dual-skill framework for roster-based cycling race outcome prediction"**
+*ISACE 2025 / Springer*
+
+Achieved NDCG@10 of 0.443 by separately modelling leader skill and helper/domestique contributions, and by clustering races by elevation and road surface type before applying TrueSkill ratings. Two key findings:
+
+- Modelling leader vs helper roles separately "significantly outperforms" treating riders independently
+- Two-stage approach (cluster races by terrain, then estimate skill within clusters) outperformed single global skill ratings
+
+**Haugh & Singal (2021) - "How to play fantasy sports strategically (and win)"**
+*Management Science, 67(1)*
+
+Definitive result on ownership-adjusted optimisation. Modelled opponents' team selections using a Dirichlet-multinomial process and optimised for expected reward conditional on outperforming the field:
+
+- 350% returns over 17 weeks in top-heavy GPP contests vs 50% for an ownership-blind benchmark
+- 7x performance differential from ownership adjustment alone, without improving underlying player projections
+- Effect is strongest in large-field tournaments; negligible in head-to-head or small-league formats
+
+**Baronchelli et al. (2025) - "Data-driven team selection in Fantasy Premier League"**
+*arXiv:2505.02170v1*
+
+Found that recency-weighted Bayesian models provide "strong and stable baselines" for expected points forecasting. Hybrid approaches augmenting Bayesian estimates with additional features yield "modest but consistent improvements." Optimal blend: roughly two-thirds model-based scores, one-third realised recent points.
+
+### DFS community sources
+
+Sharpstack (Ash, 2021) demonstrated that using Cholesky decomposition to generate correlated player projections (rather than independent simulations) produces substantially more realistic tournament outcome distributions. Ignoring correlation can approximately double the standard deviation of simulation outputs.
+
+FantasyLabs defines "leverage score" as the gap between a player's optimal lineup percentage and their ownership projection, making it the primary tool for GPP construction. The simple `leverage = E[pts] * (1 - ownership)` captures most of the benefit of more sophisticated opponent modelling.
+
+Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCyclingUK, Marginal Brains):
+
+- Value identification (spending less budget for more points) matters more than picking the winner
+- Balance over star power: low-cost GC contenders who grind out daily points are undervalued
+- Stage composition analysis: counting sprint/mountain/TT stages to calibrate rider-type allocation
+- Young riders on upward trajectories are systematically underpriced by VG's backward-looking cost algorithm
+- Classification constraints create within-category pricing inefficiencies
+
+### Impact estimates summary
+
+| Priority | Improvement | Expected impact | Evidence strength | Effort |
+| --- | --- | --- | --- | --- |
+| 1 | Fix odds integration | Very high | Strong (market efficiency literature) | Low |
+| 2 | Backtesting framework | High (indirect) | Strong (enables calibration) | Medium |
+| 3 | Course profile matching | High | Strong (Kholkine, VeloRost) | Medium |
+| 4 | Stage-by-stage simulation | High (grand tours) | Moderate (community consensus) | High |
+| 5 | Ownership-adjusted optimisation | Very high for GPPs, low for small leagues | Strong (Haugh & Singal) | Medium |
+| 6 | Leader/domestique roles | Moderate | Moderate (VeloRost) | Medium |
+| 7 | Recent form signal | Moderate-low | Weak (Kholkine: minimal weight) | Low |
+| 8 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Medium |
+| 9 | ML models | Unknown | Weak (+3% over baseline) | High |
