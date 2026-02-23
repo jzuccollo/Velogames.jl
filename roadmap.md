@@ -5,8 +5,10 @@
 The package implements expected Velogames points prediction using:
 
 - VG scoring system encoded as data (finish position, assists, breakaway points by race category)
-- PCS race-specific history for one-day classics and stage races
-- Bayesian strength estimation combining PCS, VG, race history, and optional odds
+- PCS race-specific history for one-day classics and stage races, plus terrain-similar race history via `SIMILAR_RACES`
+- VG historical race points from past editions as a Bayesian signal
+- PCS startlist filtering to remove DNS riders
+- Bayesian strength estimation combining PCS, VG season points, PCS race history (with variance penalties for similar races), VG race history, optional Cycling Oracle predictions, and optional Betfair odds
 - Monte Carlo race simulation converting strength to position probabilities to expected VG points
 - JuMP optimisation over expected VG points (replacing arbitrary composite scores)
 - Class-aware PCS blending for stage races (aggregate approach)
@@ -15,14 +17,17 @@ The package implements expected Velogames points prediction using:
 
 ### Signal inventory
 
-The strength model combines four signals, each with a variance hyperparameter controlling how much it shifts the posterior. All variance parameters are exposed as keyword arguments in `estimate_rider_strength()` for calibration and sensitivity analysis:
+The strength model combines multiple signals, each with a variance hyperparameter controlling how much it shifts the posterior. All variance parameters are exposed as keyword arguments in `estimate_rider_strength()` for calibration and sensitivity analysis:
 
-| Signal              | Source                    | Variance | Notes                                                                                        |
-| ------------------- | ------------------------- | -------- | -------------------------------------------------------------------------------------------- |
-| PCS specialty prior | `getpcsriderpts_batch()`  | 4.0      | Z-scored across field. For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS`    |
-| VG season points    | `getvgriders()`           | 3.0      | Z-scored VG `points` column                                                                  |
-| Race history        | `getpcsracehistory()`     | 1.0-3.0  | Recency-weighted: recent years get lower variance (higher precision)                         |
-| Betting odds        | `getodds()`               | 0.5      | Strongest single signal when available. Currently broken (fragile Betfair CSS selectors)     |
+| Signal                | Source                    | Variance  | Notes                                                                                        |
+| --------------------- | ------------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| PCS specialty prior   | `getpcsriderpts_batch()`  | 4.0       | Z-scored across field. For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS`    |
+| VG season points      | `getvgriders()`           | 3.0       | Z-scored VG `points` column                                                                  |
+| PCS race history      | `getpcsracehistory()`     | 1.0-3.0   | Recency-weighted: recent years get lower variance (higher precision)                         |
+| Similar-race history  | `getpcsracehistory()`     | 2.0-4.0   | Same as race history but +1.0 variance penalty. Races from `SIMILAR_RACES` terrain mapping   |
+| VG race history       | `getvgracepoints()`       | 1.5-4.0   | Z-scored per year. Actual VG points from past editions (finish + assist + breakaway)         |
+| Cycling Oracle        | `get_cycling_oracle()`    | 1.5       | Independent signal from cyclingoracle.com predictions. Broader race coverage than Betfair    |
+| Betting odds          | `getodds()`               | 0.5       | Strongest single signal when available. Uses Betfair Exchange API (market ID required)       |
 
 Odds are converted to strength via log-odds relative to a uniform baseline, then divided by a normalisation constant (default 2.0, heuristic) to match the z-score scale of other signals. This divisor is also an exposed parameter (`odds_normalisation`).
 
@@ -62,13 +67,13 @@ $$E[\text{VG points}] = E[\text{finish}] + E[\text{assists}] + E[\text{breakaway
 
 - **Velogames** (velogames.com) - rider rosters, costs, season points, classifications, ownership %, historical race results
 - **ProCyclingStats** (procyclingstats.com) - specialty ratings (one-day/GC/TT/sprint/climber), rankings, race results by year, startlist quality
-- **Betfair** (betfair.com) - betting odds for win markets (optional, currently broken)
+- **Betfair Exchange** (betfair.com) - betting odds for win markets via Exchange API (optional, requires credentials)
+- **Cycling Oracle** (cyclingoracle.com) - race predictions with win probabilities, scraped from blog prediction pages (optional, broader coverage than Betfair)
 
 ### Recommended future sources
 
 - **PCS deeper data** - rider recent results (filterable by season/type), race climb profiles (length, gradient, elevation), profile difficulty icons (p0-p5)
 - **FirstCycling** (firstcycling.com) - backup/cross-validation. Has unofficial Python API wrapper (github.com/baronet2/FirstCyclingAPI) and MCP server (github.com/r-huijts/firstcycling-mcp)
-- **Oddschecker** - aggregated odds from multiple bookmakers, more resilient than Betfair alone
 - **OpenWeatherMap** (free tier, 1000 calls/day) - race-day weather for cobbled classics
 
 ### Not recommended
@@ -79,9 +84,9 @@ $$E[\text{VG points}] = E[\text{finish}] + E[\text{assists}] + E[\text{breakaway
 
 ## Known issues
 
-### Broken odds scraper
+### ~~Broken odds scraper~~ (resolved)
 
-`getodds()` uses hardcoded Betfair CSS selectors that break when the page structure changes. The pipeline handles failure gracefully (try-catch, continues without odds) and a deprecation warning has been added. Planned replacement: Oddschecker integration with multiple bookmaker sources and overround removal.
+`getodds()` now uses the Betfair Exchange API (JSON-RPC) instead of fragile CSS selectors. Users pass a Betfair market ID; the pipeline authenticates via environment variables and fetches structured odds data. The pipeline continues to handle missing odds gracefully (most races have no Betfair market).
 
 ### Team dynamics / domestique problem
 
@@ -109,16 +114,15 @@ There is no systematic evaluation of prediction quality. We cannot currently mea
 
 The phases below are ordered by expected return on selection quality and win probability, drawing on the evidence reviewed in the appendix. The original phase numbering has been replaced with a priority ranking.
 
-### Phase 1: Fix odds integration (high impact, low effort)
+### Phase 1: Fix odds integration (high impact, low effort) — done
 
-Betting odds are the strongest single predictive signal because they aggregate private information from many informed participants. The current model already treats odds as the highest-precision observation (variance 0.5), but the Betfair scraper is broken. Restoring this signal is the highest-ROI item because the Bayesian infrastructure already exists.
+Betting odds are the strongest single predictive signal because they aggregate private information from many informed participants. The Bayesian infrastructure treats odds as the highest-precision observation (variance 0.5).
 
-**Implementation:**
+**Implemented:** `getodds()` now calls the Betfair Exchange API via `betfair_get_market_odds()`. Authentication uses environment variables (`BETFAIR_USERNAME`, `BETFAIR_PASSWORD`, `BETFAIR_APP_KEY`). Users pass a Betfair market ID to the solver; the pipeline falls back gracefully when no market ID is provided or the API is unavailable. Overround removal and log-odds conversion to the Bayesian strength model were already in place.
 
-- Multiple sources: Betfair Exchange + Oddschecker for resilience
-- Implied probability with overround removal: `implied_prob = 1/odds`, normalise to sum = 1
-- Treat as high-precision observation in Bayesian model
-- Graceful fallback when sources are down
+**Cycling Oracle:** `get_cycling_oracle()` scrapes win probability predictions from cyclingoracle.com blog pages and feeds them as an independent Bayesian signal (variance 1.5). This provides broader race coverage than Betfair, covering most European professional races. Both signals can be active simultaneously; when both are available, the model benefits from two independent observations.
+
+**Limitations:** Betfair cycling coverage is limited to grand tours, monuments, and some major classics. Most Superclassico races will not have a Betfair market. Cycling Oracle has broader coverage but only provides predictions for the top ~16 riders per race. Future work could add additional odds sources for even broader coverage.
 
 **Evidence:** Betting markets consistently outperform public statistical models across sports prediction research. In cycling specifically, odds were not tested by Kholkine et al. (2021) but are widely regarded in the DFS community as the strongest single signal because they aggregate private information (team tactics, form, injury knowledge) unavailable in public data. The current variance of 0.5 (vs 3.0-4.0 for other signals) is directionally correct.
 
@@ -384,7 +388,7 @@ Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCycli
 
 | Priority | Improvement | Expected impact | Evidence strength | Effort |
 | --- | --- | --- | --- | --- |
-| 1 | Fix odds integration | Very high | Strong (market efficiency literature) | Low |
+| 1 | ~~Fix odds integration~~ | Very high | Strong (market efficiency literature) | Low (done) |
 | 2 | Backtesting framework | High (indirect) | Strong (enables calibration) | Medium |
 | 3 | Course profile matching | High | Strong (Kholkine, VeloRost) | Medium |
 | 4 | Stage-by-stage simulation | High (grand tours) | Moderate (community consensus) | High |

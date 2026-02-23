@@ -1,5 +1,9 @@
-const DEFAULT_CLASS_REQUIREMENTS =
-    Dict("All rounder" => 2, "Climber" => 2, "Sprinter" => 1, "Unclassed" => 4)
+const DEFAULT_CLASS_REQUIREMENTS = Dict(
+    "All rounder" => STAGE_CLASS_MINIMUMS[:allrounder],
+    "Climber" => STAGE_CLASS_MINIMUMS[:climber],
+    "Sprinter" => STAGE_CLASS_MINIMUMS[:sprinter],
+    "Unclassed" => STAGE_CLASS_MINIMUMS[:unclassed],
+)
 
 """
     clean_team_names!(df, team_columns)
@@ -11,6 +15,21 @@ function clean_team_names!(df::DataFrame, team_columns::Vector{Symbol})
     for col in team_columns
         if col in propertynames(df)
             df[!, col] = map(unpipe, df[!, col])
+        end
+    end
+    return df
+end
+
+"""
+    round_numeric_columns!(df; digits=1)
+
+Round all numeric columns in the DataFrame to the given number of digits.
+Returns the modified DataFrame for chaining.
+"""
+function round_numeric_columns!(df::DataFrame; digits::Int = 1)
+    for col in names(df)
+        if eltype(df[!, col]) <: Union{Missing,Number}
+            df[!, col] = round.(df[!, col]; digits = digits)
         end
     end
     return df

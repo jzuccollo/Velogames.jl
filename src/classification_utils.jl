@@ -1,9 +1,17 @@
 """
 Classification handling utilities for rider data.
 
-This module centralizes all classification-related logic to eliminate code duplication
+This module centralises all classification-related logic to eliminate code duplication
 across the various model building functions.
 """
+
+"""Minimum rider counts per class for stage race teams (Velogames Sixes rules)."""
+const STAGE_CLASS_MINIMUMS = Dict(
+    :allrounder => 2,
+    :sprinter => 1,
+    :climber => 2,
+    :unclassed => 3,
+)
 
 """
     ensure_classification_columns!(df::DataFrame; required_classes::Vector{String}=["allrounder", "sprinter", "climber", "unclassed"])
@@ -85,10 +93,10 @@ validate_classification_constraints(df)  # returns true
 """
 function validate_classification_constraints(
     df::DataFrame;
-    min_allrounder::Int = 2,
-    min_sprinter::Int = 1,
-    min_climber::Int = 2,
-    min_unclassed::Int = 3,
+    min_allrounder::Int = STAGE_CLASS_MINIMUMS[:allrounder],
+    min_sprinter::Int = STAGE_CLASS_MINIMUMS[:sprinter],
+    min_climber::Int = STAGE_CLASS_MINIMUMS[:climber],
+    min_unclassed::Int = STAGE_CLASS_MINIMUMS[:unclassed],
 )::Bool
     # Check each required column exists
     required_cols = [:allrounder, :sprinter, :climber, :unclassed]

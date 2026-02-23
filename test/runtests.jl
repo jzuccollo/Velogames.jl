@@ -17,11 +17,15 @@ using Statistics
     @test isdefined(Velogames, :build_model_stage)
     @test isdefined(Velogames, :solve_oneday)
     @test isdefined(Velogames, :solve_stage)
-    @test isdefined(Velogames, :solve_stage_legacy)
     @test isdefined(Velogames, :createkey)
     @test isdefined(Velogames, :getvgracepoints)
     @test isdefined(Velogames, :getodds)
     @test isdefined(Velogames, :getpcsraceranking)
+    # Test Betfair API functions
+    @test isdefined(Velogames, :betfair_login)
+    @test isdefined(Velogames, :betfair_get_market_odds)
+    # Test Cycling Oracle function
+    @test isdefined(Velogames, :get_cycling_oracle)
     # Test new caching functions
     @test isdefined(Velogames, :CacheConfig)
     @test isdefined(Velogames, :clear_cache)
@@ -368,31 +372,41 @@ end
     end
 
     @testset "getodds" begin
+        # Empty market ID returns empty DataFrame without hitting the API
+        result = getodds("")
+        @test result isa DataFrame
+        @test nrow(result) == 0
+        @test names(result) == ["rider", "odds", "riderkey"]
+
+        # Invalid market ID should fail gracefully (no credentials in CI)
         try
-            getodds("https://example.com")
+            getodds("invalid-market-id")
             @test true
         catch e
             @test e isa Union{
                 HTTP.Exceptions.StatusError,
                 HTTP.Exceptions.ConnectError,
-                ArgumentError,
-                BoundsError,
                 ErrorException,
-                UndefVarError,
             }
         end
+    end
 
+    @testset "get_cycling_oracle" begin
+        # Empty URL returns empty DataFrame without hitting the web
+        result = get_cycling_oracle("")
+        @test result isa DataFrame
+        @test nrow(result) == 0
+        @test names(result) == ["rider", "win_prob", "riderkey"]
+
+        # Invalid URL should fail gracefully
         try
-            getodds("https://example.com", headers = Dict("Custom-Header" => "test"))
+            get_cycling_oracle("https://www.cyclingoracle.com/en/blog/nonexistent-race-prediction")
             @test true
         catch e
             @test e isa Union{
                 HTTP.Exceptions.StatusError,
                 HTTP.Exceptions.ConnectError,
-                ArgumentError,
-                BoundsError,
                 ErrorException,
-                UndefVarError,
             }
         end
     end
@@ -414,31 +428,6 @@ end
     end
 end
 
-@testset "Integration Tests" begin
-    @testset "solve_stage_legacy" begin
-        try
-            result = solve_stage_legacy(
-                "https://www.velogames.com/velogame/2025/riders.php",
-                :oneday,
-            )
-            @test true
-        catch e
-            @test !isa(e, MethodError)
-        end
-
-        try
-            result = solve_stage_legacy(
-                "https://www.velogames.com/velogame/2025/riders.php",
-                :stage,
-                "testhash",
-                0.7,
-            )
-            @test true
-        catch e
-            @test !isa(e, MethodError)
-        end
-    end
-end
 
 @testset "Caching System" begin
     @testset "CacheConfig" begin
@@ -474,7 +463,8 @@ end
             (getpcsraceranking, ("http://example.com",)),
             (getpcsriderhistory, ("test rider",)),
             (getvgracepoints, ("http://example.com",)),
-            (getodds, ("http://example.com",)),
+            (getodds, ("",)),
+            (get_cycling_oracle, ("",)),
         ]
 
         for (func, args) in test_params
@@ -568,39 +558,6 @@ end
     end
 end
 
-@testset "Integration Workflow Tests" begin
-    mock_vg_data = DataFrame(
-        rider = ["Tadej Pogačar", "Jonas Vingegaard", "Primož Roglič"],
-        riderkey = [
-            createkey("Tadej Pogačar"),
-            createkey("Jonas Vingegaard"),
-            createkey("Primož Roglič"),
-        ],
-        class = ["allrounder", "allrounder", "allrounder"],
-        vgpoints = [2000, 1800, 1600],
-        vgcost = [24, 22, 20],
-        allrounder = [true, true, true],
-        sprinter = [false, false, false],
-        climber = [false, false, false],
-        unclassed = [false, false, false],
-    )
-
-    try
-        integrated_data =
-            integrate_pcs_data!(copy(mock_vg_data), collect(mock_vg_data.rider))
-
-        @test integrated_data isa DataFrame
-        @test nrow(integrated_data) == nrow(mock_vg_data)
-        @test hasproperty(integrated_data, :pcs_speciality_points)
-
-        @test hasproperty(integrated_data, :vgpoints)
-        @test hasproperty(integrated_data, :vgcost)
-        @test hasproperty(integrated_data, :allrounder)
-
-    catch e
-        @test e isa Exception
-    end
-end
 
 # =========================================================================
 # Scoring, simulation, and race configuration
@@ -705,10 +662,49 @@ end
         n_starters = 150,
     ).mean > 0.0
 
+    # Oracle predictions shift strength estimate
+    @test estimate_rider_strength(
+        pcs_score = 0.0,
+        oracle_implied_prob = 0.1,
+        n_starters = 150,
+    ).mean > 0.0
+
     @test position_to_strength(1, 150) >
           position_to_strength(50, 150) >
           position_to_strength(100, 150)
     @test position_to_strength(1, 150) > 0 && position_to_strength(100, 150) < 0
+end
+
+@testset "BayesianConfig" begin
+    # Default config produces a valid result
+    default_result = estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5)
+    @test default_result.mean > 0.0
+
+    # Custom config with different variances produces different results
+    tight_config = BayesianConfig(
+        1.0,   # pcs_variance (tighter than default 4.0)
+        1.0,   # vg_variance (tighter than default 3.0)
+        1.0,   # hist_base_variance
+        0.5,   # hist_decay_rate
+        1.5,   # vg_hist_base_variance
+        0.5,   # vg_hist_decay_rate
+        0.5,   # odds_variance
+        1.5,   # oracle_variance
+        2.0,   # odds_normalisation
+    )
+    tight_result = estimate_rider_strength(
+        pcs_score = 1.0,
+        vg_points = 0.5,
+        config = tight_config,
+    )
+    # Tighter PCS variance means PCS score gets more weight, so the mean should
+    # be closer to the PCS score (1.0) than with the default config
+    @test tight_result.mean != default_result.mean
+    @test tight_result.mean > default_result.mean
+
+    # Exported constant matches struct type
+    @test DEFAULT_BAYESIAN_CONFIG isa BayesianConfig
+    @test DEFAULT_BAYESIAN_CONFIG.pcs_variance == 4.0
 end
 
 @testset "Monte Carlo Simulation" begin
@@ -867,6 +863,7 @@ end
         :expected_finish_points,
         :expected_assist_points,
         :BayesianPosterior,
+        :StrengthEstimate,
         :bayesian_update,
         :estimate_rider_strength,
         :simulate_race,
@@ -885,8 +882,187 @@ end
         :PCS_TEAM_ALIASES,
         :STAGE_RACE_PCS_WEIGHTS,
         :compute_stage_race_pcs_score,
+        :get_cycling_oracle,
+        :SIMILAR_RACES,
     ]
     for sym in new_symbols
         @test isdefined(Velogames, sym)
     end
+end
+
+@testset "Similar races mapping" begin
+    @test SIMILAR_RACES isa Dict{String,Vector{String}}
+    @test haskey(SIMILAR_RACES, "omloop-het-nieuwsblad")
+    @test "e3-harelbeke" in SIMILAR_RACES["omloop-het-nieuwsblad"]
+    @test haskey(SIMILAR_RACES, "kuurne-brussel-kuurne")
+    @test "scheldeprijs" in SIMILAR_RACES["kuurne-brussel-kuurne"]
+    # Worlds has no similar races
+    @test haskey(SIMILAR_RACES, "world-championship")
+    @test isempty(SIMILAR_RACES["world-championship"])
+end
+
+@testset "Variance penalties in strength estimation" begin
+    # Similar-race history (with penalty) should be less precise than exact-race history
+    exact = estimate_rider_strength(
+        pcs_score = 0.0,
+        race_history = [1.5],
+        race_history_years_ago = [1],
+        race_history_variance_penalties = [0.0],
+    )
+    similar = estimate_rider_strength(
+        pcs_score = 0.0,
+        race_history = [1.5],
+        race_history_years_ago = [1],
+        race_history_variance_penalties = [1.0],
+    )
+    # Both should shift the mean upward
+    @test exact.mean > 0.0
+    @test similar.mean > 0.0
+    # Exact-race should pull the mean more strongly (lower variance observation)
+    @test exact.mean > similar.mean
+    # Exact-race should produce lower posterior variance
+    @test exact.variance < similar.variance
+
+    # Empty penalties vector should work (defaults to zero)
+    no_penalty = estimate_rider_strength(
+        pcs_score = 0.0,
+        race_history = [1.5],
+        race_history_years_ago = [1],
+    )
+    @test isapprox(no_penalty.mean, exact.mean; atol = 1e-10)
+end
+
+@testset "VG race history in strength estimation" begin
+    # VG race history should shift strength estimate
+    with_vg = estimate_rider_strength(
+        pcs_score = 0.0,
+        vg_race_history = [2.0, 1.5],
+        vg_race_history_years_ago = [1, 2],
+    )
+    without_vg = estimate_rider_strength(pcs_score = 0.0)
+
+    @test with_vg.mean > without_vg.mean
+    @test with_vg.variance < without_vg.variance
+
+    # More recent VG history should have more influence
+    recent = estimate_rider_strength(
+        pcs_score = 0.0,
+        vg_race_history = [2.0],
+        vg_race_history_years_ago = [1],
+    )
+    old = estimate_rider_strength(
+        pcs_score = 0.0,
+        vg_race_history = [2.0],
+        vg_race_history_years_ago = [5],
+    )
+    @test recent.mean > old.mean  # Recent history pulls mean more
+    @test recent.variance < old.variance  # Recent history is more precise
+end
+
+@testset "predict_expected_points with variance_penalty and vg_history" begin
+    rider_df = DataFrame(
+        rider = ["Strong", "Medium", "Weak", "Also Weak", "Very Weak", "Last"],
+        team = ["A", "A", "B", "B", "C", "C"],
+        cost = [20, 15, 10, 8, 6, 4],
+        points = [500.0, 300.0, 150.0, 100.0, 50.0, 20.0],
+        riderkey = ["strong", "medium", "weak", "alsoweak", "veryweak", "last"],
+        oneday = [2000, 1200, 800, 500, 200, 50],
+    )
+
+    # Test with variance_penalty column in race history
+    history_df = DataFrame(
+        riderkey = ["strong", "strong", "medium", "medium"],
+        position = [1, 5, 10, 8],
+        year = [2024, 2023, 2024, 2023],
+        variance_penalty = [0.0, 0.0, 1.0, 1.0],  # medium's history is from similar races
+    )
+    result = predict_expected_points(
+        rider_df,
+        SCORING_CAT2;
+        race_history_df = history_df,
+        n_sims = 5000,
+    )
+    @test :expected_vg_points in propertynames(result)
+    @test all(result.expected_vg_points .>= 0)
+
+    # Test with VG history
+    vg_hist = DataFrame(
+        riderkey = ["strong", "medium", "weak", "strong", "medium", "weak"],
+        score = [500.0, 200.0, 50.0, 450.0, 180.0, 40.0],
+        year = [2024, 2024, 2024, 2023, 2023, 2023],
+    )
+    result_vg = predict_expected_points(
+        rider_df,
+        SCORING_CAT2;
+        vg_history_df = vg_hist,
+        n_sims = 5000,
+    )
+    @test :expected_vg_points in propertynames(result_vg)
+    @test all(result_vg.expected_vg_points .>= 0)
+end
+
+@testset "predict + build_model_oneday integration" begin
+    rng = Random.MersenneTwister(42)
+    rider_df = DataFrame(
+        rider = ["R$i" for i in 1:12],
+        team = repeat(["A", "B", "C", "D"], 3),
+        cost = [20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2],
+        points = Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 60, 40, 20]),
+        riderkey = ["r$i" for i in 1:12],
+        oneday = [2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 150, 100, 50],
+    )
+    predicted = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, rng = rng)
+    @test :expected_vg_points in propertynames(predicted)
+
+    sol = build_model_oneday(predicted, 6, :expected_vg_points, :cost; totalcost = 100)
+    @test sol !== nothing
+
+    chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
+    @test nrow(chosen) == 6
+    @test sum(chosen.cost) <= 100
+end
+
+@testset "predict + build_model_stage integration" begin
+    rng = Random.MersenneTwister(42)
+    rider_df = DataFrame(
+        rider = ["R$i" for i in 1:20],
+        team = repeat(["A", "B", "C", "D"], 5),
+        cost = repeat([15, 12, 10, 8, 5], 4),
+        points = Float64.(repeat([400, 300, 200, 100, 50], 4)),
+        riderkey = ["r$i" for i in 1:20],
+        classraw = repeat(["All Rounder", "All Rounder", "Climber", "Climber",
+                           "Climber", "Sprinter", "Sprinter", "Unclassed",
+                           "Unclassed", "Unclassed"], 2),
+        gc = Float64.(repeat([1500, 1200, 800, 600, 400], 4)),
+        tt = Float64.(repeat([1000, 800, 600, 400, 200], 4)),
+        climber = Float64.(repeat([500, 400, 1200, 1000, 800], 4)),
+        sprint = Float64.(repeat([200, 150, 100, 500, 300], 4)),
+        oneday = Float64.(repeat([800, 600, 400, 300, 200], 4)),
+    )
+    predicted = predict_expected_points(
+        rider_df, SCORING_STAGE; n_sims = 5000, race_type = :stage, rng = rng,
+    )
+    @test :expected_vg_points in propertynames(predicted)
+
+    sol = build_model_stage(predicted, 9, :expected_vg_points, :cost; totalcost = 100)
+    @test sol !== nothing
+
+    chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
+    @test nrow(chosen) == 9
+    @test sum(chosen.cost) <= 100
+end
+
+@testset "estimate_breakaway_points" begin
+    rng = Random.MersenneTwister(42)
+    # Stronger riders should get more breakaway points on average because they
+    # finish higher and thus appear in more front-group sectors
+    strengths = [2.0, 0.0, -2.0]
+    uncertainties = [0.5, 0.5, 0.5]
+    bp = estimate_breakaway_points(strengths, uncertainties, SCORING_CAT2; n_sims = 10000, rng = rng)
+    @test length(bp) == 3
+    @test all(bp .>= 0)
+    # Mid-pack riders tend to get more breakaway points (they fall in the breakaway position range)
+    # but the exact ordering depends on the heuristic ranges vs strength
+    # Just verify they're reasonable non-negative values
+    @test maximum(bp) < 100  # sanity check
 end

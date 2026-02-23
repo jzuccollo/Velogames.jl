@@ -443,6 +443,115 @@ end
 
 
 """
+Terrain-similar race mapping for cross-race history.
+
+Maps each PCS race slug to a list of terrain-similar races. Results from similar
+races feed into the Bayesian strength model with higher variance (less precise)
+than same-race history, expanding the evidence base for riders without exact-race
+history.
+"""
+const SIMILAR_RACES = Dict{String,Vector{String}}(
+    # Flemish hilly (bergs + short cobbled sections)
+    "omloop-het-nieuwsblad" =>
+        ["e3-harelbeke", "gent-wevelgem", "dwars-door-vlaanderen", "classic-brugge-de-panne"],
+    "e3-harelbeke" =>
+        ["omloop-het-nieuwsblad", "ronde-van-vlaanderen", "dwars-door-vlaanderen", "gent-wevelgem"],
+    "gent-wevelgem" =>
+        ["omloop-het-nieuwsblad", "e3-harelbeke", "classic-brugge-de-panne", "dwars-door-vlaanderen"],
+    "dwars-door-vlaanderen" =>
+        ["e3-harelbeke", "omloop-het-nieuwsblad", "ronde-van-vlaanderen", "gent-wevelgem"],
+    "ronde-van-vlaanderen" =>
+        ["e3-harelbeke", "dwars-door-vlaanderen", "omloop-het-nieuwsblad"],
+    "classic-brugge-de-panne" =>
+        ["gent-wevelgem", "omloop-het-nieuwsblad", "kuurne-brussel-kuurne"],
+    # Flat sprint / fast classics
+    "kuurne-brussel-kuurne" =>
+        ["scheldeprijs", "classic-brugge-de-panne", "paris-tours", "eschborn-frankfurt"],
+    "scheldeprijs" =>
+        ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "eschborn-frankfurt"],
+    "paris-tours" =>
+        ["kuurne-brussel-kuurne", "eschborn-frankfurt", "scheldeprijs"],
+    "eschborn-frankfurt" =>
+        ["kuurne-brussel-kuurne", "scheldeprijs", "cyclassics-hamburg"],
+    "copenhagen-sprint" =>
+        ["scheldeprijs", "kuurne-brussel-kuurne"],
+    # Cobbled specialist
+    "paris-roubaix" =>
+        ["e3-harelbeke", "ronde-van-vlaanderen", "dwars-door-vlaanderen"],
+    # Ardennes hilly (steep punchy climbs)
+    "liege-bastogne-liege" =>
+        ["la-fleche-wallonne", "amstel-gold-race", "de-brabantse-pijl"],
+    "la-fleche-wallonne" =>
+        ["liege-bastogne-liege", "amstel-gold-race", "de-brabantse-pijl"],
+    "amstel-gold-race" =>
+        ["la-fleche-wallonne", "liege-bastogne-liege", "de-brabantse-pijl"],
+    "de-brabantse-pijl" =>
+        ["la-fleche-wallonne", "amstel-gold-race", "liege-bastogne-liege"],
+    "gp-de-wallonie" =>
+        ["la-fleche-wallonne", "de-brabantse-pijl"],
+    # Italian hilly (autumn classics)
+    "il-lombardia" =>
+        ["giro-dell-emilia", "tre-valli-varesine", "gran-piemonte"],
+    "giro-dell-emilia" =>
+        ["il-lombardia", "tre-valli-varesine", "coppa-sabatini"],
+    "tre-valli-varesine" =>
+        ["giro-dell-emilia", "il-lombardia", "gran-piemonte"],
+    "gran-piemonte" =>
+        ["tre-valli-varesine", "giro-dell-emilia", "milano-torino"],
+    "milano-torino" =>
+        ["gran-piemonte", "trofeo-laigueglia", "giro-dell-emilia"],
+    "trofeo-laigueglia" =>
+        ["milano-torino", "gran-piemonte", "coppa-sabatini"],
+    "coppa-sabatini" =>
+        ["giro-dell-emilia", "trofeo-laigueglia"],
+    "coppa-bernocchi" =>
+        ["tre-valli-varesine", "gran-piemonte"],
+    "giro-del-veneto" =>
+        ["veneto-classic", "gran-piemonte"],
+    "veneto-classic" =>
+        ["giro-del-veneto", "gran-piemonte"],
+    # Long/unique races (limited similarity)
+    "milano-sanremo" => ["strade-bianche"],
+    "strade-bianche" => ["milano-sanremo"],
+    # Punchy hilly (mixed terrain, moderate climbs)
+    "donostia-san-sebastian-klasikoa" =>
+        ["bretagne-classic", "gp-quebec", "gp-montreal"],
+    "bretagne-classic" =>
+        ["donostia-san-sebastian-klasikoa", "gp-quebec"],
+    "cyclassics-hamburg" =>
+        ["eschborn-frankfurt", "gp-montreal"],
+    "gp-quebec" =>
+        ["gp-montreal", "donostia-san-sebastian-klasikoa", "bretagne-classic"],
+    "gp-montreal" =>
+        ["gp-quebec", "donostia-san-sebastian-klasikoa", "cyclassics-hamburg"],
+    # French regional
+    "grand-prix-du-morbihan" =>
+        ["quatre-jours-de-dunkerque", "tro-bro-leon"],
+    "tro-bro-leon" =>
+        ["grand-prix-du-morbihan", "quatre-jours-de-dunkerque"],
+    "quatre-jours-de-dunkerque" =>
+        ["grand-prix-du-morbihan", "circuit-franco-belge"],
+    "circuit-franco-belge" =>
+        ["quatre-jours-de-dunkerque", "kuurne-brussel-kuurne"],
+    # Belgian hilly
+    "brussels-cycling-classic" =>
+        ["dwars-door-het-hageland", "omloop-het-nieuwsblad"],
+    "dwars-door-het-hageland" =>
+        ["brussels-cycling-classic", "classic-brugge-de-panne"],
+    "super-8-classic" =>
+        ["brussels-cycling-classic", "dwars-door-het-hageland"],
+    # German/misc
+    "sparkassen-muensterland-giro" =>
+        ["eschborn-frankfurt", "cyclassics-hamburg"],
+    # Worlds is unique
+    "world-championship" => String[],
+    # GP Industria
+    "gp-industria-e-artigianato-di-larciano" =>
+        ["coppa-sabatini", "coppa-bernocchi"],
+)
+
+
+"""
     get_historical_url(config::RaceConfig, years_back::Int=1)
 
 Get the Velogames URL for historical data from a previous year.
