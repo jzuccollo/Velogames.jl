@@ -82,6 +82,18 @@ export ScoringTable,
     expected_breakaway_points,
     finish_points_for_position
 
+# Export backtesting framework
+export BacktestRace,
+    BacktestResult,
+    backtest_race,
+    backtest_season,
+    summarise_backtest,
+    ablation_study,
+    tune_hyperparameters,
+    build_race_catalogue,
+    ABLATION_SETS,
+    PARAM_BOUNDS
+
 # Export simulation and prediction
 export BayesianPosterior,
     StrengthEstimate,
@@ -112,5 +124,6 @@ include("pcs_extended.jl")
 include("simulation.jl")
 include("race_solver.jl")
 include("report_helpers.jl")
+include("backtest.jl")
 
 end

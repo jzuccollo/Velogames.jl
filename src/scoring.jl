@@ -304,10 +304,10 @@ const SUPERCLASICO_RACES_2025 = [
 Find a race in the Superclassico schedule by partial name match (case-insensitive).
 Returns the first matching RaceInfo or nothing.
 """
-function find_race(name::String; year::Int = 2025)
+function find_race(name::String; year::Int=2025)
     name_lower = lowercase(name)
     if year != 2025
-        error("Race schedule data only available for 2025 (requested $year)")
+        @warn "Race schedule data is from 2025; using it as approximation for $year"
     end
     races = SUPERCLASICO_RACES_2025
     for race in races

@@ -1,0 +1,252 @@
+---
+title: "Model backtesting and calibration"
+subtitle: "Evaluating prediction quality, signal value, and hyperparameter tuning"
+format: html
+---
+
+# Configuration
+
+```{julia}
+#| echo: true
+#| output: false
+using Velogames, DataFrames, Statistics, MarkdownTables
+
+# Which years to backtest (VG historical pages available for 2023–2025)
+backtest_years = [2023, 2024]
+
+# Simulation settings (lower n_sims for speed; rank correlations converge quickly)
+n_sims = 2000
+history_years = 5
+
+# Cache (longer TTL for historical data that won't change)
+bt_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 168, true)
+
+# Helper
+md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))
+```
+
+# Race catalogue
+
+```{julia}
+#| output: asis
+races = build_race_catalogue(backtest_years; history_years=history_years)
+
+cat_counts = combine(
+    groupby(
+        DataFrame(year=[r.year for r in races], category=[r.category for r in races]),
+        :year
+    ),
+    nrow => :n_races
+)
+
+print("""
+Backtesting across **$(length(races)) races** from $(join(string.(backtest_years), ", ")).
+
+""")
+md_table(cat_counts)
+print("\n")
+```
+
+# Baseline evaluation
+
+Running the full prediction pipeline (PCS + VG season points + race history) on all historical races and comparing to actual PCS finishing positions.
+
+```{julia}
+#| output: asis
+baseline_signals = [:pcs, :vg_season, :race_history]
+
+results = backtest_season(races;
+    signals=baseline_signals,
+    n_sims=n_sims,
+    cache_config=bt_cache,
+)
+
+summary_df = summarise_backtest(results)
+
+print("""
+## Overall metrics
+
+""")
+# Show aggregate rows
+agg = filter(:race => r -> startswith(r, "—"), summary_df)
+md_table(agg[:, [:race, :n_riders, :spearman_rho, :top5_overlap, :top10_overlap, :mean_abs_rank_error]])
+print("\n")
+```
+
+```{julia}
+#| output: asis
+print("""
+## Per-race results
+
+""")
+
+race_rows = filter(:race => r -> !startswith(r, "—"), summary_df)
+display_df = sort(race_rows, :spearman_rho, rev=true)
+md_table(display_df[:, [:race, :year, :category, :n_riders, :spearman_rho, :top10_overlap, :mean_abs_rank_error]])
+print("\n")
+```
+
+```{julia}
+#| output: asis
+# Distribution summary
+valid_rho = filter(!isnan, [r.spearman_rho for r in results])
+if !isempty(valid_rho)
+    q25 = round(quantile(valid_rho, 0.25), digits=3)
+    q75 = round(quantile(valid_rho, 0.75), digits=3)
+    best = round(maximum(valid_rho), digits=3)
+    worst = round(minimum(valid_rho), digits=3)
+
+    print("""
+::: {.callout-note collapse="true"}
+## Spearman \$\\rho\$ distribution
+
+The Spearman rank correlation measures how well predicted strength ranks match actual finishing positions. A value of 1.0 is perfect prediction; 0.0 is random.
+
+| Statistic | Value |
+|-----------|-------|
+| Best | $best |
+| 75th percentile | $q75 |
+| Median | $(round(median(valid_rho), digits=3)) |
+| 25th percentile | $q25 |
+| Worst | $worst |
+| Races evaluated | $(length(valid_rho)) |
+
+:::
+
+""")
+end
+```
+
+# Signal ablation study
+
+Testing which data sources actually improve predictions by running with different signal subsets. Each row shows the mean metric across all races for that signal configuration.
+
+```{julia}
+#| output: asis
+ablation_df = ablation_study(races;
+    n_sims=n_sims,
+    cache_config=bt_cache,
+)
+
+if nrow(ablation_df) > 0
+    # Extract aggregate rows only
+    agg_ablation = filter(:race => r -> r == "— MEAN —", ablation_df)
+
+    if nrow(agg_ablation) > 0
+        display_abl = sort(agg_ablation, :spearman_rho, rev=true)
+        md_table(display_abl[:, [:signal_set, :spearman_rho, :top5_overlap, :top10_overlap, :mean_abs_rank_error]])
+        print("\n")
+    end
+end
+```
+
+```{julia}
+#| output: asis
+if nrow(ablation_df) > 0
+    agg_ablation = filter(:race => r -> r == "— MEAN —", ablation_df)
+    if nrow(agg_ablation) > 0
+        best_set = first(sort(agg_ablation, :spearman_rho, rev=true)).signal_set
+        worst_set = last(sort(agg_ablation, :spearman_rho, rev=true)).signal_set
+
+        print("""
+::: {.callout-note collapse="true"}
+## Interpreting the ablation
+
+The ablation study reveals marginal signal value by comparing prediction quality across different signal subsets.
+
+**Best configuration:** `$best_set` | **Worst:** `$worst_set`
+
+Key questions answered:
+
+- **Does race history help?** Compare `pcs_only` vs `pcs_history`.
+- **Does VG season form add value?** Compare `pcs_history` vs `pcs_vg_history`.
+- **Is PCS essential?** Compare `no_pcs` vs `pcs_vg_history`.
+- **What is the baseline?** `pcs_only` shows prediction quality from PCS specialty scores alone.
+
+Note: VG season points on historical pages reflect end-of-season totals, not the value at race time. This introduces mild optimistic bias for the `:vg_season` signal; interpret its marginal value with caution.
+:::
+
+""")
+    end
+end
+```
+
+# Hyperparameter sensitivity
+
+```{julia}
+#| echo: true
+#| output: asis
+
+# Tune against the baseline signal set
+# Reduce n_iter for faster iteration; increase for more thorough search
+best_config, tuning_log = tune_hyperparameters(races;
+    objective=:spearman_rho,
+    n_iter=50,
+    signals=baseline_signals,
+    n_sims=n_sims,
+    cache_config=bt_cache,
+)
+
+print("""
+## Best configuration
+
+""")
+
+default_params = Dict(
+    :pcs_variance => DEFAULT_BAYESIAN_CONFIG.pcs_variance,
+    :vg_variance => DEFAULT_BAYESIAN_CONFIG.vg_variance,
+    :hist_base_variance => DEFAULT_BAYESIAN_CONFIG.hist_base_variance,
+    :hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.hist_decay_rate,
+    :vg_hist_base_variance => DEFAULT_BAYESIAN_CONFIG.vg_hist_base_variance,
+    :vg_hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.vg_hist_decay_rate,
+)
+
+print("""
+| Parameter | Default | Tuned | Change |
+|-----------|---------|-------|--------|
+| `pcs_variance` | $(default_params[:pcs_variance]) | $(round(best_config.pcs_variance, digits=2)) | $(round(best_config.pcs_variance - default_params[:pcs_variance], digits=2)) |
+| `vg_variance` | $(default_params[:vg_variance]) | $(round(best_config.vg_variance, digits=2)) | $(round(best_config.vg_variance - default_params[:vg_variance], digits=2)) |
+| `hist_base_variance` | $(default_params[:hist_base_variance]) | $(round(best_config.hist_base_variance, digits=2)) | $(round(best_config.hist_base_variance - default_params[:hist_base_variance], digits=2)) |
+| `hist_decay_rate` | $(default_params[:hist_decay_rate]) | $(round(best_config.hist_decay_rate, digits=2)) | $(round(best_config.hist_decay_rate - default_params[:hist_decay_rate], digits=2)) |
+| `vg_hist_base_variance` | $(default_params[:vg_hist_base_variance]) | $(round(best_config.vg_hist_base_variance, digits=2)) | $(round(best_config.vg_hist_base_variance - default_params[:vg_hist_base_variance], digits=2)) |
+| `vg_hist_decay_rate` | $(default_params[:vg_hist_decay_rate]) | $(round(best_config.vg_hist_decay_rate, digits=2)) | $(round(best_config.vg_hist_decay_rate - default_params[:vg_hist_decay_rate], digits=2)) |
+
+""")
+```
+
+```{julia}
+#| output: asis
+if nrow(tuning_log) > 0
+    print("""
+## Search landscape
+
+Top 10 candidates by mean Spearman \$\\rho\$:
+
+""")
+    top10 = first(sort(tuning_log, :mean_score, rev=true), min(10, nrow(tuning_log)))
+    display_cols = [:candidate, :mean_score, :n_races, :pcs_variance, :vg_variance, :hist_base_variance, :hist_decay_rate]
+    avail_cols = intersect(display_cols, Symbol.(names(tuning_log)))
+    round_numeric_columns!(top10)
+    md_table(top10[:, avail_cols])
+    print("\n")
+end
+```
+
+```{julia}
+#| output: asis
+if nrow(tuning_log) > 1
+    scores = filter(!isnan, tuning_log.mean_score)
+    if !isempty(scores)
+        print("""
+::: {.callout-note collapse="true"}
+## Tuning summary
+
+Searched $(nrow(tuning_log)) configurations. Score range: $(round(minimum(scores), digits=4)) to $(round(maximum(scores), digits=4)).
+
+The default configuration scored $(round(first(filter(:candidate => ==("default"), tuning_log)).mean_score, digits=4)). If the tuned configuration does not substantially improve on the default, the current hyperparameters are reasonable and the model is not highly sensitive to these parameters.
+:::
+
+""")
+    end
+end
+```

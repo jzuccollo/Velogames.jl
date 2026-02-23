@@ -6,6 +6,7 @@ project:
     - "race_notebooks/oneday_predictor.qmd"
     - "race_notebooks/stagerace_predictor.qmd"
     - "race_notebooks/historical_analysis.qmd"
+    - "race_notebooks/backtesting.qmd"
 
 jupyter: julia-1.12
 
@@ -22,6 +23,8 @@ website:
         text: "Stage race predictor"
       - href: race_notebooks/historical_analysis.qmd
         text: "Historical analysis"
+      - href: race_notebooks/backtesting.qmd
+        text: "Backtesting"
 
 format:
   html:

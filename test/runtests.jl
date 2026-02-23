@@ -66,7 +66,7 @@ end
 @testset "getvgriders" begin
     # Test that the function returns a DataFrame with new signature
     url = "https://www.velogames.com/velogame/2025/riders.php"
-    df = getvgriders(url, force_refresh = true)  # Force fresh download for tests
+    df = getvgriders(url, force_refresh=true)  # Force fresh download for tests
     @test typeof(df) == DataFrame
 
     # Test that the DataFrame has the expected columns from getvgriders
@@ -105,7 +105,7 @@ end
 
 @testset "selected column conversion" begin
     url = "https://www.velogames.com/spain/2025/riders.php"
-    df = getvgriders(url; force_refresh = true)
+    df = getvgriders(url; force_refresh=true)
     @test :selected in propertynames(df)
     # Check that all non-missing values are Float64 and between 0 and 1
     sel = df.selected
@@ -118,7 +118,7 @@ end
         expected = 0.777
         # Simulate conversion
         actual = parse(Float64, replace(raw, "%" => "")) / 100
-        @test isapprox(actual, expected; atol = 1e-6)
+        @test isapprox(actual, expected; atol=1e-6)
     end
 end
 
@@ -126,10 +126,10 @@ end
 @testset "Model Building Functions" begin
     # Create sample data for testing
     sample_df = DataFrame(
-        rider = ["Rider A", "Rider B", "Rider C", "Rider D"],
-        cost = [10, 15, 20, 25],
-        points = [50.0, 75.0, 100.0, 125.0],
-        riderkey = ["ridera", "riderb", "riderc", "riderd"],
+        rider=["Rider A", "Rider B", "Rider C", "Rider D"],
+        cost=[10, 15, 20, 25],
+        points=[50.0, 75.0, 100.0, 125.0],
+        riderkey=["ridera", "riderb", "riderc", "riderd"],
     )
 
     @testset "build_model_oneday" begin
@@ -138,7 +138,7 @@ end
         @test length(result) == 4
 
         # Test with custom parameters
-        result2 = build_model_oneday(sample_df, 2, :points, :cost, totalcost = 50)
+        result2 = build_model_oneday(sample_df, 2, :points, :cost, totalcost=50)
         @test result2 isa JuMP.Containers.DenseAxisArray
         @test length(result2) == 4
     end
@@ -166,7 +166,7 @@ end
     @testset "build_model_stage for historical analysis" begin
         # Test using build_model_stage with actual points (replaces buildmodelhistorical)
         test_data = DataFrame(
-            rider = [
+            rider=[
                 "Rider A",
                 "Rider B",
                 "Rider C",
@@ -177,7 +177,7 @@ end
                 "Rider H",
                 "Rider I",
             ],
-            riderkey = [
+            riderkey=[
                 "ridera",
                 "riderb",
                 "riderc",
@@ -188,9 +188,9 @@ end
                 "riderh",
                 "rideri",
             ],
-            points = [500, 400, 300, 250, 200, 150, 100, 50, 25],
-            cost = [20, 16, 14, 12, 10, 8, 6, 4, 2],
-            class = [
+            points=[500, 400, 300, 250, 200, 150, 100, 50, 25],
+            cost=[20, 16, 14, 12, 10, 8, 6, 4, 2],
+            class=[
                 "All rounder",
                 "All rounder",
                 "Climber",
@@ -203,7 +203,7 @@ end
             ],
         )
 
-        result = build_model_stage(test_data, 9, :points, :cost; totalcost = 100)
+        result = build_model_stage(test_data, 9, :points, :cost; totalcost=100)
 
         @test result !== nothing
         @test length(result) == nrow(test_data)
@@ -225,7 +225,7 @@ end
 
     @testset "minimise_cost_stage" begin
         test_data = DataFrame(
-            rider = [
+            rider=[
                 "Rider A",
                 "Rider B",
                 "Rider C",
@@ -236,7 +236,7 @@ end
                 "Rider H",
                 "Rider I",
             ],
-            riderkey = [
+            riderkey=[
                 "ridera",
                 "riderb",
                 "riderc",
@@ -247,9 +247,9 @@ end
                 "riderh",
                 "rideri",
             ],
-            points = [500, 400, 300, 250, 200, 150, 100, 50, 25],
-            cost = [20, 16, 14, 12, 10, 8, 6, 4, 2],
-            class = [
+            points=[500, 400, 300, 250, 200, 150, 100, 50, 25],
+            cost=[20, 16, 14, 12, 10, 8, 6, 4, 2],
+            class=[
                 "All rounder",
                 "All rounder",
                 "Climber",
@@ -264,7 +264,7 @@ end
 
         target_score = 1000
         result =
-            minimise_cost_stage(test_data, target_score, 9, :points, :cost; totalcost = 100)
+            minimise_cost_stage(test_data, target_score, 9, :points, :cost; totalcost=100)
 
         @test result !== nothing
         @test length(result) == nrow(test_data)
@@ -286,19 +286,19 @@ end
 
     @testset "Insufficient data returns nothing" begin
         insufficient_data = DataFrame(
-            rider = ["Rider A", "Rider B"],
-            riderkey = ["ridera", "riderb"],
-            points = [500, 400],
-            cost = [20, 16],
-            class = ["All rounder", "Climber"],
+            rider=["Rider A", "Rider B"],
+            riderkey=["ridera", "riderb"],
+            points=[500, 400],
+            cost=[20, 16],
+            class=["All rounder", "Climber"],
         )
 
         # build_model_stage returns nothing when constraints unsatisfiable
-        result1 = build_model_stage(insufficient_data, 9, :points, :cost; totalcost = 100)
+        result1 = build_model_stage(insufficient_data, 9, :points, :cost; totalcost=100)
         @test result1 === nothing
 
         result2 =
-            minimise_cost_stage(insufficient_data, 100, 9, :points, :cost; totalcost = 100)
+            minimise_cost_stage(insufficient_data, 100, 9, :points, :cost; totalcost=100)
         @test result2 === nothing
     end
 end
@@ -469,7 +469,7 @@ end
 
         for (func, args) in test_params
             try
-                func(args..., force_refresh = true)
+                func(args..., force_refresh=true)
             catch e
                 @test !isa(e, MethodError)
             end
@@ -480,7 +480,7 @@ end
 @testset "DataFrame Return Types" begin
     @testset "getpcsriderpts DataFrame Return" begin
         try
-            result = getpcsriderpts("test-rider", force_refresh = true)
+            result = getpcsriderpts("test-rider", force_refresh=true)
             @test result isa DataFrame
             expected_cols = ["rider", "oneday", "gc", "tt", "sprint", "climber", "riderkey"]
             if size(result, 1) > 0
@@ -508,16 +508,16 @@ end
 @testset "PCS Integration Tests" begin
     @testset "add_pcs_speciality_points!" begin
         rider_df = DataFrame(
-            riderkey = ["rider1", "rider2", "rider3", "rider4"],
-            class = ["allrounder", "sprinter", "climber", "unclassed"],
+            riderkey=["rider1", "rider2", "rider3", "rider4"],
+            class=["allrounder", "sprinter", "climber", "unclassed"],
         )
 
         pcs_df = DataFrame(
-            riderkey = ["rider1", "rider2", "rider3", "rider4"],
-            gc = [1000, 200, 1200, 500],
-            sprint = [100, 1500, 50, 300],
-            climber = [800, 100, 1800, 400],
-            oneday = [900, 1200, 1000, 600],
+            riderkey=["rider1", "rider2", "rider3", "rider4"],
+            gc=[1000, 200, 1200, 500],
+            sprint=[100, 1500, 50, 300],
+            climber=[800, 100, 1800, 400],
+            oneday=[900, 1200, 1000, 600],
         )
 
         vg_class_to_pcs_col = Dict(
@@ -536,14 +536,14 @@ end
         @test result_df.pcs_speciality_points[4] == 600
 
         rider_df_missing =
-            DataFrame(riderkey = ["rider1", "rider2"], class = ["allrounder", "sprinter"])
+            DataFrame(riderkey=["rider1", "rider2"], class=["allrounder", "sprinter"])
 
         pcs_df_missing = DataFrame(
-            riderkey = ["rider1"],
-            gc = [1000],
-            sprint = [100],
-            climber = [800],
-            oneday = [900],
+            riderkey=["rider1"],
+            gc=[1000],
+            sprint=[100],
+            climber=[800],
+            oneday=[900],
         )
 
         result_df_missing = add_pcs_speciality_points!(
@@ -596,7 +596,7 @@ end
     @test finish_points_for_position(0, SCORING_CAT1) == 0
 
     # Expected points from probability distributions
-    probs_certain_win = zeros(30);
+    probs_certain_win = zeros(30)
     probs_certain_win[1] = 1.0
     @test expected_finish_points(probs_certain_win, SCORING_CAT1) == 600.0
     @test expected_finish_points(zeros(30), SCORING_CAT1) == 0.0
@@ -641,32 +641,32 @@ end
     @test 0.0 < posterior.mean < 2.0
     @test posterior.variance < min(prior.variance, 1.0)
 
-    @test isapprox(bayesian_update(prior, 2.0, 0.01).mean, 2.0; atol = 0.1)
-    @test isapprox(bayesian_update(prior, 2.0, 1000.0).mean, 0.0; atol = 0.1)
+    @test isapprox(bayesian_update(prior, 2.0, 0.01).mean, 2.0; atol=0.1)
+    @test isapprox(bayesian_update(prior, 2.0, 1000.0).mean, 0.0; atol=0.1)
 
-    strong = estimate_rider_strength(pcs_score = 2.0)
-    weak = estimate_rider_strength(pcs_score = -2.0)
+    strong = estimate_rider_strength(pcs_score=2.0)
+    weak = estimate_rider_strength(pcs_score=-2.0)
     @test strong.mean > weak.mean
 
     precise = estimate_rider_strength(
-        pcs_score = 1.5,
-        vg_points = 1.5,
-        race_history = [1.5, 1.3],
-        race_history_years_ago = [1, 2],
+        pcs_score=1.5,
+        vg_points=1.5,
+        race_history=[1.5, 1.3],
+        race_history_years_ago=[1, 2],
     )
-    @test precise.variance < estimate_rider_strength(pcs_score = 1.5).variance
+    @test precise.variance < estimate_rider_strength(pcs_score=1.5).variance
 
     @test estimate_rider_strength(
-        pcs_score = 0.0,
-        odds_implied_prob = 0.1,
-        n_starters = 150,
+        pcs_score=0.0,
+        odds_implied_prob=0.1,
+        n_starters=150,
     ).mean > 0.0
 
     # Oracle predictions shift strength estimate
     @test estimate_rider_strength(
-        pcs_score = 0.0,
-        oracle_implied_prob = 0.1,
-        n_starters = 150,
+        pcs_score=0.0,
+        oracle_implied_prob=0.1,
+        n_starters=150,
     ).mean > 0.0
 
     @test position_to_strength(1, 150) >
@@ -677,7 +677,7 @@ end
 
 @testset "BayesianConfig" begin
     # Default config produces a valid result
-    default_result = estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5)
+    default_result = estimate_rider_strength(pcs_score=1.0, vg_points=0.5)
     @test default_result.mean > 0.0
 
     # Custom config with different variances produces different results
@@ -693,9 +693,9 @@ end
         2.0,   # odds_normalisation
     )
     tight_result = estimate_rider_strength(
-        pcs_score = 1.0,
-        vg_points = 0.5,
-        config = tight_config,
+        pcs_score=1.0,
+        vg_points=0.5,
+        config=tight_config,
     )
     # Tighter PCS variance means PCS score gets more weight, so the mean should
     # be closer to the PCS score (1.0) than with the default config
@@ -712,7 +712,7 @@ end
     strengths = [2.0, 1.0, 0.0, -1.0, -2.0]
     uncertainties = fill(0.5, 5)
 
-    positions = simulate_race(strengths, uncertainties; n_sims = 10000, rng = rng)
+    positions = simulate_race(strengths, uncertainties; n_sims=10000, rng=rng)
     @test size(positions) == (5, 10000)
     @test sort(positions[:, 1]) == 1:5
     @test count(positions[1, :] .== 1) > count(positions[5, :] .== 1)
@@ -722,12 +722,12 @@ end
     pos2 = simulate_race(
         [3.0, 1.0, 0.0, -1.0, -3.0],
         uncertainties;
-        n_sims = 10000,
-        rng = rng2,
+        n_sims=10000,
+        rng=rng2,
     )
-    probs = position_probabilities(pos2; max_position = 5)
+    probs = position_probabilities(pos2; max_position=5)
     @test size(probs) == (5, 5)
-    @test all(sum(probs, dims = 2) .> 0.99)
+    @test all(sum(probs, dims=2) .> 0.99)
     @test probs[1, 1] > probs[5, 1]
 
     teams = ["TeamA", "TeamA", "TeamB", "TeamB", "TeamC"]
@@ -735,8 +735,8 @@ end
     pos3 = simulate_race(
         [3.0, 1.0, 0.0, -1.0, -3.0],
         uncertainties;
-        n_sims = 10000,
-        rng = rng3,
+        n_sims=10000,
+        rng=rng3,
     )
     evg = expected_vg_points(pos3, teams, SCORING_CAT2)
     @test evg[1] > evg[5] && all(evg .>= 0)
@@ -745,15 +745,15 @@ end
 
 @testset "predict_expected_points end-to-end" begin
     rider_df = DataFrame(
-        rider = ["Strong", "Medium", "Weak", "Also Weak", "Very Weak", "Last"],
-        team = ["A", "A", "B", "B", "C", "C"],
-        cost = [20, 15, 10, 8, 6, 4],
-        points = [500.0, 300.0, 150.0, 100.0, 50.0, 20.0],
-        riderkey = ["strong", "medium", "weak", "alsoweak", "veryweak", "last"],
-        oneday = [2000, 1200, 800, 500, 200, 50],
+        rider=["Strong", "Medium", "Weak", "Also Weak", "Very Weak", "Last"],
+        team=["A", "A", "B", "B", "C", "C"],
+        cost=[20, 15, 10, 8, 6, 4],
+        points=[500.0, 300.0, 150.0, 100.0, 50.0, 20.0],
+        riderkey=["strong", "medium", "weak", "alsoweak", "veryweak", "last"],
+        oneday=[2000, 1200, 800, 500, 200, 50],
     )
 
-    result = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000)
+    result = predict_expected_points(rider_df, SCORING_CAT2; n_sims=5000)
 
     for col in [
         :expected_vg_points,
@@ -772,15 +772,15 @@ end
 
     # Race history reduces uncertainty
     history_df = DataFrame(
-        riderkey = ["strong", "strong", "medium"],
-        position = [1, 3, 10],
-        year = [2024, 2023, 2024],
+        riderkey=["strong", "strong", "medium"],
+        position=[1, 3, 10],
+        year=[2024, 2023, 2024],
     )
     result_hist = predict_expected_points(
         rider_df,
         SCORING_CAT2;
-        race_history_df = history_df,
-        n_sims = 5000,
+        race_history_df=history_df,
+        n_sims=5000,
     )
     @test result_hist.uncertainty[1] <= result.uncertainty[1]
 
@@ -796,8 +796,8 @@ end
     result_stage = predict_expected_points(
         rider_df_stage,
         SCORING_STAGE;
-        n_sims = 5000,
-        race_type = :stage,
+        n_sims=5000,
+        race_type=:stage,
     )
 
     for col in [:expected_vg_points, :strength, :uncertainty]
@@ -810,13 +810,13 @@ end
 
 @testset "Stage race PCS blending" begin
     # Test compute_stage_race_pcs_score with a mock row
-    row = (gc = 1000.0, tt = 500.0, climber = 800.0, sprint = 200.0, oneday = 600.0)
+    row = (gc=1000.0, tt=500.0, climber=800.0, sprint=200.0, oneday=600.0)
 
     # All-rounder: 0.5*gc + 0.25*tt + 0.25*climber = 500 + 125 + 200 = 825
-    @test isapprox(compute_stage_race_pcs_score(row, "allrounder"), 825.0; atol = 0.1)
+    @test isapprox(compute_stage_race_pcs_score(row, "allrounder"), 825.0; atol=0.1)
 
     # Climber: 0.15*gc + 0.15*tt + 0.7*climber = 150 + 75 + 560 = 785
-    @test isapprox(compute_stage_race_pcs_score(row, "climber"), 785.0; atol = 0.1)
+    @test isapprox(compute_stage_race_pcs_score(row, "climber"), 785.0; atol=0.1)
 
     # Unknown class defaults to unclassed weights
     @test compute_stage_race_pcs_score(row, "unknown") ==
@@ -904,16 +904,16 @@ end
 @testset "Variance penalties in strength estimation" begin
     # Similar-race history (with penalty) should be less precise than exact-race history
     exact = estimate_rider_strength(
-        pcs_score = 0.0,
-        race_history = [1.5],
-        race_history_years_ago = [1],
-        race_history_variance_penalties = [0.0],
+        pcs_score=0.0,
+        race_history=[1.5],
+        race_history_years_ago=[1],
+        race_history_variance_penalties=[0.0],
     )
     similar = estimate_rider_strength(
-        pcs_score = 0.0,
-        race_history = [1.5],
-        race_history_years_ago = [1],
-        race_history_variance_penalties = [1.0],
+        pcs_score=0.0,
+        race_history=[1.5],
+        race_history_years_ago=[1],
+        race_history_variance_penalties=[1.0],
     )
     # Both should shift the mean upward
     @test exact.mean > 0.0
@@ -925,35 +925,35 @@ end
 
     # Empty penalties vector should work (defaults to zero)
     no_penalty = estimate_rider_strength(
-        pcs_score = 0.0,
-        race_history = [1.5],
-        race_history_years_ago = [1],
+        pcs_score=0.0,
+        race_history=[1.5],
+        race_history_years_ago=[1],
     )
-    @test isapprox(no_penalty.mean, exact.mean; atol = 1e-10)
+    @test isapprox(no_penalty.mean, exact.mean; atol=1e-10)
 end
 
 @testset "VG race history in strength estimation" begin
     # VG race history should shift strength estimate
     with_vg = estimate_rider_strength(
-        pcs_score = 0.0,
-        vg_race_history = [2.0, 1.5],
-        vg_race_history_years_ago = [1, 2],
+        pcs_score=0.0,
+        vg_race_history=[2.0, 1.5],
+        vg_race_history_years_ago=[1, 2],
     )
-    without_vg = estimate_rider_strength(pcs_score = 0.0)
+    without_vg = estimate_rider_strength(pcs_score=0.0)
 
     @test with_vg.mean > without_vg.mean
     @test with_vg.variance < without_vg.variance
 
     # More recent VG history should have more influence
     recent = estimate_rider_strength(
-        pcs_score = 0.0,
-        vg_race_history = [2.0],
-        vg_race_history_years_ago = [1],
+        pcs_score=0.0,
+        vg_race_history=[2.0],
+        vg_race_history_years_ago=[1],
     )
     old = estimate_rider_strength(
-        pcs_score = 0.0,
-        vg_race_history = [2.0],
-        vg_race_history_years_ago = [5],
+        pcs_score=0.0,
+        vg_race_history=[2.0],
+        vg_race_history_years_ago=[5],
     )
     @test recent.mean > old.mean  # Recent history pulls mean more
     @test recent.variance < old.variance  # Recent history is more precise
@@ -961,41 +961,41 @@ end
 
 @testset "predict_expected_points with variance_penalty and vg_history" begin
     rider_df = DataFrame(
-        rider = ["Strong", "Medium", "Weak", "Also Weak", "Very Weak", "Last"],
-        team = ["A", "A", "B", "B", "C", "C"],
-        cost = [20, 15, 10, 8, 6, 4],
-        points = [500.0, 300.0, 150.0, 100.0, 50.0, 20.0],
-        riderkey = ["strong", "medium", "weak", "alsoweak", "veryweak", "last"],
-        oneday = [2000, 1200, 800, 500, 200, 50],
+        rider=["Strong", "Medium", "Weak", "Also Weak", "Very Weak", "Last"],
+        team=["A", "A", "B", "B", "C", "C"],
+        cost=[20, 15, 10, 8, 6, 4],
+        points=[500.0, 300.0, 150.0, 100.0, 50.0, 20.0],
+        riderkey=["strong", "medium", "weak", "alsoweak", "veryweak", "last"],
+        oneday=[2000, 1200, 800, 500, 200, 50],
     )
 
     # Test with variance_penalty column in race history
     history_df = DataFrame(
-        riderkey = ["strong", "strong", "medium", "medium"],
-        position = [1, 5, 10, 8],
-        year = [2024, 2023, 2024, 2023],
-        variance_penalty = [0.0, 0.0, 1.0, 1.0],  # medium's history is from similar races
+        riderkey=["strong", "strong", "medium", "medium"],
+        position=[1, 5, 10, 8],
+        year=[2024, 2023, 2024, 2023],
+        variance_penalty=[0.0, 0.0, 1.0, 1.0],  # medium's history is from similar races
     )
     result = predict_expected_points(
         rider_df,
         SCORING_CAT2;
-        race_history_df = history_df,
-        n_sims = 5000,
+        race_history_df=history_df,
+        n_sims=5000,
     )
     @test :expected_vg_points in propertynames(result)
     @test all(result.expected_vg_points .>= 0)
 
     # Test with VG history
     vg_hist = DataFrame(
-        riderkey = ["strong", "medium", "weak", "strong", "medium", "weak"],
-        score = [500.0, 200.0, 50.0, 450.0, 180.0, 40.0],
-        year = [2024, 2024, 2024, 2023, 2023, 2023],
+        riderkey=["strong", "medium", "weak", "strong", "medium", "weak"],
+        score=[500.0, 200.0, 50.0, 450.0, 180.0, 40.0],
+        year=[2024, 2024, 2024, 2023, 2023, 2023],
     )
     result_vg = predict_expected_points(
         rider_df,
         SCORING_CAT2;
-        vg_history_df = vg_hist,
-        n_sims = 5000,
+        vg_history_df=vg_hist,
+        n_sims=5000,
     )
     @test :expected_vg_points in propertynames(result_vg)
     @test all(result_vg.expected_vg_points .>= 0)
@@ -1004,17 +1004,17 @@ end
 @testset "predict + build_model_oneday integration" begin
     rng = Random.MersenneTwister(42)
     rider_df = DataFrame(
-        rider = ["R$i" for i in 1:12],
-        team = repeat(["A", "B", "C", "D"], 3),
-        cost = [20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2],
-        points = Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 60, 40, 20]),
-        riderkey = ["r$i" for i in 1:12],
-        oneday = [2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 150, 100, 50],
+        rider=["R$i" for i in 1:12],
+        team=repeat(["A", "B", "C", "D"], 3),
+        cost=[20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2],
+        points=Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 60, 40, 20]),
+        riderkey=["r$i" for i in 1:12],
+        oneday=[2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 150, 100, 50],
     )
-    predicted = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, rng = rng)
+    predicted = predict_expected_points(rider_df, SCORING_CAT2; n_sims=5000, rng=rng)
     @test :expected_vg_points in propertynames(predicted)
 
-    sol = build_model_oneday(predicted, 6, :expected_vg_points, :cost; totalcost = 100)
+    sol = build_model_oneday(predicted, 6, :expected_vg_points, :cost; totalcost=100)
     @test sol !== nothing
 
     chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
@@ -1025,26 +1025,26 @@ end
 @testset "predict + build_model_stage integration" begin
     rng = Random.MersenneTwister(42)
     rider_df = DataFrame(
-        rider = ["R$i" for i in 1:20],
-        team = repeat(["A", "B", "C", "D"], 5),
-        cost = repeat([15, 12, 10, 8, 5], 4),
-        points = Float64.(repeat([400, 300, 200, 100, 50], 4)),
-        riderkey = ["r$i" for i in 1:20],
-        classraw = repeat(["All Rounder", "All Rounder", "Climber", "Climber",
-                           "Climber", "Sprinter", "Sprinter", "Unclassed",
-                           "Unclassed", "Unclassed"], 2),
-        gc = Float64.(repeat([1500, 1200, 800, 600, 400], 4)),
-        tt = Float64.(repeat([1000, 800, 600, 400, 200], 4)),
-        climber = Float64.(repeat([500, 400, 1200, 1000, 800], 4)),
-        sprint = Float64.(repeat([200, 150, 100, 500, 300], 4)),
-        oneday = Float64.(repeat([800, 600, 400, 300, 200], 4)),
+        rider=["R$i" for i in 1:20],
+        team=repeat(["A", "B", "C", "D"], 5),
+        cost=repeat([15, 12, 10, 8, 5], 4),
+        points=Float64.(repeat([400, 300, 200, 100, 50], 4)),
+        riderkey=["r$i" for i in 1:20],
+        classraw=repeat(["All Rounder", "All Rounder", "Climber", "Climber",
+                "Climber", "Sprinter", "Sprinter", "Unclassed",
+                "Unclassed", "Unclassed"], 2),
+        gc=Float64.(repeat([1500, 1200, 800, 600, 400], 4)),
+        tt=Float64.(repeat([1000, 800, 600, 400, 200], 4)),
+        climber=Float64.(repeat([500, 400, 1200, 1000, 800], 4)),
+        sprint=Float64.(repeat([200, 150, 100, 500, 300], 4)),
+        oneday=Float64.(repeat([800, 600, 400, 300, 200], 4)),
     )
     predicted = predict_expected_points(
-        rider_df, SCORING_STAGE; n_sims = 5000, race_type = :stage, rng = rng,
+        rider_df, SCORING_STAGE; n_sims=5000, race_type=:stage, rng=rng,
     )
     @test :expected_vg_points in propertynames(predicted)
 
-    sol = build_model_stage(predicted, 9, :expected_vg_points, :cost; totalcost = 100)
+    sol = build_model_stage(predicted, 9, :expected_vg_points, :cost; totalcost=100)
     @test sol !== nothing
 
     chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
@@ -1058,11 +1058,169 @@ end
     # finish higher and thus appear in more front-group sectors
     strengths = [2.0, 0.0, -2.0]
     uncertainties = [0.5, 0.5, 0.5]
-    bp = estimate_breakaway_points(strengths, uncertainties, SCORING_CAT2; n_sims = 10000, rng = rng)
+    bp = estimate_breakaway_points(strengths, uncertainties, SCORING_CAT2; n_sims=10000, rng=rng)
     @test length(bp) == 3
     @test all(bp .>= 0)
     # Mid-pack riders tend to get more breakaway points (they fall in the breakaway position range)
     # but the exact ordering depends on the heuristic ranges vs strength
     # Just verify they're reasonable non-negative values
     @test maximum(bp) < 100  # sanity check
+end
+
+# ---------------------------------------------------------------------------
+# Backtesting framework tests
+# ---------------------------------------------------------------------------
+
+@testset "Backtesting Framework" begin
+    @testset "Functions are defined" begin
+        @test isdefined(Velogames, :BacktestRace)
+        @test isdefined(Velogames, :BacktestResult)
+        @test isdefined(Velogames, :backtest_race)
+        @test isdefined(Velogames, :backtest_season)
+        @test isdefined(Velogames, :summarise_backtest)
+        @test isdefined(Velogames, :ablation_study)
+        @test isdefined(Velogames, :tune_hyperparameters)
+        @test isdefined(Velogames, :build_race_catalogue)
+    end
+
+    @testset "BacktestRace construction" begin
+        race = BacktestRace("Test Race", 2024, "test-slug", 2)
+        @test race.name == "Test Race"
+        @test race.year == 2024
+        @test race.pcs_slug == "test-slug"
+        @test race.category == 2
+        @test race.history_years == 5  # default
+
+        race2 = BacktestRace("Test Race", 2024, "test-slug", 1, 3)
+        @test race2.history_years == 3
+    end
+
+    @testset "spearman_correlation" begin
+        # Perfect positive correlation
+        @test Velogames.spearman_correlation([1.0, 2.0, 3.0, 4.0, 5.0], [1.0, 2.0, 3.0, 4.0, 5.0]) ≈ 1.0
+
+        # Perfect negative correlation
+        @test Velogames.spearman_correlation([1.0, 2.0, 3.0, 4.0, 5.0], [5.0, 4.0, 3.0, 2.0, 1.0]) ≈ -1.0
+
+        # Zero correlation (orthogonal ranks)
+        rho = Velogames.spearman_correlation([1.0, 2.0, 3.0, 4.0, 5.0], [3.0, 1.0, 5.0, 2.0, 4.0])
+        @test abs(rho) < 0.5  # not exactly zero but low
+
+        # Too few elements
+        @test isnan(Velogames.spearman_correlation([1.0, 2.0], [2.0, 1.0]))
+
+        # Handles ties
+        rho_ties = Velogames.spearman_correlation([1.0, 1.0, 3.0, 4.0, 5.0], [1.0, 2.0, 3.0, 4.0, 5.0])
+        @test !isnan(rho_ties)
+        @test rho_ties > 0.8  # should still be highly correlated
+    end
+
+    @testset "top_n_overlap" begin
+        # predicted_values: higher = better; actual_positions: lower = better
+        predicted = [100.0, 80.0, 60.0, 40.0, 20.0]
+        actual_pos = [1, 2, 3, 4, 5]
+
+        # Perfect prediction — top 3 predicted match top 3 actual
+        @test Velogames.top_n_overlap(predicted, actual_pos, 3) == 3
+        @test Velogames.top_n_overlap(predicted, actual_pos, 5) == 5
+
+        # Scrambled — top 3 predicted are indices 1,2,3 but actual top 3 are 5,4,3
+        predicted2 = [100.0, 80.0, 60.0, 40.0, 20.0]
+        actual_pos2 = [5, 4, 3, 2, 1]
+        @test Velogames.top_n_overlap(predicted2, actual_pos2, 3) == 1  # only index 3 overlaps
+    end
+
+    @testset "mean_abs_rank_error" begin
+        # Perfect prediction
+        predicted = [100.0, 80.0, 60.0, 40.0, 20.0]
+        actual_pos = [1, 2, 3, 4, 5]
+        @test Velogames.mean_abs_rank_error(predicted, actual_pos) ≈ 0.0
+
+        # All off by 1
+        actual_pos2 = [2, 1, 4, 3, 5]
+        mae = Velogames.mean_abs_rank_error(predicted, actual_pos2)
+        @test mae > 0
+        @test mae < 2.0  # should be small-ish
+    end
+
+    @testset "build_race_catalogue" begin
+        catalogue = build_race_catalogue([2024])
+        @test length(catalogue) == length(SUPERCLASICO_RACES_2025)
+        @test all(r -> r.year == 2024, catalogue)
+        @test all(r -> r.history_years == 5, catalogue)
+
+        # Multi-year
+        catalogue2 = build_race_catalogue([2023, 2024])
+        @test length(catalogue2) == 2 * length(SUPERCLASICO_RACES_2025)
+
+        # Custom history years
+        catalogue3 = build_race_catalogue([2024]; history_years=3)
+        @test all(r -> r.history_years == 3, catalogue3)
+    end
+
+    @testset "summarise_backtest with empty results" begin
+        df = summarise_backtest(BacktestResult[])
+        @test nrow(df) == 0
+    end
+
+    @testset "summarise_backtest with results" begin
+        results = [
+            BacktestResult(
+                BacktestRace("Race A", 2024, "race-a", 2), [:pcs], 50,
+                0.6, 3, 7, 15.2, 0.8, 100.0, 125.0,
+            ),
+            BacktestResult(
+                BacktestRace("Race B", 2024, "race-b", 1), [:pcs], 40,
+                0.7, 4, 8, 12.0, 0.9, 110.0, 122.0,
+            ),
+        ]
+        df = summarise_backtest(results)
+        @test nrow(df) == 4  # 2 races + mean + median
+        @test "Race A" in df.race
+        @test "— MEAN —" in df.race
+    end
+
+    @testset "ABLATION_SETS is well-formed" begin
+        @test length(ABLATION_SETS) == 7
+        for (label, sigs) in ABLATION_SETS
+            @test label isa String
+            @test sigs isa Vector{Symbol}
+            @test !isempty(sigs)
+        end
+    end
+
+    @testset "PARAM_BOUNDS are valid" begin
+        for field in fieldnames(typeof(PARAM_BOUNDS))
+            lo, hi = getfield(PARAM_BOUNDS, field)
+            @test lo < hi
+            @test lo > 0
+        end
+    end
+
+    @testset "_average_ranks" begin
+        # No ties
+        ranks = Velogames._average_ranks([30.0, 10.0, 20.0])
+        @test ranks == [3.0, 1.0, 2.0]
+
+        # Ties: two values tied for positions 1-2 → average rank 1.5
+        ranks2 = Velogames._average_ranks([10.0, 10.0, 20.0])
+        @test ranks2[1] == 1.5
+        @test ranks2[2] == 1.5
+        @test ranks2[3] == 3.0
+    end
+
+    @testset "_random_bayesian_config produces valid configs" begin
+        rng = Random.MersenneTwister(42)
+        config = Velogames._random_bayesian_config(rng)
+        @test config.pcs_variance >= PARAM_BOUNDS.pcs_variance[1]
+        @test config.pcs_variance <= PARAM_BOUNDS.pcs_variance[2]
+        @test config.vg_variance >= PARAM_BOUNDS.vg_variance[1]
+        @test config.vg_variance <= PARAM_BOUNDS.vg_variance[2]
+        @test config.hist_base_variance >= PARAM_BOUNDS.hist_base_variance[1]
+        @test config.hist_base_variance <= PARAM_BOUNDS.hist_base_variance[2]
+        # Odds/oracle/normalisation should be defaults
+        @test config.odds_variance == DEFAULT_BAYESIAN_CONFIG.odds_variance
+        @test config.oracle_variance == DEFAULT_BAYESIAN_CONFIG.oracle_variance
+        @test config.odds_normalisation == DEFAULT_BAYESIAN_CONFIG.odds_normalisation
+    end
 end

@@ -73,20 +73,9 @@ $$E[\text{VG points}] = E[\text{finish}] + E[\text{assists}] + E[\text{breakaway
 ### Recommended future sources
 
 - **PCS deeper data** - rider recent results (filterable by season/type), race climb profiles (length, gradient, elevation), profile difficulty icons (p0-p5)
-- **FirstCycling** (firstcycling.com) - backup/cross-validation. Has unofficial Python API wrapper (github.com/baronet2/FirstCyclingAPI) and MCP server (github.com/r-huijts/firstcycling-mcp)
 - **OpenWeatherMap** (free tier, 1000 calls/day) - race-day weather for cobbled classics
 
-### Not recommended
-
-- Strava/training data - not publicly available at rider level
-- Paid APIs - out of scope
-- Social media signals - too noisy
-
 ## Known issues
-
-### ~~Broken odds scraper~~ (resolved)
-
-`getodds()` now uses the Betfair Exchange API (JSON-RPC) instead of fragile CSS selectors. Users pass a Betfair market ID; the pipeline authenticates via environment variables and fetches structured odds data. The pipeline continues to handle missing odds gracefully (most races have no Betfair market).
 
 ### Team dynamics / domestique problem
 
@@ -152,7 +141,7 @@ For each past Superclassico race:
 - Calibration plots: predicted win probability vs observed win frequency
 - Expected points of predicted team as a percentile of the actual leaderboard
 
-### Phase 3: Course profile matching (high impact)
+### Phase 3: Course profile matching (high impact) (part done)
 
 Academic evidence strongly supports terrain-aware prediction. Kholkine et al. (2021) found that for Liege-Bastogne-Liege, results from Fleche Wallonne (a similar hilly Ardennes race) were more predictive than overall PCS performance. The VeloRost paper (Rize, Saldanha & Moskovitch, 2025) achieved its best results partly by clustering races by elevation and surface type before applying TrueSkill ratings, outperforming approaches that used a single global skill rating.
 
