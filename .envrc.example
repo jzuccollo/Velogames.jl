@@ -1,0 +1,6 @@
+# Betfair Exchange API credentials for odds integration
+# Copy this file to .envrc and fill in your credentials
+# Then run `direnv allow` to load them
+export BETFAIR_USERNAME="your_username"
+export BETFAIR_PASSWORD="your_password"
+export BETFAIR_APP_KEY="your_app_key"

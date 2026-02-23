@@ -24,6 +24,24 @@ struct BayesianPosterior
 end
 
 """
+    StrengthEstimate
+
+Extended result of `estimate_rider_strength`: the final posterior plus the
+mean shift contributed by each signal source. Each `shift_*` field records
+how much that signal moved the posterior mean relative to the mean before
+that update step.
+"""
+struct StrengthEstimate
+    mean::Float64
+    variance::Float64
+    shift_vg::Float64
+    shift_history::Float64
+    shift_vg_history::Float64
+    shift_oracle::Float64
+    shift_odds::Float64
+end
+
+"""
     BayesianConfig
 
 Hyperparameters for Bayesian rider strength estimation.
@@ -136,14 +154,17 @@ function estimate_rider_strength(;
 
     # --- Update with VG season points ---
     # VG points reflect current season form. Moderate precision.
+    mean_before = posterior.mean
     if vg_points != 0.0
         posterior = bayesian_update(posterior, vg_points, config.vg_variance)
     end
+    shift_vg = posterior.mean - mean_before
 
     # --- Update with PCS race-specific history ---
     # Each past result in this or similar races is a strong signal.
     # More recent results are more informative (lower variance).
     # Similar-race history gets an additional variance penalty.
+    mean_before = posterior.mean
     if length(race_history) != length(race_history_years_ago)
         @warn "race_history ($(length(race_history))) and race_history_years_ago ($(length(race_history_years_ago))) have different lengths; using pairwise minimum"
     end
@@ -157,10 +178,12 @@ function estimate_rider_strength(;
         hist_var = config.hist_base_variance + config.hist_decay_rate * years_ago + penalty
         posterior = bayesian_update(posterior, hist_strength, hist_var)
     end
+    shift_history = posterior.mean - mean_before
 
     # --- Update with VG race history ---
     # Actual VG points from past editions, z-scored per year. Directly measures
     # the quantity we're optimising, so a strong signal.
+    mean_before = posterior.mean
     if length(vg_race_history) != length(vg_race_history_years_ago)
         @warn "vg_race_history ($(length(vg_race_history))) and vg_race_history_years_ago ($(length(vg_race_history_years_ago))) have different lengths"
     end
@@ -168,24 +191,32 @@ function estimate_rider_strength(;
         vg_var = config.vg_hist_base_variance + config.vg_hist_decay_rate * years_ago
         posterior = bayesian_update(posterior, vg_strength, vg_var)
     end
+    shift_vg_history = posterior.mean - mean_before
 
     # --- Update with Cycling Oracle predictions ---
     # Algorithmic win probabilities. Less precise than market odds but covers more races.
+    mean_before = posterior.mean
     if oracle_implied_prob > 0.0
         baseline_prob = 1.0 / n_starters
         oracle_strength = log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, oracle_strength, config.oracle_variance)
     end
+    shift_oracle = posterior.mean - mean_before
 
     # --- Update with betting odds ---
     # Odds-implied probability is the market's posterior. Very precise when available.
+    mean_before = posterior.mean
     if odds_implied_prob > 0.0
         baseline_prob = 1.0 / n_starters
         odds_strength = log(odds_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, odds_strength, config.odds_variance)
     end
+    shift_odds = posterior.mean - mean_before
 
-    return posterior
+    return StrengthEstimate(
+        posterior.mean, posterior.variance,
+        shift_vg, shift_history, shift_vg_history, shift_oracle, shift_odds,
+    )
 end
 
 """
@@ -623,6 +654,11 @@ function predict_expected_points(
     # --- Estimate strength for each rider ---
     strengths = Vector{Float64}(undef, n_riders)
     uncertainties = Vector{Float64}(undef, n_riders)
+    shifts_vg = Vector{Float64}(undef, n_riders)
+    shifts_history = Vector{Float64}(undef, n_riders)
+    shifts_vg_history = Vector{Float64}(undef, n_riders)
+    shifts_oracle = Vector{Float64}(undef, n_riders)
+    shifts_odds = Vector{Float64}(undef, n_riders)
 
     for i = 1:n_riders
         key = df.riderkey[i]
@@ -639,7 +675,7 @@ function predict_expected_points(
         odds_prob = get(odds_lookup, key, 0.0)
         oracle_prob = get(oracle_lookup, key, 0.0)
 
-        posterior = estimate_rider_strength(
+        est = estimate_rider_strength(
             pcs_score = pcs_z[i],
             race_history = hist_strengths,
             race_history_years_ago = hist_years,
@@ -653,8 +689,13 @@ function predict_expected_points(
             config = bayesian_config,
         )
 
-        strengths[i] = posterior.mean
-        uncertainties[i] = sqrt(posterior.variance)
+        strengths[i] = est.mean
+        uncertainties[i] = sqrt(est.variance)
+        shifts_vg[i] = est.shift_vg
+        shifts_history[i] = est.shift_history
+        shifts_vg_history[i] = est.shift_vg_history
+        shifts_oracle[i] = est.shift_oracle
+        shifts_odds[i] = est.shift_odds
     end
 
     # --- Monte Carlo simulation ---
@@ -694,6 +735,20 @@ function predict_expected_points(
     df[!, :expected_finish_pts] = round.(finish_pts, digits = 1)
     df[!, :expected_assist_pts] = round.(assist_pts, digits = 1)
     df[!, :expected_breakaway_pts] = round.(breakaway, digits = 1)
+
+    # --- Signal availability flags (for reporting data source coverage) ---
+    df[!, :has_pcs] = [pcs_z[i] != 0.0 for i = 1:n_riders]
+    df[!, :has_race_history] = [haskey(history_lookup, df.riderkey[i]) for i = 1:n_riders]
+    df[!, :has_vg_history] = [haskey(vg_history_lookup, df.riderkey[i]) for i = 1:n_riders]
+    df[!, :has_odds] = [haskey(odds_lookup, df.riderkey[i]) for i = 1:n_riders]
+    df[!, :has_oracle] = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
+
+    # --- Per-signal mean shifts (for diagnostics) ---
+    df[!, :shift_vg] = round.(shifts_vg, digits = 3)
+    df[!, :shift_history] = round.(shifts_history, digits = 3)
+    df[!, :shift_vg_history] = round.(shifts_vg_history, digits = 3)
+    df[!, :shift_oracle] = round.(shifts_oracle, digits = 3)
+    df[!, :shift_odds] = round.(shifts_odds, digits = 3)
 
     return df
 end

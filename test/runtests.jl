@@ -863,6 +863,7 @@ end
         :expected_finish_points,
         :expected_assist_points,
         :BayesianPosterior,
+        :StrengthEstimate,
         :bayesian_update,
         :estimate_rider_strength,
         :simulate_race,

@@ -84,6 +84,7 @@ export ScoringTable,
 
 # Export simulation and prediction
 export BayesianPosterior,
+    StrengthEstimate,
     BayesianConfig,
     DEFAULT_BAYESIAN_CONFIG,
     bayesian_update,
