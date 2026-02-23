@@ -21,6 +21,21 @@ function clean_team_names!(df::DataFrame, team_columns::Vector{Symbol})
 end
 
 """
+    round_numeric_columns!(df; digits=1)
+
+Round all numeric columns in the DataFrame to the given number of digits.
+Returns the modified DataFrame for chaining.
+"""
+function round_numeric_columns!(df::DataFrame; digits::Int = 1)
+    for col in names(df)
+        if eltype(df[!, col]) <: Union{Missing,Number}
+            df[!, col] = round.(df[!, col]; digits = digits)
+        end
+    end
+    return df
+end
+
+"""
     format_display_table(df; columns, rename_map, round_to_int, round_digits, team_columns, sort_by)
 
 Return a DataFrame tailored for report display. The function selects `columns`,

@@ -999,3 +999,69 @@ end
     @test :expected_vg_points in propertynames(result_vg)
     @test all(result_vg.expected_vg_points .>= 0)
 end
+
+@testset "predict + build_model_oneday integration" begin
+    rng = Random.MersenneTwister(42)
+    rider_df = DataFrame(
+        rider = ["R$i" for i in 1:12],
+        team = repeat(["A", "B", "C", "D"], 3),
+        cost = [20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2],
+        points = Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 60, 40, 20]),
+        riderkey = ["r$i" for i in 1:12],
+        oneday = [2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 150, 100, 50],
+    )
+    predicted = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, rng = rng)
+    @test :expected_vg_points in propertynames(predicted)
+
+    sol = build_model_oneday(predicted, 6, :expected_vg_points, :cost; totalcost = 100)
+    @test sol !== nothing
+
+    chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
+    @test nrow(chosen) == 6
+    @test sum(chosen.cost) <= 100
+end
+
+@testset "predict + build_model_stage integration" begin
+    rng = Random.MersenneTwister(42)
+    rider_df = DataFrame(
+        rider = ["R$i" for i in 1:20],
+        team = repeat(["A", "B", "C", "D"], 5),
+        cost = repeat([15, 12, 10, 8, 5], 4),
+        points = Float64.(repeat([400, 300, 200, 100, 50], 4)),
+        riderkey = ["r$i" for i in 1:20],
+        classraw = repeat(["All Rounder", "All Rounder", "Climber", "Climber",
+                           "Climber", "Sprinter", "Sprinter", "Unclassed",
+                           "Unclassed", "Unclassed"], 2),
+        gc = Float64.(repeat([1500, 1200, 800, 600, 400], 4)),
+        tt = Float64.(repeat([1000, 800, 600, 400, 200], 4)),
+        climber = Float64.(repeat([500, 400, 1200, 1000, 800], 4)),
+        sprint = Float64.(repeat([200, 150, 100, 500, 300], 4)),
+        oneday = Float64.(repeat([800, 600, 400, 300, 200], 4)),
+    )
+    predicted = predict_expected_points(
+        rider_df, SCORING_STAGE; n_sims = 5000, race_type = :stage, rng = rng,
+    )
+    @test :expected_vg_points in propertynames(predicted)
+
+    sol = build_model_stage(predicted, 9, :expected_vg_points, :cost; totalcost = 100)
+    @test sol !== nothing
+
+    chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
+    @test nrow(chosen) == 9
+    @test sum(chosen.cost) <= 100
+end
+
+@testset "estimate_breakaway_points" begin
+    rng = Random.MersenneTwister(42)
+    # Stronger riders should get more breakaway points on average because they
+    # finish higher and thus appear in more front-group sectors
+    strengths = [2.0, 0.0, -2.0]
+    uncertainties = [0.5, 0.5, 0.5]
+    bp = estimate_breakaway_points(strengths, uncertainties, SCORING_CAT2; n_sims = 10000, rng = rng)
+    @test length(bp) == 3
+    @test all(bp .>= 0)
+    # Mid-pack riders tend to get more breakaway points (they fall in the breakaway position range)
+    # but the exact ordering depends on the heuristic ranges vs strength
+    # Just verify they're reasonable non-negative values
+    @test maximum(bp) < 100  # sanity check
+end

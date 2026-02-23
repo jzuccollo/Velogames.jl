@@ -102,17 +102,8 @@ if @isdefined(chosenteam) && nrow(chosenteam) > 0
 
     team_display = chosenteam[:, display_cols]
 
-    # Round numeric columns for display
-    for col in names(team_display)
-        if eltype(team_display[!, col]) <: Union{Missing,Number}
-            team_display[!, col] = round.(team_display[!, col], digits=1)
-        end
-    end
-
-    # Clean team names
-    if hasproperty(team_display, :team)
-        team_display = transform(team_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
-    end
+    round_numeric_columns!(team_display)
+    clean_team_names!(team_display, [:team])
 
     display(markdown_table(sort(team_display, :expected_vg_points, rev=true)))
 else
@@ -146,16 +137,8 @@ if @isdefined(predicted) && nrow(predicted) > 0
     top_n = min(30, nrow(ranking))
     ranking_display = ranking[1:top_n, :]
 
-    # Round for display
-    for col in names(ranking_display)
-        if eltype(ranking_display[!, col]) <: Union{Missing,Number}
-            ranking_display[!, col] = round.(ranking_display[!, col], digits=1)
-        end
-    end
-
-    if hasproperty(ranking_display, :team)
-        ranking_display = transform(ranking_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
-    end
+    round_numeric_columns!(ranking_display)
+    clean_team_names!(ranking_display, [:team])
 
     display(markdown_table(ranking_display))
 end
@@ -181,14 +164,8 @@ if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
         println("\nTop Value Riders Not Selected:")
         top_value = sort(not_chosen, :value, rev=true)[1:min(10, nrow(not_chosen)), :]
         value_display = top_value[:, [:rider, :team, cost_col, :expected_vg_points, :value]]
-        for col in names(value_display)
-            if eltype(value_display[!, col]) <: Union{Missing,Number}
-                value_display[!, col] = round.(value_display[!, col], digits=1)
-            end
-        end
-        if hasproperty(value_display, :team)
-            value_display = transform(value_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
-        end
+        round_numeric_columns!(value_display)
+        clean_team_names!(value_display, [:team])
         display(markdown_table(value_display))
 
         # High-upside picks (high strength, high uncertainty)
@@ -196,14 +173,8 @@ if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
         not_chosen[!, :upside] = not_chosen.strength .+ not_chosen.uncertainty
         upside = sort(not_chosen, :upside, rev=true)[1:min(5, nrow(not_chosen)), :]
         upside_display = upside[:, [:rider, :team, cost_col, :expected_vg_points, :strength, :uncertainty]]
-        for col in names(upside_display)
-            if eltype(upside_display[!, col]) <: Union{Missing,Number}
-                upside_display[!, col] = round.(upside_display[!, col], digits=1)
-            end
-        end
-        if hasproperty(upside_display, :team)
-            upside_display = transform(upside_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
-        end
+        round_numeric_columns!(upside_display)
+        clean_team_names!(upside_display, [:team])
         display(markdown_table(upside_display))
 
         # Budget options
@@ -212,14 +183,8 @@ if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
         if nrow(cheap_options) > 0
             cheap_sorted = sort(cheap_options, :expected_vg_points, rev=true)[1:min(5, nrow(cheap_options)), :]
             cheap_display = cheap_sorted[:, [:rider, :team, cost_col, :expected_vg_points]]
-            for col in names(cheap_display)
-                if eltype(cheap_display[!, col]) <: Union{Missing,Number}
-                    cheap_display[!, col] = round.(cheap_display[!, col], digits=1)
-                end
-            end
-            if hasproperty(cheap_display, :team)
-                cheap_display = transform(cheap_display, :team => ByRow(x -> replace(x, "|" => "-")) => :team)
-            end
+            round_numeric_columns!(cheap_display)
+            clean_team_names!(cheap_display, [:team])
             display(markdown_table(cheap_display))
         else
             println("No riders at cost <= 6 available")
