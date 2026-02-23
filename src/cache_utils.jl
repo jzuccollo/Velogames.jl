@@ -60,7 +60,7 @@ function is_cache_valid(key::String, max_age_hours::Int, cache_dir::String)::Boo
     try
         meta_content = read(meta_file, String)
         meta = JSON3.read(meta_content, CacheMetadata)
-        age_hours = (now() - meta.timestamp).value / (1000 * 60 * 60)
+        age_hours = Dates.value(now() - meta.timestamp) / (1000 * 60 * 60)
         return age_hours < max_age_hours
     catch
         return false

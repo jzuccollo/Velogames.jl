@@ -69,12 +69,20 @@ function process_vg_table(riderdf::DataFrame)
     # cast the cost and rank columns to Int64 if they exist
     for col in [:cost, :rank]
         if hasproperty(riderdf, col)
-            riderdf[!, col] = parse.(Int64, riderdf[!, col])
+            riderdf[!, col] = [
+                let v = tryparse(Int64, string(x))
+                    v === nothing ? ((@warn "Cannot parse $col value '$x' as Int"; missing)) : v
+                end for x in riderdf[!, col]
+            ]
         end
     end
 
     # cast points column to number
-    riderdf[!, :points] = parse.(Float64, riderdf[!, :points])
+    riderdf[!, :points] = [
+        let v = tryparse(Float64, string(x))
+            v === nothing ? 0.0 : v
+        end for x in riderdf[!, :points]
+    ]
 
     # Process 'selected' column as numeric proportion, if it exists
     if hasproperty(riderdf, :selected)
@@ -409,7 +417,8 @@ function getpcsriderhistory(
     pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
     function fetch_rider_history(url, params)
-        riderpts = DataFrame(scrape_tables(url)[2])
+        tables = scrape_html_tables(url)
+        riderpts = tables[2]
         rename!(riderpts, [:year, :points, :rank])
         return riderpts
     end
@@ -425,60 +434,115 @@ function getpcsriderhistory(
 end
 
 """
-## `getodds`
+    getodds(market_id; force_refresh=false, cache_config=DEFAULT_CACHE)
 
-Retrieve odds listings from the Betfair website.
+Retrieve betting odds from the Betfair Exchange API for a given market ID.
 
-**Warning**: This scraper uses hardcoded CSS selectors (`.runner-info`,
-`.ui-display-fraction-price`) that are fragile and may not work if Betfair
-has changed their page structure. The pipeline handles failure gracefully
-(continues without odds). See the roadmap for planned Oddschecker integration.
+Find the market ID on the Betfair Exchange website: navigate to cycling, find
+the race, and extract the market ID from the URL (e.g. "1.127771425").
 
 Returns a DataFrame with columns: `rider`, `odds`, `riderkey`.
+Returns an empty DataFrame if `market_id` is empty or the API call fails.
 """
 function getodds(
-    pageurl::String;
-    headers::Dict = Dict(
-        "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
-    ),
+    market_id::String;
     force_refresh::Bool = false,
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
-
-    @warn "getodds: Betfair scraper uses fragile CSS selectors and may not work. See roadmap for planned alternatives."
-
-    function fetch_odds(url, params)
-        used_headers = get(params, "headers", headers)
-
-        oddspage = HTTP.get(url, used_headers)
-        oddshtml = Gumbo.parsehtml(String(oddspage.body))
-
-        selectors = [".runner-info", ".ui-display-fraction-price"]
-        ridertable = [eachmatch(Selector(s), oddshtml.root) for s in selectors]
-        ridernames = [Cascadia.nodeText(r) for r in ridertable[1]]
-        riderodds = [Cascadia.nodeText(r) for r in ridertable[2]]
-
-        # Process fractional odds (e.g. "5/2") to decimal (e.g. 3.5)
-        riderodds = replace.(riderodds, "\n" => "")
-        riderodds = map(
-            x ->
-                1 + parse(Float64, split(x, "/")[1]) / parse(Float64, split(x, "/")[2]),
-            riderodds,
-        )
-
-        betfairodds = DataFrame(rider = ridernames, odds = riderodds)
-        betfairodds.riderkey = map(x -> createkey(x), betfairodds.rider)
-
-        @assert length(unique(betfairodds.riderkey)) == length(betfairodds.riderkey) "Rider keys are not unique"
-
-        return betfairodds
+    if isempty(market_id)
+        return DataFrame(rider = String[], odds = Float64[], riderkey = String[])
     end
 
-    params = Dict("headers" => headers)
+    function fetch_betfair_odds(_url, params)
+        return betfair_get_market_odds(params["market_id"])
+    end
+
     return cached_fetch(
-        fetch_odds,
-        pageurl,
-        params;
+        fetch_betfair_odds,
+        "betfair://market/$market_id",
+        Dict("market_id" => market_id);
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
+end
+
+"""
+    get_cycling_oracle(prediction_url; force_refresh=false, cache_config=DEFAULT_CACHE)
+
+Fetch win probability predictions from Cycling Oracle.
+
+Pass the full blog prediction URL, e.g.
+`"https://www.cyclingoracle.com/en/blog/omloop-nieuwsblad-2026-prediction"`.
+
+Returns a DataFrame with columns: `rider` (String), `win_prob` (Float64),
+`riderkey` (String). Win probabilities are already normalised (sum to ~1).
+Returns an empty DataFrame if the URL is empty or parsing fails.
+"""
+function get_cycling_oracle(
+    prediction_url::String;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
+    if isempty(prediction_url)
+        return DataFrame(rider = String[], win_prob = Float64[], riderkey = String[])
+    end
+
+    function fetch_oracle(_url, params)
+        url = params["prediction_url"]
+        response = HTTP.get(
+            url,
+            ["User-Agent" => "Mozilla/5.0 (compatible; Velogames.jl)"],
+        )
+        html = String(response.body)
+
+        # Extract embedded JSON: var riders2D = JSON.parse(`[...]`)
+        m = match(r"var riders2D = JSON\.parse\(`(.*?)`\)", html)
+        if m === nothing
+            @warn "Could not find prediction data in Cycling Oracle page: $url"
+            return DataFrame(rider = String[], win_prob = Float64[], riderkey = String[])
+        end
+
+        data = JSON3.read(m.captures[1])
+
+        names_out = String[]
+        probs_out = Float64[]
+
+        for entry in data
+            name = String(get(entry, :col1, get(entry, :searchQuery, "")))
+            pct_str = String(get(entry, :winPercentage, ""))
+            if isempty(name) || isempty(pct_str)
+                continue
+            end
+            # European decimal format: "35,07" -> 35.07 -> 0.3507
+            pct = parse(Float64, replace(pct_str, "," => "."))
+            if pct > 0.0
+                push!(names_out, name)
+                push!(probs_out, pct / 100.0)
+            end
+        end
+
+        if isempty(names_out)
+            @warn "No predictions found in Cycling Oracle page: $url"
+            return DataFrame(rider = String[], win_prob = Float64[], riderkey = String[])
+        end
+
+        # Normalise to sum to 1 (they should already be close)
+        total = sum(probs_out)
+        if total > 0
+            probs_out .= probs_out ./ total
+        end
+
+        df = DataFrame(rider = names_out, win_prob = probs_out)
+        df.riderkey = map(createkey, df.rider)
+
+        @info "Fetched Cycling Oracle predictions for $(nrow(df)) riders"
+        return df
+    end
+
+    return cached_fetch(
+        fetch_oracle,
+        prediction_url,
+        Dict("prediction_url" => prediction_url);
         cache_config = cache_config,
         force_refresh = force_refresh,
     )
@@ -506,7 +570,16 @@ function getvgracepoints(
         for entry in eachmatch(Selector("#users li"), pagehtml.root)
             rider = nodeText(eachmatch(Selector(".name"), entry)[1])
             pointsstr = nodeText(eachmatch(Selector(".born"), entry)[1])
-            points = parse(Int, match(r"\d+", pointsstr).match)
+            m = match(r"\d+", pointsstr)
+            if m === nothing
+                @warn "Cannot parse points from '$pointsstr' for rider '$rider'; skipping"
+                continue
+            end
+            points = tryparse(Int, m.match)
+            if points === nothing
+                @warn "Cannot parse points value '$(m.match)' as Int for rider '$rider'; skipping"
+                continue
+            end
             team = nodeText(eachmatch(Selector(".born"), entry)[2])
 
             rowdf = DataFrame(rider = [rider], team = [team], score = [points])
