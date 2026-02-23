@@ -1,5 +1,9 @@
-const DEFAULT_CLASS_REQUIREMENTS =
-    Dict("All rounder" => 2, "Climber" => 2, "Sprinter" => 1, "Unclassed" => 4)
+const DEFAULT_CLASS_REQUIREMENTS = Dict(
+    "All rounder" => STAGE_CLASS_MINIMUMS[:allrounder],
+    "Climber" => STAGE_CLASS_MINIMUMS[:climber],
+    "Sprinter" => STAGE_CLASS_MINIMUMS[:sprinter],
+    "Unclassed" => STAGE_CLASS_MINIMUMS[:unclassed],
+)
 
 """
     clean_team_names!(df, team_columns)

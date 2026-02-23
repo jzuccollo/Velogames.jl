@@ -24,6 +24,41 @@ struct BayesianPosterior
 end
 
 """
+    BayesianConfig
+
+Hyperparameters for Bayesian rider strength estimation.
+
+These control how much weight each signal receives in the posterior.
+Lower variance means the signal is treated as more precise.
+"""
+struct BayesianConfig
+    pcs_variance::Float64
+    vg_variance::Float64
+    hist_base_variance::Float64
+    hist_decay_rate::Float64
+    vg_hist_base_variance::Float64
+    vg_hist_decay_rate::Float64
+    odds_variance::Float64
+    oracle_variance::Float64
+    odds_normalisation::Float64
+end
+
+"""Default Bayesian hyperparameters."""
+const DEFAULT_BAYESIAN_CONFIG = BayesianConfig(
+    4.0,   # pcs_variance: prior variance for PCS specialty score
+    3.0,   # vg_variance: observation variance for VG season points
+    1.0,   # hist_base_variance: base variance for race history observations
+    0.5,   # hist_decay_rate: additional variance per year of age
+    1.5,   # vg_hist_base_variance: base variance for VG race history
+    0.5,   # vg_hist_decay_rate: additional variance per year for VG history
+    0.5,   # odds_variance: observation variance for betting odds signal
+    1.5,   # oracle_variance: observation variance for Cycling Oracle signal
+    2.0,   # odds_normalisation: heuristic divisor to scale log-odds to z-score range.
+           # With ~150 starters, a 10% favourite produces log(0.1 / 0.0067) ≈ 2.7,
+           # which / 2.0 gives ~1.35 — a reasonable "1.35 SD above average" strength signal.
+)
+
+"""
     bayesian_update(prior::BayesianPosterior, observation::Float64, obs_variance::Float64) -> BayesianPosterior
 
 Update a normal prior with a single observation (normal-normal conjugate update).
@@ -48,10 +83,11 @@ end
 
 """
     estimate_rider_strength(;
-        pcs_score, race_history, race_history_years_ago, vg_points,
-        odds_implied_prob, n_starters,
-        pcs_variance, vg_variance, hist_base_variance, hist_decay_rate,
-        odds_variance, odds_normalisation
+        pcs_score, race_history, race_history_years_ago,
+        race_history_variance_penalties, vg_points,
+        vg_race_history, vg_race_history_years_ago,
+        odds_implied_prob, oracle_implied_prob, n_starters,
+        config
     ) -> BayesianPosterior
 
 Estimate a rider's strength for a specific race using Bayesian updating.
@@ -61,73 +97,92 @@ Returns a `BayesianPosterior` with mean (strength) and variance (uncertainty).
 ## Signal hierarchy (from broadest to most specific):
 1. **PCS score** (prior): general ability from ProCyclingStats ranking/specialty
 2. **VG season points** (broad form): current season Velogames performance
-3. **Race history** (specific): historical results in this exact race
-4. **Betting odds** (market consensus): if available, the most precise signal
+3. **PCS race history** (specific): historical finishing positions in this or similar races
+4. **VG race history** (specific): historical VG points from past editions (z-scored per year)
+5. **Cycling Oracle** (model prediction): algorithmic win probabilities
+6. **Betting odds** (market consensus): if available, the most precise signal
 
 ## Data arguments
 - `pcs_score`: normalised PCS specialty score (z-scored, mean 0, std 1)
 - `race_history`: vector of normalised finishing positions from past editions
   (lower = better; converted to strength via negative rank mapping)
 - `race_history_years_ago`: how many years ago each history entry is (for recency weighting)
+- `race_history_variance_penalties`: per-entry variance penalty (0.0 for exact-race,
+  1.0 for similar-race history). Same length as `race_history`.
 - `vg_points`: normalised VG season points (z-scored)
+- `vg_race_history`: vector of z-scored VG race points from past editions
+- `vg_race_history_years_ago`: how many years ago each VG history entry is
 - `odds_implied_prob`: implied win probability from betting odds (0-1, 0 = not available)
+- `oracle_implied_prob`: win probability from Cycling Oracle (0-1, 0 = not available)
 - `n_starters`: expected number of starters (used to scale odds to strength)
-
-## Variance hyperparameters (for calibration/sensitivity analysis)
-- `pcs_variance`: prior variance for PCS specialty score (default: 4.0)
-- `vg_variance`: observation variance for VG season points (default: 3.0)
-- `hist_base_variance`: base variance for race history observations (default: 1.0)
-- `hist_decay_rate`: additional variance per year of age (default: 0.5, so 1yr ago = 1.5, 2yr = 2.0)
-- `odds_variance`: observation variance for betting odds signal (default: 0.5)
-- `odds_normalisation`: divisor to scale log-odds to z-score range (default: 2.0, heuristic)
+- `config`: `BayesianConfig` controlling variance hyperparameters (default: `DEFAULT_BAYESIAN_CONFIG`)
 """
 function estimate_rider_strength(;
     pcs_score::Float64 = 0.0,
     race_history::Vector{Float64} = Float64[],
     race_history_years_ago::Vector{Int} = Int[],
+    race_history_variance_penalties::Vector{Float64} = Float64[],
     vg_points::Float64 = 0.0,
+    vg_race_history::Vector{Float64} = Float64[],
+    vg_race_history_years_ago::Vector{Int} = Int[],
     odds_implied_prob::Float64 = 0.0,
+    oracle_implied_prob::Float64 = 0.0,
     n_starters::Int = 150,
-    pcs_variance::Float64 = 4.0,
-    vg_variance::Float64 = 3.0,
-    hist_base_variance::Float64 = 1.0,
-    hist_decay_rate::Float64 = 0.5,
-    odds_variance::Float64 = 0.5,
-    odds_normalisation::Float64 = 2.0,
+    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
 )
     # --- Prior from PCS ---
     # PCS score is our broadest signal. Wide variance reflects general uncertainty.
-    posterior = BayesianPosterior(pcs_score, pcs_variance)
+    posterior = BayesianPosterior(pcs_score, config.pcs_variance)
 
     # --- Update with VG season points ---
     # VG points reflect current season form. Moderate precision.
     if vg_points != 0.0
-        posterior = bayesian_update(posterior, vg_points, vg_variance)
+        posterior = bayesian_update(posterior, vg_points, config.vg_variance)
     end
 
-    # --- Update with race-specific history ---
-    # Each past result in this specific race is a strong signal.
+    # --- Update with PCS race-specific history ---
+    # Each past result in this or similar races is a strong signal.
     # More recent results are more informative (lower variance).
+    # Similar-race history gets an additional variance penalty.
     if length(race_history) != length(race_history_years_ago)
         @warn "race_history ($(length(race_history))) and race_history_years_ago ($(length(race_history_years_ago))) have different lengths; using pairwise minimum"
     end
-    for (hist_strength, years_ago) in zip(race_history, race_history_years_ago)
-        # Variance increases with age: recent result is precise, old result is fuzzy
-        hist_var = hist_base_variance + hist_decay_rate * years_ago
+    penalties = if isempty(race_history_variance_penalties)
+        zeros(length(race_history))
+    else
+        race_history_variance_penalties
+    end
+    for (i, (hist_strength, years_ago)) in enumerate(zip(race_history, race_history_years_ago))
+        penalty = i <= length(penalties) ? penalties[i] : 0.0
+        hist_var = config.hist_base_variance + config.hist_decay_rate * years_ago + penalty
         posterior = bayesian_update(posterior, hist_strength, hist_var)
+    end
+
+    # --- Update with VG race history ---
+    # Actual VG points from past editions, z-scored per year. Directly measures
+    # the quantity we're optimising, so a strong signal.
+    if length(vg_race_history) != length(vg_race_history_years_ago)
+        @warn "vg_race_history ($(length(vg_race_history))) and vg_race_history_years_ago ($(length(vg_race_history_years_ago))) have different lengths"
+    end
+    for (vg_strength, years_ago) in zip(vg_race_history, vg_race_history_years_ago)
+        vg_var = config.vg_hist_base_variance + config.vg_hist_decay_rate * years_ago
+        posterior = bayesian_update(posterior, vg_strength, vg_var)
+    end
+
+    # --- Update with Cycling Oracle predictions ---
+    # Algorithmic win probabilities. Less precise than market odds but covers more races.
+    if oracle_implied_prob > 0.0
+        baseline_prob = 1.0 / n_starters
+        oracle_strength = log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
+        posterior = bayesian_update(posterior, oracle_strength, config.oracle_variance)
     end
 
     # --- Update with betting odds ---
     # Odds-implied probability is the market's posterior. Very precise when available.
     if odds_implied_prob > 0.0
-        # Convert implied win probability to a strength score.
-        # Use log-odds as a natural strength scale: strong riders have high log-odds.
         baseline_prob = 1.0 / n_starters
-        # Strength relative to average: positive = stronger than average
-        odds_strength = log(odds_implied_prob / baseline_prob)
-        # Normalise to roughly the same scale as z-scores
-        odds_strength = odds_strength / odds_normalisation
-        posterior = bayesian_update(posterior, odds_strength, odds_variance)
+        odds_strength = log(odds_implied_prob / baseline_prob) / config.odds_normalisation
+        posterior = bayesian_update(posterior, odds_strength, config.odds_variance)
     end
 
     return posterior
@@ -398,8 +453,10 @@ end
 """
     predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
                             race_history_df=nothing, odds_df=nothing,
+                            oracle_df=nothing, vg_history_df=nothing,
                             n_sims::Int=10000, race_type::Symbol=:oneday,
-                            rng::AbstractRNG=Random.default_rng()) -> DataFrame
+                            rng::AbstractRNG=Random.default_rng(),
+                            bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG) -> DataFrame
 
 Full prediction pipeline: takes rider data, computes expected VG points for each rider.
 
@@ -410,14 +467,22 @@ Full prediction pipeline: takes rider data, computes expected VG points for each
 
 ## Required columns in `rider_df`:
 - `rider::String`, `team::String`, `riderkey::String`
-- `cost::Int` or `vgcost::Int` - VG cost
-- `points::Float64` or `vgpoints::Float64` - VG season points
+- `cost::Int` - VG cost
+- `points::Float64` - VG season points
 
 ## Optional PCS columns (from `getpcsriderpts_batch`):
 - `oneday`, `gc`, `tt`, `sprint`, `climber` (all Float64)
 
 ## Optional columns for stage races:
 - `classraw::String` or `class::String` - rider classification
+
+## Optional DataFrames:
+- `race_history_df` — PCS race history with `:position`, `:year`, `:riderkey`,
+  and optional `:variance_penalty` (0.0 for exact-race, 1.0 for similar-race)
+- `odds_df` — Betfair odds with `:odds`, `:riderkey`
+- `oracle_df` — Cycling Oracle predictions with `:win_prob`, `:riderkey`
+- `vg_history_df` — VG race points from past editions with `:score`, `:year`, `:riderkey`.
+  Scores are z-scored per year before feeding as Bayesian updates.
 
 ## Returns
 The input DataFrame augmented with:
@@ -430,24 +495,19 @@ function predict_expected_points(
     scoring::ScoringTable;
     race_history_df::Union{DataFrame,Nothing} = nothing,
     odds_df::Union{DataFrame,Nothing} = nothing,
+    oracle_df::Union{DataFrame,Nothing} = nothing,
+    vg_history_df::Union{DataFrame,Nothing} = nothing,
     n_sims::Int = 10000,
     race_type::Symbol = :oneday,
     rng::AbstractRNG = Random.default_rng(),
+    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
 )
     df = copy(rider_df)
     n_riders = nrow(df)
 
     # --- Normalise input columns ---
-    pts_col =
-        :points in propertynames(df) ? :points :
-        :vgpoints in propertynames(df) ? :vgpoints : nothing
-    cost_col =
-        :cost in propertynames(df) ? :cost :
-        :vgcost in propertynames(df) ? :vgcost : nothing
-
-    if pts_col === nothing || cost_col === nothing
-        error("rider_df must contain :points or :vgpoints, and :cost or :vgcost columns")
-    end
+    pts_col = :points
+    cost_col = :cost
 
     vg_pts = Float64.(coalesce.(df[!, pts_col], 0.0))
     n_starters = n_riders
@@ -495,13 +555,25 @@ function predict_expected_points(
         end
     end
 
+    # --- Build Cycling Oracle lookup ---
+    oracle_lookup = Dict{String,Float64}()
+    if oracle_df !== nothing &&
+       :riderkey in propertynames(oracle_df) &&
+       :win_prob in propertynames(oracle_df)
+        for row in eachrow(oracle_df)
+            oracle_lookup[row.riderkey] = Float64(row.win_prob)
+        end
+    end
+
     # --- Build race history lookup ---
+    # Each entry is (strength, years_ago, variance_penalty)
     current_year = Dates.year(Dates.today())
-    history_lookup = Dict{String,Vector{Tuple{Float64,Int}}}()
+    history_lookup = Dict{String,Vector{Tuple{Float64,Int,Float64}}}()
     if race_history_df !== nothing &&
        :riderkey in propertynames(race_history_df) &&
        :position in propertynames(race_history_df) &&
        :year in propertynames(race_history_df)
+        has_penalty = :variance_penalty in propertynames(race_history_df)
         # Field size for strength conversion: classics ~175, grand tours ~175 finishers
         history_field_size = max(n_starters, 175)
         for row in eachrow(race_history_df)
@@ -511,12 +583,41 @@ function predict_expected_points(
             if !ismissing(pos) && !ismissing(yr) && pos > 0 && pos < 900
                 years_ago = current_year - yr
                 strength = position_to_strength(pos, history_field_size)
+                penalty = has_penalty ? Float64(coalesce(row.variance_penalty, 0.0)) : 0.0
                 if !haskey(history_lookup, key)
-                    history_lookup[key] = Tuple{Float64,Int}[]
+                    history_lookup[key] = Tuple{Float64,Int,Float64}[]
                 end
-                push!(history_lookup[key], (strength, years_ago))
+                push!(history_lookup[key], (strength, years_ago, penalty))
             end
         end
+    end
+
+    # --- Build VG race history lookup ---
+    # Z-score VG points per year, then store (z_score, years_ago) per rider
+    vg_history_lookup = Dict{String,Vector{Tuple{Float64,Int}}}()
+    if vg_history_df !== nothing &&
+       :riderkey in propertynames(vg_history_df) &&
+       :score in propertynames(vg_history_df) &&
+       :year in propertynames(vg_history_df)
+        # Z-score per year independently
+        for yr in unique(vg_history_df.year)
+            year_rows = filter(:year => ==(yr), vg_history_df)
+            scores = Float64.(coalesce.(year_rows.score, 0.0))
+            yr_mean = mean(scores)
+            yr_std = std(scores)
+            if yr_std > 0
+                for (i, row) in enumerate(eachrow(year_rows))
+                    key = row.riderkey
+                    z = (scores[i] - yr_mean) / yr_std
+                    years_ago = current_year - yr
+                    if !haskey(vg_history_lookup, key)
+                        vg_history_lookup[key] = Tuple{Float64,Int}[]
+                    end
+                    push!(vg_history_lookup[key], (z, years_ago))
+                end
+            end
+        end
+        @info "VG history lookup: $(length(vg_history_lookup)) riders with historical VG scores"
     end
 
     # --- Estimate strength for each rider ---
@@ -526,19 +627,30 @@ function predict_expected_points(
     for i = 1:n_riders
         key = df.riderkey[i]
 
-        hist = get(history_lookup, key, Tuple{Float64,Int}[])
+        hist = get(history_lookup, key, Tuple{Float64,Int,Float64}[])
         hist_strengths = Float64[h[1] for h in hist]
         hist_years = Int[h[2] for h in hist]
+        hist_penalties = Float64[h[3] for h in hist]
+
+        vg_hist = get(vg_history_lookup, key, Tuple{Float64,Int}[])
+        vg_hist_strengths = Float64[h[1] for h in vg_hist]
+        vg_hist_years = Int[h[2] for h in vg_hist]
 
         odds_prob = get(odds_lookup, key, 0.0)
+        oracle_prob = get(oracle_lookup, key, 0.0)
 
         posterior = estimate_rider_strength(
             pcs_score = pcs_z[i],
             race_history = hist_strengths,
             race_history_years_ago = hist_years,
+            race_history_variance_penalties = hist_penalties,
             vg_points = vg_z[i],
+            vg_race_history = vg_hist_strengths,
+            vg_race_history_years_ago = vg_hist_years,
             odds_implied_prob = odds_prob,
+            oracle_implied_prob = oracle_prob,
             n_starters = n_starters,
+            config = bayesian_config,
         )
 
         strengths[i] = posterior.mean

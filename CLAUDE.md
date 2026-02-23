@@ -5,16 +5,17 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 ## Architecture
 
 - `src/Velogames.jl` - Main module, includes and exports
-- `src/get_data.jl` - Data scraping: VG riders, PCS rankings/specialty ratings, Betfair odds (deprecated), VG race results
+- `src/betfair.jl` - Betfair Exchange API: authentication, session management, market queries for betting odds
+- `src/get_data.jl` - Data scraping: VG riders, PCS rankings/specialty ratings, Betfair odds (via API), Cycling Oracle predictions, VG race results
 - `src/pcs_scraper.jl` - PCS table scraping infrastructure and column aliases
 - `src/pcs_extended.jl` - Extended PCS scraping: race history results, startlists across multiple years
 - `src/scoring.jl` - VG scoring tables by category (one-day Cat 1/2/3, stage race aggregate) and expected points functions
 - `src/simulation.jl` - Monte Carlo race simulation, Bayesian strength estimation, class-aware PCS blending for stage races
 - `src/build_model.jl` - JuMP optimisation models: `build_model_oneday` (6 riders), `build_model_stage` (9 riders + class constraints), `minimise_cost_stage`
-- `src/race_solver.jl` - High-level solvers: `solve_oneday` and `solve_stage` (MC pipelines), `solve_stage_legacy` (weighted-score fallback)
+- `src/race_solver.jl` - High-level solvers: `solve_oneday` and `solve_stage` (MC pipelines)
 - `src/cache_utils.jl` - Feather-based caching with configurable TTL (default ~/.velogames_cache, 24h)
 - `src/classification_utils.jl` - Rider classification (allrounder/sprinter/climber/unclassed) column management
-- `src/race_helpers.jl` - `RaceConfig` struct, `setup_race()`, URL patterns for all Superclassico and grand tour races
+- `src/race_helpers.jl` - `RaceConfig` struct, `setup_race()`, URL patterns for all Superclassico and grand tour races, `SIMILAR_RACES` terrain-similarity mapping
 - `src/utilities.jl` - Name normalisation (`normalisename`), key creation (`createkey`), PCS specialty mapping
 - `src/report_helpers.jl` - Display formatting helpers
 - `race_notebooks/` - Quarto notebooks: one-day predictor, stage race predictor, historical analysis
@@ -23,9 +24,8 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Solvers (src/race_solver.jl)
 
-- `solve_oneday(config; ...)` - MC prediction pipeline for one-day Superclassico races
-- `solve_stage(config; ...)` - MC prediction pipeline for stage races (class-aware strength)
-- `solve_stage_legacy(url, racetype, ...)` - Legacy weighted-score solver (deprecated)
+- `solve_oneday(config; ...)` - MC prediction pipeline for one-day Superclassico races (PCS startlist filter, similar-race history, VG history)
+- `solve_stage(config; ...)` - MC prediction pipeline for stage races (class-aware strength, PCS startlist filter, similar-race history, VG history)
 
 ### Optimisation models (src/build_model.jl)
 
@@ -33,15 +33,25 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `build_model_stage(df, n, points_col, cost_col)` - Maximise points, stage race (9 riders, class constraints)
 - `minimise_cost_stage(df, target_score, n, cost_col)` - Minimise cost for target score
 
+### Betfair odds (src/betfair.jl)
+
+- `betfair_login(; username, password, app_key)` - Authenticate with Betfair Exchange (reads from ENV by default)
+- `betfair_get_market_odds(market_id)` - Fetch odds for a Betfair market, returns DataFrame(rider, odds, riderkey)
+
+### Data scraping (src/get_data.jl)
+
+- `get_cycling_oracle(prediction_url)` - Scrape Cycling Oracle blog predictions, returns DataFrame(rider, win_prob, riderkey)
+
 ### Simulation (src/simulation.jl)
 
-- `predict_expected_points(df, scoring; race_type=:oneday)` - Full prediction pipeline
-- `estimate_rider_strength(...)` - Bayesian posterior from multiple signals
+- `predict_expected_points(df, scoring; race_type=:oneday)` - Full prediction pipeline (supports variance_penalty in race history, VG history)
+- `estimate_rider_strength(...)` - Bayesian posterior from multiple signals (PCS, VG, PCS race history with variance penalties, VG race history, odds, oracle)
 - `simulate_race(strengths, n_sims)` - Monte Carlo position simulation
 - `compute_stage_race_pcs_score(row, class)` - Class-aware PCS blending for stage races
 
 ## Key patterns
 
+- Betfair API credentials via environment variables (`BETFAIR_USERNAME`, `BETFAIR_PASSWORD`, `BETFAIR_APP_KEY`); see `.envrc.example`
 - All data functions use `cached_fetch()` with `CacheConfig` and `force_refresh` parameter
 - Rider matching across sources uses `riderkey` (from `createkey()` name normalisation)
 - Web scraping: `gettable()` -> `process_rider_table()` via TableScraper/Gumbo/Cascadia

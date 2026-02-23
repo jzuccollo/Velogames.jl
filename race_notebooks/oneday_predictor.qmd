@@ -16,12 +16,21 @@ race_name = "omloop"  # Short name from get_url_pattern (e.g. "omloop", "kuurne"
 race_year = 2025
 racehash = ""  # VG startlist hash filter (leave empty for all riders)
 
-# Optional: Betfair odds URL (leave empty to skip)
-odds_url = ""
+# Optional: Betfair Exchange market ID (leave empty to skip)
+# Find the market ID on betfair.com/exchange -> cycling -> look at the URL
+betfair_market_id = ""
+
+# Optional: Cycling Oracle prediction URL (leave empty to skip)
+# e.g. "https://www.cyclingoracle.com/en/blog/omloop-nieuwsblad-2026-prediction"
+oracle_url = ""
 
 # Simulation Parameters
 n_sims = 1000  # Monte Carlo simulations (more = smoother, slower)
 history_years = 5  # How many years of race history to use
+
+# Optional: VG historical race results (year => results URL)
+# Find URLs at velogames.com -> past results -> race score page
+vg_history = Dict{Int,String}()
 
 # Exclusions (add rider names to avoid)
 excluded_riders = String[]
@@ -55,7 +64,9 @@ println("="^40)
 predicted, chosenteam = solve_oneday(config;
     racehash=racehash,
     history_years=history_years,
-    odds_url=odds_url,
+    betfair_market_id=betfair_market_id,
+    oracle_url=oracle_url,
+    vg_history=vg_history,
     n_sims=n_sims,
     excluded_riders=excluded_riders)
 
@@ -68,7 +79,7 @@ println("Pipeline complete: $(nrow(predicted)) riders analysed")
 ```{julia}
 #| echo: false
 if @isdefined(chosenteam) && nrow(chosenteam) > 0
-    cost_col = :vgcost in propertynames(chosenteam) ? :vgcost : :cost
+    cost_col = :cost
     total_cost = sum(chosenteam[!, cost_col])
     total_evg = sum(chosenteam.expected_vg_points)
 
@@ -116,7 +127,7 @@ Top 30 riders by expected VG points:
 ```{julia}
 #| echo: false
 if @isdefined(predicted) && nrow(predicted) > 0
-    cost_col = :vgcost in propertynames(predicted) ? :vgcost : :cost
+    cost_col = :cost
 
     # Show top 30 riders
     ranking_cols = [:rider, :team, cost_col, :expected_vg_points, :strength, :uncertainty]
@@ -155,7 +166,7 @@ end
 ```{julia}
 #| echo: false
 if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
-    cost_col = :vgcost in propertynames(predicted) ? :vgcost : :cost
+    cost_col = :cost
 
     println("ALTERNATIVE CONSIDERATIONS")
     println("="^45)
@@ -219,9 +230,9 @@ if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
 end
 ```
 
-# How to Use This Tool
+# How to use the notebook
 
-**Quick Start:**
+## Quick Start
 
 1. Update `race_name` to the short name of the race (e.g. `"omloop"`, `"kuurne"`, `"roubaix"`, `"flanders"`)
 2. Update `race_year` to the current year
@@ -229,24 +240,27 @@ end
 4. Run all cells to get your optimal team
 5. Copy the team into VeloGames
 
-**Available Race Names:**
+## Available race names
+
 Use `get_url_pattern("name")` to check. Examples: `omloop`, `kuurne`, `strade`, `sanremo`, `roubaix`, `flanders`, `agr`, `fleche`, `ljl`, `eschborn`, `worlds`.
 
-**Prediction Pipeline:**
+## Prediction pipeline
+
 The optimizer now uses Monte Carlo simulation to estimate **expected Velogames points** for each rider:
 
 1. Fetches VG rider costs and season points
 2. Fetches PCS specialty ratings (one-day, GC, sprint, climb, TT)
 3. Fetches PCS race-specific history (past editions of this race)
-4. Optionally fetches betting odds from Betfair
+4. Optionally fetches betting odds from Betfair and/or Cycling Oracle predictions
 5. Estimates rider strength via Bayesian updating of all signals
 6. Runs Monte Carlo simulation to get finishing position probabilities
 7. Computes expected VG points (finish + assists + breakaway)
 8. Optimizes team selection to maximize total expected VG points
 
-**Customization:**
+## Customisation
 
-- Set `odds_url` to a Betfair market URL for odds integration (strongest single signal when available)
+- Set `betfair_market_id` for Betfair odds integration (strongest single signal when available)
+- Set `oracle_url` for Cycling Oracle predictions (independent signal, good coverage of European races)
 - Adjust `n_sims` for speed vs accuracy (10000 is a good default)
 - Adjust `history_years` for how much race history to consider
 - Add rider names to `excluded_riders` to avoid specific riders

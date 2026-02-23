@@ -16,12 +16,21 @@ race_name = "tdf"  # Short name from get_url_pattern (e.g. "tdf", "vuelta", "gir
 race_year = 2025
 racehash = ""  # VG startlist hash filter (leave empty for all riders)
 
-# Optional: betting odds URL (leave empty to skip)
-odds_url = ""
+# Optional: Betfair Exchange market ID (leave empty to skip)
+# Find the market ID on betfair.com/exchange -> cycling -> look at the URL
+betfair_market_id = ""
+
+# Optional: Cycling Oracle prediction URL (leave empty to skip)
+# e.g. "https://www.cyclingoracle.com/en/blog/tour-de-france-2026-prediction"
+oracle_url = ""
 
 # Simulation parameters
 n_sims = 1000  # Monte Carlo simulations (more = smoother, slower)
 history_years = 3  # How many years of race history to use
+
+# Optional: VG historical race results (year => results URL)
+# Find URLs at velogames.com -> past results -> race score page
+vg_history = Dict{Int, String}()
 
 # Exclusions (add rider names to avoid)
 excluded_riders = String[]
@@ -53,7 +62,9 @@ println("="^40)
 predicted, chosenteam = solve_stage(config;
     racehash=racehash,
     history_years=history_years,
-    odds_url=odds_url,
+    betfair_market_id=betfair_market_id,
+    oracle_url=oracle_url,
+    vg_history=vg_history,
     n_sims=n_sims,
     excluded_riders=excluded_riders)
 
@@ -66,7 +77,7 @@ println("Pipeline complete: $(nrow(predicted)) riders analysed")
 ```{julia}
 #| echo: false
 if @isdefined(chosenteam) && nrow(chosenteam) > 0
-    cost_col = :vgcost in propertynames(chosenteam) ? :vgcost : :cost
+    cost_col = :cost
     total_cost = sum(chosenteam[!, cost_col])
     total_evg = sum(chosenteam.expected_vg_points)
 
@@ -122,7 +133,7 @@ Top 30 riders by expected VG points:
 ```{julia}
 #| echo: false
 if @isdefined(predicted) && nrow(predicted) > 0
-    cost_col = :vgcost in propertynames(predicted) ? :vgcost : :cost
+    cost_col = :cost
 
     # Show top 30 riders
     ranking_cols = [:rider, :team, :classraw, cost_col, :expected_vg_points, :strength, :uncertainty]
@@ -160,7 +171,7 @@ end
 ```{julia}
 #| echo: false
 if @isdefined(predicted) && @isdefined(chosenteam) && nrow(chosenteam) > 0
-    cost_col = :vgcost in propertynames(predicted) ? :vgcost : :cost
+    cost_col = :cost
 
     println("ALTERNATIVE CONSIDERATIONS")
     println("="^45)
