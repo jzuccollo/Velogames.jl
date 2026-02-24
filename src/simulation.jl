@@ -72,8 +72,8 @@ const DEFAULT_BAYESIAN_CONFIG = BayesianConfig(
     0.5,   # odds_variance: observation variance for betting odds signal
     1.5,   # oracle_variance: observation variance for Cycling Oracle signal
     2.0,   # odds_normalisation: heuristic divisor to scale log-odds to z-score range.
-           # With ~150 starters, a 10% favourite produces log(0.1 / 0.0067) ≈ 2.7,
-           # which / 2.0 gives ~1.35 — a reasonable "1.35 SD above average" strength signal.
+    # With ~150 starters, a 10% favourite produces log(0.1 / 0.0067) ≈ 2.7,
+    # which / 2.0 gives ~1.35 — a reasonable "1.35 SD above average" strength signal.
 )
 
 """
@@ -173,7 +173,8 @@ function estimate_rider_strength(;
     else
         race_history_variance_penalties
     end
-    for (i, (hist_strength, years_ago)) in enumerate(zip(race_history, race_history_years_ago))
+    for (i, (hist_strength, years_ago)) in
+        enumerate(zip(race_history, race_history_years_ago))
         penalty = i <= length(penalties) ? penalties[i] : 0.0
         hist_var = config.hist_base_variance + config.hist_decay_rate * years_ago + penalty
         posterior = bayesian_update(posterior, hist_strength, hist_var)
@@ -198,7 +199,8 @@ function estimate_rider_strength(;
     mean_before = posterior.mean
     if oracle_implied_prob > 0.0
         baseline_prob = 1.0 / n_starters
-        oracle_strength = log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
+        oracle_strength =
+            log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, oracle_strength, config.oracle_variance)
     end
     shift_oracle = posterior.mean - mean_before
@@ -214,8 +216,13 @@ function estimate_rider_strength(;
     shift_odds = posterior.mean - mean_before
 
     return StrengthEstimate(
-        posterior.mean, posterior.variance,
-        shift_vg, shift_history, shift_vg_history, shift_oracle, shift_odds,
+        posterior.mean,
+        posterior.variance,
+        shift_vg,
+        shift_history,
+        shift_vg_history,
+        shift_oracle,
+        shift_odds,
     )
 end
 
@@ -371,7 +378,7 @@ end
 
 Estimate expected breakaway points using heuristics.
 
-The Superclassico awards breakaway points at 4 sectors (50% distance, 50km, 20km, 10km).
+The Superclasico awards breakaway points at 4 sectors (50% distance, 50km, 20km, 10km).
 A "leading group" is <= 20 riders with >5s gap.
 
 Heuristic approach:
@@ -532,6 +539,8 @@ function predict_expected_points(
     race_type::Symbol = :oneday,
     rng::AbstractRNG = Random.default_rng(),
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    race_year::Union{Int,Nothing} = nothing,
+    race_date::Union{Date,Nothing} = nothing,
 )
     df = copy(rider_df)
     n_riders = nrow(df)
@@ -598,7 +607,15 @@ function predict_expected_points(
 
     # --- Build race history lookup ---
     # Each entry is (strength, years_ago, variance_penalty)
-    current_year = Dates.year(Dates.today())
+    # Use race_date/race_year when provided (backtesting) to avoid
+    # miscalculating years_ago relative to today's date
+    current_year = if race_date !== nothing
+        Dates.year(race_date)
+    elseif race_year !== nothing
+        race_year
+    else
+        Dates.year(Dates.today())
+    end
     history_lookup = Dict{String,Vector{Tuple{Float64,Int,Float64}}}()
     if race_history_df !== nothing &&
        :riderkey in propertynames(race_history_df) &&
@@ -751,4 +768,36 @@ function predict_expected_points(
     df[!, :shift_odds] = round.(shifts_odds, digits = 3)
 
     return df
+end
+
+
+"""
+    predict_expected_points(data::RaceData, scoring::ScoringTable; kwargs...) -> DataFrame
+
+Convenience method that unpacks `RaceData` fields into the standard kwargs.
+"""
+function predict_expected_points(
+    data::RaceData,
+    scoring::ScoringTable;
+    n_sims::Int = 10000,
+    race_type::Symbol = :oneday,
+    rng::AbstractRNG = Random.default_rng(),
+    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    race_year::Union{Int,Nothing} = nothing,
+    race_date::Union{Date,Nothing} = nothing,
+)
+    predict_expected_points(
+        data.rider_df,
+        scoring;
+        race_history_df = data.race_history_df,
+        odds_df = data.odds_df,
+        oracle_df = data.oracle_df,
+        vg_history_df = data.vg_history_df,
+        n_sims = n_sims,
+        race_type = race_type,
+        rng = rng,
+        bayesian_config = bayesian_config,
+        race_year = race_year,
+        race_date = race_date,
+    )
 end
