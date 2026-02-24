@@ -12,17 +12,19 @@ format: html
 using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Which years to backtest (VG historical pages available for 2023–2025)
-backtest_years = [2023, 2024]
+backtest_years = [2023, 2024, 2025]
 
-# Simulation settings (lower n_sims for speed; rank correlations converge quickly)
-n_sims = 2000
+# Simulation settings
+n_sims = 1000
 history_years = 5
 
 # Cache (longer TTL for historical data that won't change)
-bt_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 168, true)
+bt_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 168)
 
-# Helper
+# Helpers
 md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))
+
+cat_label = Dict(1 => "Cat 1 (monuments)", 2 => "Cat 2 (WT classics)", 3 => "Cat 3 (semi-classics)")
 ```
 
 # Race catalogue
@@ -47,6 +49,62 @@ md_table(cat_counts)
 print("\n")
 ```
 
+```{julia}
+#| output: false
+# Pre-fetch all race data once — reused by baseline, ablation, and tuning
+race_data = prefetch_all_races(races; cache_config=bt_cache)
+```
+
+## Data availability
+
+```{julia}
+#| output: asis
+# Summarise what signals are available per race
+n_total = length(races)
+n_fetched = length(race_data)
+n_with_odds = count(d -> d.odds_df !== nothing, values(race_data))
+n_with_oracle = count(d -> d.oracle_df !== nothing, values(race_data))
+n_with_history = count(d -> d.race_history_df !== nothing, values(race_data))
+
+print("""
+| Signal | Races with data | Coverage |
+|--------|-----------------|----------|
+| PCS results (ground truth) | $n_fetched / $n_total | $(round(100 * n_fetched / n_total, digits=0))% |
+| PCS race history | $n_with_history / $n_fetched | $(round(100 * n_with_history / max(n_fetched, 1), digits=0))% |
+| Archived Betfair odds | $n_with_odds / $n_fetched | $(round(100 * n_with_odds / max(n_fetched, 1), digits=0))% |
+| Archived Cycling Oracle | $n_with_oracle / $n_fetched | $(round(100 * n_with_oracle / max(n_fetched, 1), digits=0))% |
+
+""")
+
+if n_with_odds > 0 || n_with_oracle > 0
+    print("Races with archived odds/oracle data:\n\n")
+    archive_rows = []
+    for (race, data) in sort(collect(race_data), by=p -> (p.first.year, p.first.name))
+        has_odds = data.odds_df !== nothing
+        has_oracle = data.oracle_df !== nothing
+        if has_odds || has_oracle
+            push!(archive_rows, (
+                race=race.name,
+                year=race.year,
+                odds=has_odds ? "$(nrow(data.odds_df)) riders" : "—",
+                oracle=has_oracle ? "$(nrow(data.oracle_df)) riders" : "—",
+            ))
+        end
+    end
+    if !isempty(archive_rows)
+        md_table(DataFrame(archive_rows))
+        print("\n")
+    end
+else
+    print("""
+::: {.callout-warning}
+No archived odds or oracle data found. The `with_odds`, `with_oracle`, and `all_available` ablation sets will behave identically to `pcs_vg_history`. Run `solve_oneday` with `betfair_market_id` or `oracle_url` for upcoming races to start building the archive.
+:::
+
+""")
+end
+```
+
 # Baseline evaluation
 
 Running the full prediction pipeline (PCS + VG season points + race history) on all historical races and comparing to actual PCS finishing positions.
@@ -56,9 +114,9 @@ Running the full prediction pipeline (PCS + VG season points + race history) on 
 baseline_signals = [:pcs, :vg_season, :race_history]
 
 results = backtest_season(races;
+    race_data=race_data,
     signals=baseline_signals,
     n_sims=n_sims,
-    cache_config=bt_cache,
 )
 
 summary_df = summarise_backtest(results)
@@ -69,14 +127,41 @@ print("""
 """)
 # Show aggregate rows
 agg = filter(:race => r -> startswith(r, "—"), summary_df)
-md_table(agg[:, [:race, :n_riders, :spearman_rho, :top5_overlap, :top10_overlap, :mean_abs_rank_error]])
+md_table(agg[:, [:race, :n_riders, :spearman_rho, :top5_overlap, :top10_overlap, :mean_abs_rank_error, :points_captured_ratio]])
 print("\n")
+```
+
+## Results by category
+
+```{julia}
+#| output: asis
+for cat in sort(unique(r.race.category for r in results))
+    cat_results = filter(r -> r.race.category == cat, results)
+    if isempty(cat_results)
+        continue
+    end
+    cat_rhos = filter(!isnan, [r.spearman_rho for r in cat_results])
+    if isempty(cat_rhos)
+        continue
+    end
+
+    print("""
+### $(get(cat_label, cat, "Cat $cat"))
+
+Races: $(length(cat_results)) | Mean Spearman ρ: $(round(mean(cat_rhos), digits=3)) | Median: $(round(median(cat_rhos), digits=3))
+
+""")
+    cat_summary = summarise_backtest(cat_results)
+    race_rows_cat = filter(:race => r -> !startswith(r, "—"), cat_summary)
+    md_table(race_rows_cat[:, [:race, :year, :n_riders, :spearman_rho, :top10_overlap, :mean_abs_rank_error, :points_captured_ratio]])
+    print("\n")
+end
 ```
 
 ```{julia}
 #| output: asis
 print("""
-## Per-race results
+## Per-race results (all categories)
 
 """)
 
@@ -117,15 +202,92 @@ The Spearman rank correlation measures how well predicted strength ranks match a
 end
 ```
 
+# Calibration diagnostics
+
+If the model's uncertainty estimates are well-calibrated, the standardised prediction errors (z-scores) should be approximately standard normal: mean near 0, standard deviation near 1, with roughly 68% of riders within one sigma and 95% within two sigma.
+
+```{julia}
+#| output: asis
+all_z = vcat([r.calibration_z_scores for r in results]...)
+
+if !isempty(all_z)
+    z_mean = round(mean(all_z), digits=3)
+    z_std = round(std(all_z), digits=3)
+    cov1 = round(count(z -> abs(z) <= 1.0, all_z) / length(all_z), digits=3)
+    cov2 = round(count(z -> abs(z) <= 2.0, all_z) / length(all_z), digits=3)
+
+    print("""
+## Aggregate calibration
+
+| Statistic | Observed | Expected |
+|-----------|----------|----------|
+| Mean | $z_mean | 0.0 |
+| Std | $z_std | 1.0 |
+| 1σ coverage | $cov1 | 0.683 |
+| 2σ coverage | $cov2 | 0.954 |
+| Total rider-observations | $(length(all_z)) | — |
+
+""")
+end
+```
+
+```{julia}
+#| output: asis
+if !isempty(all_z)
+    print("## Calibration by category\n\n")
+    for cat in sort(unique(r.race.category for r in results))
+        cat_z = vcat([r.calibration_z_scores for r in results if r.race.category == cat]...)
+        if length(cat_z) < 10
+            continue
+        end
+        cz_mean = round(mean(cat_z), digits=3)
+        cz_std = round(std(cat_z), digits=3)
+        cz_cov1 = round(count(z -> abs(z) <= 1.0, cat_z) / length(cat_z), digits=3)
+
+        print("""
+**$(get(cat_label, cat, "Cat $cat"))**: mean=$cz_mean, std=$cz_std, 1σ coverage=$cz_cov1 (n=$(length(cat_z)))
+
+""")
+    end
+end
+```
+
+```{julia}
+#| output: asis
+if !isempty(all_z)
+    # Hardcoded standard normal quantiles (avoids Distributions.jl dependency)
+    quantile_levels = [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
+    expected_q = [-2.326, -1.645, -1.282, -0.674, 0.0, 0.674, 1.282, 1.645, 2.326]
+    observed_q = [round(quantile(all_z, q), digits=3) for q in quantile_levels]
+
+    print("""
+::: {.callout-note collapse="true"}
+## Q-Q table
+
+| Quantile | Expected N(0,1) | Observed |
+|----------|-----------------|----------|
+""")
+    for (q, e, o) in zip(quantile_levels, expected_q, observed_q)
+        print("| $q | $e | $o |\n")
+    end
+    print("""
+
+Systematic deviations indicate miscalibrated uncertainty. If observed quantiles are compressed relative to expected, the model is overconfident (uncertainties too narrow). If stretched, it is underconfident.
+:::
+
+""")
+end
+```
+
 # Signal ablation study
 
-Testing which data sources actually improve predictions by running with different signal subsets. Each row shows the mean metric across all races for that signal configuration.
+Testing which data sources improve predictions by running with different signal subsets. Each row shows the mean metric across all races for that signal configuration. Signal subsets including `:odds` and `:oracle` will only show their effect for races where archived data is available.
 
 ```{julia}
 #| output: asis
 ablation_df = ablation_study(races;
+    race_data=race_data,
     n_sims=n_sims,
-    cache_config=bt_cache,
 )
 
 if nrow(ablation_df) > 0
@@ -161,9 +323,11 @@ Key questions answered:
 - **Does race history help?** Compare `pcs_only` vs `pcs_history`.
 - **Does VG season form add value?** Compare `pcs_history` vs `pcs_vg_history`.
 - **Is PCS essential?** Compare `no_pcs` vs `pcs_vg_history`.
+- **Do odds improve predictions?** Compare `pcs_vg_history` vs `with_odds`.
+- **Does oracle add value?** Compare `pcs_vg_history` vs `with_oracle`.
 - **What is the baseline?** `pcs_only` shows prediction quality from PCS specialty scores alone.
 
-Note: VG season points on historical pages reflect end-of-season totals, not the value at race time. This introduces mild optimistic bias for the `:vg_season` signal; interpret its marginal value with caution.
+Note: VG season points on historical pages reflect end-of-season totals, not the value at race time. This introduces mild optimistic bias for the `:vg_season` signal; interpret its marginal value with caution. Odds and oracle signals are only available for races where archived data exists.
 :::
 
 """)
@@ -180,11 +344,11 @@ end
 # Tune against the baseline signal set
 # Reduce n_iter for faster iteration; increase for more thorough search
 best_config, tuning_log = tune_hyperparameters(races;
+    race_data=race_data,
     objective=:spearman_rho,
     n_iter=50,
     signals=baseline_signals,
     n_sims=n_sims,
-    cache_config=bt_cache,
 )
 
 print("""

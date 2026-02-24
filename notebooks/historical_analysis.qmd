@@ -24,7 +24,7 @@ winner_name = "James"
 winner_score = 1074
 
 # Cache configuration
-analysis_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 168, true)
+analysis_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 168)
 ```
 
 # Race setup

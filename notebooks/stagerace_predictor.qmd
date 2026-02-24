@@ -31,7 +31,7 @@ vg_history = Dict{Int, String}()
 excluded_riders = String[]
 
 # Cache
-race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6, true)
+race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6)
 
 # Helper: print a MarkdownTables table as raw markdown text
 md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))

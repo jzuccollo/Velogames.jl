@@ -14,7 +14,7 @@ For stage races, PCS specialty scores are blended according to each rider's VG c
 
 Outputs calculated in the Quarto files in the `race_notebooks/` directory:
 
-- `oneday_predictor.qmd` - Pre-race team selection for Superclassico Sixes one-day races
+- `oneday_predictor.qmd` - Pre-race team selection for Superclasico Sixes one-day races
 - `stagerace_predictor.qmd` - Pre-race team selection for grand tours and stage races
 - `historical_analysis.qmd` - Retrospective analysis of completed races (both types)
 
@@ -24,7 +24,7 @@ No guarantee they'll re-render because they pull from the moving target of velog
 
 - **Monte Carlo prediction**: Bayesian strength estimation and race simulation to compute expected VG points per rider
 - **Multi-source data integration**: Combines VG costs/season points, PCS specialty ratings, race history, and optional betting odds
-- **One-day and stage race support**: `solve_oneday()` for Superclassico Sixes, `solve_stage()` for grand tours with classification constraints
+- **One-day and stage race support**: `solve_oneday()` for Superclasico Sixes, `solve_stage()` for grand tours with classification constraints
 - **Robust caching**: Feather-based caching (`CacheConfig`) with configurable TTL to avoid hammering external sites
 - **Historical analysis**: Deterministic optimisation on actual results to find optimal and cheapest-winning teams
 

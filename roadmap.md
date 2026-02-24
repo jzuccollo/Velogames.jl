@@ -111,7 +111,7 @@ Betting odds are the strongest single predictive signal because they aggregate p
 
 **Cycling Oracle:** `get_cycling_oracle()` scrapes win probability predictions from cyclingoracle.com blog pages and feeds them as an independent Bayesian signal (variance 1.5). This provides broader race coverage than Betfair, covering most European professional races. Both signals can be active simultaneously; when both are available, the model benefits from two independent observations.
 
-**Limitations:** Betfair cycling coverage is limited to grand tours, monuments, and some major classics. Most Superclassico races will not have a Betfair market. Cycling Oracle has broader coverage but only provides predictions for the top ~16 riders per race. Future work could add additional odds sources for even broader coverage.
+**Limitations:** Betfair cycling coverage is limited to grand tours, monuments, and some major classics. Most Superclasico races will not have a Betfair market. Cycling Oracle has broader coverage but only provides predictions for the top ~16 riders per race. Future work could add additional odds sources for even broader coverage.
 
 **Evidence:** Betting markets consistently outperform public statistical models across sports prediction research. In cycling specifically, odds were not tested by Kholkine et al. (2021) but are widely regarded in the DFS community as the strongest single signal because they aggregate private information (team tactics, form, injury knowledge) unavailable in public data. The current variance of 0.5 (vs 3.0-4.0 for other signals) is directionally correct.
 
@@ -121,7 +121,7 @@ Every other improvement is flying blind without systematic evaluation. We cannot
 
 **Pipeline:**
 
-For each past Superclassico race:
+For each past Superclasico race:
 
 1. Reconstruct pre-race available data
 2. Run prediction pipeline
@@ -132,7 +132,7 @@ For each past Superclassico race:
 
 - Tune variance hyperparameters exposed in `estimate_rider_strength()` (PCS, VG, history, odds variances and odds normalisation divisor)
 - Ablation study: which features improve predictions?
-- Requires: systematically scraping VG historical results for all Superclassico races (2+ seasons)
+- Requires: systematically scraping VG historical results for all Superclasico races (2+ seasons)
 
 **Additional metrics to consider:**
 
@@ -257,11 +257,11 @@ The Sharpstack paper and DFS community research shows that ignoring correlation 
 
 ### Phase 9: Machine learning (unknown impact, requires prerequisites)
 
-Replacing the Bayesian strength model with a trained ML model requires a backtesting dataset of 90-135+ races (2-3 full Superclassico seasons), which does not yet exist. Academic results in cycling prediction show marginal gains from ML over well-tuned baselines: Kholkine et al. (2021) achieved 0.82 NDCG@10 with learn-to-rank, but this was only ~3% above a tuned logistic regression baseline. The FPL literature confirms that Bayesian approaches provide "strong and stable baselines" and that ML augmentation yields "modest but consistent improvements."
+Replacing the Bayesian strength model with a trained ML model requires a backtesting dataset of 90-135+ races (2-3 full Superclasico seasons), which does not yet exist. Academic results in cycling prediction show marginal gains from ML over well-tuned baselines: Kholkine et al. (2021) achieved 0.82 NDCG@10 with learn-to-rank, but this was only ~3% above a tuned logistic regression baseline. The FPL literature confirms that Bayesian approaches provide "strong and stable baselines" and that ML augmentation yields "modest but consistent improvements."
 
 **Prerequisites:**
 
-- Backtesting dataset of 90-135+ races (2-3 full Superclassico seasons)
+- Backtesting dataset of 90-135+ races (2-3 full Superclasico seasons)
 - Feature engineering pipeline from Phases 1-7
 
 **Approach:**
