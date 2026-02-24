@@ -5,6 +5,374 @@ This module provides utilities to quickly set up race analysis with
 standard URL patterns and configurations for common races.
 """
 
+# ---------------------------------------------------------------------------
+# Race metadata (single source of truth)
+# ---------------------------------------------------------------------------
+
+"""
+    RaceInfo
+
+Metadata for a Superclasico race: name, template date, scoring category,
+PCS slug, and terrain-similar races.
+"""
+struct RaceInfo
+    name::String
+    date::String
+    category::Int
+    pcs_slug::String
+    similar_races::Vector{String}
+end
+
+# Convenience constructor without similar_races (defaults to empty)
+RaceInfo(name, date, category, pcs_slug) =
+    RaceInfo(name, date, category, pcs_slug, String[])
+
+"""Complete 2025 Superclasico race schedule with categories, PCS slugs, and terrain similarity."""
+const SUPERCLASICO_RACES_2025 = [
+    # Flemish hilly (bergs + short cobbled sections)
+    RaceInfo(
+        "Omloop Nieuwsblad",
+        "2025-03-01",
+        2,
+        "omloop-het-nieuwsblad",
+        [
+            "e3-harelbeke",
+            "gent-wevelgem",
+            "dwars-door-vlaanderen",
+            "classic-brugge-de-panne",
+        ],
+    ),
+    RaceInfo(
+        "Kuurne-Brussel-Kuurne",
+        "2025-03-02",
+        3,
+        "kuurne-brussel-kuurne",
+        ["scheldeprijs", "classic-brugge-de-panne", "paris-tours", "eschborn-frankfurt"],
+    ),
+    RaceInfo(
+        "Trofeo Laigueglia",
+        "2025-03-05",
+        3,
+        "trofeo-laigueglia",
+        ["milano-torino", "gran-piemonte", "coppa-sabatini"],
+    ),
+    RaceInfo("Strade Bianche", "2025-03-08", 2, "strade-bianche", ["milano-sanremo"]),
+    RaceInfo(
+        "Milano-Torino",
+        "2025-03-19",
+        3,
+        "milano-torino",
+        ["gran-piemonte", "trofeo-laigueglia", "giro-dell-emilia"],
+    ),
+    RaceInfo("Milano-Sanremo", "2025-03-22", 1, "milano-sanremo", ["strade-bianche"]),
+    RaceInfo(
+        "Classic Brugge-De Panne",
+        "2025-03-26",
+        2,
+        "classic-brugge-de-panne",
+        ["gent-wevelgem", "omloop-het-nieuwsblad", "kuurne-brussel-kuurne"],
+    ),
+    RaceInfo(
+        "E3 Saxo Classic",
+        "2025-03-28",
+        2,
+        "e3-harelbeke",
+        [
+            "omloop-het-nieuwsblad",
+            "ronde-van-vlaanderen",
+            "dwars-door-vlaanderen",
+            "gent-wevelgem",
+        ],
+    ),
+    RaceInfo(
+        "Gent-Wevelgem",
+        "2025-03-30",
+        2,
+        "gent-wevelgem",
+        [
+            "omloop-het-nieuwsblad",
+            "e3-harelbeke",
+            "classic-brugge-de-panne",
+            "dwars-door-vlaanderen",
+        ],
+    ),
+    RaceInfo(
+        "Dwars door Vlaanderen",
+        "2025-04-02",
+        2,
+        "dwars-door-vlaanderen",
+        ["e3-harelbeke", "omloop-het-nieuwsblad", "ronde-van-vlaanderen", "gent-wevelgem"],
+    ),
+    RaceInfo(
+        "Ronde van Vlaanderen",
+        "2025-04-06",
+        1,
+        "ronde-van-vlaanderen",
+        ["e3-harelbeke", "dwars-door-vlaanderen", "omloop-het-nieuwsblad"],
+    ),
+    RaceInfo(
+        "Scheldeprijs",
+        "2025-04-09",
+        3,
+        "scheldeprijs",
+        ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "eschborn-frankfurt"],
+    ),
+    RaceInfo(
+        "Paris-Roubaix",
+        "2025-04-13",
+        1,
+        "paris-roubaix",
+        ["e3-harelbeke", "ronde-van-vlaanderen", "dwars-door-vlaanderen"],
+    ),
+    # Ardennes hilly (steep punchy climbs)
+    RaceInfo(
+        "De Brabantse Pijl",
+        "2025-04-18",
+        3,
+        "brabantse-pijl",
+        ["la-fleche-wallonne", "amstel-gold-race", "liege-bastogne-liege"],
+    ),
+    RaceInfo(
+        "Amstel Gold Race",
+        "2025-04-20",
+        2,
+        "amstel-gold-race",
+        ["la-fleche-wallonne", "liege-bastogne-liege", "brabantse-pijl"],
+    ),
+    RaceInfo(
+        "La Fleche Wallonne",
+        "2025-04-23",
+        2,
+        "la-fleche-wallonne",
+        ["liege-bastogne-liege", "amstel-gold-race", "brabantse-pijl"],
+    ),
+    RaceInfo(
+        "Liege-Bastogne-Liege",
+        "2025-04-27",
+        1,
+        "liege-bastogne-liege",
+        ["la-fleche-wallonne", "amstel-gold-race", "brabantse-pijl"],
+    ),
+    RaceInfo(
+        "Eschborn-Frankfurt",
+        "2025-05-01",
+        2,
+        "eschborn-frankfurt",
+        ["kuurne-brussel-kuurne", "scheldeprijs", "cyclassics-hamburg"],
+    ),
+    # French regional
+    RaceInfo(
+        "Grand Prix du Morbihan",
+        "2025-05-10",
+        3,
+        "gp-de-plumelec",
+        ["quatre-jours-de-dunkerque", "tro-bro-leon"],
+    ),
+    RaceInfo(
+        "Tro-Bro Leon",
+        "2025-05-11",
+        3,
+        "tro-bro-leon",
+        ["gp-de-plumelec", "quatre-jours-de-dunkerque"],
+    ),
+    RaceInfo(
+        "Classique Dunkerque",
+        "2025-05-13",
+        3,
+        "quatre-jours-de-dunkerque",
+        ["gp-de-plumelec", "circuit-franco-belge"],
+    ),
+    # Belgian hilly
+    RaceInfo(
+        "Brussels Cycling Classic",
+        "2025-06-08",
+        2,
+        "brussels-cycling-classic",
+        ["dwars-door-het-hageland", "omloop-het-nieuwsblad"],
+    ),
+    RaceInfo(
+        "Dwars door het Hageland",
+        "2025-06-14",
+        3,
+        "dwars-door-het-hageland",
+        ["brussels-cycling-classic", "classic-brugge-de-panne"],
+    ),
+    # Flat sprint
+    RaceInfo(
+        "Copenhagen Sprint",
+        "2025-06-22",
+        2,
+        "copenhagen-sprint",
+        ["scheldeprijs", "kuurne-brussel-kuurne"],
+    ),
+    # Punchy hilly (mixed terrain, moderate climbs)
+    RaceInfo(
+        "Donostia San Sebastian Klasikoa",
+        "2025-08-02",
+        2,
+        "san-sebastian",
+        ["bretagne-classic", "gp-quebec", "gp-montreal"],
+    ),
+    RaceInfo(
+        "Circuit Franco-Belge",
+        "2025-08-15",
+        3,
+        "circuit-franco-belge",
+        ["quatre-jours-de-dunkerque", "kuurne-brussel-kuurne"],
+    ),
+    RaceInfo(
+        "ADAC Cyclassics Hamburg",
+        "2025-08-17",
+        2,
+        "cyclassics-hamburg",
+        ["eschborn-frankfurt", "gp-montreal"],
+    ),
+    RaceInfo(
+        "Bretagne Classic",
+        "2025-08-31",
+        2,
+        "bretagne-classic",
+        ["san-sebastian", "gp-quebec"],
+    ),
+    RaceInfo(
+        "GP Industria & Artigianato",
+        "2025-09-07",
+        3,
+        "gp-industria-e-artigianato-di-larciano",
+        ["coppa-sabatini", "coppa-bernocchi"],
+    ),
+    RaceInfo(
+        "Coppa Sabatini",
+        "2025-09-11",
+        3,
+        "coppa-sabatini",
+        ["giro-dell-emilia", "trofeo-laigueglia"],
+    ),
+    RaceInfo(
+        "Grand Prix Cycliste de Quebec",
+        "2025-09-12",
+        2,
+        "gp-quebec",
+        ["gp-montreal", "san-sebastian", "bretagne-classic"],
+    ),
+    RaceInfo(
+        "Grand Prix Cycliste de Montreal",
+        "2025-09-14",
+        2,
+        "gp-montreal",
+        ["gp-quebec", "san-sebastian", "cyclassics-hamburg"],
+    ),
+    RaceInfo(
+        "Grand Prix de Wallonie",
+        "2025-09-17",
+        3,
+        "gp-de-wallonie",
+        ["la-fleche-wallonne", "brabantse-pijl"],
+    ),
+    RaceInfo(
+        "SUPER 8 Classic",
+        "2025-09-20",
+        3,
+        "super-8-classic",
+        ["brussels-cycling-classic", "dwars-door-het-hageland"],
+    ),
+    RaceInfo("Worlds Elite Road Race", "2025-09-28", 1, "world-championship"),
+    # Italian autumn classics
+    RaceInfo(
+        "Sparkassen Munsterland Giro",
+        "2025-10-03",
+        3,
+        "sparkassen-muensterland-giro",
+        ["eschborn-frankfurt", "cyclassics-hamburg"],
+    ),
+    RaceInfo(
+        "Giro dell'Emilia",
+        "2025-10-04",
+        3,
+        "giro-dell-emilia",
+        ["il-lombardia", "tre-valli-varesine", "coppa-sabatini"],
+    ),
+    RaceInfo(
+        "Coppa Bernocchi",
+        "2025-10-06",
+        3,
+        "coppa-bernocchi",
+        ["tre-valli-varesine", "gran-piemonte"],
+    ),
+    RaceInfo(
+        "Tre Valli Varesine",
+        "2025-10-07",
+        3,
+        "tre-valli-varesine",
+        ["giro-dell-emilia", "il-lombardia", "gran-piemonte"],
+    ),
+    RaceInfo(
+        "Gran Piemonte",
+        "2025-10-09",
+        3,
+        "gran-piemonte",
+        ["tre-valli-varesine", "giro-dell-emilia", "milano-torino"],
+    ),
+    RaceInfo(
+        "Il Lombardia",
+        "2025-10-11",
+        1,
+        "il-lombardia",
+        ["giro-dell-emilia", "tre-valli-varesine", "gran-piemonte"],
+    ),
+    RaceInfo(
+        "Paris-Tours",
+        "2025-10-12",
+        3,
+        "paris-tours",
+        ["kuurne-brussel-kuurne", "eschborn-frankfurt", "scheldeprijs"],
+    ),
+    RaceInfo(
+        "Giro del Veneto",
+        "2025-10-15",
+        3,
+        "giro-del-veneto",
+        ["veneto-classic", "gran-piemonte"],
+    ),
+    RaceInfo(
+        "Veneto Classic",
+        "2025-10-19",
+        3,
+        "veneto-classic",
+        ["giro-del-veneto", "gran-piemonte"],
+    ),
+]
+
+"""Terrain-similar race mapping, derived from `SUPERCLASICO_RACES_2025`."""
+const SIMILAR_RACES = Dict{String,Vector{String}}(
+    ri.pcs_slug => ri.similar_races for
+    ri in SUPERCLASICO_RACES_2025 if !isempty(ri.similar_races)
+)
+
+"""
+    find_race(name::String; year::Int=2025) -> Union{RaceInfo, Nothing}
+
+Find a race in the Superclasico schedule by partial name match (case-insensitive).
+Returns the first matching RaceInfo or nothing.
+"""
+function find_race(name::String; year::Int = 2025)
+    name_lower = lowercase(name)
+    if year != 2025
+        @warn "Race schedule data is from 2025; using it as approximation for $year"
+    end
+    for race in SUPERCLASICO_RACES_2025
+        if occursin(name_lower, lowercase(race.name))
+            return race
+        end
+    end
+    return nothing
+end
+
+
+# ---------------------------------------------------------------------------
+# Race configuration
+# ---------------------------------------------------------------------------
+
 """
 Race configuration data structure.
 
@@ -42,7 +410,7 @@ Returns a RaceConfig with standard URLs and settings for common races.
 - `race_name::String`: Race identifier (e.g., "tdf", "vuelta", "giro", "liege", "roubaix")
 - `year::Int`: Year of the race
 - `race_type::Symbol`: `:stage`, `:oneday`, or `:auto` (default). `:auto` infers the
-  type from the race pattern — Superclassico races (category > 0) are one-day, others are stage.
+  type from the race pattern — Superclasico races (category > 0) are one-day, others are stage.
 - `cache_config::CacheConfig`: Cache configuration (default: `DEFAULT_CACHE`)
 
 # Returns
@@ -68,26 +436,16 @@ function setup_race(
     race_type::Symbol = :auto;
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
-    # Get URL pattern for this race
+    # Get URL pattern for this race (includes schedule fallback)
     pattern = get_url_pattern(race_name)
 
     # Build the current URL
     current_url = replace(pattern.template, "{year}" => string(year))
 
-    # Look up scoring category and PCS slug from the Superclassico schedule
-    category = get(pattern, :category, 0)
-    pcs_slug = get(pattern, :pcs_slug, "")
+    category = pattern.category
+    pcs_slug = pattern.pcs_slug
 
-    # Also try to find in the race schedule if not in the pattern
-    if category == 0
-        race_info = find_race(race_name; year = year)
-        if race_info !== nothing
-            category = race_info.category
-            pcs_slug = race_info.pcs_slug
-        end
-    end
-
-    # Auto-detect race type: Superclassico races (category > 0) are one-day
+    # Auto-detect race type: Superclasico races (category > 0) are one-day
     if race_type == :auto
         race_type = category > 0 ? :oneday : :stage
     end
@@ -120,435 +478,145 @@ function setup_race(
 end
 
 
+"""VG URL template for Superclasico races (shared with backtest.jl)."""
+const VG_SUPERCLASICO_URL = "https://www.velogames.com/sixes-superclasico/{year}/riders.php"
+
+"""Grand tour URL patterns (separate competition from Superclasico)."""
+const _GRAND_TOUR_PATTERNS =
+    Dict{String,NamedTuple{(:slug, :template),Tuple{String,String}}}(
+        "tdf" => (
+            slug = "velogame",
+            template = "https://www.velogames.com/velogame/{year}/riders.php",
+        ),
+        "tour" => (
+            slug = "velogame",
+            template = "https://www.velogames.com/velogame/{year}/riders.php",
+        ),
+        "tourdefrance" => (
+            slug = "velogame",
+            template = "https://www.velogames.com/velogame/{year}/riders.php",
+        ),
+        "vuelta" => (
+            slug = "spain",
+            template = "https://www.velogames.com/spain/{year}/riders.php",
+        ),
+        "spain" => (
+            slug = "spain",
+            template = "https://www.velogames.com/spain/{year}/riders.php",
+        ),
+        "giro" =>
+            (slug = "giro", template = "https://www.velogames.com/giro/{year}/riders.php"),
+        "giroditalia" =>
+            (slug = "giro", template = "https://www.velogames.com/giro/{year}/riders.php"),
+    )
+
+"""Human-friendly aliases mapping to PCS slugs for Superclasico races."""
+const _SUPERCLASICO_ALIASES = Dict{String,String}(
+    # Monuments
+    "liege" => "liege-bastogne-liege",
+    "liegebastogneliege" => "liege-bastogne-liege",
+    "roubaix" => "paris-roubaix",
+    "parisroubaix" => "paris-roubaix",
+    "flanders" => "ronde-van-vlaanderen",
+    "ronde" => "ronde-van-vlaanderen",
+    "lombardia" => "il-lombardia",
+    "ilombardia" => "il-lombardia",
+    "sanremo" => "milano-sanremo",
+    "milansanremo" => "milano-sanremo",
+    "worlds" => "world-championship",
+    # Belgian opening weekend
+    "omloop" => "omloop-het-nieuwsblad",
+    "omloopnieuwsblad" => "omloop-het-nieuwsblad",
+    "kuurne" => "kuurne-brussel-kuurne",
+    "kuurnebrussels" => "kuurne-brussel-kuurne",
+    # Cobbled classics
+    "stradebianche" => "strade-bianche",
+    "strade" => "strade-bianche",
+    "bruggepanne" => "classic-brugge-de-panne",
+    "e3" => "e3-harelbeke",
+    "gentwevelgem" => "gent-wevelgem",
+    "dwars" => "dwars-door-vlaanderen",
+    "scheldeprijs" => "scheldeprijs",
+    # Ardennes classics
+    "amstel" => "amstel-gold-race",
+    "amstelgoldrace" => "amstel-gold-race",
+    "fleche" => "la-fleche-wallonne",
+    "flechewallonne" => "la-fleche-wallonne",
+    "brabantse" => "brabantse-pijl",
+    # Other
+    "eschborn" => "eschborn-frankfurt",
+    "brussels" => "brussels-cycling-classic",
+    "sansebastian" => "san-sebastian",
+    "hamburg" => "cyclassics-hamburg",
+    "bretagne" => "bretagne-classic",
+    "quebec" => "gp-quebec",
+    "montreal" => "gp-montreal",
+    "laigueglia" => "trofeo-laigueglia",
+    "milanotorino" => "milano-torino",
+    "paristours" => "paris-tours",
+)
+
 """
     get_url_pattern(race_name::String)
 
 Get the URL pattern for a given race name.
 
-Returns a NamedTuple with (slug, template) where template uses {year} placeholder.
+Returns a NamedTuple with (slug, template, category, pcs_slug) where template
+uses {year} placeholder. Looks up Superclasico aliases against the canonical
+race schedule; grand tours have their own URL patterns.
 """
 function get_url_pattern(race_name::String)
-    # Normalize race name
     race_lower = lowercase(strip(race_name))
 
-    # Known race patterns. NamedTuples include optional category and pcs_slug for Superclassico races.
-    # All Superclassico races use the same VG URL: sixes-superclasico/{year}/riders.php
-    superclasico_tpl = "https://www.velogames.com/sixes-superclasico/{year}/riders.php"
+    # Grand tours have their own URL templates
+    if haskey(_GRAND_TOUR_PATTERNS, race_lower)
+        gt = _GRAND_TOUR_PATTERNS[race_lower]
+        return (slug = gt.slug, template = gt.template, category = 0, pcs_slug = "")
+    end
 
-    patterns = Dict(
-        # Grand Tours (no scoring category -- different competition)
-        "tdf" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
-            category = 0,
-            pcs_slug = "",
-        ),
-        "tour" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
-            category = 0,
-            pcs_slug = "",
-        ),
-        "tourdefrance" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
-            category = 0,
-            pcs_slug = "",
-        ),
-        "vuelta" => (
-            slug = "spain",
-            template = "https://www.velogames.com/spain/{year}/riders.php",
-            category = 0,
-            pcs_slug = "",
-        ),
-        "spain" => (
-            slug = "spain",
-            template = "https://www.velogames.com/spain/{year}/riders.php",
-            category = 0,
-            pcs_slug = "",
-        ),
-        "giro" => (
-            slug = "giro",
-            template = "https://www.velogames.com/giro/{year}/riders.php",
-            category = 0,
-            pcs_slug = "",
-        ),
-        "giroditalia" => (
-            slug = "giro",
-            template = "https://www.velogames.com/giro/{year}/riders.php",
-            category = 0,
-            pcs_slug = "",
-        ),
+    # Superclasico alias lookup
+    if haskey(_SUPERCLASICO_ALIASES, race_lower)
+        pcs_slug = _SUPERCLASICO_ALIASES[race_lower]
+        ri = _find_race_by_slug(pcs_slug)
+        if ri !== nothing
+            return (
+                slug = "sixes-superclasico",
+                template = VG_SUPERCLASICO_URL,
+                category = ri.category,
+                pcs_slug = ri.pcs_slug,
+            )
+        end
+    end
 
-        # Monuments (Cat 1 in Superclassico)
-        "liege" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "liege-bastogne-liege",
-        ),
-        "liegebastogneliege" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "liege-bastogne-liege",
-        ),
-        "roubaix" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "paris-roubaix",
-        ),
-        "parisroubaix" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "paris-roubaix",
-        ),
-        "flanders" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "ronde-van-vlaanderen",
-        ),
-        "ronde" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "ronde-van-vlaanderen",
-        ),
-        "lombardia" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "il-lombardia",
-        ),
-        "ilombardia" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "il-lombardia",
-        ),
-        "sanremo" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "milano-sanremo",
-        ),
-        "milansanremo" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "milano-sanremo",
-        ),
-
-        # Belgian Opening Weekend (Cat 2 + Cat 3)
-        "omloop" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "omloop-het-nieuwsblad",
-        ),
-        "omloopnieuwsblad" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "omloop-het-nieuwsblad",
-        ),
-        "kuurne" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 3,
-            pcs_slug = "kuurne-brussel-kuurne",
-        ),
-        "kuurnebrussels" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 3,
-            pcs_slug = "kuurne-brussel-kuurne",
-        ),
-
-        # Cobbled Classics (Cat 2)
-        "stradebianche" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "strade-bianche",
-        ),
-        "strade" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "strade-bianche",
-        ),
-        "bruggepanne" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "classic-brugge-de-panne",
-        ),
-        "e3" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "e3-harelbeke",
-        ),
-        "gentwevelgem" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "gent-wevelgem",
-        ),
-        "dwars" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "dwars-door-vlaanderen",
-        ),
-        "scheldeprijs" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 3,
-            pcs_slug = "scheldeprijs",
-        ),
-
-        # Ardennes Classics (Cat 2)
-        "amstel" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "amstel-gold-race",
-        ),
-        "amstelgoldrace" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "amstel-gold-race",
-        ),
-        "fleche" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "la-fleche-wallonne",
-        ),
-        "flechewallonne" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "la-fleche-wallonne",
-        ),
-
-        # Other Cat 2 races
-        "eschborn" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "eschborn-frankfurt",
-        ),
-        "brussels" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "brussels-cycling-classic",
-        ),
-        "sansebastian" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "donostia-san-sebastian-klasikoa",
-        ),
-        "hamburg" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "cyclassics-hamburg",
-        ),
-        "bretagne" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "bretagne-classic",
-        ),
-        "quebec" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "gp-quebec",
-        ),
-        "montreal" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 2,
-            pcs_slug = "gp-montreal",
-        ),
-
-        # Cat 3 races
-        "laigueglia" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 3,
-            pcs_slug = "trofeo-laigueglia",
-        ),
-        "milanoTorino" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 3,
-            pcs_slug = "milano-torino",
-        ),
-        "brabantse" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 3,
-            pcs_slug = "de-brabantse-pijl",
-        ),
-        "paristours" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 3,
-            pcs_slug = "paris-tours",
-        ),
-
-        # Worlds (Cat 1)
-        "worlds" => (
-            slug = "sixes-superclasico",
-            template = superclasico_tpl,
-            category = 1,
-            pcs_slug = "world-championship",
-        ),
-    )
-
-    if haskey(patterns, race_lower)
-        return patterns[race_lower]
-    else
-        @warn """Unknown race: '$race_name'
-
-        Supported races:
-          Grand Tours: tdf, vuelta, giro
-          Monuments: roubaix, flanders, liege, lombardia, sanremo
-          Classics: amstel, fleche
-
-        Using generic pattern - you'll need to check the URL manually.
-        """
-
-        # Return a generic pattern with the race name as slug
-        sanitized = replace(race_lower, r"[^a-z0-9]" => "-")
+    # Fallback: try partial name match against the race schedule
+    ri = find_race(race_name)
+    if ri !== nothing
         return (
-            slug = sanitized,
-            template = "https://www.velogames.com/$sanitized/{year}/riders.php",
-            category = 0,
-            pcs_slug = "",
+            slug = "sixes-superclasico",
+            template = VG_SUPERCLASICO_URL,
+            category = ri.category,
+            pcs_slug = ri.pcs_slug,
         )
     end
+
+    @warn """Unknown race: '$race_name'
+
+    Supported races:
+      Grand Tours: tdf, vuelta, giro
+      Monuments: roubaix, flanders, liege, lombardia, sanremo
+      Classics: amstel, fleche
+
+    Using generic pattern - you'll need to check the URL manually.
+    """
+
+    sanitized = replace(race_lower, r"[^a-z0-9]" => "-")
+    return (
+        slug = sanitized,
+        template = "https://www.velogames.com/$sanitized/{year}/riders.php",
+        category = 0,
+        pcs_slug = "",
+    )
 end
-
-
-"""
-Terrain-similar race mapping for cross-race history.
-
-Maps each PCS race slug to a list of terrain-similar races. Results from similar
-races feed into the Bayesian strength model with higher variance (less precise)
-than same-race history, expanding the evidence base for riders without exact-race
-history.
-"""
-const SIMILAR_RACES = Dict{String,Vector{String}}(
-    # Flemish hilly (bergs + short cobbled sections)
-    "omloop-het-nieuwsblad" =>
-        ["e3-harelbeke", "gent-wevelgem", "dwars-door-vlaanderen", "classic-brugge-de-panne"],
-    "e3-harelbeke" =>
-        ["omloop-het-nieuwsblad", "ronde-van-vlaanderen", "dwars-door-vlaanderen", "gent-wevelgem"],
-    "gent-wevelgem" =>
-        ["omloop-het-nieuwsblad", "e3-harelbeke", "classic-brugge-de-panne", "dwars-door-vlaanderen"],
-    "dwars-door-vlaanderen" =>
-        ["e3-harelbeke", "omloop-het-nieuwsblad", "ronde-van-vlaanderen", "gent-wevelgem"],
-    "ronde-van-vlaanderen" =>
-        ["e3-harelbeke", "dwars-door-vlaanderen", "omloop-het-nieuwsblad"],
-    "classic-brugge-de-panne" =>
-        ["gent-wevelgem", "omloop-het-nieuwsblad", "kuurne-brussel-kuurne"],
-    # Flat sprint / fast classics
-    "kuurne-brussel-kuurne" =>
-        ["scheldeprijs", "classic-brugge-de-panne", "paris-tours", "eschborn-frankfurt"],
-    "scheldeprijs" =>
-        ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "eschborn-frankfurt"],
-    "paris-tours" =>
-        ["kuurne-brussel-kuurne", "eschborn-frankfurt", "scheldeprijs"],
-    "eschborn-frankfurt" =>
-        ["kuurne-brussel-kuurne", "scheldeprijs", "cyclassics-hamburg"],
-    "copenhagen-sprint" =>
-        ["scheldeprijs", "kuurne-brussel-kuurne"],
-    # Cobbled specialist
-    "paris-roubaix" =>
-        ["e3-harelbeke", "ronde-van-vlaanderen", "dwars-door-vlaanderen"],
-    # Ardennes hilly (steep punchy climbs)
-    "liege-bastogne-liege" =>
-        ["la-fleche-wallonne", "amstel-gold-race", "de-brabantse-pijl"],
-    "la-fleche-wallonne" =>
-        ["liege-bastogne-liege", "amstel-gold-race", "de-brabantse-pijl"],
-    "amstel-gold-race" =>
-        ["la-fleche-wallonne", "liege-bastogne-liege", "de-brabantse-pijl"],
-    "de-brabantse-pijl" =>
-        ["la-fleche-wallonne", "amstel-gold-race", "liege-bastogne-liege"],
-    "gp-de-wallonie" =>
-        ["la-fleche-wallonne", "de-brabantse-pijl"],
-    # Italian hilly (autumn classics)
-    "il-lombardia" =>
-        ["giro-dell-emilia", "tre-valli-varesine", "gran-piemonte"],
-    "giro-dell-emilia" =>
-        ["il-lombardia", "tre-valli-varesine", "coppa-sabatini"],
-    "tre-valli-varesine" =>
-        ["giro-dell-emilia", "il-lombardia", "gran-piemonte"],
-    "gran-piemonte" =>
-        ["tre-valli-varesine", "giro-dell-emilia", "milano-torino"],
-    "milano-torino" =>
-        ["gran-piemonte", "trofeo-laigueglia", "giro-dell-emilia"],
-    "trofeo-laigueglia" =>
-        ["milano-torino", "gran-piemonte", "coppa-sabatini"],
-    "coppa-sabatini" =>
-        ["giro-dell-emilia", "trofeo-laigueglia"],
-    "coppa-bernocchi" =>
-        ["tre-valli-varesine", "gran-piemonte"],
-    "giro-del-veneto" =>
-        ["veneto-classic", "gran-piemonte"],
-    "veneto-classic" =>
-        ["giro-del-veneto", "gran-piemonte"],
-    # Long/unique races (limited similarity)
-    "milano-sanremo" => ["strade-bianche"],
-    "strade-bianche" => ["milano-sanremo"],
-    # Punchy hilly (mixed terrain, moderate climbs)
-    "donostia-san-sebastian-klasikoa" =>
-        ["bretagne-classic", "gp-quebec", "gp-montreal"],
-    "bretagne-classic" =>
-        ["donostia-san-sebastian-klasikoa", "gp-quebec"],
-    "cyclassics-hamburg" =>
-        ["eschborn-frankfurt", "gp-montreal"],
-    "gp-quebec" =>
-        ["gp-montreal", "donostia-san-sebastian-klasikoa", "bretagne-classic"],
-    "gp-montreal" =>
-        ["gp-quebec", "donostia-san-sebastian-klasikoa", "cyclassics-hamburg"],
-    # French regional
-    "grand-prix-du-morbihan" =>
-        ["quatre-jours-de-dunkerque", "tro-bro-leon"],
-    "tro-bro-leon" =>
-        ["grand-prix-du-morbihan", "quatre-jours-de-dunkerque"],
-    "quatre-jours-de-dunkerque" =>
-        ["grand-prix-du-morbihan", "circuit-franco-belge"],
-    "circuit-franco-belge" =>
-        ["quatre-jours-de-dunkerque", "kuurne-brussel-kuurne"],
-    # Belgian hilly
-    "brussels-cycling-classic" =>
-        ["dwars-door-het-hageland", "omloop-het-nieuwsblad"],
-    "dwars-door-het-hageland" =>
-        ["brussels-cycling-classic", "classic-brugge-de-panne"],
-    "super-8-classic" =>
-        ["brussels-cycling-classic", "dwars-door-het-hageland"],
-    # German/misc
-    "sparkassen-muensterland-giro" =>
-        ["eschborn-frankfurt", "cyclassics-hamburg"],
-    # Worlds is unique
-    "world-championship" => String[],
-    # GP Industria
-    "gp-industria-e-artigianato-di-larciano" =>
-        ["coppa-sabatini", "coppa-bernocchi"],
-)
 
 
 """
@@ -602,6 +670,26 @@ function print_race_info(config::RaceConfig)
     println("Cache:")
     println("  Directory: $(config.cache.cache_dir)")
     println("  Max Age:   $(config.cache.max_age_hours) hours")
-    println("  Enabled:   $(config.cache.enabled)")
     println("="^60)
+end
+
+
+# ---------------------------------------------------------------------------
+# Race lookup helpers (used by data assembly and backtesting)
+# ---------------------------------------------------------------------------
+
+"""Find a RaceInfo by PCS slug from the 2025 schedule template."""
+function _find_race_by_slug(pcs_slug::String)
+    for ri in SUPERCLASICO_RACES_2025
+        if ri.pcs_slug == pcs_slug
+            return ri
+        end
+    end
+    return nothing
+end
+
+"""Compute a race date for a given year using the template date."""
+function _race_date_for_year(ri::RaceInfo, year::Int)
+    template = Date(ri.date)
+    return Date(year, Dates.month(template), Dates.day(template))
 end
