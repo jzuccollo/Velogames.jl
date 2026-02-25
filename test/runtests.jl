@@ -240,9 +240,9 @@ end
 # =========================================================================
 
 @testset "Scoring System" begin
-    @test SCORING_CAT1.finish_points[1] == 600
-    @test SCORING_CAT2.finish_points[1] == 450
-    @test SCORING_CAT3.finish_points[1] == 300
+    @test SCORING_CAT1.finish_points[1] == 640
+    @test SCORING_CAT2.finish_points[1] == 480
+    @test SCORING_CAT3.finish_points[1] == 320
     @test SCORING_CAT1.finish_points[30] == 12
     @test SCORING_CAT1.assist_points[1] == 90
     @test SCORING_CAT1.breakaway_points == 60
@@ -263,20 +263,20 @@ end
     @test_throws ArgumentError get_scoring(4)
     @test_throws ArgumentError get_scoring(:invalid)
 
-    @test finish_points_for_position(1, SCORING_CAT1) == 600
+    @test finish_points_for_position(1, SCORING_CAT1) == 640
     @test finish_points_for_position(31, SCORING_CAT1) == 0
     @test finish_points_for_position(0, SCORING_CAT1) == 0
 
     probs_certain_win = zeros(30)
     probs_certain_win[1] = 1.0
-    @test expected_finish_points(probs_certain_win, SCORING_CAT1) == 600.0
+    @test expected_finish_points(probs_certain_win, SCORING_CAT1) == 640.0
     @test expected_finish_points(zeros(30), SCORING_CAT1) == 0.0
 end
 
 @testset "Race Configuration" begin
-    @test length(SUPERCLASICO_RACES_2025) == 44
-    @test count(r -> r.category == 1, SUPERCLASICO_RACES_2025) == 6
-    @test all(r -> r.category in [1, 2, 3], SUPERCLASICO_RACES_2025)
+    @test length(CLASSICS_RACES_2026) == 44
+    @test count(r -> r.category == 1, CLASSICS_RACES_2026) == 7
+    @test all(r -> r.category in [1, 2, 3], CLASSICS_RACES_2026)
 
     omloop = find_race("Omloop")
     @test omloop !== nothing &&
@@ -674,12 +674,12 @@ end
 
     @testset "build_race_catalogue" begin
         catalogue = build_race_catalogue([2024])
-        @test length(catalogue) == length(SUPERCLASICO_RACES_2025)
+        @test length(catalogue) == length(CLASSICS_RACES_2026)
         @test all(r -> r.year == 2024, catalogue)
         @test all(r -> r.history_years == 5, catalogue)
 
         catalogue2 = build_race_catalogue([2023, 2024])
-        @test length(catalogue2) == 2 * length(SUPERCLASICO_RACES_2025)
+        @test length(catalogue2) == 2 * length(CLASSICS_RACES_2026)
 
         catalogue3 = build_race_catalogue([2024]; history_years = 3)
         @test all(r -> r.history_years == 3, catalogue3)

@@ -378,7 +378,7 @@ end
 
 Estimate expected breakaway points using heuristics.
 
-The Superclasico awards breakaway points at 4 sectors (50% distance, 50km, 20km, 10km).
+The Sixes Classics awards breakaway points at 4 sectors (50% distance, 50km, 20km, 10km).
 A "leading group" is <= 20 riders with >5s gap.
 
 Heuristic approach:

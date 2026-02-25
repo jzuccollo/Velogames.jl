@@ -495,9 +495,6 @@ end
 # VG race catalogue and per-race results
 # ---------------------------------------------------------------------------
 
-"""VG game ID for the Superclasico Sixes (stable across years)."""
-const VG_SUPERCLASICO_GAME_ID = 13
-
 """
     normalise_race_name(name::String) -> String
 
@@ -514,7 +511,7 @@ end
 """
     getvgracelist(year::Int; cache_config, force_refresh) -> DataFrame
 
-Scrape the VG Superclasico races page for a given year. Returns a DataFrame
+Scrape the VG one-day classics races page for a given year. Returns a DataFrame
 with columns: `race_number` (Int, the `st` parameter for ridescore URLs),
 `name` (String), `deadline` (String), `category` (Int), `namekey` (String,
 normalised name for matching).
@@ -524,7 +521,8 @@ function getvgracelist(
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
 )
-    url = "https://www.velogames.com/sixes-superclasico/$year/races.php"
+    slug = vg_classics_slug(year)
+    url = "https://www.velogames.com/$slug/$year/races.php"
 
     function fetch_racelist(url, params)
         tables = scrape_html_tables(url)
@@ -604,8 +602,8 @@ end
     getvgraceresults(year::Int, race_number::Int; cache_config, force_refresh) -> DataFrame
 
 Fetch VG rider scores for a specific race. Constructs the ridescore URL
-using `ga=\$VG_SUPERCLASICO_GAME_ID&st=\$race_number` and delegates to
-`getvgracepoints()`. Returns DataFrame(rider, team, score, riderkey).
+using the year-aware game ID and delegates to `getvgracepoints()`.
+Returns DataFrame(rider, team, score, riderkey).
 """
 function getvgraceresults(
     year::Int,
@@ -613,7 +611,9 @@ function getvgraceresults(
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
 )
-    url = "https://www.velogames.com/sixes-superclasico/$year/ridescore.php?ga=$VG_SUPERCLASICO_GAME_ID&st=$race_number"
+    slug = vg_classics_slug(year)
+    game_id = vg_classics_game_id(year)
+    url = "https://www.velogames.com/$slug/$year/ridescore.php?ga=$game_id&st=$race_number"
     return getvgracepoints(url; cache_config = cache_config, force_refresh = force_refresh)
 end
 

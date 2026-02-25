@@ -12,7 +12,7 @@ standard URL patterns and configurations for common races.
 """
     RaceInfo
 
-Metadata for a Superclasico race: name, template date, scoring category,
+Metadata for a one-day classics race: name, template date, scoring category,
 PCS slug, and terrain-similar races.
 """
 struct RaceInfo
@@ -27,12 +27,12 @@ end
 RaceInfo(name, date, category, pcs_slug) =
     RaceInfo(name, date, category, pcs_slug, String[])
 
-"""Complete 2025 Superclasico race schedule with categories, PCS slugs, and terrain similarity."""
-const SUPERCLASICO_RACES_2025 = [
+"""Complete 2026 Sixes Classics race schedule with categories, PCS slugs, and terrain similarity."""
+const CLASSICS_RACES_2026 = [
     # Flemish hilly (bergs + short cobbled sections)
     RaceInfo(
         "Omloop Nieuwsblad",
-        "2025-03-01",
+        "2026-02-28",
         2,
         "omloop-het-nieuwsblad",
         [
@@ -43,38 +43,38 @@ const SUPERCLASICO_RACES_2025 = [
         ],
     ),
     RaceInfo(
-        "Kuurne-Brussel-Kuurne",
-        "2025-03-02",
+        "Kuurne - Brussel - Kuurne",
+        "2026-03-01",
         3,
         "kuurne-brussel-kuurne",
         ["scheldeprijs", "classic-brugge-de-panne", "paris-tours", "eschborn-frankfurt"],
     ),
     RaceInfo(
         "Trofeo Laigueglia",
-        "2025-03-05",
+        "2026-03-04",
         3,
         "trofeo-laigueglia",
-        ["milano-torino", "gran-piemonte", "coppa-sabatini"],
+        ["gran-piemonte", "coppa-sabatini"],
     ),
-    RaceInfo("Strade Bianche", "2025-03-08", 2, "strade-bianche", ["milano-sanremo"]),
+    RaceInfo("Strade Bianche", "2026-03-07", 2, "strade-bianche", ["milano-sanremo"]),
     RaceInfo(
-        "Milano-Torino",
-        "2025-03-19",
+        "Danilith Nokere Koerse",
+        "2026-03-18",
         3,
-        "milano-torino",
-        ["gran-piemonte", "trofeo-laigueglia", "giro-dell-emilia"],
+        "nokere-koerse",
+        ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "scheldeprijs"],
     ),
-    RaceInfo("Milano-Sanremo", "2025-03-22", 1, "milano-sanremo", ["strade-bianche"]),
+    RaceInfo("Milano-Sanremo", "2026-03-21", 1, "milano-sanremo", ["strade-bianche"]),
     RaceInfo(
-        "Classic Brugge-De Panne",
-        "2025-03-26",
+        "Ronde Van Brugge",
+        "2026-03-25",
         2,
-        "classic-brugge-de-panne",
+        "de-panne",
         ["gent-wevelgem", "omloop-het-nieuwsblad", "kuurne-brussel-kuurne"],
     ),
     RaceInfo(
         "E3 Saxo Classic",
-        "2025-03-28",
+        "2026-03-27",
         2,
         "e3-harelbeke",
         [
@@ -85,8 +85,8 @@ const SUPERCLASICO_RACES_2025 = [
         ],
     ),
     RaceInfo(
-        "Gent-Wevelgem",
-        "2025-03-30",
+        "In Flanders Fields - From Middelkerke to Wevelgem",
+        "2026-03-29",
         2,
         "gent-wevelgem",
         [
@@ -98,28 +98,28 @@ const SUPERCLASICO_RACES_2025 = [
     ),
     RaceInfo(
         "Dwars door Vlaanderen",
-        "2025-04-02",
+        "2026-04-01",
         2,
         "dwars-door-vlaanderen",
         ["e3-harelbeke", "omloop-het-nieuwsblad", "ronde-van-vlaanderen", "gent-wevelgem"],
     ),
     RaceInfo(
         "Ronde van Vlaanderen",
-        "2025-04-06",
+        "2026-04-05",
         1,
         "ronde-van-vlaanderen",
         ["e3-harelbeke", "dwars-door-vlaanderen", "omloop-het-nieuwsblad"],
     ),
     RaceInfo(
         "Scheldeprijs",
-        "2025-04-09",
+        "2026-04-08",
         3,
         "scheldeprijs",
         ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "eschborn-frankfurt"],
     ),
     RaceInfo(
         "Paris-Roubaix",
-        "2025-04-13",
+        "2026-04-12",
         1,
         "paris-roubaix",
         ["e3-harelbeke", "ronde-van-vlaanderen", "dwars-door-vlaanderen"],
@@ -127,35 +127,35 @@ const SUPERCLASICO_RACES_2025 = [
     # Ardennes hilly (steep punchy climbs)
     RaceInfo(
         "De Brabantse Pijl",
-        "2025-04-18",
+        "2026-04-17",
         3,
         "brabantse-pijl",
         ["la-fleche-wallonne", "amstel-gold-race", "liege-bastogne-liege"],
     ),
     RaceInfo(
         "Amstel Gold Race",
-        "2025-04-20",
-        2,
+        "2026-04-19",
+        1,
         "amstel-gold-race",
         ["la-fleche-wallonne", "liege-bastogne-liege", "brabantse-pijl"],
     ),
     RaceInfo(
         "La Fleche Wallonne",
-        "2025-04-23",
+        "2026-04-22",
         2,
         "la-fleche-wallonne",
         ["liege-bastogne-liege", "amstel-gold-race", "brabantse-pijl"],
     ),
     RaceInfo(
         "Liege-Bastogne-Liege",
-        "2025-04-27",
+        "2026-04-26",
         1,
         "liege-bastogne-liege",
         ["la-fleche-wallonne", "amstel-gold-race", "brabantse-pijl"],
     ),
     RaceInfo(
         "Eschborn-Frankfurt",
-        "2025-05-01",
+        "2026-05-01",
         2,
         "eschborn-frankfurt",
         ["kuurne-brussel-kuurne", "scheldeprijs", "cyclassics-hamburg"],
@@ -163,21 +163,21 @@ const SUPERCLASICO_RACES_2025 = [
     # French regional
     RaceInfo(
         "Grand Prix du Morbihan",
-        "2025-05-10",
+        "2026-05-09",
         3,
         "gp-de-plumelec",
-        ["quatre-jours-de-dunkerque", "tro-bro-leon"],
+        ["tro-bro-leon", "quatre-jours-de-dunkerque"],
     ),
     RaceInfo(
         "Tro-Bro Leon",
-        "2025-05-11",
+        "2026-05-10",
         3,
         "tro-bro-leon",
         ["gp-de-plumelec", "quatre-jours-de-dunkerque"],
     ),
     RaceInfo(
         "Classique Dunkerque",
-        "2025-05-13",
+        "2026-05-19",
         3,
         "quatre-jours-de-dunkerque",
         ["gp-de-plumelec", "circuit-franco-belge"],
@@ -185,14 +185,21 @@ const SUPERCLASICO_RACES_2025 = [
     # Belgian hilly
     RaceInfo(
         "Brussels Cycling Classic",
-        "2025-06-08",
-        2,
+        "2026-06-07",
+        3,
         "brussels-cycling-classic",
         ["dwars-door-het-hageland", "omloop-het-nieuwsblad"],
     ),
     RaceInfo(
-        "Dwars door het Hageland",
-        "2025-06-14",
+        "Circuit Franco-Belge",
+        "2026-06-10",
+        3,
+        "circuit-franco-belge",
+        ["quatre-jours-de-dunkerque", "kuurne-brussel-kuurne"],
+    ),
+    RaceInfo(
+        "Duracell Dwars door het Hageland",
+        "2026-06-13",
         3,
         "dwars-door-het-hageland",
         ["brussels-cycling-classic", "classic-brugge-de-panne"],
@@ -200,7 +207,7 @@ const SUPERCLASICO_RACES_2025 = [
     # Flat sprint
     RaceInfo(
         "Copenhagen Sprint",
-        "2025-06-22",
+        "2026-06-14",
         2,
         "copenhagen-sprint",
         ["scheldeprijs", "kuurne-brussel-kuurne"],
@@ -208,159 +215,149 @@ const SUPERCLASICO_RACES_2025 = [
     # Punchy hilly (mixed terrain, moderate climbs)
     RaceInfo(
         "Donostia San Sebastian Klasikoa",
-        "2025-08-02",
+        "2026-08-01",
         2,
         "san-sebastian",
         ["bretagne-classic", "gp-quebec", "gp-montreal"],
     ),
     RaceInfo(
-        "Circuit Franco-Belge",
-        "2025-08-15",
-        3,
-        "circuit-franco-belge",
-        ["quatre-jours-de-dunkerque", "kuurne-brussel-kuurne"],
-    ),
-    RaceInfo(
         "ADAC Cyclassics Hamburg",
-        "2025-08-17",
+        "2026-08-16",
         2,
         "cyclassics-hamburg",
         ["eschborn-frankfurt", "gp-montreal"],
     ),
     RaceInfo(
-        "Bretagne Classic",
-        "2025-08-31",
+        "Bretagne Classic - CIC",
+        "2026-08-30",
         2,
         "bretagne-classic",
         ["san-sebastian", "gp-quebec"],
     ),
     RaceInfo(
         "GP Industria & Artigianato",
-        "2025-09-07",
+        "2026-09-06",
         3,
         "gp-industria-e-artigianato-di-larciano",
         ["coppa-sabatini", "coppa-bernocchi"],
     ),
     RaceInfo(
         "Coppa Sabatini",
-        "2025-09-11",
+        "2026-09-10",
         3,
         "coppa-sabatini",
         ["giro-dell-emilia", "trofeo-laigueglia"],
     ),
     RaceInfo(
         "Grand Prix Cycliste de Quebec",
-        "2025-09-12",
+        "2026-09-11",
         2,
         "gp-quebec",
         ["gp-montreal", "san-sebastian", "bretagne-classic"],
     ),
     RaceInfo(
         "Grand Prix Cycliste de Montreal",
-        "2025-09-14",
+        "2026-09-13",
         2,
         "gp-montreal",
         ["gp-quebec", "san-sebastian", "cyclassics-hamburg"],
     ),
     RaceInfo(
-        "Grand Prix de Wallonie",
-        "2025-09-17",
+        "Lotto Grand Prix de Wallonie",
+        "2026-09-16",
         3,
         "gp-de-wallonie",
         ["la-fleche-wallonne", "brabantse-pijl"],
     ),
     RaceInfo(
         "SUPER 8 Classic",
-        "2025-09-20",
+        "2026-09-19",
         3,
         "super-8-classic",
         ["brussels-cycling-classic", "dwars-door-het-hageland"],
     ),
-    RaceInfo("Worlds Elite Road Race", "2025-09-28", 1, "world-championship"),
-    # Italian autumn classics
-    RaceInfo(
-        "Sparkassen Munsterland Giro",
-        "2025-10-03",
-        3,
-        "sparkassen-muensterland-giro",
-        ["eschborn-frankfurt", "cyclassics-hamburg"],
-    ),
+    RaceInfo("World Championships - Elite Road Race", "2026-09-27", 1, "world-championship"),
+    # Italian/European autumn classics
     RaceInfo(
         "Giro dell'Emilia",
-        "2025-10-04",
+        "2026-10-03",
         3,
         "giro-dell-emilia",
         ["il-lombardia", "tre-valli-varesine", "coppa-sabatini"],
     ),
     RaceInfo(
+        "European Championships - Elite Road Race",
+        "2026-10-04",
+        2,
+        "uec-road-european-championships-me",
+        ["world-championship", "gp-quebec", "gp-montreal"],
+    ),
+    RaceInfo(
         "Coppa Bernocchi",
-        "2025-10-06",
+        "2026-10-05",
         3,
         "coppa-bernocchi",
         ["tre-valli-varesine", "gran-piemonte"],
     ),
     RaceInfo(
         "Tre Valli Varesine",
-        "2025-10-07",
+        "2026-10-06",
         3,
         "tre-valli-varesine",
         ["giro-dell-emilia", "il-lombardia", "gran-piemonte"],
     ),
     RaceInfo(
         "Gran Piemonte",
-        "2025-10-09",
+        "2026-10-08",
         3,
         "gran-piemonte",
-        ["tre-valli-varesine", "giro-dell-emilia", "milano-torino"],
+        ["tre-valli-varesine", "giro-dell-emilia"],
     ),
     RaceInfo(
         "Il Lombardia",
-        "2025-10-11",
+        "2026-10-10",
         1,
         "il-lombardia",
         ["giro-dell-emilia", "tre-valli-varesine", "gran-piemonte"],
     ),
     RaceInfo(
-        "Paris-Tours",
-        "2025-10-12",
+        "Paris - Tours Elite",
+        "2026-10-11",
         3,
         "paris-tours",
         ["kuurne-brussel-kuurne", "eschborn-frankfurt", "scheldeprijs"],
     ),
     RaceInfo(
         "Giro del Veneto",
-        "2025-10-15",
+        "2026-10-14",
         3,
         "giro-del-veneto",
         ["veneto-classic", "gran-piemonte"],
     ),
     RaceInfo(
         "Veneto Classic",
-        "2025-10-19",
+        "2026-10-18",
         3,
         "veneto-classic",
         ["giro-del-veneto", "gran-piemonte"],
     ),
 ]
 
-"""Terrain-similar race mapping, derived from `SUPERCLASICO_RACES_2025`."""
+"""Terrain-similar race mapping, derived from `CLASSICS_RACES_2026`."""
 const SIMILAR_RACES = Dict{String,Vector{String}}(
     ri.pcs_slug => ri.similar_races for
-    ri in SUPERCLASICO_RACES_2025 if !isempty(ri.similar_races)
+    ri in CLASSICS_RACES_2026 if !isempty(ri.similar_races)
 )
 
 """
-    find_race(name::String; year::Int=2025) -> Union{RaceInfo, Nothing}
+    find_race(name::String) -> Union{RaceInfo, Nothing}
 
-Find a race in the Superclasico schedule by partial name match (case-insensitive).
+Find a race in the classics schedule by partial name match (case-insensitive).
 Returns the first matching RaceInfo or nothing.
 """
-function find_race(name::String; year::Int = 2025)
+function find_race(name::String)
     name_lower = lowercase(name)
-    if year != 2025
-        @warn "Race schedule data is from 2025; using it as approximation for $year"
-    end
-    for race in SUPERCLASICO_RACES_2025
+    for race in CLASSICS_RACES_2026
         if occursin(name_lower, lowercase(race.name))
             return race
         end
@@ -410,7 +407,7 @@ Returns a RaceConfig with standard URLs and settings for common races.
 - `race_name::String`: Race identifier (e.g., "tdf", "vuelta", "giro", "liege", "roubaix")
 - `year::Int`: Year of the race
 - `race_type::Symbol`: `:stage`, `:oneday`, or `:auto` (default). `:auto` infers the
-  type from the race pattern — Superclasico races (category > 0) are one-day, others are stage.
+  type from the race pattern — classics races (category > 0) are one-day, others are stage.
 - `cache_config::CacheConfig`: Cache configuration (default: `DEFAULT_CACHE`)
 
 # Returns
@@ -437,7 +434,7 @@ function setup_race(
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
     # Get URL pattern for this race (includes schedule fallback)
-    pattern = get_url_pattern(race_name)
+    pattern = get_url_pattern(race_name; year = year)
 
     # Build the current URL
     current_url = replace(pattern.template, "{year}" => string(year))
@@ -445,7 +442,7 @@ function setup_race(
     category = pattern.category
     pcs_slug = pattern.pcs_slug
 
-    # Auto-detect race type: Superclasico races (category > 0) are one-day
+    # Auto-detect race type: classics races (category > 0) are one-day
     if race_type == :auto
         race_type = category > 0 ? :oneday : :stage
     end
@@ -478,10 +475,16 @@ function setup_race(
 end
 
 
-"""VG URL template for Superclasico races (shared with backtest.jl)."""
-const VG_SUPERCLASICO_URL = "https://www.velogames.com/sixes-superclasico/{year}/riders.php"
+"""VG URL slug for one-day classics, year-aware (renamed from Superclasico to Classics in 2026)."""
+vg_classics_slug(year::Int) = year >= 2026 ? "sixes-classics" : "sixes-superclasico"
 
-"""Grand tour URL patterns (separate competition from Superclasico)."""
+"""Full VG riders page URL for a given year's one-day classics competition."""
+vg_classics_url(year::Int) = "https://www.velogames.com/$(vg_classics_slug(year))/$year/riders.php"
+
+"""VG game ID for one-day classics ridescore URLs (may change with 2026 rebrand)."""
+vg_classics_game_id(year::Int) = 13  # Update if 2026 uses a different game ID
+
+"""Grand tour URL patterns (separate competition from one-day classics)."""
 const _GRAND_TOUR_PATTERNS =
     Dict{String,NamedTuple{(:slug, :template),Tuple{String,String}}}(
         "tdf" => (
@@ -510,8 +513,8 @@ const _GRAND_TOUR_PATTERNS =
             (slug = "giro", template = "https://www.velogames.com/giro/{year}/riders.php"),
     )
 
-"""Human-friendly aliases mapping to PCS slugs for Superclasico races."""
-const _SUPERCLASICO_ALIASES = Dict{String,String}(
+"""Human-friendly aliases mapping to PCS slugs for one-day classics races."""
+const _CLASSICS_ALIASES = Dict{String,String}(
     # Monuments
     "liege" => "liege-bastogne-liege",
     "liegebastogneliege" => "liege-bastogne-liege",
@@ -533,8 +536,12 @@ const _SUPERCLASICO_ALIASES = Dict{String,String}(
     "stradebianche" => "strade-bianche",
     "strade" => "strade-bianche",
     "bruggepanne" => "classic-brugge-de-panne",
+    "brugge" => "classic-brugge-de-panne",
+    "rondevanbrugge" => "classic-brugge-de-panne",
     "e3" => "e3-harelbeke",
     "gentwevelgem" => "gent-wevelgem",
+    "inflanders" => "gent-wevelgem",
+    "wevelgem" => "gent-wevelgem",
     "dwars" => "dwars-door-vlaanderen",
     "scheldeprijs" => "scheldeprijs",
     # Ardennes classics
@@ -552,20 +559,23 @@ const _SUPERCLASICO_ALIASES = Dict{String,String}(
     "quebec" => "gp-quebec",
     "montreal" => "gp-montreal",
     "laigueglia" => "trofeo-laigueglia",
-    "milanotorino" => "milano-torino",
     "paristours" => "paris-tours",
+    "euros" => "european-championship",
+    "european" => "european-championship",
+    "copenhagen" => "copenhagen-sprint",
+    "nokere" => "danilith-nokere-koerse",
 )
 
 """
-    get_url_pattern(race_name::String)
+    get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
 
 Get the URL pattern for a given race name.
 
 Returns a NamedTuple with (slug, template, category, pcs_slug) where template
-uses {year} placeholder. Looks up Superclasico aliases against the canonical
+uses {year} placeholder. Looks up classics aliases against the canonical
 race schedule; grand tours have their own URL patterns.
 """
-function get_url_pattern(race_name::String)
+function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()))
     race_lower = lowercase(strip(race_name))
 
     # Grand tours have their own URL templates
@@ -574,14 +584,17 @@ function get_url_pattern(race_name::String)
         return (slug = gt.slug, template = gt.template, category = 0, pcs_slug = "")
     end
 
-    # Superclasico alias lookup
-    if haskey(_SUPERCLASICO_ALIASES, race_lower)
-        pcs_slug = _SUPERCLASICO_ALIASES[race_lower]
+    slug = vg_classics_slug(year)
+    template = "https://www.velogames.com/$slug/{year}/riders.php"
+
+    # Classics alias lookup
+    if haskey(_CLASSICS_ALIASES, race_lower)
+        pcs_slug = _CLASSICS_ALIASES[race_lower]
         ri = _find_race_by_slug(pcs_slug)
         if ri !== nothing
             return (
-                slug = "sixes-superclasico",
-                template = VG_SUPERCLASICO_URL,
+                slug = slug,
+                template = template,
                 category = ri.category,
                 pcs_slug = ri.pcs_slug,
             )
@@ -592,8 +605,8 @@ function get_url_pattern(race_name::String)
     ri = find_race(race_name)
     if ri !== nothing
         return (
-            slug = "sixes-superclasico",
-            template = VG_SUPERCLASICO_URL,
+            slug = slug,
+            template = template,
             category = ri.category,
             pcs_slug = ri.pcs_slug,
         )
@@ -640,7 +653,15 @@ two_years_url = get_historical_url(race, 2)  # 2023 Vuelta
 """
 function get_historical_url(config::RaceConfig, years_back::Int = 1)
     historical_year = config.year - years_back
-    return replace(config.current_url, string(config.year) => string(historical_year))
+    # For one-day classics, reconstruct with the correct slug for that year
+    # (slug changed from sixes-superclasico to sixes-classics in 2026).
+    # For grand tours, the slug is stable so just replace the year.
+    if config.category > 0
+        slug = vg_classics_slug(historical_year)
+        return "https://www.velogames.com/$slug/$historical_year/riders.php"
+    else
+        return replace(config.current_url, string(config.year) => string(historical_year))
+    end
 end
 
 
@@ -678,9 +699,9 @@ end
 # Race lookup helpers (used by data assembly and backtesting)
 # ---------------------------------------------------------------------------
 
-"""Find a RaceInfo by PCS slug from the 2025 schedule template."""
+"""Find a RaceInfo by PCS slug from the race schedule."""
 function _find_race_by_slug(pcs_slug::String)
-    for ri in SUPERCLASICO_RACES_2025
+    for ri in CLASSICS_RACES_2026
         if ri.pcs_slug == pcs_slug
             return ri
         end

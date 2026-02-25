@@ -4,7 +4,7 @@ Backtesting and model calibration framework.
 Evaluates prediction quality against historical race results, runs signal
 ablation studies, and tunes BayesianConfig hyperparameters.
 
-Focuses on one-day Superclasico races. Ground truth is PCS finishing
+Focuses on one-day classics races. Ground truth is PCS finishing
 positions (always available) supplemented by VG points when accessible.
 """
 
@@ -15,7 +15,7 @@ positions (always available) supplemented by VG points when accessible.
 """
     BacktestRace
 
-A historical race for backtesting. Built from `SUPERCLASICO_RACES_2025`
+A historical race for backtesting. Built from `CLASSICS_RACES_2026`
 by `build_race_catalogue()`.
 """
 struct BacktestRace
@@ -144,14 +144,14 @@ end
 """
     build_race_catalogue(years::Vector{Int}) -> Vector{BacktestRace}
 
-Build a catalogue of historical races from `SUPERCLASICO_RACES_2025`.
+Build a catalogue of historical races from `CLASSICS_RACES_2026`.
 Assumes the schedule is broadly stable across years; races missing from
 PCS are skipped at backtest time.
 """
 function build_race_catalogue(years::Vector{Int}; history_years::Int = 5)
     races = BacktestRace[]
     for year in years
-        for race_info in SUPERCLASICO_RACES_2025
+        for race_info in CLASSICS_RACES_2026
             # Parse template date and substitute the backtest year
             template_date = Date(race_info.date)
             race_date = Date(year, Dates.month(template_date), Dates.day(template_date))
@@ -175,7 +175,7 @@ end
 # Data pre-fetching
 # ---------------------------------------------------------------------------
 
-# Uses VG_SUPERCLASICO_URL from race_helpers.jl
+# Uses vg_classics_url() from race_helpers.jl
 
 """
     prefetch_race_data(race::BacktestRace; cache_config, force_refresh) -> RaceData
@@ -481,7 +481,7 @@ function _build_rider_df(
     cache_config::CacheConfig,
     force_refresh::Bool,
 )
-    vg_url = replace(VG_SUPERCLASICO_URL, "{year}" => string(race.year))
+    vg_url = vg_classics_url(race.year)
     try
         vg_df = getvgriders(
             vg_url;

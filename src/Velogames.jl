@@ -50,9 +50,11 @@ export setup_race,
     RaceConfig,
     RaceInfo,
     find_race,
-    SUPERCLASICO_RACES_2025,
+    CLASSICS_RACES_2026,
     SIMILAR_RACES,
-    VG_SUPERCLASICO_URL
+    vg_classics_slug,
+    vg_classics_url,
+    vg_classics_game_id
 
 # Scoring
 export ScoringTable,

@@ -1,5 +1,5 @@
 """
-Velogames Superclasico Sixes scoring system.
+Velogames Sixes Classics scoring system.
 
 Encodes the scoring rules (finish position points, assist points, breakaway points)
 by race category, and provides functions to compute expected VG points from
@@ -27,13 +27,13 @@ struct ScoringTable
 end
 
 # ---------------------------------------------------------------------------
-# Scoring tables by category (from velogames.com/sixes-superclasico/2025/scores.php)
+# Scoring tables by category (from velogames.com/sixes-classics/2026/scores.php)
 # ---------------------------------------------------------------------------
 
 const SCORING_CAT1 = ScoringTable(
     [
-        600,
-        540,
+        640,
+        560,
         480,
         420,
         360,
@@ -69,8 +69,8 @@ const SCORING_CAT1 = ScoringTable(
 
 const SCORING_CAT2 = ScoringTable(
     [
-        450,
-        405,
+        480,
+        420,
         360,
         315,
         270,
@@ -106,8 +106,8 @@ const SCORING_CAT2 = ScoringTable(
 
 const SCORING_CAT3 = ScoringTable(
     [
-        300,
-        270,
+        320,
+        280,
         240,
         210,
         180,

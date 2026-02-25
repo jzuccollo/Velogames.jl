@@ -1,5 +1,5 @@
 ---
-title: "Superclasico sixes team builder"
+title: "Sixes Classics team builder"
 subtitle: "Monte Carlo simulation-based fantasy cycling team optimiser"
 format: html
 ---
@@ -13,7 +13,7 @@ using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Race — use get_url_pattern("name") to check available names
 race_name = "omloop"
-race_year = 2025
+race_year = 2026
 racehash = ""  # VG startlist hash filter (leave empty for all riders)
 
 # Optional data sources (leave empty to skip)

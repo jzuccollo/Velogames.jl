@@ -115,7 +115,7 @@ Betting odds are the strongest single predictive signal because they aggregate p
 
 **Evidence:** Betting markets consistently outperform public statistical models across sports prediction research. In cycling specifically, odds were not tested by Kholkine et al. (2021) but are widely regarded in the DFS community as the strongest single signal because they aggregate private information (team tactics, form, injury knowledge) unavailable in public data. The current variance of 0.5 (vs 3.0-4.0 for other signals) is directionally correct.
 
-### Phase 2: Historical backtesting (high indirect impact)
+### Phase 2: Historical backtesting (high indirect impact) (done)
 
 Every other improvement is flying blind without systematic evaluation. We cannot currently measure whether the MC predictions are well-calibrated, whether variance hyperparameters are optimal, or whether model changes actually improve selection quality. The cycling prediction literature (Kholkine et al., 2021) and FPL research (Baronchelli et al., 2025) both emphasise that ablation studies are essential for confident iteration.
 

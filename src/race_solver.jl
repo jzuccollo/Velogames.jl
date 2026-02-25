@@ -247,7 +247,7 @@ end
 """
 ## `solve_oneday`
 
-Construct an optimal team for a Superclasico Sixes one-day race using Monte Carlo
+Construct an optimal team for a Sixes Classics one-day race using Monte Carlo
 simulation of expected Velogames points.
 
 ## Pipeline:

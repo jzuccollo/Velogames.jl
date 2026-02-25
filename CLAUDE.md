@@ -16,7 +16,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/race_solver.jl` - High-level solvers: `solve_oneday` and `solve_stage` (MC pipelines)
 - `src/cache_utils.jl` - Feather-based caching with configurable TTL (default ~/.velogames_cache, 24h), plus permanent archival storage (~/.velogames_archive) for odds/oracle snapshots
 - `src/classification_utils.jl` - Rider classification (allrounder/sprinter/climber/unclassed) column management
-- `src/race_helpers.jl` - `RaceInfo` struct (canonical race metadata), `RaceConfig` struct, `setup_race()`, URL alias lookup, `SUPERCLASICO_RACES_2025` schedule, `SIMILAR_RACES` (derived from `RaceInfo`)
+- `src/race_helpers.jl` - `RaceInfo` struct (canonical race metadata), `RaceConfig` struct, `setup_race()`, URL alias lookup, `CLASSICS_RACES_2026` schedule, `SIMILAR_RACES` (derived from `RaceInfo`), year-aware VG slug/URL/game ID functions
 - `src/utilities.jl` - Name normalisation (`normalisename`), key creation (`createkey`), sentinel constants (`DNF_POSITION`, `UNRANKED_POSITION`)
 - `src/backtest.jl` - Backtesting framework: race catalogue, season-level evaluation, ablation study, hyperparameter tuning, calibration diagnostics, VG race history integration, cumulative VG season points, PCS specialty archiving
 - `src/report_helpers.jl` - Display formatting: `round_numeric_columns!`, `clean_team_names!`
@@ -26,7 +26,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Solvers (src/race_solver.jl)
 
-- `solve_oneday(config; ...)` - MC prediction pipeline for one-day Superclasico races (PCS startlist filter, similar-race history, VG history)
+- `solve_oneday(config; ...)` - MC prediction pipeline for one-day classics races (PCS startlist filter, similar-race history, VG history)
 - `solve_stage(config; ...)` - MC prediction pipeline for stage races (class-aware strength, PCS startlist filter, similar-race history, VG history)
 
 ### Optimisation models (src/build_model.jl)
@@ -43,8 +43,8 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 ### Data scraping (src/get_data.jl)
 
 - `get_cycling_oracle(prediction_url)` - Scrape Cycling Oracle blog predictions, returns DataFrame(rider, win_prob, riderkey)
-- `getvgracelist(year)` - Scrape VG races.php for Superclasico, returns DataFrame(race_number, deadline, name, category, namekey)
-- `getvgraceresults(year, race_number)` - Fetch VG race results via `ridescore.php?ga=13&st={race_number}`
+- `getvgracelist(year)` - Scrape VG races.php for one-day classics, returns DataFrame(race_number, deadline, name, category, namekey)
+- `getvgraceresults(year, race_number)` - Fetch VG race results via year-aware ridescore URL
 - `match_vg_race_number(race_name, vg_racelist)` - Match a race name to VG race number using normalised string comparison
 - `normalise_race_name(name)` - Normalise race names for cross-source matching (strips accents, hyphens, punctuation)
 
@@ -63,7 +63,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Backtesting (src/backtest.jl)
 
-- `build_race_catalogue(years)` - Generate `BacktestRace` entries (with dates) from the 2025 Superclasico schedule template
+- `build_race_catalogue(years)` - Generate `BacktestRace` entries (with dates) from the classics race schedule
 - `prefetch_all_races(races)` - Bulk pre-fetch data (PCS results, rider info, race history, VG race history, cumulative VG season points, archived odds/oracle/PCS specialty)
 - `backtest_season(races; race_data, signals, ...)` - Evaluate predictions across all races
 - `summarise_backtest(results)` - Convert results to summary DataFrame with aggregates
@@ -80,10 +80,10 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - Optimisation: JuMP + HiGHS, binary variables for rider selection
 - PCS URLs: `https://www.procyclingstats.com/race/{slug}/{year}`
 - VG URLs: `https://www.velogames.com/{race-slug}/{year}/riders.php`
-- Superclasico races share one VG URL: `sixes-superclasico/{year}/riders.php` with startlist hash filtering
+- One-day classics races share one VG URL per year: `sixes-classics/{year}/riders.php` (2026+) or `sixes-superclasico/{year}/riders.php` (≤2025), with startlist hash filtering
 - Archival storage: `_prepare_rider_data` automatically archives odds/oracle/PCS specialty data on successful fetch; `prefetch_race_data` loads archived data for backtesting
 - Archival paths: `~/.velogames_archive/{data_type}/{pcs_slug}/{year}.feather` — data_type includes odds, oracle, pcs_specialty, vg_results
-- VG race URLs: `ridescore.php?ga={game_id}&st={race_number}` where `ga=13` is Superclasico Sixes (stable across years), `st` is race number 1-44 from races.php
+- VG race URLs: `ridescore.php?ga={game_id}&st={race_number}` where game_id is from `vg_classics_game_id(year)`, `st` is race number 1-44 from races.php
 - Backtesting temporal integrity: `predict_expected_points` accepts `race_year`/`race_date` for correct recency weighting; cumulative VG season points prevent end-of-year leakage; archived PCS specialty scores prevent current-day leakage
 
 ## Commands
@@ -97,8 +97,18 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - Julia naming: snake_case for functions, PascalCase for types
 - New data functions must support CacheConfig parameter
 - Prefer extending existing files over creating new ones
-- Scoring categories: Cat 1 = monuments + worlds, Cat 2 = WT classics, Cat 3 = semi-classics
+- Scoring categories: Cat 1 = monuments + worlds + Amstel Gold, Cat 2 = WT classics, Cat 3 = semi-classics
 - British English spelling throughout (optimise, normalise, colour)
+
+## Keep it simple
+
+This is a small, personal package. Avoid overengineering:
+
+- **No defensive coding** — don't guard against impossible states, add excessive input validation, or handle hypothetical edge cases. Trust the caller.
+- **Delete, don't deprecate** — when removing or renaming something, just do it. No deprecation warnings, shims, or backward-compatibility aliases.
+- **No unnecessary flexibility** — don't add parameters, config options, or abstractions "for future use". Add them when actually needed.
+- **Minimal error handling** — let Julia's built-in errors propagate naturally. Only catch errors at boundaries where you can do something useful.
+- **No boilerplate** — skip docstrings for obvious functions, skip type annotations where Julia infers fine, skip comments that restate the code.
 
 ## Roadmap
 

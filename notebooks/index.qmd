@@ -8,7 +8,7 @@ Fantasy cycling team optimisation for [Velogames](https://www.velogames.com/). T
 
 Four notebooks cover the main use cases:
 
-- **[One-day predictor](oneday_predictor.qmd)**: Pre-race team selection for Superclasico Sixes one-day races. Monte Carlo simulation converts rider strength estimates into expected VG points, then optimises a 6-rider team.
+- **[One-day predictor](oneday_predictor.qmd)**: Pre-race team selection for Sixes Classics one-day races. Monte Carlo simulation converts rider strength estimates into expected VG points, then optimises a 6-rider team.
 - **[Stage race predictor](stagerace_predictor.qmd)**: Pre-race team selection for grand tours and stage races. Class-aware strength estimation blends PCS specialties according to each rider's VG classification (all-rounder, climber, sprinter, unclassed), then optimises a 9-rider team with classification constraints.
 - **[Historical analysis](historical_analysis.qmd)**: Retrospective analysis of completed races. Uses actual race results to find the optimal team you could have picked, the cheapest team that beats a benchmark, and rider value analysis. Works for both one-day and stage races.
 - **[Backtesting](backtesting.qmd)**: Model calibration and evaluation. Runs predictions against historical PCS race results to measure accuracy (Spearman correlation, top-N overlap), identifies which data sources improve predictions via ablation study, and tunes Bayesian hyperparameters.
@@ -32,7 +32,7 @@ The key difference between one-day and stage race prediction is how PCS specialt
 
 ## One-day races
 
-For Superclasico Sixes one-day races, teams are 6 riders with no classification constraints:
+For Sixes Classics one-day races, teams are 6 riders with no classification constraints:
 
 $$\max \sum_{j=1}^{n} x_j y_j$$
 
