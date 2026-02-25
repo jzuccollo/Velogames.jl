@@ -14,7 +14,7 @@ using Velogames, DataFrames, Statistics, MarkdownTables
 # Race — use get_url_pattern("name") to check available names
 race_name = "omloop"
 race_year = 2026
-racehash = ""  # VG startlist hash filter (leave empty for all riders)
+racehash = "#OmloopNieuwsblad"  # VG startlist hash filter (leave empty for all riders)
 
 # Optional data sources (leave empty to skip)
 betfair_market_id = ""  # Betfair Exchange market ID from the URL
@@ -23,9 +23,6 @@ oracle_url = "https://www.cyclingoracle.com/en/blog/omloop-nieuwsblad-2026-predi
 # Simulation
 n_sims = 1000         # Monte Carlo iterations (more = smoother, slower)
 history_years = 5     # Years of PCS race history to fetch
-
-# Optional: VG historical race results (year => results URL from velogames.com)
-vg_history = Dict{Int,String}()
 
 # Exclusions
 excluded_riders = String[]
@@ -54,7 +51,6 @@ predicted, chosenteam = redirect_stdout(devnull) do
         history_years=history_years,
         betfair_market_id=betfair_market_id,
         oracle_url=oracle_url,
-        vg_history=vg_history,
         n_sims=n_sims,
         excluded_riders=excluded_riders)
 end
@@ -84,7 +80,7 @@ print("""
 | VG season points | $(n_total)/$(n_total) riders (100%) | Always used |
 | PCS race history ($(history_years) yrs) | $(n_history)/$(n_total) riders ($(pct(n_history))%) | $(n_history > 0 ? "Active" : "No matches") |
 | Similar races | $(let sr = get(SIMILAR_RACES, config.pcs_slug, String[]); isempty(sr) ? "None configured" : join(sr, ", "); end) | $(isempty(get(SIMILAR_RACES, config.pcs_slug, String[])) ? "N/A" : "Included with higher variance") |
-| VG race history | $(n_vg_hist)/$(n_total) riders ($(pct(n_vg_hist))%) | $(isempty(vg_history) ? "Not provided" : "Active") |
+| VG race history | $(n_vg_hist)/$(n_total) riders ($(pct(n_vg_hist))%) | $(n_vg_hist > 0 ? "Active" : "No matches") |
 | Cycling Oracle | $(n_oracle)/$(n_total) riders ($(pct(n_oracle))%) | $(isempty(oracle_url) ? "Not provided" : (n_oracle > 0 ? "Active" : "No matches")) |
 | Betfair odds | $(n_odds)/$(n_total) riders ($(pct(n_odds))%) | $(isempty(betfair_market_id) ? "Not provided" : (n_odds > 0 ? "Active" : "No matches")) |
 
