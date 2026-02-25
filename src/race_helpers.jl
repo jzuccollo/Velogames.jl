@@ -276,7 +276,12 @@ const CLASSICS_RACES_2026 = [
         "super-8-classic",
         ["brussels-cycling-classic", "dwars-door-het-hageland"],
     ),
-    RaceInfo("World Championships - Elite Road Race", "2026-09-27", 1, "world-championship"),
+    RaceInfo(
+        "World Championships - Elite Road Race",
+        "2026-09-27",
+        1,
+        "world-championship",
+    ),
     # Italian/European autumn classics
     RaceInfo(
         "Giro dell'Emilia",
@@ -479,7 +484,9 @@ end
 vg_classics_slug(year::Int) = year >= 2026 ? "sixes-classics" : "sixes-superclasico"
 
 """Full VG riders page URL for a given year's one-day classics competition."""
-vg_classics_url(year::Int) = "https://www.velogames.com/$(vg_classics_slug(year))/$year/riders.php"
+vg_classics_url(
+    year::Int,
+) = "https://www.velogames.com/$(vg_classics_slug(year))/$year/riders.php"
 
 """VG game ID for one-day classics ridescore URLs (may change with 2026 rebrand)."""
 vg_classics_game_id(year::Int) = 13  # Update if 2026 uses a different game ID

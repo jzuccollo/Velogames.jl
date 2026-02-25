@@ -127,7 +127,7 @@ if is_stage && @isdefined(optimal_team) && hasproperty(optimal_team, :classraw)
     println("\nClassification breakdown:")
     for class in sort(unique(optimal_team.classraw))
         n = count(optimal_team.classraw .== class)
-        pts = sum(optimal_team[optimal_team.classraw .== class, :score])
+        pts = sum(optimal_team[optimal_team.classraw.==class, :score])
         println("  $class: $n riders, $pts points")
     end
 end

@@ -25,7 +25,7 @@ n_sims = 1000         # Monte Carlo iterations (more = smoother, slower)
 history_years = 3     # Years of PCS race history to fetch
 
 # Optional: VG historical race results (year => results URL from velogames.com)
-vg_history = Dict{Int, String}()
+vg_history = Dict{Int,String}()
 
 # Exclusions
 excluded_riders = String[]

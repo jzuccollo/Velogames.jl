@@ -67,11 +67,7 @@ export ScoringTable,
     finish_points_for_position
 
 # Solvers and optimisation
-export solve_oneday,
-    solve_stage,
-    build_model_oneday,
-    build_model_stage,
-    minimise_cost_stage
+export solve_oneday, solve_stage, build_model_oneday, build_model_stage, minimise_cost_stage
 
 # Simulation and prediction (public API)
 export BayesianConfig,
