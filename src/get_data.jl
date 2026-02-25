@@ -525,29 +525,40 @@ function getvgracelist(
     url = "https://www.velogames.com/$slug/$year/races.php"
 
     function fetch_racelist(url, params)
-        tables = scrape_html_tables(url)
-        if isempty(tables)
-            error("No tables found on VG races page for $year")
+        # Parse directly with Gumbo — VG races.php uses <TD> not <TH> for
+        # headers, which breaks TableScraper's column name detection.
+        response =
+            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+        pagehtml = Gumbo.parsehtml(String(response.body))
+
+        rows = eachmatch(Selector("table tr"), pagehtml.root)
+
+        race_numbers = Int[]
+        deadlines = String[]
+        race_names = String[]
+        category_strs = String[]
+
+        for row in rows
+            cells = eachmatch(Selector("td"), row)
+            length(cells) < 4 && continue
+            texts = [strip(nodeText(c)) for c in cells]
+            num = tryparse(Int, texts[1])
+            num === nothing && continue  # skip header row
+            push!(race_numbers, num)
+            push!(deadlines, texts[2])
+            push!(race_names, texts[3])
+            push!(category_strs, texts[4])
         end
 
-        # Find the largest table (the race schedule)
-        raw = tables[argmax(nrow.(tables))]
-        if nrow(raw) < 5
-            error("Race table has too few rows ($(nrow(raw))) for $year")
+        if length(race_numbers) < 5
+            error("Race table has too few rows ($(length(race_numbers))) for $year")
         end
 
-        # The table has 4 columns: number, deadline, name, category
-        # Column names vary by year so we select by position
-        col_names = names(raw)
-        ncols = length(col_names)
-        if ncols < 4
-            error("Expected at least 4 columns in VG races table, got $ncols")
-        end
         df = DataFrame(
-            race_number = parse.(Int, string.(raw[!, col_names[1]])),
-            deadline = string.(raw[!, col_names[2]]),
-            name = string.(raw[!, col_names[3]]),
-            category_str = string.(raw[!, col_names[4]]),
+            race_number = race_numbers,
+            deadline = deadlines,
+            name = race_names,
+            category_str = category_strs,
         )
 
         # Parse category from strings like "Cat 1", "Cat 2", "Cat 3"

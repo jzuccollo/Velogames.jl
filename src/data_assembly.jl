@@ -211,6 +211,12 @@ function assemble_vg_race_history(
         end
         racelist = _get_racelist(yr)
         race_num = match_vg_race_number(name, racelist)
+        # Fallback: try slug as a name (e.g. "gent-wevelgem" matches VG's
+        # "Gent-Wevelgem" even when the 2026 RaceInfo name has changed)
+        if race_num === nothing && !isempty(slug)
+            slug_name = replace(slug, "-" => " ")
+            race_num = match_vg_race_number(slug_name, racelist)
+        end
         race_num === nothing && return nothing
         result = getvgraceresults(
             yr,
@@ -239,7 +245,7 @@ function assemble_vg_race_history(
                     vcat(vg_history_df, vg_df; cols = :union)
             end
         catch e
-            @debug "Failed to fetch VG results for $race_name $hist_year: $e"
+            @warn "Failed to fetch VG results for $race_name $hist_year" exception = e
         end
     end
 
@@ -248,6 +254,7 @@ function assemble_vg_race_history(
     for slug in similar_slugs
         similar_race_info = _find_race_by_slug(slug)
         if similar_race_info === nothing
+            @debug "No RaceInfo found for similar race slug '$slug' — skipping VG history"
             continue
         end
         for hist_year in history_years_range
@@ -261,7 +268,8 @@ function assemble_vg_race_history(
                         vcat(vg_history_df, vg_df; cols = :union)
                 end
             catch e
-                @debug "Failed to fetch VG similar-race results for $slug $hist_year: $e"
+                @warn "Failed to fetch VG similar-race results for $slug $hist_year" exception =
+                    e
             end
         end
     end
@@ -292,11 +300,13 @@ function assemble_vg_race_history(
                         @debug "Added $(nrow(vg_df)) within-year VG results from $slug ($race_year)"
                     end
                 catch e
-                    @debug "Failed to fetch within-year VG results for $slug $race_year: $e"
+                    @warn "Failed to fetch within-year VG results for $slug $race_year" exception =
+                        e
                 end
             end
         catch e
-            @debug "Failed to fetch VG race list for within-year history $race_year: $e"
+            @warn "Failed to fetch VG race list for within-year history $race_year" exception =
+                e
         end
     end
 

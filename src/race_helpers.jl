@@ -69,7 +69,7 @@ const CLASSICS_RACES_2026 = [
         "Ronde Van Brugge",
         "2026-03-25",
         2,
-        "de-panne",
+        "classic-brugge-de-panne",
         ["gent-wevelgem", "omloop-het-nieuwsblad", "kuurne-brussel-kuurne"],
     ),
     RaceInfo(
