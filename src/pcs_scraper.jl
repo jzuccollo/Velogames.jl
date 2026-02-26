@@ -61,7 +61,12 @@ Download a web page and extract all HTML tables as DataFrames.
 This is the lowest-level scraping function, shared by both VG and PCS paths.
 """
 function scrape_html_tables(pageurl::String)::Vector{DataFrame}
-    page = TableScraper.scrape_tables(pageurl)
+    page = try
+        TableScraper.scrape_tables(pageurl)
+    catch e
+        # TableScraper has a bug: calls `raise` (Python) instead of `error` on HTTP failure
+        error("Failed to scrape tables from $pageurl: $e")
+    end
     if isempty(page)
         error(
             "No tables found at: $pageurl. " *

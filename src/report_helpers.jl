@@ -1,4 +1,20 @@
 """
+    suppress_output(f)
+
+Suppress stdout and info-level logging whilst executing `f()`.
+Useful in Quarto notebooks to keep rendered output clean.
+"""
+function suppress_output(f)
+    redirect_stdout(devnull) do
+        Base.CoreLogging.with_logger(
+            Base.CoreLogging.SimpleLogger(stderr, Base.CoreLogging.Warn),
+        ) do
+            f()
+        end
+    end
+end
+
+"""
     clean_team_names!(df, team_columns)
 
 Replace pipe characters with hyphens for each column listed in `team_columns`.

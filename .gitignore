@@ -34,10 +34,13 @@ _site/
 /.quarto/
 *.ipynb
 
-**/*.quarto_ipynb
 
 # LLM permissions
 .claude/settings.local.json
 
 # Local environment (direnv)
 .envrc
+
+# Not providing a website for now
+**/*.quarto_ipynb
+**/*.html

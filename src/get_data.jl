@@ -19,7 +19,7 @@ function gettable(pageurl::String)
             has_points =
                 any(occursin("point", c) || occursin("score", c) for c in cols_lower)
             has_cost = any(occursin("cost", c) || occursin("price", c) for c in cols_lower)
-            reasonable_size = nrow(df) >= 10 && nrow(df) <= 500
+            reasonable_size = nrow(df) >= 10 && nrow(df) <= 2000
 
             if has_rider && (has_points || has_cost) && reasonable_size
                 @debug "Using table $i from $pageurl ($(nrow(df)) rows)"
@@ -605,7 +605,7 @@ function match_vg_race_number(race_name::String, vg_racelist::DataFrame)
             return row.race_number
         end
     end
-    @warn "No VG race match found for '$race_name'"
+    @debug "No VG race match found for '$race_name'"
     return nothing
 end
 
