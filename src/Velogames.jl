@@ -80,7 +80,7 @@ export BayesianConfig,
     simulate_race,
     position_probabilities,
     expected_vg_points,
-    estimate_breakaway_points,
+    simulate_vg_points,
     compute_stage_race_pcs_score
 
 # Backtesting
@@ -92,12 +92,13 @@ export BacktestRace,
     summarise_backtest,
     ablation_study,
     tune_hyperparameters,
+    tune_risk_aversion,
     build_race_catalogue,
     prefetch_race_data,
     prefetch_all_races
 
 # Utilities
-export createkey, unpipe, round_numeric_columns!, clean_team_names!
+export createkey, unpipe, round_numeric_columns!, clean_team_names!, suppress_output
 
 # Include all modules (order matters for dependencies)
 include("cache_utils.jl")

@@ -285,6 +285,7 @@ function solve_oneday(
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
+    risk_aversion::Float64 = 0.0,
 )
     data = _prepare_rider_data(
         config,
@@ -307,18 +308,24 @@ function solve_oneday(
     scoring = get_scoring(config.category > 0 ? config.category : 2)  # default Cat 2 if unknown
 
     @info "Predicting expected VG points (Cat $(config.category), $n_sims sims)..."
-    predicted =
-        predict_expected_points(data, scoring; n_sims = n_sims, race_year = config.year)
+    predicted = predict_expected_points(
+        data,
+        scoring;
+        n_sims = n_sims,
+        race_year = config.year,
+        risk_aversion = risk_aversion,
+    )
 
     # --- 8. Optimise team selection ---
     @info "Optimising team selection..."
 
     cost_col = :cost
+    points_col = risk_aversion > 0 ? :risk_adjusted_vg_points : :expected_vg_points
 
     results = build_model_oneday(
         predicted,
         config.team_size,
-        :expected_vg_points,
+        points_col,
         cost_col;
         totalcost = 100,
     )
@@ -381,6 +388,7 @@ function solve_stage(
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
+    risk_aversion::Float64 = 0.0,
 )
     data = _prepare_rider_data(
         config,
@@ -409,17 +417,19 @@ function solve_stage(
         n_sims = n_sims,
         race_type = :stage,
         race_year = config.year,
+        risk_aversion = risk_aversion,
     )
 
     # --- 8. Optimise team selection with class constraints ---
     @info "Optimising team selection (9 riders, class constraints)..."
 
     cost_col = :cost
+    points_col = risk_aversion > 0 ? :risk_adjusted_vg_points : :expected_vg_points
 
     results = build_model_stage(
         predicted,
         config.team_size,
-        :expected_vg_points,
+        points_col,
         cost_col;
         totalcost = 100,
     )

@@ -59,21 +59,26 @@ struct BayesianConfig
     odds_variance::Float64
     oracle_variance::Float64
     odds_normalisation::Float64
+    signal_correlation::Float64
 end
 
 """Default Bayesian hyperparameters."""
 const DEFAULT_BAYESIAN_CONFIG = BayesianConfig(
-    4.0,   # pcs_variance: prior variance for PCS specialty score
-    3.0,   # vg_variance: observation variance for VG season points
-    1.0,   # hist_base_variance: base variance for race history observations
-    0.5,   # hist_decay_rate: additional variance per year of age
-    1.5,   # vg_hist_base_variance: base variance for VG race history
-    0.5,   # vg_hist_decay_rate: additional variance per year for VG history
+    5.5,   # pcs_variance: prior variance for PCS specialty score
+    1.2,   # vg_variance: observation variance for VG season points
+    4.0,   # hist_base_variance: base variance for race history observations (z-scored scale)
+    1.2,   # hist_decay_rate: additional variance per year of age
+    3.0,   # vg_hist_base_variance: base variance for VG race history
+    0.65,  # vg_hist_decay_rate: additional variance per year for VG history
     0.5,   # odds_variance: observation variance for betting odds signal
     1.5,   # oracle_variance: observation variance for Cycling Oracle signal
     2.0,   # odds_normalisation: heuristic divisor to scale log-odds to z-score range.
     # With ~150 starters, a 10% favourite produces log(0.1 / 0.0067) ≈ 2.7,
     # which / 2.0 gives ~1.35 — a reasonable "1.35 SD above average" strength signal.
+    0.15,  # signal_correlation: equicorrelation discount for correlated signals.
+    # With n signals at pairwise correlation ρ, effective precision is
+    # Στ_i / (1 + ρ(n-1)) instead of Στ_i. Prevents over-concentration of
+    # posterior for favourites who have many correlated signal sources.
 )
 
 """
@@ -150,13 +155,16 @@ function estimate_rider_strength(;
 )
     # --- Prior from PCS ---
     # PCS score is our broadest signal. Wide variance reflects general uncertainty.
-    posterior = BayesianPosterior(pcs_score, config.pcs_variance)
+    prior = BayesianPosterior(pcs_score, config.pcs_variance)
+    posterior = prior
+    n_signals = 0
 
     # --- Update with VG season points ---
     # VG points reflect current season form. Moderate precision.
     mean_before = posterior.mean
     if vg_points != 0.0
         posterior = bayesian_update(posterior, vg_points, config.vg_variance)
+        n_signals += 1
     end
     shift_vg = posterior.mean - mean_before
 
@@ -178,6 +186,7 @@ function estimate_rider_strength(;
         penalty = i <= length(penalties) ? penalties[i] : 0.0
         hist_var = config.hist_base_variance + config.hist_decay_rate * years_ago + penalty
         posterior = bayesian_update(posterior, hist_strength, hist_var)
+        n_signals += 1
     end
     shift_history = posterior.mean - mean_before
 
@@ -191,6 +200,7 @@ function estimate_rider_strength(;
     for (vg_strength, years_ago) in zip(vg_race_history, vg_race_history_years_ago)
         vg_var = config.vg_hist_base_variance + config.vg_hist_decay_rate * years_ago
         posterior = bayesian_update(posterior, vg_strength, vg_var)
+        n_signals += 1
     end
     shift_vg_history = posterior.mean - mean_before
 
@@ -202,6 +212,7 @@ function estimate_rider_strength(;
         oracle_strength =
             log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, oracle_strength, config.oracle_variance)
+        n_signals += 1
     end
     shift_oracle = posterior.mean - mean_before
 
@@ -212,8 +223,29 @@ function estimate_rider_strength(;
         baseline_prob = 1.0 / n_starters
         odds_strength = log(odds_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, odds_strength, config.odds_variance)
+        n_signals += 1
     end
     shift_odds = posterior.mean - mean_before
+
+    # --- Equicorrelation precision discount ---
+    # Signals are correlated (all measure "rider quality"), so summing precisions
+    # overstates certainty. Under exchangeable correlation ρ, the effective
+    # precision of n observations is Στ_i / (1 + ρ(n-1)).
+    ρ = config.signal_correlation
+    if n_signals > 1 && ρ > 0
+        prior_prec = 1.0 / prior.variance
+        post_prec = 1.0 / posterior.variance
+        obs_prec = post_prec - prior_prec
+        discount = 1.0 + ρ * (n_signals - 1)
+        eff_obs_prec = obs_prec / discount
+        # Recover precision-weighted observation mean from the naive posterior
+        obs_mean = (posterior.mean * post_prec - prior.mean * prior_prec) / obs_prec
+        eff_prec = prior_prec + eff_obs_prec
+        posterior = BayesianPosterior(
+            (prior_prec * prior.mean + eff_obs_prec * obs_mean) / eff_prec,
+            1.0 / eff_prec,
+        )
+    end
 
     return StrengthEstimate(
         posterior.mean,
@@ -247,14 +279,21 @@ end
 # Monte Carlo race simulation
 # ---------------------------------------------------------------------------
 
+function _rand_t(rng::AbstractRNG, df::Int)
+    z = randn(rng)
+    v = sum(randn(rng)^2 for _ = 1:df)
+    return z * sqrt(df / v)
+end
+
 """
-    simulate_race(strengths::Vector{Float64}, uncertainties::Vector{Float64};
-                  n_sims::Int=10000, rng::AbstractRNG=Random.default_rng()) -> Matrix{Int}
+    simulate_race(strengths, uncertainties; n_sims, rng, simulation_df) -> Matrix{Int}
 
 Simulate a race `n_sims` times using Monte Carlo.
 
-For each simulation, adds Gaussian noise (scaled by each rider's uncertainty)
+For each simulation, adds noise (scaled by each rider's uncertainty)
 to their strength score, then ranks riders by noisy strength (highest = 1st place).
+Uses Student's t-distribution with `simulation_df` degrees of freedom for
+heavy-tailed noise (set `simulation_df=nothing` for Gaussian).
 
 Returns a `n_riders x n_sims` matrix where entry [i, s] is rider i's finishing
 position in simulation s.
@@ -264,6 +303,7 @@ function simulate_race(
     uncertainties::Vector{Float64};
     n_sims::Int = 10000,
     rng::AbstractRNG = Random.default_rng(),
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     n_riders = length(strengths)
     @assert length(uncertainties) == n_riders "Length mismatch: strengths and uncertainties"
@@ -272,11 +312,10 @@ function simulate_race(
     noisy_strengths = Vector{Float64}(undef, n_riders)
 
     for s = 1:n_sims
-        # Add noise to each rider's strength
         for i = 1:n_riders
-            noisy_strengths[i] = strengths[i] + uncertainties[i] * randn(rng)
+            noise = simulation_df === nothing ? randn(rng) : _rand_t(rng, simulation_df)
+            noisy_strengths[i] = strengths[i] + uncertainties[i] * noise
         end
-        # Rank: highest noisy strength = position 1
         order = sortperm(noisy_strengths, rev = true)
         for (pos, rider_idx) in enumerate(order)
             positions[rider_idx, s] = pos
@@ -372,21 +411,7 @@ function expected_vg_points(
 end
 
 """
-    estimate_breakaway_points(strengths::Vector{Float64}, uncertainties::Vector{Float64},
-                               scoring::ScoringTable; n_sims::Int=10000,
-                               rng::AbstractRNG=Random.default_rng()) -> Vector{Float64}
-
-Estimate expected breakaway points using heuristics.
-
-The Sixes Classics awards breakaway points at 4 sectors (50% distance, 50km, 20km, 10km).
-A "leading group" is <= 20 riders with >5s gap.
-
-Heuristic approach:
-- **Late sectors (20km, 10km)**: riders likely to be in the front group are the
-  top ~20 finishers. Use simulation to estimate P(top 20).
-- **Early sectors (50%, 50km)**: breakaway riders tend to be moderate-strength
-  riders (strong enough to be in the race, but not favourites who sit in the peloton).
-  Use a heuristic based on strength rank.
+Heuristic breakaway sector count for a given finishing position.
 
 Sector allocation per simulated finishing position:
 - Position 1-14:  2 late sectors (20km, 10km)                   = 2 sectors
@@ -396,51 +421,88 @@ Sector allocation per simulated finishing position:
 - Position 31-50: 2 early sectors (50% + 50km)                   = 2 sectors
 - Position 51-60: 1 early sector (50% distance)                  = 1 sector
 - Position 61+:   0 sectors
-
-Note the sharp jump at position 20, where riders gain a 4th sector. This is a known
-simplification; actual breakaway behaviour is hard to predict from historical data alone.
 """
-function estimate_breakaway_points(
-    strengths::Vector{Float64},
-    uncertainties::Vector{Float64},
-    scoring::ScoringTable;
-    n_sims::Int = 10000,
-    rng::AbstractRNG = Random.default_rng(),
-)
-    n_riders = length(strengths)
-    sim = simulate_race(strengths, uncertainties; n_sims = n_sims, rng = rng)
+function _breakaway_sectors(pos::Int)
+    sectors = 0
+    if pos <= 20
+        sectors += 2
+    elseif pos <= 30
+        sectors += 1
+    end
+    if 15 <= pos <= 60
+        sectors += 1
+    end
+    if 20 <= pos <= 50
+        sectors += 1
+    end
+    return sectors
+end
 
-    breakaway_pts = zeros(Float64, n_riders)
+"""
+    simulate_vg_points(sim_positions, rider_teams, scoring; include_breakaway=false)
+        -> (mean_pts::Vector{Float64}, std_pts::Vector{Float64})
+
+Compute per-rider mean and standard deviation of VG points across simulations.
+
+Scores each simulation using finish points, assist points, and optionally breakaway
+sector points. Uses Welford's online algorithm for numerically stable variance
+computation without materialising the full n_riders × n_sims matrix.
+
+Returns `(mean_pts, std_pts)` vectors of length n_riders.
+"""
+function simulate_vg_points(
+    sim_positions::Matrix{Int},
+    rider_teams::Vector{String},
+    scoring::ScoringTable;
+    include_breakaway::Bool = false,
+)
+    n_riders, n_sims = size(sim_positions)
+    @assert length(rider_teams) == n_riders "Length mismatch: rider_teams"
+
     points_per_sector = scoring.breakaway_points
 
+    # Welford's online mean and variance
+    mean_pts = zeros(Float64, n_riders)
+    m2 = zeros(Float64, n_riders)  # sum of squared deviations from current mean
+    sim_pts = Vector{Float64}(undef, n_riders)
+
     for s = 1:n_sims
+        # --- Finish points ---
         for i = 1:n_riders
-            pos = sim[i, s]
-            sectors_in = 0
+            sim_pts[i] = Float64(finish_points_for_position(sim_positions[i, s], scoring))
+        end
 
-            # Late sectors (20km and 10km to go): front group probability
-            # Riders in top 20 are likely in the front group at these points
-            if pos <= 20
-                sectors_in += 2  # 20km and 10km sectors
-            elseif pos <= 30
-                sectors_in += 1  # Maybe in front group for 20km sector
+        # --- Assist points ---
+        for i = 1:n_riders
+            pos = sim_positions[i, s]
+            if pos <= 3
+                top_team = rider_teams[i]
+                for j = 1:n_riders
+                    if j != i && rider_teams[j] == top_team
+                        sim_pts[j] += scoring.assist_points[pos]
+                    end
+                end
             end
+        end
 
-            # Early sectors (50% and 50km to go): breakaway probability
-            # Aggressive riders ranked 15th-60th most likely to be in a breakaway
-            # Favourites (top 10) sit in the peloton; weak riders can't get in a break
-            if 15 <= pos <= 60
-                sectors_in += 1  # Reasonable chance of being in early break
+        # --- Breakaway points (one-day only) ---
+        if include_breakaway
+            for i = 1:n_riders
+                sim_pts[i] += _breakaway_sectors(sim_positions[i, s]) * points_per_sector
             end
-            if 20 <= pos <= 50
-                sectors_in += 1  # Higher chance for mid-pack aggressive riders
-            end
+        end
 
-            breakaway_pts[i] += sectors_in * points_per_sector
+        # --- Welford update ---
+        for i = 1:n_riders
+            delta = sim_pts[i] - mean_pts[i]
+            mean_pts[i] += delta / s
+            delta2 = sim_pts[i] - mean_pts[i]
+            m2[i] += delta * delta2
         end
     end
 
-    return breakaway_pts ./ n_sims
+    std_pts = [n_sims > 1 ? sqrt(m2[i] / (n_sims - 1)) : 0.0 for i = 1:n_riders]
+    return (mean_pts, std_pts)
 end
 
 # ---------------------------------------------------------------------------
@@ -525,7 +587,9 @@ Full prediction pipeline: takes rider data, computes expected VG points for each
 ## Returns
 The input DataFrame augmented with:
 - `strength`, `uncertainty` - posterior estimates
-- `expected_vg_points` - total expected VG points
+- `expected_vg_points` - total expected VG points (mean across simulations)
+- `std_vg_points` - standard deviation of VG points across simulations
+- `risk_adjusted_vg_points` - `expected_vg_points - risk_aversion * std_vg_points`
 - `expected_finish_pts`, `expected_assist_pts`, `expected_breakaway_pts` - components
 """
 function predict_expected_points(
@@ -541,6 +605,8 @@ function predict_expected_points(
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     race_year::Union{Int,Nothing} = nothing,
     race_date::Union{Date,Nothing} = nothing,
+    simulation_df::Union{Int,Nothing} = nothing,
+    risk_aversion::Float64 = 0.0,
 )
     df = copy(rider_df)
     n_riders = nrow(df)
@@ -622,8 +688,7 @@ function predict_expected_points(
        :position in propertynames(race_history_df) &&
        :year in propertynames(race_history_df)
         has_penalty = :variance_penalty in propertynames(race_history_df)
-        # Field size for strength conversion: classics ~175, grand tours ~175 finishers
-        history_field_size = max(n_starters, 175)
+        history_field_size = n_starters
         for row in eachrow(race_history_df)
             key = row.riderkey
             pos = row.position
@@ -636,6 +701,28 @@ function predict_expected_points(
                     history_lookup[key] = Tuple{Float64,Int,Float64}[]
                 end
                 push!(history_lookup[key], (strength, years_ago, penalty))
+            end
+        end
+        # Z-score strengths per years_ago group so race history is on same scale as other signals
+        all_years_ago = Set{Int}()
+        for entries in values(history_lookup)
+            for (_, ya, _) in entries
+                push!(all_years_ago, ya)
+            end
+        end
+        for ya in all_years_ago
+            yr_strengths = Float64[
+                h[1] for entries in values(history_lookup) for h in entries if h[2] == ya
+            ]
+            yr_mean = mean(yr_strengths)
+            yr_std = std(yr_strengths)
+            if yr_std > 0
+                for key in keys(history_lookup)
+                    history_lookup[key] = [
+                        (h[2] == ya ? ((h[1] - yr_mean) / yr_std, h[2], h[3]) : h) for
+                        h in history_lookup[key]
+                    ]
+                end
             end
         end
     end
@@ -717,48 +804,81 @@ function predict_expected_points(
 
     # --- Monte Carlo simulation ---
     @info "Running Monte Carlo simulation ($n_sims iterations, $n_riders riders)..."
-    sim_positions = simulate_race(strengths, uncertainties; n_sims = n_sims, rng = rng)
+    sim_positions = simulate_race(
+        strengths,
+        uncertainties;
+        n_sims = n_sims,
+        rng = rng,
+        simulation_df = simulation_df,
+    )
 
-    # --- Compute expected points ---
+    # --- Compute expected points with per-rider variance ---
     teams = String.(df.team)
+    include_breakaway = (race_type == :oneday)
 
-    # Finish + assist points from main simulation
-    evg = expected_vg_points(sim_positions, teams, scoring)
-
-    # Breakaway points: only for one-day races (stage race scoring already includes these)
-    breakaway = zeros(n_riders)
-    if race_type == :oneday
-        breakaway = estimate_breakaway_points(
-            strengths,
-            uncertainties,
-            scoring;
-            n_sims = n_sims,
-            rng = rng,
-        )
-    end
+    total_evg, std_pts = simulate_vg_points(
+        sim_positions,
+        teams,
+        scoring;
+        include_breakaway = include_breakaway,
+    )
 
     # Decompose finish and assist points for reporting
     pos_probs = position_probabilities(sim_positions; max_position = 30)
     finish_pts = [expected_finish_points(pos_probs[i, :], scoring) for i = 1:n_riders]
-    assist_pts = evg .- finish_pts
+    evg_no_breakaway = expected_vg_points(sim_positions, teams, scoring)
+    assist_pts = evg_no_breakaway .- finish_pts
+    breakaway = total_evg .- evg_no_breakaway
 
-    # Total expected VG points
-    total_evg = evg .+ breakaway
+    # --- Signal availability flags (for reporting data source coverage) ---
+    has_pcs = if :has_pcs_data in propertynames(df)
+        Bool.(df.has_pcs_data)
+    else
+        # Check raw specialty columns — z-scored values are non-zero even for missing riders
+        specialty_cols =
+            intersect(propertynames(df), [:oneday, :gc, :tt, :sprint, :climber])
+        [any(df[i, col] != 0 for col in specialty_cols) for i = 1:n_riders]
+    end
+    has_race_history = [haskey(history_lookup, df.riderkey[i]) for i = 1:n_riders]
+    has_vg_history = [haskey(vg_history_lookup, df.riderkey[i]) for i = 1:n_riders]
+    has_odds = [haskey(odds_lookup, df.riderkey[i]) for i = 1:n_riders]
+    has_oracle = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
+    has_any_signal = has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle
+
+    # Zero out predictions for riders with no informative signals — these are
+    # unknown riders whose expected points are driven purely by prior uncertainty
+    no_signal_mask = .!has_any_signal
+    if any(no_signal_mask)
+        no_signal_names = String.(df.rider[no_signal_mask])
+        @warn "$(sum(no_signal_mask)) riders have no informative signals — expected points set to 0" riders =
+            no_signal_names
+        total_evg[no_signal_mask] .= 0.0
+        std_pts[no_signal_mask] .= 0.0
+        finish_pts[no_signal_mask] .= 0.0
+        assist_pts[no_signal_mask] .= 0.0
+        breakaway[no_signal_mask] .= 0.0
+    end
+
+    # Risk-adjusted VG points: E[pts] - γ * SD[pts]
+    # γ=0 recovers pure expected-value optimisation
+    risk_adjusted = total_evg .- risk_aversion .* std_pts
 
     # --- Add results to DataFrame ---
     df[!, :strength] = round.(strengths, digits = 3)
     df[!, :uncertainty] = round.(uncertainties, digits = 3)
     df[!, :expected_vg_points] = round.(total_evg, digits = 1)
+    df[!, :std_vg_points] = round.(std_pts, digits = 1)
+    df[!, :risk_adjusted_vg_points] = round.(risk_adjusted, digits = 1)
     df[!, :expected_finish_pts] = round.(finish_pts, digits = 1)
     df[!, :expected_assist_pts] = round.(assist_pts, digits = 1)
     df[!, :expected_breakaway_pts] = round.(breakaway, digits = 1)
 
-    # --- Signal availability flags (for reporting data source coverage) ---
-    df[!, :has_pcs] = [pcs_z[i] != 0.0 for i = 1:n_riders]
-    df[!, :has_race_history] = [haskey(history_lookup, df.riderkey[i]) for i = 1:n_riders]
-    df[!, :has_vg_history] = [haskey(vg_history_lookup, df.riderkey[i]) for i = 1:n_riders]
-    df[!, :has_odds] = [haskey(odds_lookup, df.riderkey[i]) for i = 1:n_riders]
-    df[!, :has_oracle] = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
+    df[!, :has_pcs] = has_pcs
+    df[!, :has_race_history] = has_race_history
+    df[!, :has_vg_history] = has_vg_history
+    df[!, :has_odds] = has_odds
+    df[!, :has_oracle] = has_oracle
+    df[!, :has_any_signal] = has_any_signal
 
     # --- Per-signal mean shifts (for diagnostics) ---
     df[!, :shift_vg] = round.(shifts_vg, digits = 3)
@@ -785,6 +905,8 @@ function predict_expected_points(
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     race_year::Union{Int,Nothing} = nothing,
     race_date::Union{Date,Nothing} = nothing,
+    simulation_df::Union{Int,Nothing} = nothing,
+    risk_aversion::Float64 = 0.0,
 )
     predict_expected_points(
         data.rider_df,
@@ -799,5 +921,7 @@ function predict_expected_points(
         bayesian_config = bayesian_config,
         race_year = race_year,
         race_date = race_date,
+        simulation_df = simulation_df,
+        risk_aversion = risk_aversion,
     )
 end
