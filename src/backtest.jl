@@ -57,10 +57,13 @@ struct BacktestResult
     optimal_team_vg_points::Float64
     # Calibration diagnostics
     calibration_z_scores::Vector{Float64}
+    calibration_strengths::Vector{Float64}
     calibration_mean::Float64
     calibration_std::Float64
     coverage_1sigma::Float64
     coverage_2sigma::Float64
+    # Signal contribution (mean shift per signal across matched riders)
+    mean_signal_shifts::Dict{Symbol,Float64}
 end
 
 # ---------------------------------------------------------------------------
@@ -312,13 +315,17 @@ function prefetch_all_races(
 
     data = Dict{BacktestRace,RaceData}()
     for (i, race) in enumerate(races)
-        data[race] = prefetch_race_data(
-            race;
-            vg_racelists = vg_racelists,
-            cache_config = cache_config,
-            force_refresh = force_refresh,
-        )
-        @info "Prefetch [$i/$(length(races))] $(race.name) $(race.year): $(nrow(data[race].rider_df)) riders"
+        try
+            data[race] = prefetch_race_data(
+                race;
+                vg_racelists = vg_racelists,
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            @info "Prefetch [$i/$(length(races))] $(race.name) $(race.year): $(nrow(data[race].rider_df)) riders"
+        catch e
+            @warn "Prefetch [$i/$(length(races))] FAILED $(race.name) $(race.year): $e"
+        end
     end
     @info "Prefetched $(length(data))/$(length(races)) races"
     return data
@@ -337,9 +344,11 @@ signal selection operates on copies of the pre-fetched data.
 function backtest_race(
     race::BacktestRace,
     data::RaceData;
-    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history],
+    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     n_sims::Int = 2000,
+    simulation_df::Union{Int,Nothing} = nothing,
+    risk_aversion::Float64 = 0.0,
 )
     actual_df = data.actual_df
     if actual_df === nothing
@@ -387,6 +396,8 @@ function backtest_race(
         bayesian_config = bayesian_config,
         race_year = race.year,
         race_date = race.date,
+        simulation_df = simulation_df,
+        risk_aversion = risk_aversion,
     )
 
     # --- Compute rank-based metrics ---
@@ -407,28 +418,59 @@ function backtest_race(
 
     # --- VG team metrics (if costs available) ---
     pcr, pred_pts, opt_pts = NaN, NaN, NaN
+    prediction_col = risk_aversion > 0 ? :risk_adjusted_vg_points : :expected_vg_points
     if :cost in propertynames(predicted) && any(predicted.cost .> 0)
         try
-            pcr, pred_pts, opt_pts = _compute_team_metrics(predicted, actual_df, scoring)
+            pcr, pred_pts, opt_pts = _compute_team_metrics(
+                predicted,
+                actual_df,
+                scoring;
+                prediction_col = prediction_col,
+            )
         catch e
             @warn "Could not compute team metrics for $(race.name) $(race.year): $e"
         end
     end
 
     # --- Calibration z-scores ---
+    cal_cols = [:riderkey, :strength, :uncertainty]
     cal_df = innerjoin(
-        predicted[:, [:riderkey, :strength, :uncertainty]],
+        predicted[:, cal_cols],
         actual_df[:, [:riderkey, :position]],
         on = :riderkey,
     )
-    n_matched = nrow(cal_df)
-    actual_strengths = [position_to_strength(Int(p), n_matched) for p in cal_df.position]
+    n_finishers = nrow(actual_df)
+    # Z-score actual strengths so they're on the same scale as predicted strengths
+    # (which are built from z-scored PCS, VG, history signals).
+    # Raw logit values have std ≈ 1.81 vs predicted std ≈ 1.0.
+    all_logit = [position_to_strength(p, n_finishers) for p = 1:n_finishers]
+    logit_mean = mean(all_logit)
+    logit_std = std(all_logit)
+    actual_strengths = if logit_std > 0
+        [
+            (position_to_strength(Int(p), n_finishers) - logit_mean) / logit_std for
+            p in cal_df.position
+        ]
+    else
+        zeros(nrow(cal_df))
+    end
     z_scores = (actual_strengths .- cal_df.strength) ./ cal_df.uncertainty
 
     cal_mean = mean(z_scores)
     cal_std = length(z_scores) > 1 ? std(z_scores) : NaN
     cov_1sigma = count(z -> abs(z) <= 1.0, z_scores) / length(z_scores)
     cov_2sigma = count(z -> abs(z) <= 2.0, z_scores) / length(z_scores)
+
+    # --- Signal shift analysis ---
+    shift_cols = [:shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+    mean_shifts = Dict{Symbol,Float64}()
+    for col in shift_cols
+        if col in propertynames(predicted)
+            vals = predicted[!, col]
+            nonzero = filter(!=(0.0), vals)
+            mean_shifts[col] = isempty(nonzero) ? 0.0 : mean(abs, nonzero)
+        end
+    end
 
     return BacktestResult(
         race,
@@ -442,10 +484,12 @@ function backtest_race(
         pred_pts,
         opt_pts,
         z_scores,
+        Float64.(cal_df.strength),
         cal_mean,
         cal_std,
         cov_1sigma,
         cov_2sigma,
+        mean_shifts,
     )
 end
 
@@ -462,6 +506,8 @@ function backtest_race(
     n_sims::Int = 2000,
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
+    simulation_df::Union{Int,Nothing} = nothing,
+    risk_aversion::Float64 = 0.0,
 )
     data =
         prefetch_race_data(race; cache_config = cache_config, force_refresh = force_refresh)
@@ -471,6 +517,8 @@ function backtest_race(
         signals = signals,
         bayesian_config = bayesian_config,
         n_sims = n_sims,
+        simulation_df = simulation_df,
+        risk_aversion = risk_aversion,
     )
 end
 
@@ -572,7 +620,8 @@ end
 function _compute_team_metrics(
     predicted::DataFrame,
     actual_df::DataFrame,
-    scoring::ScoringTable,
+    scoring::ScoringTable;
+    prediction_col::Symbol = :expected_vg_points,
 )
     joined = innerjoin(
         predicted,
@@ -585,7 +634,7 @@ function _compute_team_metrics(
     joined[!, :actual_vg_points] =
         [Float64(finish_points_for_position(Int(p), scoring)) for p in joined.position]
 
-    pred_sol = build_model_oneday(joined, 6, :expected_vg_points, :cost; totalcost = 100)
+    pred_sol = build_model_oneday(joined, 6, prediction_col, :cost; totalcost = 100)
     if pred_sol === nothing
         return NaN, NaN, NaN
     end
@@ -623,34 +672,44 @@ Otherwise falls back to fetching data for each race individually.
 function backtest_season(
     races::Vector{BacktestRace};
     race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
-    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history],
+    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     n_sims::Int = 2000,
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
+    simulation_df::Union{Int,Nothing} = nothing,
+    risk_aversion::Float64 = 0.0,
 )
     results = BacktestResult[]
     for (i, race) in enumerate(races)
-        result = if race_data !== nothing && haskey(race_data, race)
-            backtest_race(
-                race,
-                race_data[race];
-                signals = signals,
-                bayesian_config = bayesian_config,
-                n_sims = n_sims,
-            )
-        else
-            backtest_race(
-                race;
-                signals = signals,
-                bayesian_config = bayesian_config,
-                n_sims = n_sims,
-                cache_config = cache_config,
-                force_refresh = force_refresh,
-            )
+        try
+            result = if race_data !== nothing && haskey(race_data, race)
+                backtest_race(
+                    race,
+                    race_data[race];
+                    signals = signals,
+                    bayesian_config = bayesian_config,
+                    n_sims = n_sims,
+                    simulation_df = simulation_df,
+                    risk_aversion = risk_aversion,
+                )
+            else
+                backtest_race(
+                    race;
+                    signals = signals,
+                    bayesian_config = bayesian_config,
+                    n_sims = n_sims,
+                    cache_config = cache_config,
+                    force_refresh = force_refresh,
+                    simulation_df = simulation_df,
+                    risk_aversion = risk_aversion,
+                )
+            end
+            push!(results, result)
+            @info "[$i/$(length(races))] $(race.name) $(race.year): ρ=$(round(result.spearman_rho, digits=3)), top10=$(result.top10_overlap)"
+        catch e
+            @warn "[$i/$(length(races))] FAILED $(race.name) $(race.year): $e"
         end
-        push!(results, result)
-        @info "[$i/$(length(races))] $(race.name) $(race.year): ρ=$(round(result.spearman_rho, digits=3)), top10=$(result.top10_overlap)"
     end
     @info "Completed $(length(results))/$(length(races)) races"
     return results
@@ -745,14 +804,15 @@ end
 """Signal subsets for ablation study."""
 const ABLATION_SETS = [
     ("pcs_only", [:pcs]),
-    ("pcs_vg", [:pcs, :vg_season]),
-    ("pcs_history", [:pcs, :race_history]),
-    ("pcs_vg_history", [:pcs, :vg_season, :race_history]),
-    ("all_available", [:pcs, :vg_season, :race_history, :vg_history, :odds, :oracle]),
-    ("no_pcs", [:vg_season, :race_history]),
-    ("history_only", [:race_history]),
-    ("with_odds", [:pcs, :vg_season, :race_history, :odds]),
-    ("with_oracle", [:pcs, :vg_season, :race_history, :oracle]),
+    ("pcs+vgseason", [:pcs, :vg_season]),
+    ("pcs+pcshistory", [:pcs, :race_history]),
+    ("pcs+vgseason+pcshistory", [:pcs, :vg_season, :race_history]),
+    ("baseline", [:pcs, :vg_season, :race_history, :vg_history]),
+    ("all", [:pcs, :vg_season, :race_history, :vg_history, :odds, :oracle]),
+    ("vgseason+pcshistory", [:vg_season, :race_history]),
+    ("pcshistory_only", [:race_history]),
+    ("baseline+odds", [:pcs, :vg_season, :race_history, :vg_history, :odds]),
+    ("baseline+oracle", [:pcs, :vg_season, :race_history, :vg_history, :oracle]),
 ]
 
 """
@@ -771,6 +831,7 @@ function ablation_study(
     n_sims::Int = 2000,
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     if race_data === nothing
         @info "Ablation study: pre-fetching data for $(length(races)) races..."
@@ -794,6 +855,7 @@ function ablation_study(
             signals = sigs,
             bayesian_config = bayesian_config,
             n_sims = n_sims,
+            simulation_df = simulation_df,
         )
         if !isempty(results)
             summary = summarise_backtest(results)
@@ -813,10 +875,11 @@ end
 const PARAM_BOUNDS = (
     pcs_variance = (1.0, 10.0),
     vg_variance = (1.0, 8.0),
-    hist_base_variance = (0.3, 3.0),
-    hist_decay_rate = (0.1, 1.5),
-    vg_hist_base_variance = (0.5, 4.0),
-    vg_hist_decay_rate = (0.1, 1.5),
+    hist_base_variance = (1.0, 6.0),
+    hist_decay_rate = (0.3, 2.0),
+    vg_hist_base_variance = (1.0, 6.0),
+    vg_hist_decay_rate = (0.3, 2.0),
+    signal_correlation = (0.0, 0.7),
 )
 
 """Sample a random BayesianConfig within PARAM_BOUNDS."""
@@ -840,6 +903,9 @@ function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
         DEFAULT_BAYESIAN_CONFIG.odds_variance,
         DEFAULT_BAYESIAN_CONFIG.oracle_variance,
         DEFAULT_BAYESIAN_CONFIG.odds_normalisation,
+        rand(rng) *
+        (PARAM_BOUNDS.signal_correlation[2] - PARAM_BOUNDS.signal_correlation[1]) +
+        PARAM_BOUNDS.signal_correlation[1],
     )
 end
 
@@ -852,6 +918,7 @@ function _config_to_dict(config::BayesianConfig)
         :hist_decay_rate => config.hist_decay_rate,
         :vg_hist_base_variance => config.vg_hist_base_variance,
         :vg_hist_decay_rate => config.vg_hist_decay_rate,
+        :signal_correlation => config.signal_correlation,
     )
 end
 
@@ -870,11 +937,12 @@ function tune_hyperparameters(
     race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
     objective::Symbol = :spearman_rho,
     n_iter::Int = 100,
-    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history],
+    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
     n_sims::Int = 2000,
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     if race_data === nothing
         @info "Tuning: pre-fetching data for $(length(races)) races..."
@@ -909,14 +977,27 @@ function tune_hyperparameters(
             signals = signals,
             bayesian_config = config,
             n_sims = n_sims,
+            simulation_df = simulation_df,
         )
         if isempty(results)
             continue
         end
 
-        scores = _extract_metric(results, objective)
+        scores = _extract_metric(
+            results,
+            objective == :calibrated_rho ? :spearman_rho : objective,
+        )
         valid = filter(!isnan, scores)
         score = isempty(valid) ? NaN : mean(valid)
+
+        # Penalise miscalibrated uncertainty when using calibrated objective
+        if objective == :calibrated_rho && !isnan(score)
+            all_z = vcat([r.calibration_z_scores for r in results]...)
+            if length(all_z) > 10
+                z_std = std(all_z)
+                score -= 0.1 * (z_std - 1.0)^2
+            end
+        end
 
         params = _config_to_dict(config)
         push!(
@@ -958,4 +1039,55 @@ function _extract_metric(results::Vector{BacktestResult}, metric::Symbol)
     else
         error("Unknown metric: $metric")
     end
+end
+
+# ---------------------------------------------------------------------------
+# Risk aversion tuning
+# ---------------------------------------------------------------------------
+
+"""
+    tune_risk_aversion(races; gammas, race_data, kwargs...) -> (best_gamma, log_df)
+
+Grid search over risk aversion values γ, evaluating each via `backtest_season`
+with `points_captured_ratio` as the objective (since γ affects team selection,
+not rank prediction).
+
+Returns `(best_gamma, log_df)` where `log_df` has columns `:gamma` and `:mean_pcr`.
+"""
+function tune_risk_aversion(
+    races::Vector{BacktestRace};
+    gammas::Vector{Float64} = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5],
+    race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
+    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
+    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    n_sims::Int = 2000,
+    simulation_df::Union{Int,Nothing} = nothing,
+)
+    best_gamma = 0.0
+    best_pcr = -Inf
+    log_rows = NamedTuple{(:gamma, :mean_pcr),Tuple{Float64,Float64}}[]
+
+    for gamma in gammas
+        results = backtest_season(
+            races;
+            race_data = race_data,
+            signals = signals,
+            bayesian_config = bayesian_config,
+            n_sims = n_sims,
+            simulation_df = simulation_df,
+            risk_aversion = gamma,
+        )
+        pcrs = [r.points_captured_ratio for r in results if !isnan(r.points_captured_ratio)]
+        mean_pcr = isempty(pcrs) ? NaN : mean(pcrs)
+        push!(log_rows, (gamma = gamma, mean_pcr = mean_pcr))
+        @info "γ=$(gamma): mean PCR=$(round(mean_pcr, digits=4)) ($(length(pcrs)) races)"
+
+        if !isnan(mean_pcr) && mean_pcr > best_pcr
+            best_pcr = mean_pcr
+            best_gamma = gamma
+        end
+    end
+
+    @info "Best γ=$(best_gamma) with mean PCR=$(round(best_pcr, digits=4))"
+    return best_gamma, DataFrame(log_rows)
 end
