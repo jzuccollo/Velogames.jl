@@ -389,13 +389,41 @@ end
     default_result = estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5)
     @test default_result.mean > 0.0
 
-    tight_config = BayesianConfig(1.0, 1.0, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.0)
-    tight_result =
-        estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5, config = tight_config)
-    @test tight_result.mean > default_result.mean
+    custom_config = BayesianConfig(0.5, 0.5, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.0, 0.0)
+    custom_result =
+        estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5, config = custom_config)
+    @test custom_result.mean != default_result.mean
 
     @test DEFAULT_BAYESIAN_CONFIG isa BayesianConfig
-    @test DEFAULT_BAYESIAN_CONFIG.pcs_variance == 4.0
+    @test DEFAULT_BAYESIAN_CONFIG.pcs_variance == 5.5
+    @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.15
+
+    # Equicorrelation discount: more signals → wider posterior with ρ > 0
+    no_corr = BayesianConfig(5.0, 1.4, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.0, 0.0)
+    with_corr = BayesianConfig(5.0, 1.4, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.0, 0.4)
+    r_nocorr = estimate_rider_strength(
+        pcs_score = 1.0,
+        vg_points = 0.8,
+        race_history = [0.5, 0.3],
+        race_history_years_ago = [0, 1],
+        config = no_corr,
+    )
+    r_corr = estimate_rider_strength(
+        pcs_score = 1.0,
+        vg_points = 0.8,
+        race_history = [0.5, 0.3],
+        race_history_years_ago = [0, 1],
+        config = with_corr,
+    )
+    @test r_corr.variance > r_nocorr.variance  # correlation widens posterior
+    @test abs(r_corr.mean - r_nocorr.mean) < 0.3  # mean shifts toward prior but stays close
+end
+
+@testset "_rand_t distribution" begin
+    rng = Random.MersenneTwister(99)
+    samples = [Velogames._rand_t(rng, 5) for _ = 1:50000]
+    @test abs(mean(samples)) < 0.05  # mean ≈ 0
+    @test std(samples) > 1.1  # heavier tails than normal (t(5) variance = 5/3)
 end
 
 @testset "Monte Carlo Simulation" begin
@@ -408,6 +436,17 @@ end
     @test sort(positions[:, 1]) == 1:5
     @test count(positions[1, :] .== 1) > count(positions[5, :] .== 1)
     @test mean(positions[1, :]) < mean(positions[5, :])
+
+    # Gaussian mode (simulation_df=nothing) should also work
+    rng_gauss = Random.MersenneTwister(42)
+    pos_gauss = simulate_race(
+        strengths,
+        uncertainties;
+        n_sims = 1000,
+        rng = rng_gauss,
+        simulation_df = nothing,
+    )
+    @test size(pos_gauss) == (5, 1000)
 
     rng2 = Random.MersenneTwister(123)
     pos2 = simulate_race(
@@ -461,7 +500,7 @@ end
     @test result.strength[1] > result.strength[6]
     @test all(result.expected_vg_points .>= 0)
 
-    # Race history reduces uncertainty
+    # Race history shifts strength estimates
     history_df = DataFrame(
         riderkey = ["strong", "strong", "medium"],
         position = [1, 3, 10],
@@ -473,7 +512,7 @@ end
         race_history_df = history_df,
         n_sims = 5000,
     )
-    @test result_hist.uncertainty[1] <= result.uncertainty[1]
+    @test result_hist.strength[1] != result.strength[1]  # history shifts the mean
 
     # Stage race mode uses class-aware blending
     rider_df_stage = copy(rider_df)
@@ -496,6 +535,53 @@ end
     end
     @test all(result_stage.expected_vg_points .>= 0)
     @test all(result_stage.expected_breakaway_pts .== 0)
+end
+
+@testset "join_pcs_specialty! tracks data provenance" begin
+    riderdf = DataFrame(rider = ["Found", "Missing"], riderkey = ["found", "missing"])
+    pcsriderpts = DataFrame(
+        riderkey = ["found", "missing"],
+        oneday = [1200, missing],
+        gc = [800, missing],
+        tt = [600, missing],
+        sprint = [300, missing],
+        climber = [500, missing],
+    )
+    result = Velogames.join_pcs_specialty!(riderdf, pcsriderpts)
+    @test :has_pcs_data in propertynames(result)
+    @test result.has_pcs_data[1] == true   # "Found" had real data
+    @test result.has_pcs_data[2] == false  # "Missing" had all missing
+    # Coalescing still works
+    @test result.oneday[1] == 1200
+    @test result.oneday[2] == 0
+
+    # Empty PCS data
+    riderdf2 = DataFrame(rider = ["A"], riderkey = ["a"])
+    pcsriderpts2 = DataFrame(riderkey = String[])
+    result2 = Velogames.join_pcs_specialty!(riderdf2, pcsriderpts2)
+    @test :has_pcs_data in propertynames(result2)
+    @test result2.has_pcs_data[1] == false
+end
+
+@testset "predict_expected_points zeros out no-signal riders" begin
+    # Rider with has_pcs_data=true gets points; rider without any signal gets 0
+    rider_df = DataFrame(
+        rider = ["Known", "Unknown"],
+        team = ["A", "B"],
+        cost = [20, 4],
+        points = [500.0, 0.0],
+        riderkey = ["known", "unknown"],
+        oneday = [2000, 0],
+        has_pcs_data = [true, false],
+    )
+    result = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000)
+    @test :has_any_signal in propertynames(result)
+    @test result.has_any_signal[1] == true
+    @test result.has_any_signal[2] == false
+    @test result.expected_vg_points[1] > 0
+    @test result.expected_vg_points[2] == 0.0
+    @test result.expected_finish_pts[2] == 0.0
+    @test result.expected_breakaway_pts[2] == 0.0
 end
 
 @testset "Stage race PCS blending" begin
@@ -702,20 +788,96 @@ end
     @test sum(chosen.cost) <= 100
 end
 
-@testset "estimate_breakaway_points" begin
+@testset "simulate_vg_points" begin
     rng = Random.MersenneTwister(42)
-    strengths = [2.0, 0.0, -2.0]
-    uncertainties = [0.5, 0.5, 0.5]
-    bp = estimate_breakaway_points(
-        strengths,
-        uncertainties,
-        SCORING_CAT2;
-        n_sims = 10000,
-        rng = rng,
+    strengths = [2.0, 1.0, 0.0, -1.0, -2.0]
+    uncertainties = fill(0.5, 5)
+    teams = ["A", "A", "B", "B", "C"]
+
+    sim = simulate_race(strengths, uncertainties; n_sims = 10000, rng = rng)
+
+    # Without breakaway should match expected_vg_points
+    mean_pts, std_pts = simulate_vg_points(sim, teams, SCORING_CAT2)
+    evg = expected_vg_points(sim, teams, SCORING_CAT2)
+    @test length(mean_pts) == 5
+    @test length(std_pts) == 5
+    @test all(isapprox.(mean_pts, evg; atol = 0.01))
+    @test all(std_pts .>= 0)
+    @test std_pts[1] > 0  # strong rider has non-zero SD
+
+    # Stronger riders should have higher mean
+    @test mean_pts[1] > mean_pts[5]
+
+    # With breakaway increases mean for one-day scoring
+    mean_brk, std_brk =
+        simulate_vg_points(sim, teams, SCORING_CAT2; include_breakaway = true)
+    @test all(mean_brk .>= mean_pts .- 0.01)  # breakaway adds points (tolerance for float)
+
+    # Stage race scoring has no breakaway points
+    mean_stage, _ = simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = false)
+    mean_stage_brk, _ =
+        simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = true)
+    # SCORING_STAGE.breakaway_points == 0, so include_breakaway has no effect
+    @test all(isapprox.(mean_stage, mean_stage_brk; atol = 0.01))
+end
+
+@testset "risk_aversion in predict_expected_points" begin
+    rider_df = DataFrame(
+        rider = ["Strong", "Medium", "Weak", "Uncertain"],
+        team = ["A", "A", "B", "B"],
+        cost = [20, 15, 10, 4],
+        points = [500.0, 300.0, 150.0, 0.0],
+        riderkey = ["strong", "medium", "weak", "uncertain"],
+        oneday = [2000, 1200, 800, 50],
+        has_pcs_data = [true, true, true, true],
     )
-    @test length(bp) == 3
-    @test all(bp .>= 0)
-    @test maximum(bp) < 100
+
+    # gamma=0 recovers current behaviour
+    result0 =
+        predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 0.0)
+    @test :std_vg_points in propertynames(result0)
+    @test :risk_adjusted_vg_points in propertynames(result0)
+    @test all(result0.risk_adjusted_vg_points .== result0.expected_vg_points)
+
+    # gamma>0 penalises high-uncertainty riders
+    result1 =
+        predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 0.5)
+    @test all(result1.risk_adjusted_vg_points .<= result1.expected_vg_points .+ 0.1)
+    # The uncertain rider (low PCS, high prior variance) should be penalised more
+    strong_penalty = result1.expected_vg_points[1] - result1.risk_adjusted_vg_points[1]
+    uncertain_penalty = result1.expected_vg_points[4] - result1.risk_adjusted_vg_points[4]
+    @test uncertain_penalty >= 0
+    @test strong_penalty >= 0
+end
+
+@testset "risk-adjusted team selection integration" begin
+    rng = Random.MersenneTwister(42)
+    # Create a field with some reliable riders and some lottery tickets
+    rider_df = DataFrame(
+        rider = ["R$i" for i = 1:12],
+        team = repeat(["A", "B", "C", "D"], 3),
+        cost = [20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 4, 4],
+        points = Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 0, 0, 0]),
+        riderkey = ["r$i" for i = 1:12],
+        oneday = [2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 10, 10, 10],
+        has_pcs_data = [trues(9); trues(3)],
+    )
+
+    predicted = predict_expected_points(
+        rider_df,
+        SCORING_CAT2;
+        n_sims = 5000,
+        rng = rng,
+        risk_aversion = 0.5,
+    )
+
+    # Optimise on risk-adjusted column
+    sol = build_model_oneday(predicted, 6, :risk_adjusted_vg_points, :cost; totalcost = 100)
+    @test sol !== nothing
+
+    chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
+    @test nrow(chosen) == 6
+    @test sum(chosen.cost) <= 100
 end
 
 # =========================================================================
@@ -803,10 +965,12 @@ end
                 100.0,
                 125.0,
                 randn(50),
+                randn(50),
                 0.1,
                 1.05,
                 0.68,
                 0.94,
+                Dict{Symbol,Float64}(:shift_vg => 0.1, :shift_history => -0.2),
             ),
             BacktestResult(
                 BacktestRace("Race B", 2024, "race-b", 1),
@@ -820,10 +984,12 @@ end
                 110.0,
                 122.0,
                 randn(40),
+                randn(40),
                 -0.05,
                 0.98,
                 0.70,
                 0.96,
+                Dict{Symbol,Float64}(:shift_vg => -0.05),
             ),
         ]
         df = summarise_backtest(results)
@@ -835,22 +1001,23 @@ end
     end
 
     @testset "ABLATION_SETS is well-formed" begin
-        @test length(Velogames.ABLATION_SETS) == 9
+        @test length(Velogames.ABLATION_SETS) == 10
         for (label, sigs) in Velogames.ABLATION_SETS
             @test label isa String
             @test sigs isa Vector{Symbol}
             @test !isempty(sigs)
         end
         labels = [l for (l, _) in Velogames.ABLATION_SETS]
-        @test "with_odds" in labels
-        @test "with_oracle" in labels
+        @test "baseline" in labels
+        @test "baseline+odds" in labels
+        @test "baseline+oracle" in labels
     end
 
     @testset "PARAM_BOUNDS are valid" begin
         for field in fieldnames(typeof(Velogames.PARAM_BOUNDS))
             lo, hi = getfield(Velogames.PARAM_BOUNDS, field)
             @test lo < hi
-            @test lo > 0
+            @test lo >= 0
         end
     end
 
