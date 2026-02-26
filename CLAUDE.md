@@ -50,9 +50,10 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Simulation (src/simulation.jl)
 
-- `predict_expected_points(df, scoring; ...)` / `predict_expected_points(data::RaceData, scoring; ...)` - Full prediction pipeline (supports variance_penalty in race history, VG history, temporally-aware recency weighting)
+- `predict_expected_points(df, scoring; ...)` / `predict_expected_points(data::RaceData, scoring; ...)` - Full prediction pipeline (supports variance_penalty in race history, VG history, temporally-aware recency weighting, risk-adjusted optimisation via `risk_aversion` parameter)
 - `estimate_rider_strength(...)` - Bayesian posterior from multiple signals (PCS, VG, PCS race history with variance penalties, VG race history, odds, oracle)
 - `simulate_race(strengths, n_sims)` - Monte Carlo position simulation
+- `simulate_vg_points(sim_positions, teams, scoring; include_breakaway)` - Per-rider mean and SD of VG points across simulations (finish + assist + optional breakaway, using Welford's online algorithm)
 - `compute_stage_race_pcs_score(row, class)` - Class-aware PCS blending for stage races
 
 ### Archival storage (src/cache_utils.jl)
@@ -69,6 +70,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `summarise_backtest(results)` - Convert results to summary DataFrame with aggregates
 - `ablation_study(races; ...)` - Test 9 signal subsets to measure marginal signal value
 - `tune_hyperparameters(races; ...)` - Two-stage hyperparameter optimisation with cross-validation
+- `tune_risk_aversion(races; gammas, ...)` - Grid search over risk aversion γ values, optimising points_captured_ratio via backtest_season
 - `BacktestResult` includes: rank metrics (Spearman ρ, top-N overlap), VG team metrics (actual scoring tables), and calibration diagnostics (z-scores, coverage rates)
 
 ## Key patterns

@@ -18,6 +18,12 @@ backtest_years = [2023, 2024, 2025]
 n_sims = 1000
 history_years = 5
 
+# Risk aversion (0 = risk-neutral baseline, >0 penalises high-variance riders)
+risk_aversion = 0.0
+
+# Whether to run the (slow) tuning sections
+run_tuning = true
+
 # Cache (longer TTL for historical data that won't change)
 bt_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 168)
 
@@ -52,7 +58,9 @@ print("\n")
 ```{julia}
 #| output: false
 # Pre-fetch all race data once — reused by baseline, ablation, and tuning
-race_data = prefetch_all_races(races; cache_config=bt_cache)
+race_data = suppress_output() do
+    prefetch_all_races(races; cache_config=bt_cache)
+end
 ```
 
 ## Data availability
@@ -107,17 +115,20 @@ end
 
 # Baseline evaluation
 
-Running the full prediction pipeline (PCS + VG season points + race history) on all historical races and comparing to actual PCS finishing positions.
+Running the full prediction pipeline (PCS + VG season points + race history + VG history) on all historical races and comparing to actual PCS finishing positions.
 
 ```{julia}
 #| output: asis
-baseline_signals = [:pcs, :vg_season, :race_history]
+baseline_signals = [:pcs, :vg_season, :race_history, :vg_history]
 
-results = backtest_season(races;
-    race_data=race_data,
-    signals=baseline_signals,
-    n_sims=n_sims,
-)
+results = suppress_output() do
+    backtest_season(races;
+        race_data=race_data,
+        signals=baseline_signals,
+        n_sims=n_sims,
+        risk_aversion=risk_aversion,
+    )
+end
 
 summary_df = summarise_backtest(results)
 
@@ -131,49 +142,9 @@ md_table(agg[:, [:race, :n_riders, :spearman_rho, :top5_overlap, :top10_overlap,
 print("\n")
 ```
 
-## Results by category
-
 ```{julia}
 #| output: asis
-for cat in sort(unique(r.race.category for r in results))
-    cat_results = filter(r -> r.race.category == cat, results)
-    if isempty(cat_results)
-        continue
-    end
-    cat_rhos = filter(!isnan, [r.spearman_rho for r in cat_results])
-    if isempty(cat_rhos)
-        continue
-    end
-
-    print("""
-### $(get(cat_label, cat, "Cat $cat"))
-
-Races: $(length(cat_results)) | Mean Spearman ρ: $(round(mean(cat_rhos), digits=3)) | Median: $(round(median(cat_rhos), digits=3))
-
-""")
-    cat_summary = summarise_backtest(cat_results)
-    race_rows_cat = filter(:race => r -> !startswith(r, "—"), cat_summary)
-    md_table(race_rows_cat[:, [:race, :year, :n_riders, :spearman_rho, :top10_overlap, :mean_abs_rank_error, :points_captured_ratio]])
-    print("\n")
-end
-```
-
-```{julia}
-#| output: asis
-print("""
-## Per-race results (all categories)
-
-""")
-
-race_rows = filter(:race => r -> !startswith(r, "—"), summary_df)
-display_df = sort(race_rows, :spearman_rho, rev=true)
-md_table(display_df[:, [:race, :year, :category, :n_riders, :spearman_rho, :top10_overlap, :mean_abs_rank_error]])
-print("\n")
-```
-
-```{julia}
-#| output: asis
-# Distribution summary
+# Spearman ρ distribution
 valid_rho = filter(!isnan, [r.spearman_rho for r in results])
 if !isempty(valid_rho)
     q25 = round(quantile(valid_rho, 0.25), digits=3)
@@ -182,7 +153,6 @@ if !isempty(valid_rho)
     worst = round(minimum(valid_rho), digits=3)
 
     print("""
-::: {.callout-note collapse="true"}
 ## Spearman \$\\rho\$ distribution
 
 The Spearman rank correlation measures how well predicted strength ranks match actual finishing positions. A value of 1.0 is perfect prediction; 0.0 is random.
@@ -195,8 +165,6 @@ The Spearman rank correlation measures how well predicted strength ranks match a
 | 25th percentile | $q25 |
 | Worst | $worst |
 | Races evaluated | $(length(valid_rho)) |
-
-:::
 
 """)
 end
@@ -255,15 +223,35 @@ end
 ```{julia}
 #| output: asis
 if !isempty(all_z)
+    print("## Calibration by year\n\n")
+    for year in sort(unique(r.race.year for r in results))
+        year_z = vcat([r.calibration_z_scores for r in results if r.race.year == year]...)
+        if length(year_z) < 10
+            continue
+        end
+        yz_mean = round(mean(year_z), digits=3)
+        yz_std = round(std(year_z), digits=3)
+        yz_cov1 = round(count(z -> abs(z) <= 1.0, year_z) / length(year_z), digits=3)
+
+        print("""
+**$year**: mean=$yz_mean, std=$yz_std, 1σ coverage=$yz_cov1 (n=$(length(year_z)))
+
+""")
+    end
+end
+```
+
+## Q-Q table
+
+```{julia}
+#| output: asis
+if !isempty(all_z)
     # Hardcoded standard normal quantiles (avoids Distributions.jl dependency)
     quantile_levels = [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
     expected_q = [-2.326, -1.645, -1.282, -0.674, 0.0, 0.674, 1.282, 1.645, 2.326]
     observed_q = [round(quantile(all_z, q), digits=3) for q in quantile_levels]
 
     print("""
-::: {.callout-note collapse="true"}
-## Q-Q table
-
 | Quantile | Expected N(0,1) | Observed |
 |----------|-----------------|----------|
 """)
@@ -273,22 +261,143 @@ if !isempty(all_z)
     print("""
 
 Systematic deviations indicate miscalibrated uncertainty. If observed quantiles are compressed relative to expected, the model is overconfident (uncertainties too narrow). If stretched, it is underconfident.
-:::
 
 """)
 end
 ```
 
-# Signal ablation study
+## Calibration by strength tier
 
-Testing which data sources improve predictions by running with different signal subsets. Each row shows the mean metric across all races for that signal configuration. Signal subsets including `:odds` and `:oracle` will only show their effect for races where archived data is available.
+Splitting riders into strength tiers reveals whether calibration problems are concentrated among favourites, mid-pack riders, or outsiders.
 
 ```{julia}
 #| output: asis
-ablation_df = ablation_study(races;
-    race_data=race_data,
-    n_sims=n_sims,
+all_strengths = vcat([r.calibration_strengths for r in results]...)
+
+if !isempty(all_z) && !isempty(all_strengths) && length(all_z) == length(all_strengths)
+    # Split into quartiles by predicted strength
+    q25_s = quantile(all_strengths, 0.25)
+    q75_s = quantile(all_strengths, 0.75)
+
+    tiers = [
+        ("Bottom 25% (outsiders)", all_strengths .<= q25_s),
+        ("Middle 50%", (all_strengths .> q25_s) .& (all_strengths .< q75_s)),
+        ("Top 25% (favourites)", all_strengths .>= q75_s),
+    ]
+
+    print("""
+| Tier | Mean z | Std z | 1σ coverage | n |
+|------|--------|-------|-------------|---|
+""")
+    for (label, mask) in tiers
+        tier_z = all_z[mask]
+        if length(tier_z) < 10
+            continue
+        end
+        tz_mean = round(mean(tier_z), digits=3)
+        tz_std = round(std(tier_z), digits=3)
+        tz_cov1 = round(count(z -> abs(z) <= 1.0, tier_z) / length(tier_z), digits=3)
+        print("| $label | $tz_mean | $tz_std | $tz_cov1 | $(length(tier_z)) |\n")
+    end
+    print("\n")
+end
+```
+
+# Signal analysis
+
+## Signal contribution
+
+Mean |shift| per signal shows how much each data source moves the predicted strength away from the PCS prior, averaged across riders that have that signal.
+
+```{julia}
+#| output: asis
+shift_keys = [:shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+shift_labels = Dict(
+    :shift_vg => "VG season points",
+    :shift_history => "PCS race history",
+    :shift_vg_history => "VG race history",
+    :shift_oracle => "Cycling Oracle",
+    :shift_odds => "Betfair odds",
 )
+
+# Aggregate across all races
+agg_shifts = Dict{Symbol,Vector{Float64}}()
+for r in results
+    for (k, v) in r.mean_signal_shifts
+        push!(get!(agg_shifts, k, Float64[]), v)
+    end
+end
+
+if !isempty(agg_shifts)
+    print("""
+| Signal | Mean |shift| | Std | Races with signal |
+|--------|-----------|-----|-------------------|
+""")
+    for k in shift_keys
+        if !haskey(agg_shifts, k)
+            continue
+        end
+        vals = agg_shifts[k]
+        nonzero = filter(!=(0.0), vals)
+        if isempty(nonzero)
+            continue
+        end
+        label = get(shift_labels, k, string(k))
+        print("| $label | $(round(mean(abs, nonzero), digits=3)) | $(round(std(nonzero), digits=3)) | $(length(nonzero)) |\n")
+    end
+    print("\n")
+end
+```
+
+```{julia}
+#| output: asis
+if !isempty(agg_shifts)
+    print("""
+::: {.callout-note collapse="true"}
+### Signal shifts by category
+
+""")
+    for cat in sort(unique(r.race.category for r in results))
+        cat_results = filter(r -> r.race.category == cat, results)
+        cat_shifts = Dict{Symbol,Vector{Float64}}()
+        for r in cat_results
+            for (k, v) in r.mean_signal_shifts
+                push!(get!(cat_shifts, k, Float64[]), v)
+            end
+        end
+
+        print("**$(get(cat_label, cat, "Cat $cat"))**\n\n")
+        print("| Signal | Mean shift | Races |\n|--------|-----------|-------|\n")
+        for k in shift_keys
+            if !haskey(cat_shifts, k)
+                continue
+            end
+            vals = cat_shifts[k]
+            nonzero = filter(!=(0.0), vals)
+            if isempty(nonzero)
+                continue
+            end
+            label = get(shift_labels, k, string(k))
+            print("| $label | $(round(mean(nonzero), digits=3)) | $(length(nonzero)) |\n")
+        end
+        print("\n")
+    end
+    print(":::\n\n")
+end
+```
+
+## Signal ablation study
+
+Testing which data sources improve predictions by running with different signal subsets. Each row shows the mean metric across all races for that signal configuration.
+
+```{julia}
+#| output: asis
+ablation_df = suppress_output() do
+    ablation_study(races;
+        race_data=race_data,
+        n_sims=n_sims,
+    )
+end
 
 if nrow(ablation_df) > 0
     # Extract aggregate rows only
@@ -312,9 +421,7 @@ if nrow(ablation_df) > 0
 
         print("""
 ::: {.callout-note collapse="true"}
-## Interpreting the ablation
-
-The ablation study reveals marginal signal value by comparing prediction quality across different signal subsets.
+### Interpreting the ablation
 
 **Best configuration:** `$best_set` | **Worst:** `$worst_set`
 
@@ -335,37 +442,105 @@ Note: VG season points on historical pages reflect end-of-season totals, not the
 end
 ```
 
+# Ranking detail
+
+## Results by year
+
+```{julia}
+#| output: asis
+for year in sort(unique(r.race.year for r in results))
+    year_results = filter(r -> r.race.year == year, results)
+    if isempty(year_results)
+        continue
+    end
+    year_rhos = filter(!isnan, [r.spearman_rho for r in year_results])
+    if isempty(year_rhos)
+        continue
+    end
+
+    print("""
+### $year
+
+Races: $(length(year_results)) | Mean Spearman ρ: $(round(mean(year_rhos), digits=3)) | Median: $(round(median(year_rhos), digits=3))
+
+""")
+end
+```
+
+## Results by category
+
+```{julia}
+#| output: asis
+for cat in sort(unique(r.race.category for r in results))
+    cat_results = filter(r -> r.race.category == cat, results)
+    if isempty(cat_results)
+        continue
+    end
+    cat_rhos = filter(!isnan, [r.spearman_rho for r in cat_results])
+    if isempty(cat_rhos)
+        continue
+    end
+
+    print("""
+### $(get(cat_label, cat, "Cat $cat"))
+
+Races: $(length(cat_results)) | Mean Spearman ρ: $(round(mean(cat_rhos), digits=3)) | Median: $(round(median(cat_rhos), digits=3))
+
+""")
+end
+```
+
+```{julia}
+#| output: asis
+print("""
+::: {.callout-note collapse="true"}
+## Per-race results
+
+""")
+
+race_rows = filter(:race => r -> !startswith(r, "—"), summary_df)
+display_df = sort(race_rows, :spearman_rho, rev=true)
+md_table(display_df[:, [:race, :year, :category, :n_riders, :spearman_rho, :top10_overlap, :mean_abs_rank_error]])
+print("""
+
+:::
+
+""")
+```
+
 # Hyperparameter sensitivity
 
 ```{julia}
 #| echo: true
 #| output: asis
 
-# Tune against the baseline signal set
-# Reduce n_iter for faster iteration; increase for more thorough search
-best_config, tuning_log = tune_hyperparameters(races;
-    race_data=race_data,
-    objective=:spearman_rho,
-    n_iter=50,
-    signals=baseline_signals,
-    n_sims=n_sims,
-)
+if run_tuning
+    # Tune against the baseline signal set with calibration-aware objective
+    best_config, tuning_log = suppress_output() do
+        tune_hyperparameters(races;
+            race_data=race_data,
+            objective=:calibrated_rho,
+            n_iter=50,
+            signals=baseline_signals,
+            n_sims=n_sims,
+        )
+    end
 
-print("""
+    print("""
 ## Best configuration
 
 """)
 
-default_params = Dict(
-    :pcs_variance => DEFAULT_BAYESIAN_CONFIG.pcs_variance,
-    :vg_variance => DEFAULT_BAYESIAN_CONFIG.vg_variance,
-    :hist_base_variance => DEFAULT_BAYESIAN_CONFIG.hist_base_variance,
-    :hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.hist_decay_rate,
-    :vg_hist_base_variance => DEFAULT_BAYESIAN_CONFIG.vg_hist_base_variance,
-    :vg_hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.vg_hist_decay_rate,
-)
+    default_params = Dict(
+        :pcs_variance => DEFAULT_BAYESIAN_CONFIG.pcs_variance,
+        :vg_variance => DEFAULT_BAYESIAN_CONFIG.vg_variance,
+        :hist_base_variance => DEFAULT_BAYESIAN_CONFIG.hist_base_variance,
+        :hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.hist_decay_rate,
+        :vg_hist_base_variance => DEFAULT_BAYESIAN_CONFIG.vg_hist_base_variance,
+        :vg_hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.vg_hist_decay_rate,
+    )
 
-print("""
+    print("""
 | Parameter | Default | Tuned | Change |
 |-----------|---------|-------|--------|
 | `pcs_variance` | $(default_params[:pcs_variance]) | $(round(best_config.pcs_variance, digits=2)) | $(round(best_config.pcs_variance - default_params[:pcs_variance], digits=2)) |
@@ -376,21 +551,27 @@ print("""
 | `vg_hist_decay_rate` | $(default_params[:vg_hist_decay_rate]) | $(round(best_config.vg_hist_decay_rate, digits=2)) | $(round(best_config.vg_hist_decay_rate - default_params[:vg_hist_decay_rate], digits=2)) |
 
 """)
+else
+    print("""
+Hyperparameter tuning is disabled (`run_tuning = false`). Set `run_tuning = true` in the configuration cell to enable it.
+
+""")
+end
 ```
 
 ```{julia}
 #| output: asis
-if nrow(tuning_log) > 0
+if run_tuning && @isdefined(tuning_log) && nrow(tuning_log) > 0
     print("""
 ## Search landscape
 
-Top 10 candidates by mean Spearman \$\\rho\$:
+Top 10 candidates by calibrated score (Spearman \$\\rho\$ with calibration penalty):
 
 """)
     top10 = first(sort(tuning_log, :mean_score, rev=true), min(10, nrow(tuning_log)))
-    display_cols = [:candidate, :mean_score, :n_races, :pcs_variance, :vg_variance, :hist_base_variance, :hist_decay_rate]
+    display_cols = [:candidate, :mean_score, :n_races, :pcs_variance, :vg_variance, :hist_base_variance, :hist_decay_rate, :signal_correlation]
     avail_cols = intersect(display_cols, Symbol.(names(tuning_log)))
-    round_numeric_columns!(top10)
+    round_numeric_columns!(top10; digits=3)
     md_table(top10[:, avail_cols])
     print("\n")
 end
@@ -398,19 +579,55 @@ end
 
 ```{julia}
 #| output: asis
-if nrow(tuning_log) > 1
+if run_tuning && @isdefined(tuning_log) && nrow(tuning_log) > 1
     scores = filter(!isnan, tuning_log.mean_score)
     if !isempty(scores)
+        default_score = first(filter(:candidate => ==("default"), tuning_log)).mean_score
         print("""
 ::: {.callout-note collapse="true"}
 ## Tuning summary
 
 Searched $(nrow(tuning_log)) configurations. Score range: $(round(minimum(scores), digits=4)) to $(round(maximum(scores), digits=4)).
 
-The default configuration scored $(round(first(filter(:candidate => ==("default"), tuning_log)).mean_score, digits=4)). If the tuned configuration does not substantially improve on the default, the current hyperparameters are reasonable and the model is not highly sensitive to these parameters.
+The default configuration scored $(round(default_score, digits=4)). The objective combines Spearman ρ with a penalty for miscalibrated uncertainty (z-score std deviating from 1.0).
 :::
 
 """)
     end
+end
+```
+
+# Risk aversion tuning
+
+The optimiser can penalise high-variance riders using `risk_adjusted_vg = E[pts] - γ * SD[pts]`. This section searches over γ values to find the level that maximises the points captured ratio in backtesting.
+
+```{julia}
+#| echo: true
+#| output: asis
+
+if run_tuning
+    best_gamma, gamma_log = suppress_output() do
+        tune_risk_aversion(races;
+            race_data=race_data,
+            signals=baseline_signals,
+            n_sims=n_sims,
+        )
+    end
+
+    print("""
+## Risk aversion grid search
+
+**Best γ:** $(best_gamma)
+
+""")
+
+    round_numeric_columns!(gamma_log; digits=4)
+    md_table(gamma_log)
+    print("\n")
+else
+    print("""
+Risk aversion tuning is disabled (`run_tuning = false`). Set `run_tuning = true` in the configuration cell to enable it.
+
+""")
 end
 ```

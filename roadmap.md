@@ -87,7 +87,7 @@ The model treats riders independently but VG assists create team-level correlati
 
 ### Breakaway heuristic limitations
 
-Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see the docstring on `estimate_breakaway_points()` for the full allocation table). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this. The heuristic is a small fraction of total expected points for most riders, so the impact is limited.
+Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see `_breakaway_sectors()` in `src/simulation.jl`). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this. The heuristic is a small fraction of total expected points for most riders, so the impact is limited.
 
 ### Stage race scoring calibration
 

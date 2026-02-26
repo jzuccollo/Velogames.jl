@@ -23,6 +23,7 @@ oracle_url = "https://www.cyclingoracle.com/en/blog/omloop-nieuwsblad-2026-predi
 # Simulation
 n_sims = 1000         # Monte Carlo iterations (more = smoother, slower)
 history_years = 5     # Years of PCS race history to fetch
+risk_aversion = 1.   # Penalise high-variance riders (0 = risk-neutral, higher = more conservative)
 
 # Exclusions
 excluded_riders = String[]
@@ -39,26 +40,27 @@ md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))
 ```{julia}
 #| output: asis
 
-# Suppress setup_race / solve_oneday println output
-config = redirect_stdout(devnull) do
+config = suppress_output() do
     setup_race(race_name, race_year; cache_config=race_cache)
 end
 scoring = get_scoring(config.category > 0 ? config.category : 2)
 
-predicted, chosenteam = redirect_stdout(devnull) do
+predicted, chosenteam = suppress_output() do
     solve_oneday(config;
         racehash=racehash,
         history_years=history_years,
         betfair_market_id=betfair_market_id,
         oracle_url=oracle_url,
         n_sims=n_sims,
-        excluded_riders=excluded_riders)
+        excluded_riders=excluded_riders,
+        risk_aversion=risk_aversion)
 end
 
 # --- Race summary ---
 n_total = nrow(predicted)
+ra_str = risk_aversion > 0 ? "γ=$(risk_aversion)" : "risk-neutral"
 print("""
-**$(titlecase(config.name)) $(config.year)** — Category $(config.category), $(n_total) riders, $(n_sims) simulations
+**$(titlecase(config.name)) $(config.year)** — Category $(config.category), $(n_total) riders, $(n_sims) simulations, $(ra_str)
 
 """)
 
@@ -129,12 +131,16 @@ if @isdefined(chosenteam) && nrow(chosenteam) > 0
 
 """)
 
-    display_cols = [:rider, :team, :cost, :expected_vg_points, :strength, :uncertainty]
+    display_cols = [:rider, :team, :cost, :expected_vg_points, :std_vg_points, :strength, :uncertainty]
+    if risk_aversion > 0
+        insert!(display_cols, findfirst(==(:std_vg_points), display_cols) + 1, :risk_adjusted_vg_points)
+    end
     for col in [:expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
         if col in propertynames(chosenteam)
             push!(display_cols, col)
         end
     end
+    display_cols = filter(c -> c in propertynames(chosenteam), display_cols)
 
     team_display = chosenteam[:, display_cols]
     round_numeric_columns!(team_display)
@@ -157,7 +163,10 @@ Top 30 riders by expected VG points:
 ```{julia}
 #| output: asis
 if @isdefined(predicted) && nrow(predicted) > 0
-    ranking_cols = [:rider, :team, :cost, :expected_vg_points, :strength, :uncertainty]
+    ranking_cols = [:rider, :team, :cost, :expected_vg_points, :std_vg_points, :strength, :uncertainty]
+    if risk_aversion > 0
+        insert!(ranking_cols, findfirst(==(:std_vg_points), ranking_cols) + 1, :risk_adjusted_vg_points)
+    end
     for col in [:expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
         if col in propertynames(predicted)
             push!(ranking_cols, col)
@@ -166,6 +175,7 @@ if @isdefined(predicted) && nrow(predicted) > 0
     if :chosen in propertynames(predicted)
         push!(ranking_cols, :chosen)
     end
+    ranking_cols = filter(c -> c in propertynames(predicted), ranking_cols)
 
     ranking = sort(predicted[:, ranking_cols], :expected_vg_points, rev=true)
     top_n = min(30, nrow(ranking))
