@@ -73,20 +73,9 @@ $$E[\text{VG points}] = E[\text{finish}] + E[\text{assists}] + E[\text{breakaway
 ### Recommended future sources
 
 - **PCS deeper data** - rider recent results (filterable by season/type), race climb profiles (length, gradient, elevation), profile difficulty icons (p0-p5)
-- **FirstCycling** (firstcycling.com) - backup/cross-validation. Has unofficial Python API wrapper (github.com/baronet2/FirstCyclingAPI) and MCP server (github.com/r-huijts/firstcycling-mcp)
 - **OpenWeatherMap** (free tier, 1000 calls/day) - race-day weather for cobbled classics
 
-### Not recommended
-
-- Strava/training data - not publicly available at rider level
-- Paid APIs - out of scope
-- Social media signals - too noisy
-
 ## Known issues
-
-### ~~Broken odds scraper~~ (resolved)
-
-`getodds()` now uses the Betfair Exchange API (JSON-RPC) instead of fragile CSS selectors. Users pass a Betfair market ID; the pipeline authenticates via environment variables and fetches structured odds data. The pipeline continues to handle missing odds gracefully (most races have no Betfair market).
 
 ### Team dynamics / domestique problem
 
@@ -98,7 +87,7 @@ The model treats riders independently but VG assists create team-level correlati
 
 ### Breakaway heuristic limitations
 
-Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see the docstring on `estimate_breakaway_points()` for the full allocation table). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this. The heuristic is a small fraction of total expected points for most riders, so the impact is limited.
+Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see `_breakaway_sectors()` in `src/simulation.jl`). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this. The heuristic is a small fraction of total expected points for most riders, so the impact is limited.
 
 ### Stage race scoring calibration
 
@@ -122,17 +111,17 @@ Betting odds are the strongest single predictive signal because they aggregate p
 
 **Cycling Oracle:** `get_cycling_oracle()` scrapes win probability predictions from cyclingoracle.com blog pages and feeds them as an independent Bayesian signal (variance 1.5). This provides broader race coverage than Betfair, covering most European professional races. Both signals can be active simultaneously; when both are available, the model benefits from two independent observations.
 
-**Limitations:** Betfair cycling coverage is limited to grand tours, monuments, and some major classics. Most Superclassico races will not have a Betfair market. Cycling Oracle has broader coverage but only provides predictions for the top ~16 riders per race. Future work could add additional odds sources for even broader coverage.
+**Limitations:** Betfair cycling coverage is limited to grand tours, monuments, and some major classics. Most Superclasico races will not have a Betfair market. Cycling Oracle has broader coverage but only provides predictions for the top ~16 riders per race. Future work could add additional odds sources for even broader coverage.
 
 **Evidence:** Betting markets consistently outperform public statistical models across sports prediction research. In cycling specifically, odds were not tested by Kholkine et al. (2021) but are widely regarded in the DFS community as the strongest single signal because they aggregate private information (team tactics, form, injury knowledge) unavailable in public data. The current variance of 0.5 (vs 3.0-4.0 for other signals) is directionally correct.
 
-### Phase 2: Historical backtesting (high indirect impact)
+### Phase 2: Historical backtesting (high indirect impact) (done)
 
 Every other improvement is flying blind without systematic evaluation. We cannot currently measure whether the MC predictions are well-calibrated, whether variance hyperparameters are optimal, or whether model changes actually improve selection quality. The cycling prediction literature (Kholkine et al., 2021) and FPL research (Baronchelli et al., 2025) both emphasise that ablation studies are essential for confident iteration.
 
 **Pipeline:**
 
-For each past Superclassico race:
+For each past Superclasico race:
 
 1. Reconstruct pre-race available data
 2. Run prediction pipeline
@@ -143,7 +132,7 @@ For each past Superclassico race:
 
 - Tune variance hyperparameters exposed in `estimate_rider_strength()` (PCS, VG, history, odds variances and odds normalisation divisor)
 - Ablation study: which features improve predictions?
-- Requires: systematically scraping VG historical results for all Superclassico races (2+ seasons)
+- Requires: systematically scraping VG historical results for all Superclasico races (2+ seasons)
 
 **Additional metrics to consider:**
 
@@ -152,7 +141,7 @@ For each past Superclassico race:
 - Calibration plots: predicted win probability vs observed win frequency
 - Expected points of predicted team as a percentile of the actual leaderboard
 
-### Phase 3: Course profile matching (high impact)
+### Phase 3: Course profile matching (high impact) (part done)
 
 Academic evidence strongly supports terrain-aware prediction. Kholkine et al. (2021) found that for Liege-Bastogne-Liege, results from Fleche Wallonne (a similar hilly Ardennes race) were more predictive than overall PCS performance. The VeloRost paper (Rize, Saldanha & Moskovitch, 2025) achieved its best results partly by clustering races by elevation and surface type before applying TrueSkill ratings, outperforming approaches that used a single global skill rating.
 
@@ -268,11 +257,11 @@ The Sharpstack paper and DFS community research shows that ignoring correlation 
 
 ### Phase 9: Machine learning (unknown impact, requires prerequisites)
 
-Replacing the Bayesian strength model with a trained ML model requires a backtesting dataset of 90-135+ races (2-3 full Superclassico seasons), which does not yet exist. Academic results in cycling prediction show marginal gains from ML over well-tuned baselines: Kholkine et al. (2021) achieved 0.82 NDCG@10 with learn-to-rank, but this was only ~3% above a tuned logistic regression baseline. The FPL literature confirms that Bayesian approaches provide "strong and stable baselines" and that ML augmentation yields "modest but consistent improvements."
+Replacing the Bayesian strength model with a trained ML model requires a backtesting dataset of 90-135+ races (2-3 full Superclasico seasons), which does not yet exist. Academic results in cycling prediction show marginal gains from ML over well-tuned baselines: Kholkine et al. (2021) achieved 0.82 NDCG@10 with learn-to-rank, but this was only ~3% above a tuned logistic regression baseline. The FPL literature confirms that Bayesian approaches provide "strong and stable baselines" and that ML augmentation yields "modest but consistent improvements."
 
 **Prerequisites:**
 
-- Backtesting dataset of 90-135+ races (2-3 full Superclassico seasons)
+- Backtesting dataset of 90-135+ races (2-3 full Superclasico seasons)
 - Feature engineering pipeline from Phases 1-7
 
 **Approach:**

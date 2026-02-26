@@ -1,4 +1,21 @@
 # ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+"""Extract the chosen team from optimisation results and log a summary."""
+function _extract_chosen_team(results, predicted::DataFrame, cost_col::Symbol)
+    chosen_vec = [results[r] for r in predicted.riderkey]
+    predicted[!, :chosen] = chosen_vec .> 0.5
+    chosenteam = filter(:chosen => ==(true), predicted)
+
+    total_cost = sum(chosenteam[!, cost_col])
+    total_evg = sum(chosenteam.expected_vg_points)
+    @info "Selected $(nrow(chosenteam)) riders | Cost: $total_cost | Expected VG points: $(round(total_evg, digits=1))"
+
+    return predicted, chosenteam
+end
+
+# ---------------------------------------------------------------------------
 # Shared data preparation
 # ---------------------------------------------------------------------------
 
@@ -6,7 +23,7 @@
     _prepare_rider_data(config, racehash, excluded_riders, history_years,
                         betfair_market_id, oracle_url, min_riders, cache_config,
                         force_refresh; pcs_check_col=:oneday,
-                        filter_startlist=true, vg_history=Dict{Int,String}())
+                        filter_startlist=true)
 
 Shared data-fetching pipeline for `solve_oneday` and `solve_stage`.
 
@@ -15,8 +32,8 @@ against PCS confirmed startlist, joins PCS specialty ratings, fetches race histo
 (including similar races), VG historical race points, odds, and Cycling Oracle
 predictions, and logs a data quality summary.
 
-Returns `(riderdf, race_history_df, odds_df, oracle_df, vg_history_df)` or
-`nothing` if fewer than `min_riders` remain after filtering.
+Returns a `RaceData` struct or `nothing` if fewer than `min_riders` remain
+after filtering.
 """
 function _prepare_rider_data(
     config::RaceConfig,
@@ -30,7 +47,6 @@ function _prepare_rider_data(
     force_refresh::Bool;
     pcs_check_col::Symbol = :oneday,
     filter_startlist::Bool = true,
-    vg_history::Dict{Int,String} = Dict{Int,String}(),
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -89,92 +105,41 @@ function _prepare_rider_data(
         force_refresh = force_refresh,
     )
 
-    # Join PCS data onto rider data
-    pcs_cols = intersect(
-        names(pcsriderpts),
-        ["riderkey", "oneday", "gc", "tt", "sprint", "climber"],
-    )
-    if !isempty(pcs_cols)
-        riderdf =
-            leftjoin(riderdf, pcsriderpts[:, pcs_cols], on = :riderkey, makeunique = true)
-        for col in [:oneday, :gc, :tt, :sprint, :climber]
-            if col in propertynames(riderdf)
-                riderdf[!, col] = coalesce.(riderdf[!, col], 0)
-            end
-        end
-    end
+    riderdf = join_pcs_specialty!(riderdf, pcsriderpts)
 
-    # --- 3. Fetch PCS race history (primary + similar races) ---
-    race_history_df = nothing
-    if !isempty(config.pcs_slug) && history_years > 0
-        current_year = config.year
-        years = collect((current_year-history_years):(current_year-1))
-        @info "Fetching race history for $(config.pcs_slug): $years..."
+    # Archive PCS specialty scores for future backtesting
+    if !isempty(config.pcs_slug) && nrow(pcsriderpts) > 0
         try
-            race_history_df = getpcsracehistory(
-                config.pcs_slug,
-                years;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
-            )
-            race_history_df[!, :variance_penalty] .= 0.0
-            @info "Got $(nrow(race_history_df)) primary race history results"
+            save_race_snapshot(pcsriderpts, "pcs_specialty", config.pcs_slug, config.year)
         catch e
-            @warn "Failed to fetch race history: $e"
-        end
-
-        # Fetch similar-race history with variance penalty
-        similar_slugs = get(SIMILAR_RACES, config.pcs_slug, String[])
-        if !isempty(similar_slugs)
-            @info "Fetching similar-race history from: $(join(similar_slugs, ", "))..."
-            for slug in similar_slugs
-                try
-                    similar_df = getpcsracehistory(
-                        slug,
-                        years;
-                        cache_config = cache_config,
-                        force_refresh = force_refresh,
-                    )
-                    if nrow(similar_df) > 0
-                        similar_df[!, :variance_penalty] .= 1.0
-                        if race_history_df === nothing
-                            race_history_df = similar_df
-                        else
-                            race_history_df = vcat(race_history_df, similar_df; cols = :union)
-                        end
-                    end
-                catch e
-                    @warn "Failed to fetch similar-race history for $slug: $e"
-                end
-            end
-            n_similar = race_history_df !== nothing ?
-                count(==(1.0), race_history_df.variance_penalty) : 0
-            @info "Got $n_similar similar-race history results"
+            @debug "Failed to archive PCS specialty data: $e"
         end
     end
 
-    # --- 3b. Fetch VG historical race points (optional) ---
-    vg_history_df = nothing
-    if !isempty(vg_history)
-        dfs = DataFrame[]
-        for (year, url) in vg_history
-            try
-                df = getvgracepoints(
-                    url;
-                    cache_config = cache_config,
-                    force_refresh = force_refresh,
-                )
-                df[!, :year] .= year
-                push!(dfs, df)
-            catch e
-                @warn "Failed to fetch VG results for $year: $e"
-            end
-        end
-        if !isempty(dfs)
-            vg_history_df = vcat(dfs...)
-            @info "Got VG historical results: $(nrow(vg_history_df)) riders across $(length(dfs)) years"
-        end
-    end
+    # --- 3. Fetch PCS race history (primary + similar + within-year) ---
+    race_info = _find_race_by_slug(config.pcs_slug)
+    race_date =
+        race_info !== nothing ? _race_date_for_year(race_info, config.year) : nothing
+    race_history_df = assemble_pcs_race_history(
+        config.pcs_slug,
+        config.year,
+        history_years;
+        race_date = race_date,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
+
+    # --- 3b. Fetch VG race history (automatic) ---
+    race_name = race_info !== nothing ? race_info.name : ""
+    vg_history_df = assemble_vg_race_history(
+        race_name,
+        config.pcs_slug,
+        config.year,
+        history_years;
+        race_date = race_date,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
 
     # --- 4. Fetch Betfair odds (optional) ---
     odds_df = nothing
@@ -187,6 +152,14 @@ function _prepare_rider_data(
             )
             if nrow(odds_df) > 0
                 @info "Got Betfair odds for $(nrow(odds_df)) riders"
+                # Archive for future backtesting
+                if !isempty(config.pcs_slug)
+                    try
+                        save_race_snapshot(odds_df, "odds", config.pcs_slug, config.year)
+                    catch e
+                        @warn "Failed to archive odds: $e"
+                    end
+                end
             else
                 @info "Betfair market returned no active runners"
             end
@@ -206,6 +179,19 @@ function _prepare_rider_data(
             )
             if nrow(oracle_df) > 0
                 @info "Got Cycling Oracle predictions for $(nrow(oracle_df)) riders"
+                # Archive for future backtesting
+                if !isempty(config.pcs_slug)
+                    try
+                        save_race_snapshot(
+                            oracle_df,
+                            "oracle",
+                            config.pcs_slug,
+                            config.year,
+                        )
+                    catch e
+                        @warn "Failed to archive oracle predictions: $e"
+                    end
+                end
             else
                 @info "Cycling Oracle returned no predictions"
             end
@@ -242,7 +228,7 @@ function _prepare_rider_data(
         0
     end
 
-    @info "Data quality summary" riders=n_total pcs_specialty="$n_pcs/$n_total" race_history="$n_history/$n_total" vg_history="$n_vg_history/$n_total" odds="$n_odds/$n_total" oracle="$n_oracle/$n_total"
+    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total"
     if n_pcs == 0
         @warn "No riders have PCS specialty data — strength estimates will rely on VG season points only"
     end
@@ -250,7 +236,7 @@ function _prepare_rider_data(
         @warn "No riders matched to race history — historical finishing positions won't inform predictions"
     end
 
-    return (riderdf = riderdf, race_history_df = race_history_df, odds_df = odds_df, oracle_df = oracle_df, vg_history_df = vg_history_df)
+    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, nothing)
 end
 
 
@@ -261,7 +247,7 @@ end
 """
 ## `solve_oneday`
 
-Construct an optimal team for a Superclassico Sixes one-day race using Monte Carlo
+Construct an optimal team for a Sixes Classics one-day race using Monte Carlo
 simulation of expected Velogames points.
 
 ## Pipeline:
@@ -283,7 +269,6 @@ simulation of expected Velogames points.
 - `n_sims::Int` - Monte Carlo simulations (default: 10000)
 - `excluded_riders::Vector{String}` - rider names to exclude
 - `filter_startlist::Bool` - filter against PCS confirmed startlist (default: true)
-- `vg_history::Dict{Int,String}` - VG historical race results: year => results URL
 
 ## Returns
 A tuple `(predicted, chosenteam)` where `predicted` is a DataFrame of all riders
@@ -298,9 +283,9 @@ function solve_oneday(
     n_sims::Int = 10000,
     excluded_riders::Vector{String} = String[],
     filter_startlist::Bool = true,
-    vg_history::Dict{Int,String} = Dict{Int,String}(),
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
+    risk_aversion::Float64 = 0.0,
 )
     data = _prepare_rider_data(
         config,
@@ -314,40 +299,33 @@ function solve_oneday(
         force_refresh;
         pcs_check_col = :oneday,
         filter_startlist = filter_startlist,
-        vg_history = vg_history,
     )
     if data === nothing
         return DataFrame(), DataFrame()
     end
-    riderdf = data.riderdf
-    race_history_df = data.race_history_df
-    odds_df = data.odds_df
-    oracle_df = data.oracle_df
-    vg_history_df = data.vg_history_df
 
     # --- 5-7. Predict expected VG points ---
     scoring = get_scoring(config.category > 0 ? config.category : 2)  # default Cat 2 if unknown
 
     @info "Predicting expected VG points (Cat $(config.category), $n_sims sims)..."
     predicted = predict_expected_points(
-        riderdf,
+        data,
         scoring;
-        race_history_df = race_history_df,
-        odds_df = odds_df,
-        oracle_df = oracle_df,
-        vg_history_df = vg_history_df,
         n_sims = n_sims,
+        race_year = config.year,
+        risk_aversion = risk_aversion,
     )
 
     # --- 8. Optimise team selection ---
     @info "Optimising team selection..."
 
     cost_col = :cost
+    points_col = risk_aversion > 0 ? :risk_adjusted_vg_points : :expected_vg_points
 
     results = build_model_oneday(
         predicted,
         config.team_size,
-        :expected_vg_points,
+        points_col,
         cost_col;
         totalcost = 100,
     )
@@ -357,16 +335,7 @@ function solve_oneday(
         return DataFrame(), DataFrame()
     end
 
-    # Extract chosen riders
-    chosen_vec = [results[r] for r in predicted.riderkey]
-    predicted[!, :chosen] = chosen_vec .> 0.5
-    chosenteam = filter(:chosen => ==(true), predicted)
-
-    total_cost = sum(chosenteam[!, cost_col])
-    total_evg = sum(chosenteam.expected_vg_points)
-    @info "Selected $(nrow(chosenteam)) riders | Cost: $total_cost | Expected VG points: $(round(total_evg, digits=1))"
-
-    return predicted, chosenteam
+    return _extract_chosen_team(results, predicted, cost_col)
 end
 
 
@@ -403,7 +372,6 @@ than individual stages. See the roadmap for planned stage-by-stage simulation.
 - `n_sims::Int` - Monte Carlo simulations (default: 10000)
 - `excluded_riders::Vector{String}` - rider names to exclude
 - `filter_startlist::Bool` - filter against PCS confirmed startlist (default: true)
-- `vg_history::Dict{Int,String}` - VG historical race results: year => results URL
 
 ## Returns
 A tuple `(predicted, chosenteam)` where `predicted` is a DataFrame of all riders
@@ -418,9 +386,9 @@ function solve_stage(
     n_sims::Int = 10000,
     excluded_riders::Vector{String} = String[],
     filter_startlist::Bool = true,
-    vg_history::Dict{Int,String} = Dict{Int,String}(),
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
+    risk_aversion::Float64 = 0.0,
 )
     data = _prepare_rider_data(
         config,
@@ -434,41 +402,34 @@ function solve_stage(
         force_refresh;
         pcs_check_col = :gc,
         filter_startlist = filter_startlist,
-        vg_history = vg_history,
     )
     if data === nothing
         return DataFrame(), DataFrame()
     end
-    riderdf = data.riderdf
-    race_history_df = data.race_history_df
-    odds_df = data.odds_df
-    oracle_df = data.oracle_df
-    vg_history_df = data.vg_history_df
 
     # --- 5-7. Predict expected VG points (stage race mode) ---
     scoring = get_scoring(:stage)
 
     @info "Predicting expected VG points (stage race, $n_sims sims)..."
     predicted = predict_expected_points(
-        riderdf,
+        data,
         scoring;
-        race_history_df = race_history_df,
-        odds_df = odds_df,
-        oracle_df = oracle_df,
-        vg_history_df = vg_history_df,
         n_sims = n_sims,
         race_type = :stage,
+        race_year = config.year,
+        risk_aversion = risk_aversion,
     )
 
     # --- 8. Optimise team selection with class constraints ---
     @info "Optimising team selection (9 riders, class constraints)..."
 
     cost_col = :cost
+    points_col = risk_aversion > 0 ? :risk_adjusted_vg_points : :expected_vg_points
 
     results = build_model_stage(
         predicted,
         config.team_size,
-        :expected_vg_points,
+        points_col,
         cost_col;
         totalcost = 100,
     )
@@ -478,16 +439,5 @@ function solve_stage(
         return DataFrame(), DataFrame()
     end
 
-    # Extract chosen riders
-    chosen_vec = [results[r] for r in predicted.riderkey]
-    predicted[!, :chosen] = chosen_vec .> 0.5
-    chosenteam = filter(:chosen => ==(true), predicted)
-
-    total_cost = sum(chosenteam[!, cost_col])
-    total_evg = sum(chosenteam.expected_vg_points)
-    @info "Selected $(nrow(chosenteam)) riders | Cost: $total_cost | Expected VG points: $(round(total_evg, digits=1))"
-
-    return predicted, chosenteam
+    return _extract_chosen_team(results, predicted, cost_col)
 end
-
-

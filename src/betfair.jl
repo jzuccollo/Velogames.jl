@@ -70,12 +70,9 @@ Make a JSON-RPC call to the Betfair Betting API. Returns the parsed result.
 function betfair_api_call(method::String, params::Dict)
     session, app_key = betfair_ensure_session()
 
-    body = JSON3.write(Dict(
-        "jsonrpc" => "2.0",
-        "method" => method,
-        "params" => params,
-        "id" => 1,
-    ))
+    body = JSON3.write(
+        Dict("jsonrpc" => "2.0", "method" => method, "params" => params, "id" => 1),
+    )
 
     headers = [
         "X-Application" => app_key,

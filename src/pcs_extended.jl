@@ -81,17 +81,17 @@ function getpcsraceresults(
         end
 
         # Parse position values; non-numeric strings (DNF, DNS, OTL, DSQ,
-        # ABD, etc.) become 999 to keep them in the DataFrame but
+        # ABD, etc.) become DNF_POSITION to keep them in the DataFrame but
         # distinguishable from finishers.
         if rank_col !== nothing
             result.position = map(df[!, rank_col]) do val
                 s = strip(string(val))
                 parsed = tryparse(Int, s)
-                parsed !== nothing ? parsed : 999
+                parsed !== nothing ? parsed : DNF_POSITION
             end
         else
-            @warn "No position column found in race results from $url; position will be set to 999"
-            result.position = fill(999, nrow(df))
+            @warn "No position column found in race results from $url; position will be set to $DNF_POSITION"
+            result.position = fill(DNF_POSITION, nrow(df))
         end
 
         result.team = team_col !== nothing ? String.(df[!, team_col]) : fill("", nrow(df))
@@ -181,11 +181,11 @@ function getpcsracestartlist(
             map(df[!, rank_col]) do val
                 s = strip(string(val))
                 parsed = tryparse(Int, s)
-                parsed !== nothing ? parsed : 9999
+                parsed !== nothing ? parsed : UNRANKED_POSITION
             end
         else
-            @warn "No PCS ranking column found in startlist from $url; pcsrank will be 9999"
-            fill(9999, nrow(df))
+            @warn "No PCS ranking column found in startlist from $url; pcsrank will be $UNRANKED_POSITION"
+            fill(UNRANKED_POSITION, nrow(df))
         end
 
         # PCS points
