@@ -480,6 +480,9 @@ function setup_race(
 end
 
 
+"""Earliest year VG ran the one-day classics competition (Superclasico)."""
+const VG_CLASSICS_FIRST_YEAR = 2023
+
 """VG URL slug for one-day classics, year-aware (renamed from Superclasico to Classics in 2026)."""
 vg_classics_slug(year::Int) = year >= 2026 ? "sixes-classics" : "sixes-superclasico"
 

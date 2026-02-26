@@ -40,7 +40,8 @@ end
     join_pcs_specialty!(riderdf::DataFrame, pcsriderpts::DataFrame) -> DataFrame
 
 Left-join PCS specialty columns (oneday, gc, tt, sprint, climber) onto `riderdf`
-by `:riderkey`, filling missing values with 0. Returns the modified DataFrame.
+by `:riderkey`, filling missing values with 0. Also adds a `:has_pcs_data` boolean
+column tracking whether PCS data was successfully retrieved (before coalescing).
 """
 function join_pcs_specialty!(riderdf::DataFrame, pcsriderpts::DataFrame)
     pcs_cols = intersect(
@@ -50,11 +51,20 @@ function join_pcs_specialty!(riderdf::DataFrame, pcsriderpts::DataFrame)
     if !isempty(pcs_cols)
         riderdf =
             leftjoin(riderdf, pcsriderpts[:, pcs_cols], on = :riderkey, makeunique = true)
+        # Track which riders had PCS data before coalescing missing → 0
+        specialty_cols =
+            intersect(propertynames(riderdf), [:oneday, :gc, :tt, :sprint, :climber])
+        riderdf[!, :has_pcs_data] = [
+            any(!ismissing(riderdf[i, col]) for col in specialty_cols) for
+            i = 1:nrow(riderdf)
+        ]
         for col in [:oneday, :gc, :tt, :sprint, :climber]
             if col in propertynames(riderdf)
                 riderdf[!, col] = coalesce.(riderdf[!, col], 0)
             end
         end
+    else
+        riderdf[!, :has_pcs_data] = falses(nrow(riderdf))
     end
     return riderdf
 end
@@ -193,7 +203,8 @@ function assemble_vg_race_history(
     force_refresh::Bool = false,
 )
     vg_history_df = nothing
-    history_years_range = collect((race_year-history_years):(race_year-1))
+    history_years_range =
+        collect(max(VG_CLASSICS_FIRST_YEAR, race_year-history_years):(race_year-1))
 
     # Helper: get a VG race list, preferring the pre-fetched dict
     function _get_racelist(yr)
@@ -217,7 +228,10 @@ function assemble_vg_race_history(
             slug_name = replace(slug, "-" => " ")
             race_num = match_vg_race_number(slug_name, racelist)
         end
-        race_num === nothing && return nothing
+        if race_num === nothing
+            @debug "No VG race match for '$name' (slug '$slug') in $yr"
+            return nothing
+        end
         result = getvgraceresults(
             yr,
             race_num;
