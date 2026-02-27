@@ -191,6 +191,62 @@ compute.
 PCS specialty scores are always fetched (signal selection happens later).
 Odds and oracle are set to `nothing` (no historical data for these).
 """
+
+function _build_pcs_slug_map(
+    pcs_slug::String,
+    year::Int;
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    slug_map = Dict{String,String}()
+    try
+        startlist_df = getpcsracestartlist(pcs_slug, year; cache_config, force_refresh)
+        if nrow(startlist_df) > 0 && :pcs_slug in propertynames(startlist_df)
+            for row in eachrow(startlist_df)
+                if !isempty(row.pcs_slug)
+                    slug_map[row.riderkey] = row.pcs_slug
+                end
+            end
+        end
+    catch e
+        @debug "Could not extract PCS slugs from startlist: $e"
+    end
+    return slug_map
+end
+
+function _supplement_missing_pcs!(
+    archived_pcs::DataFrame,
+    riderdf::DataFrame,
+    slug_map::Dict{String,String};
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    specialty_cols = [c for c in [:gc, :tt, :sprint, :climber, :oneday] if c in propertynames(archived_pcs)]
+    isempty(specialty_cols) && return
+
+    race_keys = Set(riderdf.riderkey)
+    missing_keys = Set{String}()
+    for row in eachrow(archived_pcs)
+        if row.riderkey in race_keys && all(ismissing(row[c]) for c in specialty_cols)
+            push!(missing_keys, row.riderkey)
+        end
+    end
+    isempty(missing_keys) && return
+
+    missing_names = String.([r.rider for r in eachrow(riderdf) if r.riderkey in missing_keys])
+    isempty(missing_names) && return
+
+    @debug "Supplementing $(length(missing_names)) riders with missing archived PCS data"
+    fresh = getpcsriderpts_batch(missing_names; slug_map, cache_config, force_refresh)
+    for frow in eachrow(fresh)
+        idx = findfirst(==(frow.riderkey), archived_pcs.riderkey)
+        idx === nothing && continue
+        for c in propertynames(fresh)
+            c in propertynames(archived_pcs) && (archived_pcs[idx, c] = frow[c])
+        end
+    end
+end
+
 function prefetch_race_data(
     race::BacktestRace;
     vg_racelists::Union{Dict{Int,DataFrame},Nothing} = nothing,
@@ -236,14 +292,21 @@ function prefetch_race_data(
 
     # --- 3. Fetch PCS specialty scores (prefer archived to avoid temporal leakage) ---
     rider_names = String.(riderdf.rider)
+
+    # Build slug map from startlist (shared by both archive-supplement and fresh-fetch paths)
+    pcs_slug_map = _build_pcs_slug_map(race.pcs_slug, race.year; cache_config, force_refresh)
+
     archived_pcs = load_race_snapshot("pcs_specialty", race.pcs_slug, race.year)
     pcspts = if archived_pcs !== nothing
         @info "Using archived PCS specialty scores for $(race.name) $(race.year)"
+        # Supplement riders with all-missing specialty (archive may predate URL fixes)
+        _supplement_missing_pcs!(archived_pcs, riderdf, pcs_slug_map; cache_config, force_refresh)
         archived_pcs
     else
         @debug "No archived PCS scores for $(race.name) $(race.year) — using current PCS data"
         getpcsriderpts_batch(
             rider_names;
+            slug_map = pcs_slug_map,
             cache_config = cache_config,
             force_refresh = force_refresh,
         )

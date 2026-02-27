@@ -74,6 +74,7 @@ function _prepare_rider_data(
     end
 
     # Filter against PCS confirmed startlist
+    pcs_slug_map = Dict{String,String}()
     if filter_startlist && !isempty(config.pcs_slug)
         try
             startlist_df = getpcsracestartlist(
@@ -86,6 +87,19 @@ function _prepare_rider_data(
                 before = nrow(riderdf)
                 riderdf = semijoin(riderdf, startlist_df[:, [:riderkey]], on = :riderkey)
                 @info "Filtered to $(nrow(riderdf)) riders confirmed on PCS startlist (removed $(before - nrow(riderdf)))"
+
+                # Build riderkey → PCS slug mapping from startlist
+                if :pcs_slug in propertynames(startlist_df)
+                    for row in eachrow(startlist_df)
+                        if !isempty(row.pcs_slug)
+                            pcs_slug_map[row.riderkey] = row.pcs_slug
+                        end
+                    end
+                    n_slugs = length(pcs_slug_map)
+                    if n_slugs > 0
+                        @info "Extracted $n_slugs PCS profile slugs from startlist"
+                    end
+                end
             end
         catch e
             @warn "Could not fetch PCS startlist: $e — skipping startlist filter"
@@ -102,6 +116,7 @@ function _prepare_rider_data(
     rider_names = String.(riderdf.rider)
     pcsriderpts = getpcsriderpts_batch(
         rider_names;
+        slug_map = pcs_slug_map,
         cache_config = cache_config,
         force_refresh = force_refresh,
     )

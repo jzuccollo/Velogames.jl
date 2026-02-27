@@ -115,39 +115,23 @@ function getpcsraceresults(
 end
 
 
-"""
-## `getpcsracestartlist`
+function _extract_rider_slugs(pageurl::String)::Dict{String,String}
+    slug_map = Dict{String,String}()
+    response = HTTP.get(pageurl, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+    pagehtml = Gumbo.parsehtml(String(response.body))
+    for link in eachmatch(Selector("a"), pagehtml.root)
+        href = get(link.attributes, "href", "")
+        m = match(r"(?:^|/)rider/([a-z0-9-]+)", href)
+        m === nothing && continue
+        rider_name = String(strip(nodeText(link)))
+        isempty(rider_name) && continue
+        key = createkey(rider_name)
+        isempty(key) && continue
+        slug_map[key] = m.captures[1]
+    end
+    return slug_map
+end
 
-Downloads and parses the confirmed startlist (with PCS quality/ranking data) for a
-specific race edition from the PCS website.
-
-The function targets the startlist-quality page, which exposes a well-structured table:
-
-    URL: `https://www.procyclingstats.com/race/{slug}/{year}/startlist/startlist-quality`
-
-Uses `scrape_pcs_table()` and `find_column()` for resilient column resolution.
-
-Returns a DataFrame with the following columns:
-
-    * `rider` - rider name
-    * `team` - team name
-    * `pcsrank` - PCS individual ranking (Int; unranked riders are assigned 9999)
-    * `pcspoints` - PCS ranking points (Float64)
-    * `riderkey` - normalised rider key created via `createkey(rider)`
-
-# Arguments
-- `pcs_race_slug` - the PCS race slug, e.g. `"tour-de-france"`
-- `year` - the edition year, e.g. `2024`
-
-# Keyword Arguments
-- `force_refresh` - bypass the cache and fetch fresh data (default: `false`)
-- `cache_config` - cache configuration (default: `DEFAULT_CACHE`)
-
-# Example
-```julia
-getpcsracestartlist("tour-de-france", 2024)
-```
-"""
 function getpcsracestartlist(
     pcs_race_slug::String,
     year::Int;
@@ -204,11 +188,20 @@ function getpcsracestartlist(
         result.team = team_col !== nothing ? String.(df[!, team_col]) : fill("", nrow(df))
         result.riderkey = createkey.(result.rider)
 
+        # Extract actual PCS profile slugs from rider links on the page
+        result.pcs_slug = try
+            slug_map = _extract_rider_slugs(url)
+            [get(slug_map, key, "") for key in result.riderkey]
+        catch e
+            @debug "Could not extract PCS slugs from startlist: $e"
+            fill("", nrow(result))
+        end
+
         # Drop rows with empty riderkey
         result = filter(row -> !isempty(row.riderkey), result)
         result = unique(result, :riderkey)
 
-        return result[:, [:rider, :team, :pcsrank, :pcspoints, :riderkey]]
+        return result[:, [:rider, :team, :pcsrank, :pcspoints, :riderkey, :pcs_slug]]
     end
 
     params = Dict("slug" => pcs_race_slug, "year" => string(year))
