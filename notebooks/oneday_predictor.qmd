@@ -27,7 +27,7 @@ qualitative_json_file = ""      # Path to manually saved JSON response file
 # Simulation
 n_sims = 1000         # Monte Carlo iterations (more = smoother, slower)
 history_years = 5     # Years of PCS race history to fetch
-risk_aversion = 1.   # Penalise high-variance riders (0 = risk-neutral, higher = more conservative)
+risk_aversion = 1.5   # Penalise high-variance riders (0 = risk-neutral, higher = more conservative)
 
 # Exclusions
 excluded_riders = String[]
