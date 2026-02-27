@@ -142,6 +142,29 @@ function _prepare_rider_data(
         force_refresh = force_refresh,
     )
 
+    # --- 3c. Fetch PCS form scores (automatic) ---
+    form_df = nothing
+    if !isempty(config.pcs_slug)
+        try
+            form_df = getpcsraceform(
+                config.pcs_slug,
+                config.year;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            if nrow(form_df) > 0
+                @info "Got PCS form scores for $(nrow(form_df)) riders"
+                try
+                    save_race_snapshot(form_df, "pcs_form", config.pcs_slug, config.year)
+                catch e
+                    @debug "Failed to archive PCS form data: $e"
+                end
+            end
+        catch e
+            @warn "Failed to fetch PCS form data: $e"
+        end
+    end
+
     # --- 4. Fetch Betfair odds (optional) ---
     odds_df = nothing
     if !isempty(betfair_market_id)
@@ -233,8 +256,13 @@ function _prepare_rider_data(
     else
         0
     end
+    n_form = if form_df !== nothing
+        length(intersect(riderdf.riderkey, form_df.riderkey))
+    else
+        0
+    end
 
-    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" qualitative = "$n_qualitative/$n_total"
+    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" qualitative = "$n_qualitative/$n_total" form = "$n_form/$n_total"
     if n_pcs == 0
         @warn "No riders have PCS specialty data — strength estimates will rely on VG season points only"
     end
@@ -242,7 +270,7 @@ function _prepare_rider_data(
         @warn "No riders matched to race history — historical finishing positions won't inform predictions"
     end
 
-    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, qualitative_df, nothing)
+    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, qualitative_df, form_df, nothing)
 end
 
 

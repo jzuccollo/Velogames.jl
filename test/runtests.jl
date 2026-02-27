@@ -379,6 +379,14 @@ end
         n_starters = 150,
     ).mean > 0.0
 
+    # Form signal shifts mean and reduces variance
+    with_form = estimate_rider_strength(pcs_score = 0.0, form_score = 1.5)
+    without_form = estimate_rider_strength(pcs_score = 0.0)
+    @test with_form.mean > without_form.mean
+    @test with_form.variance < without_form.variance
+    @test with_form.shift_form > 0.0
+    @test without_form.shift_form == 0.0
+
     @test position_to_strength(1, 150) >
           position_to_strength(50, 150) >
           position_to_strength(100, 150)
@@ -389,7 +397,7 @@ end
     default_result = estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5)
     @test default_result.mean > 0.0
 
-    custom_config = BayesianConfig(0.5, 0.5, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.5, 2.0, 0.0)
+    custom_config = BayesianConfig(0.5, 0.5, 2.0, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.5, 2.0, 0.0)
     custom_result =
         estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5, config = custom_config)
     @test custom_result.mean != default_result.mean
@@ -399,8 +407,8 @@ end
     @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.15
 
     # Equicorrelation discount: more signals → wider posterior with ρ > 0
-    no_corr = BayesianConfig(5.0, 1.4, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.0)
-    with_corr = BayesianConfig(5.0, 1.4, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.4)
+    no_corr = BayesianConfig(5.0, 1.4, 2.0, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.0)
+    with_corr = BayesianConfig(5.0, 1.4, 2.0, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.4)
     r_nocorr = estimate_rider_strength(
         pcs_score = 1.0,
         vg_points = 0.8,
@@ -1037,7 +1045,7 @@ end
     end
 
     @testset "ABLATION_SETS is well-formed" begin
-        @test length(Velogames.ABLATION_SETS) == 10
+        @test length(Velogames.ABLATION_SETS) == 11
         for (label, sigs) in Velogames.ABLATION_SETS
             @test label isa String
             @test sigs isa Vector{Symbol}

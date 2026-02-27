@@ -8,7 +8,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/betfair.jl` - Betfair Exchange API: authentication, session management, market queries for betting odds
 - `src/get_data.jl` - Data scraping: VG riders, PCS rankings/specialty ratings, Betfair odds (via API), Cycling Oracle predictions, VG race results, VG race catalogue and per-race results
 - `src/pcs_scraper.jl` - PCS table scraping infrastructure and column aliases
-- `src/pcs_extended.jl` - Extended PCS scraping: race history results, startlists across multiple years
+- `src/pcs_extended.jl` - Extended PCS scraping: race history results, startlists, form scores across multiple years
 - `src/data_assembly.jl` - Shared data assembly: `RaceData` struct, `join_pcs_specialty!`, `assemble_pcs_race_history`, `assemble_vg_race_history`, `prefetch_vg_racelists` (used by both production and backtesting pipelines)
 - `src/qualitative.jl` - Qualitative intelligence: YouTube transcript fetching (via yt-dlp), Claude API extraction, prompt generation, JSON response parsing, manual workflow support
 - `src/scoring.jl` - VG scoring tables by category (one-day Cat 1/2/3, stage race aggregate) and expected points functions

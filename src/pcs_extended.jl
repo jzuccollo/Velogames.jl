@@ -223,6 +223,87 @@ end
 
 
 """
+## `getpcsraceform`
+
+Downloads and parses PCS form scores for riders on a race startlist.
+
+URL: `https://www.procyclingstats.com/race/{slug}/{year}/startlist/form`
+
+The form page ranks starters by recent results across all races (last ~6 weeks).
+Only the top ~40-60 riders by form appear; riders not listed simply don't receive
+the signal. The Points column uses a valuebar widget but `nodeText` extracts the
+numeric value correctly.
+
+Returns a DataFrame with columns:
+
+    * `rider` - rider name
+    * `form_score` - PCS form points (Float64)
+    * `riderkey` - normalised rider key
+
+# Arguments
+- `pcs_race_slug` - the PCS race slug, e.g. `"omloop-het-nieuwsblad"`
+- `year` - the edition year, e.g. `2026`
+
+# Keyword Arguments
+- `force_refresh` - bypass the cache and fetch fresh data (default: `false`)
+- `cache_config` - cache configuration (default: `DEFAULT_CACHE`)
+"""
+function getpcsraceform(
+    pcs_race_slug::String,
+    year::Int;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
+
+    pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/startlist/form"
+
+    function fetch_form(url, params)
+        df = scrape_pcs_table(url)
+
+        rider_col = find_column(df, PCS_RIDER_ALIASES)
+        points_col = find_column(df, PCS_POINTS_ALIASES)
+
+        rider_col === nothing && error(
+            "No rider column found in form page from $url. " *
+            "Columns: $(names(df)). " *
+            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl",
+        )
+
+        result = DataFrame()
+        result.rider = String.(df[!, rider_col])
+
+        result.form_score = if points_col !== nothing
+            map(df[!, points_col]) do val
+                val isa Float64 && return val
+                s = strip(string(val))
+                parsed = tryparse(Float64, s)
+                parsed !== nothing ? parsed : 0.0
+            end
+        else
+            @warn "No points column found in form page from $url; form_score will be 0.0"
+            fill(0.0, nrow(df))
+        end
+
+        result.riderkey = createkey.(result.rider)
+
+        result = filter(row -> !isempty(row.riderkey), result)
+        result = unique(result, :riderkey)
+
+        return result[:, [:rider, :form_score, :riderkey]]
+    end
+
+    params = Dict("slug" => pcs_race_slug, "year" => string(year))
+    return cached_fetch(
+        fetch_form,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
+end
+
+
+"""
 ## `getpcsracehistory`
 
 Convenience function that fetches finishing results for a race across multiple years

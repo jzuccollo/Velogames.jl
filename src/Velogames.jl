@@ -27,6 +27,7 @@ export getvgriders,
     match_vg_race_number,
     getpcsraceresults,
     getpcsracestartlist,
+    getpcsraceform,
     getpcsracehistory
 
 # Betfair API

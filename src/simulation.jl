@@ -35,6 +35,7 @@ struct StrengthEstimate
     mean::Float64
     variance::Float64
     shift_vg::Float64
+    shift_form::Float64
     shift_history::Float64
     shift_vg_history::Float64
     shift_oracle::Float64
@@ -53,6 +54,7 @@ Lower variance means the signal is treated as more precise.
 struct BayesianConfig
     pcs_variance::Float64
     vg_variance::Float64
+    form_variance::Float64
     hist_base_variance::Float64
     hist_decay_rate::Float64
     vg_hist_base_variance::Float64
@@ -68,6 +70,7 @@ end
 const DEFAULT_BAYESIAN_CONFIG = BayesianConfig(
     5.5,   # pcs_variance: prior variance for PCS specialty score
     1.2,   # vg_variance: observation variance for VG season points
+    2.0,   # form_variance: observation variance for PCS form score
     4.0,   # hist_base_variance: base variance for race history observations (z-scored scale)
     1.2,   # hist_decay_rate: additional variance per year of age
     3.0,   # vg_hist_base_variance: base variance for VG race history
@@ -149,6 +152,7 @@ function estimate_rider_strength(;
     race_history_years_ago::Vector{Int} = Int[],
     race_history_variance_penalties::Vector{Float64} = Float64[],
     vg_points::Float64 = 0.0,
+    form_score::Float64 = 0.0,
     vg_race_history::Vector{Float64} = Float64[],
     vg_race_history_years_ago::Vector{Int} = Int[],
     odds_implied_prob::Float64 = 0.0,
@@ -172,6 +176,17 @@ function estimate_rider_strength(;
         n_signals += 1
     end
     shift_vg = posterior.mean - mean_before
+
+    # --- Update with PCS form score ---
+    # Recent cross-race form from PCS startlist/form page. Captures performance
+    # across all races in the last ~6 weeks, filling the gap between broad
+    # season points and race-specific history.
+    mean_before = posterior.mean
+    if form_score != 0.0
+        posterior = bayesian_update(posterior, form_score, config.form_variance)
+        n_signals += 1
+    end
+    shift_form = posterior.mean - mean_before
 
     # --- Update with PCS race-specific history ---
     # Each past result in this or similar races is a strong signal.
@@ -271,6 +286,7 @@ function estimate_rider_strength(;
         posterior.mean,
         posterior.variance,
         shift_vg,
+        shift_form,
         shift_history,
         shift_vg_history,
         shift_oracle,
@@ -635,6 +651,7 @@ function predict_expected_points(
     oracle_df::Union{DataFrame,Nothing} = nothing,
     vg_history_df::Union{DataFrame,Nothing} = nothing,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
+    form_df::Union{DataFrame,Nothing} = nothing,
     n_sims::Int = 10000,
     race_type::Symbol = :oneday,
     rng::AbstractRNG = Random.default_rng(),
@@ -722,6 +739,22 @@ function predict_expected_points(
                 qualitative_lookup[key] = Tuple{Float64,Float64}[]
             end
             push!(qualitative_lookup[key], (adj, conf))
+        end
+    end
+
+    # --- Build PCS form lookup ---
+    # Z-score form scores across the field so they're on the same scale as other signals
+    form_lookup = Dict{String,Float64}()
+    if form_df !== nothing &&
+       :riderkey in propertynames(form_df) &&
+       :form_score in propertynames(form_df)
+        form_raw = Float64.(form_df.form_score)
+        form_mean = mean(form_raw)
+        form_std = std(form_raw)
+        if form_std > 0
+            for (i, row) in enumerate(eachrow(form_df))
+                form_lookup[row.riderkey] = (form_raw[i] - form_mean) / form_std
+            end
         end
     end
 
@@ -813,6 +846,7 @@ function predict_expected_points(
     strengths = Vector{Float64}(undef, n_riders)
     uncertainties = Vector{Float64}(undef, n_riders)
     shifts_vg = Vector{Float64}(undef, n_riders)
+    shifts_form = Vector{Float64}(undef, n_riders)
     shifts_history = Vector{Float64}(undef, n_riders)
     shifts_vg_history = Vector{Float64}(undef, n_riders)
     shifts_oracle = Vector{Float64}(undef, n_riders)
@@ -833,6 +867,7 @@ function predict_expected_points(
 
         odds_prob = get(odds_lookup, key, 0.0)
         oracle_prob = get(oracle_lookup, key, 0.0)
+        form_val = get(form_lookup, key, 0.0)
 
         qual_entries = get(qualitative_lookup, key, Tuple{Float64,Float64}[])
         qual_adjs = Float64[q[1] for q in qual_entries]
@@ -844,6 +879,7 @@ function predict_expected_points(
             race_history_years_ago = hist_years,
             race_history_variance_penalties = hist_penalties,
             vg_points = vg_z[i],
+            form_score = form_val,
             vg_race_history = vg_hist_strengths,
             vg_race_history_years_ago = vg_hist_years,
             odds_implied_prob = odds_prob,
@@ -857,6 +893,7 @@ function predict_expected_points(
         strengths[i] = est.mean
         uncertainties[i] = sqrt(est.variance)
         shifts_vg[i] = est.shift_vg
+        shifts_form[i] = est.shift_form
         shifts_history[i] = est.shift_history
         shifts_vg_history[i] = est.shift_vg_history
         shifts_oracle[i] = est.shift_oracle
@@ -906,7 +943,8 @@ function predict_expected_points(
     has_odds = [haskey(odds_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_oracle = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_qualitative = [haskey(qualitative_lookup, df.riderkey[i]) for i = 1:n_riders]
-    has_any_signal = has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle .| has_qualitative
+    has_form = [haskey(form_lookup, df.riderkey[i]) for i = 1:n_riders]
+    has_any_signal = has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle .| has_qualitative .| has_form
 
     # Zero out finish and breakaway points for uninformative riders. Two criteria:
     # 1. No external signal at all (no PCS specialty, race history, VG history, odds,
@@ -953,10 +991,12 @@ function predict_expected_points(
     df[!, :has_odds] = has_odds
     df[!, :has_oracle] = has_oracle
     df[!, :has_qualitative] = has_qualitative
+    df[!, :has_form] = has_form
     df[!, :has_any_signal] = has_any_signal
 
     # --- Per-signal mean shifts (for diagnostics) ---
     df[!, :shift_vg] = round.(shifts_vg, digits = 3)
+    df[!, :shift_form] = round.(shifts_form, digits = 3)
     df[!, :shift_history] = round.(shifts_history, digits = 3)
     df[!, :shift_vg_history] = round.(shifts_vg_history, digits = 3)
     df[!, :shift_oracle] = round.(shifts_oracle, digits = 3)
@@ -992,6 +1032,7 @@ function predict_expected_points(
         oracle_df = data.oracle_df,
         vg_history_df = data.vg_history_df,
         qualitative_df = data.qualitative_df,
+        form_df = data.form_df,
         n_sims = n_sims,
         race_type = race_type,
         rng = rng,
