@@ -8,7 +8,7 @@ The package implements expected Velogames points prediction using:
 - PCS race-specific history for one-day classics and stage races, plus terrain-similar race history via `SIMILAR_RACES`
 - VG historical race points from past editions as a Bayesian signal
 - PCS startlist filtering to remove DNS riders
-- Bayesian strength estimation combining PCS, VG season points, PCS race history (with variance penalties for similar races), VG race history, optional Cycling Oracle predictions, and optional Betfair odds
+- Bayesian strength estimation combining PCS, VG season points, PCS form scores, PCS race history (with variance penalties for similar races), VG race history, optional Cycling Oracle predictions, and optional Betfair odds
 - Monte Carlo race simulation converting strength to position probabilities to expected VG points
 - JuMP optimisation over expected VG points (replacing arbitrary composite scores)
 - Risk-adjusted optimisation via ratio-based penalty: `E / (1 + γ * CV_down)` where `CV_down` is the downside coefficient of variation, giving scale-invariant penalisation of outcome variance
@@ -24,6 +24,7 @@ The strength model combines multiple signals, each with a variance hyperparamete
 | --------------------- | ------------------------- | --------- | -------------------------------------------------------------------------------------------- |
 | PCS specialty prior   | `getpcsriderpts_batch()`  | 4.0       | Z-scored across field. For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS`    |
 | VG season points      | `getvgriders()`           | 3.0       | Z-scored VG `points` column                                                                  |
+| PCS form score        | `getpcsraceform()`        | 2.0       | Z-scored across field. Top ~40-60 riders by recent cross-race results from PCS form page     |
 | PCS race history      | `getpcsracehistory()`     | 1.0-3.0   | Recency-weighted: recent years get lower variance (higher precision)                         |
 | Similar-race history  | `getpcsracehistory()`     | 2.0-4.0   | Same as race history but +1.0 variance penalty. Races from `SIMILAR_RACES` terrain mapping   |
 | VG race history       | `getvgracepoints()`       | 1.5-4.0   | Z-scored per year. Actual VG points from past editions (finish + assist + breakaway)         |
@@ -67,13 +68,13 @@ $$E[\text{VG points}] = E[\text{finish}] + E[\text{assists}] + E[\text{breakaway
 ### Currently used
 
 - **Velogames** (velogames.com) - rider rosters, costs, season points, classifications, ownership %, historical race results
-- **ProCyclingStats** (procyclingstats.com) - specialty ratings (one-day/GC/TT/sprint/climber), rankings, race results by year, startlist quality
+- **ProCyclingStats** (procyclingstats.com) - specialty ratings (one-day/GC/TT/sprint/climber), rankings, race results by year, startlist quality, recent form scores
 - **Betfair Exchange** (betfair.com) - betting odds for win markets via Exchange API (optional, requires credentials)
 - **Cycling Oracle** (cyclingoracle.com) - race predictions with win probabilities, scraped from blog prediction pages (optional, broader coverage than Betfair)
 
 ### Recommended future sources
 
-- **PCS deeper data** - rider recent results (filterable by season/type), race climb profiles (length, gradient, elevation), profile difficulty icons (p0-p5)
+- **PCS deeper data** - race climb profiles (length, gradient, elevation), profile difficulty icons (p0-p5)
 - **OpenWeatherMap** (free tier, 1000 calls/day) - race-day weather for cobbled classics
 
 ## Known issues
@@ -220,19 +221,13 @@ The VeloRost paper (Rize, Saldanha & Moskovitch, 2025) found that separately mod
 
 A domestique on a strong team can outscore a weaker independent rider because of assist points, but the current model treats them as equivalent to a rider of similar raw strength. Modelling team roles would improve predictions for riders in supporting roles and better estimate the assist point component.
 
-### Phase 7: Recent form signal (moderate-low impact)
+### Phase 7: Recent form signal (moderate-low impact) — done
 
 Academic evidence on recent form is surprisingly lukewarm. Kholkine et al. (2021) found that 6-week pre-race form features received "minimal weight" in their learn-to-rank models for spring classics — overall PCS performance and race-specific history dominated. FPL research (Baronchelli et al., 2025) found the optimal hybrid model placed roughly two-thirds weight on model-based scores and one-third on realised recent points, suggesting form is informative but should not dominate.
 
-**Implementation:**
+**Implemented:** `getpcsraceform()` scrapes the PCS `/startlist/form` page, which ranks the top ~40-60 starters by recent cross-race results (last ~6 weeks). Form scores are z-scored across the field and fed as a Bayesian update with variance 2.0, positioned between VG season points and PCS race history. The signal is automatically fetched and archived in the production pipeline, loaded from archive in backtesting, and gated on `:form` in the ablation study.
 
-- `getpcsrecentresults(rider_name; months=3)` - scrape rider's recent results from PCS
-- Compute: race days, average position in similar races, recent PCS points, win/podium count
-- Feed as additional signal into Bayesian strength model with moderate precision (variance ~3.5)
-
-**Recommended approach:**
-
-A 3-month window of results in terrain-similar race types would be the best formulation, combining the form signal with course profile matching rather than treating them independently. Early-season races (February/March) will have limited form data, so the signal should degrade gracefully to the prior.
+**Limitations:** The PCS form page only covers the top ~40-60 riders; those not listed receive no form update (the prior passes through unchanged). The signal is race-agnostic — it does not distinguish between terrain types, so a sprint result contributes equally to form for a hilly classic. A future refinement could filter form by terrain-similar race types (combining with phase 3 course profile matching) or weight by race quality.
 
 ### Phase 8: Correlated position simulation (low-moderate impact)
 
@@ -380,6 +375,6 @@ Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCycli
 | 4 | Stage-by-stage simulation | High (grand tours) | Moderate (community consensus) | High |
 | 5 | Ownership-adjusted optimisation | Very high for GPPs, low for small leagues | Strong (Haugh & Singal) | Medium |
 | 6 | Leader/domestique roles | Moderate | Moderate (VeloRost) | Medium |
-| 7 | Recent form signal | Moderate-low | Weak (Kholkine: minimal weight) | Low |
+| 7 | ~~Recent form signal~~ | Moderate-low | Weak (Kholkine: minimal weight) | Low (done) |
 | 8 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Medium |
 | 9 | ML models | Unknown | Weak (+3% over baseline) | High |

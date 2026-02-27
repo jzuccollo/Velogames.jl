@@ -8,8 +8,9 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/betfair.jl` - Betfair Exchange API: authentication, session management, market queries for betting odds
 - `src/get_data.jl` - Data scraping: VG riders, PCS rankings/specialty ratings, Betfair odds (via API), Cycling Oracle predictions, VG race results, VG race catalogue and per-race results
 - `src/pcs_scraper.jl` - PCS table scraping infrastructure and column aliases
-- `src/pcs_extended.jl` - Extended PCS scraping: race history results, startlists across multiple years
+- `src/pcs_extended.jl` - Extended PCS scraping: race history results, startlists, form scores across multiple years
 - `src/data_assembly.jl` - Shared data assembly: `RaceData` struct, `join_pcs_specialty!`, `assemble_pcs_race_history`, `assemble_vg_race_history`, `prefetch_vg_racelists` (used by both production and backtesting pipelines)
+- `src/qualitative.jl` - Qualitative intelligence: YouTube transcript fetching (via yt-dlp), Claude API extraction, prompt generation, JSON response parsing, manual workflow support
 - `src/scoring.jl` - VG scoring tables by category (one-day Cat 1/2/3, stage race aggregate) and expected points functions
 - `src/simulation.jl` - Monte Carlo race simulation, Bayesian strength estimation, class-aware PCS blending for stage races
 - `src/build_model.jl` - JuMP optimisation models: `build_model_oneday` (6 riders), `build_model_stage` (9 riders + class constraints), `minimise_cost_stage`
@@ -51,10 +52,18 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 ### Simulation (src/simulation.jl)
 
 - `predict_expected_points(df, scoring; ...)` / `predict_expected_points(data::RaceData, scoring; ...)` - Full prediction pipeline (supports variance_penalty in race history, VG history, temporally-aware recency weighting, ratio-based risk-adjusted optimisation via `risk_aversion` parameter: `E / (1 + γ * CV_down)`)
-- `estimate_rider_strength(...)` - Bayesian posterior from multiple signals (PCS, VG, PCS race history with variance penalties, VG race history, odds, oracle)
+- `estimate_rider_strength(...)` - Bayesian posterior from multiple signals (PCS, VG, PCS race history with variance penalties, VG race history, odds, oracle, qualitative intelligence)
 - `simulate_race(strengths, n_sims)` - Monte Carlo position simulation
 - `simulate_vg_points(sim_positions, teams, scoring; include_breakaway)` - Per-rider mean and SD of VG points across simulations (finish + assist + optional breakaway, using Welford's online algorithm)
 - `compute_stage_race_pcs_score(row, class)` - Class-aware PCS blending for stage races
+
+### Qualitative intelligence (src/qualitative.jl)
+
+- `get_qualitative_auto(youtube_url, riders, race_name, race_date)` - Full automated pipeline: YouTube transcript → Claude API extraction → DataFrame(riderkey, adjustment, confidence, reasoning)
+- `build_qualitative_prompt(riders, race_name, race_date; transcript)` - Generate prompt for Claude API or manual web UI workflow
+- `load_qualitative_file(filepath)` - Load manually saved JSON response file
+- `parse_qualitative_response(json_text)` - Parse Claude's JSON response into the standard qualitative DataFrame
+- `fetch_transcript(youtube_url)` - Download and clean YouTube auto-captions via yt-dlp
 
 ### Archival storage (src/cache_utils.jl)
 
@@ -75,7 +84,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ## Key patterns
 
-- Betfair API credentials via environment variables (`BETFAIR_USERNAME`, `BETFAIR_PASSWORD`, `BETFAIR_APP_KEY`); see `.envrc.example`
+- Betfair API credentials via environment variables (`BETFAIR_USERNAME`, `BETFAIR_PASSWORD`, `BETFAIR_APP_KEY`); Anthropic API key via `ANTHROPIC_API_KEY`; see `.envrc.example`
 - All data functions use `cached_fetch()` with `CacheConfig` and `force_refresh` parameter
 - Rider matching across sources uses `riderkey` (from `createkey()` name normalisation)
 - Web scraping: `gettable()` -> `process_rider_table()` via TableScraper/Gumbo/Cascadia

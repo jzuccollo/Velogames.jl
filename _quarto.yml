@@ -29,6 +29,8 @@ website:
 format:
   html:
     theme: flatly
+    code-fold: true
+    code-summary: "Show the code"
     toc: true
     toc_float: true
 

@@ -191,6 +191,62 @@ compute.
 PCS specialty scores are always fetched (signal selection happens later).
 Odds and oracle are set to `nothing` (no historical data for these).
 """
+
+function _build_pcs_slug_map(
+    pcs_slug::String,
+    year::Int;
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    slug_map = Dict{String,String}()
+    try
+        startlist_df = getpcsracestartlist(pcs_slug, year; cache_config, force_refresh)
+        if nrow(startlist_df) > 0 && :pcs_slug in propertynames(startlist_df)
+            for row in eachrow(startlist_df)
+                if !isempty(row.pcs_slug)
+                    slug_map[row.riderkey] = row.pcs_slug
+                end
+            end
+        end
+    catch e
+        @debug "Could not extract PCS slugs from startlist: $e"
+    end
+    return slug_map
+end
+
+function _supplement_missing_pcs!(
+    archived_pcs::DataFrame,
+    riderdf::DataFrame,
+    slug_map::Dict{String,String};
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    specialty_cols = [c for c in [:gc, :tt, :sprint, :climber, :oneday] if c in propertynames(archived_pcs)]
+    isempty(specialty_cols) && return
+
+    race_keys = Set(riderdf.riderkey)
+    missing_keys = Set{String}()
+    for row in eachrow(archived_pcs)
+        if row.riderkey in race_keys && all(ismissing(row[c]) for c in specialty_cols)
+            push!(missing_keys, row.riderkey)
+        end
+    end
+    isempty(missing_keys) && return
+
+    missing_names = String.([r.rider for r in eachrow(riderdf) if r.riderkey in missing_keys])
+    isempty(missing_names) && return
+
+    @debug "Supplementing $(length(missing_names)) riders with missing archived PCS data"
+    fresh = getpcsriderpts_batch(missing_names; slug_map, cache_config, force_refresh)
+    for frow in eachrow(fresh)
+        idx = findfirst(==(frow.riderkey), archived_pcs.riderkey)
+        idx === nothing && continue
+        for c in propertynames(fresh)
+            c in propertynames(archived_pcs) && (archived_pcs[idx, c] = frow[c])
+        end
+    end
+end
+
 function prefetch_race_data(
     race::BacktestRace;
     vg_racelists::Union{Dict{Int,DataFrame},Nothing} = nothing,
@@ -236,14 +292,21 @@ function prefetch_race_data(
 
     # --- 3. Fetch PCS specialty scores (prefer archived to avoid temporal leakage) ---
     rider_names = String.(riderdf.rider)
+
+    # Build slug map from startlist (shared by both archive-supplement and fresh-fetch paths)
+    pcs_slug_map = _build_pcs_slug_map(race.pcs_slug, race.year; cache_config, force_refresh)
+
     archived_pcs = load_race_snapshot("pcs_specialty", race.pcs_slug, race.year)
     pcspts = if archived_pcs !== nothing
         @info "Using archived PCS specialty scores for $(race.name) $(race.year)"
+        # Supplement riders with all-missing specialty (archive may predate URL fixes)
+        _supplement_missing_pcs!(archived_pcs, riderdf, pcs_slug_map; cache_config, force_refresh)
         archived_pcs
     else
         @debug "No archived PCS scores for $(race.name) $(race.year) — using current PCS data"
         getpcsriderpts_batch(
             rider_names;
+            slug_map = pcs_slug_map,
             cache_config = cache_config,
             force_refresh = force_refresh,
         )
@@ -271,6 +334,11 @@ function prefetch_race_data(
         @info "Loaded archived oracle for $(race.name) $(race.year): $(nrow(oracle_df)) riders"
     end
 
+    form_df = load_race_snapshot("pcs_form", race.pcs_slug, race.year)
+    if form_df !== nothing
+        @info "Loaded archived PCS form for $(race.name) $(race.year): $(nrow(form_df)) riders"
+    end
+
     # --- 6. Fetch VG race history (prior editions + similar + within-year) ---
     vg_history_df = assemble_vg_race_history(
         race.name,
@@ -283,7 +351,7 @@ function prefetch_race_data(
         force_refresh = force_refresh,
     )
 
-    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, actual_df)
+    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, nothing, form_df, actual_df)
 end
 
 """
@@ -382,6 +450,12 @@ function backtest_race(
     odds_df = :odds in signals ? data.odds_df : nothing
     oracle_df = :oracle in signals ? data.oracle_df : nothing
 
+    # Qualitative intelligence
+    qualitative_df = :qualitative in signals ? data.qualitative_df : nothing
+
+    # PCS form
+    form_df = :form in signals ? data.form_df : nothing
+
     # --- Run prediction pipeline ---
     scoring = get_scoring(race.category > 0 ? race.category : 2)
     predicted = predict_expected_points(
@@ -391,6 +465,8 @@ function backtest_race(
         odds_df = odds_df,
         oracle_df = oracle_df,
         vg_history_df = vg_history_df,
+        qualitative_df = qualitative_df,
+        form_df = form_df,
         n_sims = n_sims,
         race_type = :oneday,
         bayesian_config = bayesian_config,
@@ -462,7 +538,7 @@ function backtest_race(
     cov_2sigma = count(z -> abs(z) <= 2.0, z_scores) / length(z_scores)
 
     # --- Signal shift analysis ---
-    shift_cols = [:shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+    shift_cols = [:shift_vg, :shift_form, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
     mean_shifts = Dict{Symbol,Float64}()
     for col in shift_cols
         if col in propertynames(predicted)
@@ -808,7 +884,8 @@ const ABLATION_SETS = [
     ("pcs+pcshistory", [:pcs, :race_history]),
     ("pcs+vgseason+pcshistory", [:pcs, :vg_season, :race_history]),
     ("baseline", [:pcs, :vg_season, :race_history, :vg_history]),
-    ("all", [:pcs, :vg_season, :race_history, :vg_history, :odds, :oracle]),
+    ("all", [:pcs, :vg_season, :race_history, :vg_history, :odds, :oracle, :form]),
+    ("baseline+form", [:pcs, :vg_season, :race_history, :vg_history, :form]),
     ("vgseason+pcshistory", [:vg_season, :race_history]),
     ("pcshistory_only", [:race_history]),
     ("baseline+odds", [:pcs, :vg_season, :race_history, :vg_history, :odds]),
@@ -889,6 +966,7 @@ function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
         PARAM_BOUNDS.pcs_variance[1],
         rand(rng) * (PARAM_BOUNDS.vg_variance[2] - PARAM_BOUNDS.vg_variance[1]) +
         PARAM_BOUNDS.vg_variance[1],
+        DEFAULT_BAYESIAN_CONFIG.form_variance,
         rand(rng) *
         (PARAM_BOUNDS.hist_base_variance[2] - PARAM_BOUNDS.hist_base_variance[1]) +
         PARAM_BOUNDS.hist_base_variance[1],
@@ -902,6 +980,7 @@ function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
         PARAM_BOUNDS.vg_hist_decay_rate[1],
         DEFAULT_BAYESIAN_CONFIG.odds_variance,
         DEFAULT_BAYESIAN_CONFIG.oracle_variance,
+        DEFAULT_BAYESIAN_CONFIG.qualitative_base_variance,
         DEFAULT_BAYESIAN_CONFIG.odds_normalisation,
         rand(rng) *
         (PARAM_BOUNDS.signal_correlation[2] - PARAM_BOUNDS.signal_correlation[1]) +

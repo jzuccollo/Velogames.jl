@@ -115,39 +115,23 @@ function getpcsraceresults(
 end
 
 
-"""
-## `getpcsracestartlist`
+function _extract_rider_slugs(pageurl::String)::Dict{String,String}
+    slug_map = Dict{String,String}()
+    response = HTTP.get(pageurl, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+    pagehtml = Gumbo.parsehtml(String(response.body))
+    for link in eachmatch(Selector("a"), pagehtml.root)
+        href = get(link.attributes, "href", "")
+        m = match(r"(?:^|/)rider/([a-z0-9-]+)", href)
+        m === nothing && continue
+        rider_name = String(strip(nodeText(link)))
+        isempty(rider_name) && continue
+        key = createkey(rider_name)
+        isempty(key) && continue
+        slug_map[key] = m.captures[1]
+    end
+    return slug_map
+end
 
-Downloads and parses the confirmed startlist (with PCS quality/ranking data) for a
-specific race edition from the PCS website.
-
-The function targets the startlist-quality page, which exposes a well-structured table:
-
-    URL: `https://www.procyclingstats.com/race/{slug}/{year}/startlist/startlist-quality`
-
-Uses `scrape_pcs_table()` and `find_column()` for resilient column resolution.
-
-Returns a DataFrame with the following columns:
-
-    * `rider` - rider name
-    * `team` - team name
-    * `pcsrank` - PCS individual ranking (Int; unranked riders are assigned 9999)
-    * `pcspoints` - PCS ranking points (Float64)
-    * `riderkey` - normalised rider key created via `createkey(rider)`
-
-# Arguments
-- `pcs_race_slug` - the PCS race slug, e.g. `"tour-de-france"`
-- `year` - the edition year, e.g. `2024`
-
-# Keyword Arguments
-- `force_refresh` - bypass the cache and fetch fresh data (default: `false`)
-- `cache_config` - cache configuration (default: `DEFAULT_CACHE`)
-
-# Example
-```julia
-getpcsracestartlist("tour-de-france", 2024)
-```
-"""
 function getpcsracestartlist(
     pcs_race_slug::String,
     year::Int;
@@ -204,16 +188,106 @@ function getpcsracestartlist(
         result.team = team_col !== nothing ? String.(df[!, team_col]) : fill("", nrow(df))
         result.riderkey = createkey.(result.rider)
 
+        # Extract actual PCS profile slugs from rider links on the page
+        result.pcs_slug = try
+            slug_map = _extract_rider_slugs(url)
+            [get(slug_map, key, "") for key in result.riderkey]
+        catch e
+            @debug "Could not extract PCS slugs from startlist: $e"
+            fill("", nrow(result))
+        end
+
         # Drop rows with empty riderkey
         result = filter(row -> !isempty(row.riderkey), result)
         result = unique(result, :riderkey)
 
-        return result[:, [:rider, :team, :pcsrank, :pcspoints, :riderkey]]
+        return result[:, [:rider, :team, :pcsrank, :pcspoints, :riderkey, :pcs_slug]]
     end
 
     params = Dict("slug" => pcs_race_slug, "year" => string(year))
     return cached_fetch(
         fetch_startlist,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
+end
+
+
+"""
+## `getpcsraceform`
+
+Downloads and parses PCS form scores for riders on a race startlist.
+
+URL: `https://www.procyclingstats.com/race/{slug}/{year}/startlist/form`
+
+The form page ranks starters by recent results across all races (last ~6 weeks).
+Only the top ~40-60 riders by form appear; riders not listed simply don't receive
+the signal. The Points column uses a valuebar widget but `nodeText` extracts the
+numeric value correctly.
+
+Returns a DataFrame with columns:
+
+    * `rider` - rider name
+    * `form_score` - PCS form points (Float64)
+    * `riderkey` - normalised rider key
+
+# Arguments
+- `pcs_race_slug` - the PCS race slug, e.g. `"omloop-het-nieuwsblad"`
+- `year` - the edition year, e.g. `2026`
+
+# Keyword Arguments
+- `force_refresh` - bypass the cache and fetch fresh data (default: `false`)
+- `cache_config` - cache configuration (default: `DEFAULT_CACHE`)
+"""
+function getpcsraceform(
+    pcs_race_slug::String,
+    year::Int;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
+
+    pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/startlist/form"
+
+    function fetch_form(url, params)
+        df = scrape_pcs_table(url)
+
+        rider_col = find_column(df, PCS_RIDER_ALIASES)
+        points_col = find_column(df, PCS_POINTS_ALIASES)
+
+        rider_col === nothing && error(
+            "No rider column found in form page from $url. " *
+            "Columns: $(names(df)). " *
+            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl",
+        )
+
+        result = DataFrame()
+        result.rider = String.(df[!, rider_col])
+
+        result.form_score = if points_col !== nothing
+            map(df[!, points_col]) do val
+                val isa Float64 && return val
+                s = strip(string(val))
+                parsed = tryparse(Float64, s)
+                parsed !== nothing ? parsed : 0.0
+            end
+        else
+            @warn "No points column found in form page from $url; form_score will be 0.0"
+            fill(0.0, nrow(df))
+        end
+
+        result.riderkey = createkey.(result.rider)
+
+        result = filter(row -> !isempty(row.riderkey), result)
+        result = unique(result, :riderkey)
+
+        return result[:, [:rider, :form_score, :riderkey]]
+    end
+
+    params = Dict("slug" => pcs_race_slug, "year" => string(year))
+    return cached_fetch(
+        fetch_form,
         pageurl,
         params;
         cache_config = cache_config,

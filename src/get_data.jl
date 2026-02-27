@@ -245,6 +245,14 @@ function getvgriders(
 end
 
 
+"""Manual PCS slug overrides for riders whose names don't normalise to a valid PCS URL."""
+const PCS_SLUG_OVERRIDES = Dict{String,String}(
+    "alexey-lutsenko" => "aleksey-lutsenko",
+    "fred-wright" => "frederick-wright",
+    "will-barta" => "william-barta",
+    "michael-valgren" => "michael-valgren-andersen",
+)
+
 """
 ## `getpcsriderpts`
 
@@ -254,11 +262,18 @@ Returns a DataFrame with columns: rider, oneday, gc, tt, sprint, climber, riderk
 """
 function getpcsriderpts(
     ridername::String;
+    pcs_slug::String = "",
     force_refresh::Bool = false,
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
 
-    regularisedname = normalisename(ridername)
+    # Use provided slug (from startlist extraction), manual override, or heuristic
+    regularisedname = if !isempty(pcs_slug)
+        pcs_slug
+    else
+        slug = normalisename(ridername)
+        get(PCS_SLUG_OVERRIDES, slug, slug)
+    end
     pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
     _missing_rider_df() = DataFrame(
@@ -636,6 +651,7 @@ Returns a DataFrame with all riders' points, including rows with missing values 
 """
 function getpcsriderpts_batch(
     ridernames::Vector{String};
+    slug_map::Dict{String,String} = Dict{String,String}(),
     force_refresh::Bool = false,
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
@@ -645,8 +661,10 @@ function getpcsriderpts_batch(
 
     for rider in ridernames
         try
+            slug = get(slug_map, createkey(rider), "")
             rider_pts = getpcsriderpts(
                 rider;
+                pcs_slug = slug,
                 force_refresh = force_refresh,
                 cache_config = cache_config,
             )

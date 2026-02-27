@@ -27,10 +27,20 @@ export getvgriders,
     match_vg_race_number,
     getpcsraceresults,
     getpcsracestartlist,
+    getpcsraceform,
     getpcsracehistory
 
 # Betfair API
 export betfair_login, betfair_get_market_odds
+
+# Qualitative intelligence
+export get_qualitative_auto,
+    load_qualitative_file,
+    build_qualitative_prompt,
+    parse_qualitative_response,
+    fetch_transcript,
+    QUALITATIVE_ADJUSTMENTS,
+    QUALITATIVE_CONFIDENCES
 
 # Caching and archival
 export CacheConfig,
@@ -112,6 +122,7 @@ include("get_data.jl")
 include("pcs_scraper.jl")
 include("pcs_extended.jl")
 include("data_assembly.jl")
+include("qualitative.jl")
 include("simulation.jl")
 include("backtest.jl")
 include("race_solver.jl")

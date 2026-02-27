@@ -10,6 +10,7 @@ const UNRANKED_POSITION = 9999
 
 The normalisation process involves:
     * expanding ligatures (æ→ae, ø→oe, ð→d, þ→th, ß→ss)
+    * replacing apostrophes/quotes with word separators
     * removing accents/diacritics
     * removing case
     * replacing spaces with hyphens (or removing them for keys)
@@ -34,6 +35,9 @@ function normalisename(ridername::String, iskey::Bool = false)
         "ł" => "l",
         "Ł" => "L",
     )
+    # Replace apostrophes/quotes with spaces — PCS treats them as word separators
+    # (e.g. "Ben O'Connor" → "ben-o-connor", not "ben-oconnor")
+    expanded = replace(expanded, r"['ʼ`'']" => " ")
     newname = replace(
         Unicode.normalize(expanded, stripmark = true, stripcc = true, casefold = true),
         " " => spacechar,

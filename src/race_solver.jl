@@ -47,6 +47,7 @@ function _prepare_rider_data(
     force_refresh::Bool;
     pcs_check_col::Symbol = :oneday,
     filter_startlist::Bool = true,
+    qualitative_df::Union{DataFrame,Nothing} = nothing,
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -73,6 +74,7 @@ function _prepare_rider_data(
     end
 
     # Filter against PCS confirmed startlist
+    pcs_slug_map = Dict{String,String}()
     if filter_startlist && !isempty(config.pcs_slug)
         try
             startlist_df = getpcsracestartlist(
@@ -85,6 +87,19 @@ function _prepare_rider_data(
                 before = nrow(riderdf)
                 riderdf = semijoin(riderdf, startlist_df[:, [:riderkey]], on = :riderkey)
                 @info "Filtered to $(nrow(riderdf)) riders confirmed on PCS startlist (removed $(before - nrow(riderdf)))"
+
+                # Build riderkey → PCS slug mapping from startlist
+                if :pcs_slug in propertynames(startlist_df)
+                    for row in eachrow(startlist_df)
+                        if !isempty(row.pcs_slug)
+                            pcs_slug_map[row.riderkey] = row.pcs_slug
+                        end
+                    end
+                    n_slugs = length(pcs_slug_map)
+                    if n_slugs > 0
+                        @info "Extracted $n_slugs PCS profile slugs from startlist"
+                    end
+                end
             end
         catch e
             @warn "Could not fetch PCS startlist: $e — skipping startlist filter"
@@ -101,6 +116,7 @@ function _prepare_rider_data(
     rider_names = String.(riderdf.rider)
     pcsriderpts = getpcsriderpts_batch(
         rider_names;
+        slug_map = pcs_slug_map,
         cache_config = cache_config,
         force_refresh = force_refresh,
     )
@@ -140,6 +156,29 @@ function _prepare_rider_data(
         cache_config = cache_config,
         force_refresh = force_refresh,
     )
+
+    # --- 3c. Fetch PCS form scores (automatic) ---
+    form_df = nothing
+    if !isempty(config.pcs_slug)
+        try
+            form_df = getpcsraceform(
+                config.pcs_slug,
+                config.year;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            if nrow(form_df) > 0
+                @info "Got PCS form scores for $(nrow(form_df)) riders"
+                try
+                    save_race_snapshot(form_df, "pcs_form", config.pcs_slug, config.year)
+                catch e
+                    @debug "Failed to archive PCS form data: $e"
+                end
+            end
+        catch e
+            @warn "Failed to fetch PCS form data: $e"
+        end
+    end
 
     # --- 4. Fetch Betfair odds (optional) ---
     odds_df = nothing
@@ -227,8 +266,18 @@ function _prepare_rider_data(
     else
         0
     end
+    n_qualitative = if qualitative_df !== nothing
+        length(intersect(riderdf.riderkey, qualitative_df.riderkey))
+    else
+        0
+    end
+    n_form = if form_df !== nothing
+        length(intersect(riderdf.riderkey, form_df.riderkey))
+    else
+        0
+    end
 
-    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total"
+    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" qualitative = "$n_qualitative/$n_total" form = "$n_form/$n_total"
     if n_pcs == 0
         @warn "No riders have PCS specialty data — strength estimates will rely on VG season points only"
     end
@@ -236,7 +285,7 @@ function _prepare_rider_data(
         @warn "No riders matched to race history — historical finishing positions won't inform predictions"
     end
 
-    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, nothing)
+    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, qualitative_df, form_df, nothing)
 end
 
 
@@ -285,6 +334,7 @@ function solve_oneday(
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
+    qualitative_df::Union{DataFrame,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
 )
     data = _prepare_rider_data(
@@ -299,6 +349,7 @@ function solve_oneday(
         force_refresh;
         pcs_check_col = :oneday,
         filter_startlist = filter_startlist,
+        qualitative_df = qualitative_df,
     )
     if data === nothing
         return DataFrame(), DataFrame()
@@ -388,6 +439,7 @@ function solve_stage(
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
+    qualitative_df::Union{DataFrame,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
 )
     data = _prepare_rider_data(
@@ -402,6 +454,7 @@ function solve_stage(
         force_refresh;
         pcs_check_col = :gc,
         filter_startlist = filter_startlist,
+        qualitative_df = qualitative_df,
     )
     if data === nothing
         return DataFrame(), DataFrame()
