@@ -440,15 +440,21 @@ end
 
 """
     simulate_vg_points(sim_positions, rider_teams, scoring; include_breakaway=false)
-        -> (mean_pts::Vector{Float64}, std_pts::Vector{Float64})
+        -> (mean_pts, std_pts, downside_std)
 
-Compute per-rider mean and standard deviation of VG points across simulations.
+Compute per-rider mean, standard deviation, and downside semi-deviation of VG
+points across simulations.
 
 Scores each simulation using finish points, assist points, and optionally breakaway
 sector points. Uses Welford's online algorithm for numerically stable variance
 computation without materialising the full n_riders × n_sims matrix.
 
-Returns `(mean_pts, std_pts)` vectors of length n_riders.
+The downside semi-deviation only accumulates squared deviations for simulations
+where the rider scores *below* the running mean, so upside variance (scoring
+unexpectedly well) is not penalised. This is appropriate for the heavily
+right-skewed VG points distributions where most variance is upside.
+
+Returns `(mean_pts, std_pts, downside_std)` vectors of length n_riders.
 """
 function simulate_vg_points(
     sim_positions::Matrix{Int},
@@ -464,6 +470,7 @@ function simulate_vg_points(
     # Welford's online mean and variance
     mean_pts = zeros(Float64, n_riders)
     m2 = zeros(Float64, n_riders)  # sum of squared deviations from current mean
+    m2_down = zeros(Float64, n_riders)  # downside only: squared deviations when below mean
     sim_pts = Vector{Float64}(undef, n_riders)
 
     for s = 1:n_sims
@@ -498,11 +505,17 @@ function simulate_vg_points(
             mean_pts[i] += delta / s
             delta2 = sim_pts[i] - mean_pts[i]
             m2[i] += delta * delta2
+            # Downside semi-deviation: only accumulate when below the running mean
+            if sim_pts[i] < mean_pts[i]
+                m2_down[i] += delta * delta2
+            end
         end
     end
 
     std_pts = [n_sims > 1 ? sqrt(m2[i] / (n_sims - 1)) : 0.0 for i = 1:n_riders]
-    return (mean_pts, std_pts)
+    downside_std =
+        [n_sims > 1 ? sqrt(m2_down[i] / (n_sims - 1)) : 0.0 for i = 1:n_riders]
+    return (mean_pts, std_pts, downside_std)
 end
 
 # ---------------------------------------------------------------------------
@@ -589,7 +602,8 @@ The input DataFrame augmented with:
 - `strength`, `uncertainty` - posterior estimates
 - `expected_vg_points` - total expected VG points (mean across simulations)
 - `std_vg_points` - standard deviation of VG points across simulations
-- `risk_adjusted_vg_points` - `expected_vg_points - risk_aversion * std_vg_points`
+- `downside_std_vg_points` - downside semi-deviation (only below-mean variance)
+- `risk_adjusted_vg_points` - `expected_vg_points - risk_aversion * downside_std_vg_points`
 - `expected_finish_pts`, `expected_assist_pts`, `expected_breakaway_pts` - components
 """
 function predict_expected_points(
@@ -816,7 +830,7 @@ function predict_expected_points(
     teams = String.(df.team)
     include_breakaway = (race_type == :oneday)
 
-    total_evg, std_pts = simulate_vg_points(
+    total_evg, std_pts, downside_std = simulate_vg_points(
         sim_positions,
         teams,
         scoring;
@@ -845,29 +859,34 @@ function predict_expected_points(
     has_oracle = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_any_signal = has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle
 
-    # Zero out predictions for riders with no informative signals — these are
-    # unknown riders whose expected points are driven purely by prior uncertainty
+    # Zero out expected points for riders with no informative signals — these are
+    # unknown riders whose expected points are driven purely by prior uncertainty.
+    # We keep std_pts (and downside_std) intact so that risk aversion properly
+    # penalises selecting unknown riders (they are the MOST uncertain, not riskless).
     no_signal_mask = .!has_any_signal
     if any(no_signal_mask)
         no_signal_names = String.(df.rider[no_signal_mask])
         @warn "$(sum(no_signal_mask)) riders have no informative signals — expected points set to 0" riders =
             no_signal_names
         total_evg[no_signal_mask] .= 0.0
-        std_pts[no_signal_mask] .= 0.0
         finish_pts[no_signal_mask] .= 0.0
         assist_pts[no_signal_mask] .= 0.0
         breakaway[no_signal_mask] .= 0.0
     end
 
-    # Risk-adjusted VG points: E[pts] - γ * SD[pts]
-    # γ=0 recovers pure expected-value optimisation
-    risk_adjusted = total_evg .- risk_aversion .* std_pts
+    # Risk-adjusted VG points: E[pts] - γ * downside_semi_dev[pts]
+    # Uses downside semi-deviation (Sortino-style) rather than full SD so that
+    # upside variance (chance of scoring big) is not penalised. This is appropriate
+    # for the heavily right-skewed VG points distributions.
+    # γ=0 recovers pure expected-value optimisation.
+    risk_adjusted = total_evg .- risk_aversion .* downside_std
 
     # --- Add results to DataFrame ---
     df[!, :strength] = round.(strengths, digits = 3)
     df[!, :uncertainty] = round.(uncertainties, digits = 3)
     df[!, :expected_vg_points] = round.(total_evg, digits = 1)
     df[!, :std_vg_points] = round.(std_pts, digits = 1)
+    df[!, :downside_std_vg_points] = round.(downside_std, digits = 1)
     df[!, :risk_adjusted_vg_points] = round.(risk_adjusted, digits = 1)
     df[!, :expected_finish_pts] = round.(finish_pts, digits = 1)
     df[!, :expected_assist_pts] = round.(assist_pts, digits = 1)

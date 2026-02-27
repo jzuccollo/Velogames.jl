@@ -582,6 +582,10 @@ end
     @test result.expected_vg_points[2] == 0.0
     @test result.expected_finish_pts[2] == 0.0
     @test result.expected_breakaway_pts[2] == 0.0
+    # std and downside_std are NOT zeroed for no-signal riders — they reflect
+    # genuine uncertainty so that risk aversion properly penalises unknown riders
+    @test result.std_vg_points[2] > 0
+    @test result.downside_std_vg_points[2] > 0
 end
 
 @testset "Stage race PCS blending" begin
@@ -797,25 +801,30 @@ end
     sim = simulate_race(strengths, uncertainties; n_sims = 10000, rng = rng)
 
     # Without breakaway should match expected_vg_points
-    mean_pts, std_pts = simulate_vg_points(sim, teams, SCORING_CAT2)
+    mean_pts, std_pts, down_std = simulate_vg_points(sim, teams, SCORING_CAT2)
     evg = expected_vg_points(sim, teams, SCORING_CAT2)
     @test length(mean_pts) == 5
     @test length(std_pts) == 5
+    @test length(down_std) == 5
     @test all(isapprox.(mean_pts, evg; atol = 0.01))
     @test all(std_pts .>= 0)
+    @test all(down_std .>= 0)
     @test std_pts[1] > 0  # strong rider has non-zero SD
+    @test down_std[1] > 0  # strong rider has non-zero downside SD
+    # Downside semi-deviation <= full SD (only counts below-mean deviations)
+    @test all(down_std .<= std_pts .+ 0.01)
 
     # Stronger riders should have higher mean
     @test mean_pts[1] > mean_pts[5]
 
     # With breakaway increases mean for one-day scoring
-    mean_brk, std_brk =
+    mean_brk, std_brk, _ =
         simulate_vg_points(sim, teams, SCORING_CAT2; include_breakaway = true)
     @test all(mean_brk .>= mean_pts .- 0.01)  # breakaway adds points (tolerance for float)
 
     # Stage race scoring has no breakaway points
-    mean_stage, _ = simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = false)
-    mean_stage_brk, _ =
+    mean_stage, _, _ = simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = false)
+    mean_stage_brk, _, _ =
         simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = true)
     # SCORING_STAGE.breakaway_points == 0, so include_breakaway has no effect
     @test all(isapprox.(mean_stage, mean_stage_brk; atol = 0.01))
@@ -836,8 +845,11 @@ end
     result0 =
         predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 0.0)
     @test :std_vg_points in propertynames(result0)
+    @test :downside_std_vg_points in propertynames(result0)
     @test :risk_adjusted_vg_points in propertynames(result0)
     @test all(result0.risk_adjusted_vg_points .== result0.expected_vg_points)
+    # Downside semi-deviation should be <= full SD
+    @test all(result0.downside_std_vg_points .<= result0.std_vg_points .+ 0.1)
 
     # gamma>0 penalises high-uncertainty riders
     result1 =
