@@ -1056,7 +1056,7 @@ Returns `(best_gamma, log_df)` where `log_df` has columns `:gamma` and `:mean_pc
 """
 function tune_risk_aversion(
     races::Vector{BacktestRace};
-    gammas::Vector{Float64} = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5],
+    gammas::Vector{Float64} = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0],
     race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
     signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,

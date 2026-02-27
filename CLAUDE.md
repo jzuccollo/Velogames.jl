@@ -50,7 +50,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Simulation (src/simulation.jl)
 
-- `predict_expected_points(df, scoring; ...)` / `predict_expected_points(data::RaceData, scoring; ...)` - Full prediction pipeline (supports variance_penalty in race history, VG history, temporally-aware recency weighting, risk-adjusted optimisation via `risk_aversion` parameter)
+- `predict_expected_points(df, scoring; ...)` / `predict_expected_points(data::RaceData, scoring; ...)` - Full prediction pipeline (supports variance_penalty in race history, VG history, temporally-aware recency weighting, ratio-based risk-adjusted optimisation via `risk_aversion` parameter: `E / (1 + γ * CV_down)`)
 - `estimate_rider_strength(...)` - Bayesian posterior from multiple signals (PCS, VG, PCS race history with variance penalties, VG race history, odds, oracle)
 - `simulate_race(strengths, n_sims)` - Monte Carlo position simulation
 - `simulate_vg_points(sim_positions, teams, scoring; include_breakaway)` - Per-rider mean and SD of VG points across simulations (finish + assist + optional breakaway, using Welford's online algorithm)

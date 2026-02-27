@@ -563,29 +563,31 @@ end
     @test result2.has_pcs_data[1] == false
 end
 
-@testset "predict_expected_points zeros out no-signal riders" begin
-    # Rider with has_pcs_data=true gets points; rider without any signal gets 0
+@testset "predict_expected_points zeros out uninformative riders" begin
+    # Unknown rider on same team as a strong rider — gets assist points but no finish/breakaway
+    # Zeroing uses two criteria: no external signal (has_any_signal=false) OR
+    # posterior uncertainty barely reduced from prior (catches e.g. PCS pages with tiny scores)
     rider_df = DataFrame(
-        rider = ["Known", "Unknown"],
-        team = ["A", "B"],
-        cost = [20, 4],
-        points = [500.0, 0.0],
-        riderkey = ["known", "unknown"],
-        oneday = [2000, 0],
-        has_pcs_data = [true, false],
+        rider = ["Known", "Unknown", "KnownTeammate"],
+        team = ["A", "B", "B"],
+        cost = [20, 4, 18],
+        points = [500.0, 0.0, 400.0],
+        riderkey = ["known", "unknown", "knownteammate"],
+        oneday = [2000, 0, 1800],
+        has_pcs_data = [true, false, true],
     )
     result = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000)
-    @test :has_any_signal in propertynames(result)
-    @test result.has_any_signal[1] == true
-    @test result.has_any_signal[2] == false
     @test result.expected_vg_points[1] > 0
-    @test result.expected_vg_points[2] == 0.0
+    # Unknown rider has no external signal — finish/breakaway zeroed,
+    # but assist preserved (depends on teammate, not rider's own signal)
+    @test result.has_any_signal[2] == false
     @test result.expected_finish_pts[2] == 0.0
     @test result.expected_breakaway_pts[2] == 0.0
-    # std and downside_std are NOT zeroed for no-signal riders — they reflect
-    # genuine uncertainty so that risk aversion properly penalises unknown riders
-    @test result.std_vg_points[2] > 0
-    @test result.downside_std_vg_points[2] > 0
+    @test result.expected_assist_pts[2] > 0.0  # teammate finishes top 3 sometimes
+    @test result.expected_vg_points[2] ≈ result.expected_assist_pts[2] atol = 0.1
+    # Known riders have signals and keep their points
+    @test result.has_any_signal[1] == true
+    @test result.expected_finish_pts[1] > 0
 end
 
 @testset "Stage race PCS blending" begin
@@ -855,6 +857,8 @@ end
     result1 =
         predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 0.5)
     @test all(result1.risk_adjusted_vg_points .<= result1.expected_vg_points .+ 0.1)
+    # Ratio-based formula always produces non-negative values
+    @test all(result1.risk_adjusted_vg_points .>= 0.0)
     # The uncertain rider (low PCS, high prior variance) should be penalised more
     strong_penalty = result1.expected_vg_points[1] - result1.risk_adjusted_vg_points[1]
     uncertain_penalty = result1.expected_vg_points[4] - result1.risk_adjusted_vg_points[4]
@@ -890,6 +894,26 @@ end
     chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
     @test nrow(chosen) == 6
     @test sum(chosen.cost) <= 100
+end
+
+@testset "ratio risk metric handles no-signal riders correctly" begin
+    rider_df = DataFrame(
+        rider = ["Star", "Solid", "Unknown"],
+        team = ["A", "B", "C"],
+        cost = [20, 12, 4],
+        points = [500.0, 200.0, 0.0],
+        riderkey = ["star", "solid", "unknown"],
+        oneday = [2000, 800, 0],
+        has_pcs_data = [true, true, false],
+    )
+    result = predict_expected_points(
+        rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 1.0,
+    )
+    # Ratio formula is always non-negative
+    @test all(result.risk_adjusted_vg_points .>= 0.0)
+    # Known riders should have higher risk-adjusted points than the unknown rider
+    @test result.risk_adjusted_vg_points[1] > result.risk_adjusted_vg_points[3]
+    @test result.risk_adjusted_vg_points[2] > result.risk_adjusted_vg_points[3]
 end
 
 # =========================================================================

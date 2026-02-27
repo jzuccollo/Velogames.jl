@@ -603,7 +603,7 @@ The input DataFrame augmented with:
 - `expected_vg_points` - total expected VG points (mean across simulations)
 - `std_vg_points` - standard deviation of VG points across simulations
 - `downside_std_vg_points` - downside semi-deviation (only below-mean variance)
-- `risk_adjusted_vg_points` - `expected_vg_points - risk_aversion * downside_std_vg_points`
+- `risk_adjusted_vg_points` - `expected_vg_points / (1 + risk_aversion * CV_down)` where `CV_down = downside_std / max(expected, 1)`
 - `expected_finish_pts`, `expected_assist_pts`, `expected_breakaway_pts` - components
 """
 function predict_expected_points(
@@ -859,27 +859,33 @@ function predict_expected_points(
     has_oracle = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_any_signal = has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle
 
-    # Zero out expected points for riders with no informative signals — these are
-    # unknown riders whose expected points are driven purely by prior uncertainty.
-    # We keep std_pts (and downside_std) intact so that risk aversion properly
-    # penalises selecting unknown riders (they are the MOST uncertain, not riskless).
-    no_signal_mask = .!has_any_signal
-    if any(no_signal_mask)
-        no_signal_names = String.(df.rider[no_signal_mask])
-        @warn "$(sum(no_signal_mask)) riders have no informative signals — expected points set to 0" riders =
-            no_signal_names
-        total_evg[no_signal_mask] .= 0.0
-        finish_pts[no_signal_mask] .= 0.0
-        assist_pts[no_signal_mask] .= 0.0
-        breakaway[no_signal_mask] .= 0.0
+    # Zero out finish and breakaway points for uninformative riders. Two criteria:
+    # 1. No external signal at all (no PCS specialty, race history, VG history, odds,
+    #    or oracle) — VG season points alone are not enough to trust simulated positions
+    # 2. Posterior uncertainty barely reduced from prior (>90% of prior σ) — rider has
+    #    technically-present signals that are too weak to be informative (e.g. a PCS
+    #    page with near-zero scores)
+    # Only assist points are kept — they depend on teammate performance, not the
+    # rider's own signal quality.
+    prior_uncertainty = sqrt(bayesian_config.pcs_variance)
+    uninformative_mask = .!has_any_signal .| (uncertainties .> 0.9 * prior_uncertainty)
+    if any(uninformative_mask)
+        uninformative_names = String.(df.rider[uninformative_mask])
+        @warn "$(sum(uninformative_mask)) riders have uninformative signals — finish/breakaway points set to 0" riders =
+            uninformative_names
+        finish_pts[uninformative_mask] .= 0.0
+        breakaway[uninformative_mask] .= 0.0
+        total_evg .= finish_pts .+ assist_pts .+ breakaway
     end
 
-    # Risk-adjusted VG points: E[pts] - γ * downside_semi_dev[pts]
-    # Uses downside semi-deviation (Sortino-style) rather than full SD so that
-    # upside variance (chance of scoring big) is not penalised. This is appropriate
-    # for the heavily right-skewed VG points distributions.
-    # γ=0 recovers pure expected-value optimisation.
-    risk_adjusted = total_evg .- risk_aversion .* downside_std
+    # Risk-adjusted VG points: E / (1 + γ * CV_down)
+    # where CV_down = downside_semi_dev / max(E, 1).
+    # This ratio-based penalty is scale-invariant: riders with the same downside
+    # coefficient of variation receive the same proportional penalty regardless of
+    # absolute expected points. The floor max(E, 1) prevents division by zero and
+    # treats near-zero expected riders as having high CV (appropriately penalised).
+    # γ=0 recovers pure expected-value optimisation; σ_down=0 recovers E exactly.
+    risk_adjusted = total_evg ./ (1.0 .+ risk_aversion .* downside_std ./ max.(total_evg, 1.0))
 
     # --- Add results to DataFrame ---
     df[!, :strength] = round.(strengths, digits = 3)

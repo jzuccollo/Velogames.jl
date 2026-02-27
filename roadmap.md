@@ -11,6 +11,7 @@ The package implements expected Velogames points prediction using:
 - Bayesian strength estimation combining PCS, VG season points, PCS race history (with variance penalties for similar races), VG race history, optional Cycling Oracle predictions, and optional Betfair odds
 - Monte Carlo race simulation converting strength to position probabilities to expected VG points
 - JuMP optimisation over expected VG points (replacing arbitrary composite scores)
+- Risk-adjusted optimisation via ratio-based penalty: `E / (1 + γ * CV_down)` where `CV_down` is the downside coefficient of variation, giving scale-invariant penalisation of outcome variance
 - Class-aware PCS blending for stage races (aggregate approach)
 
 ## Prediction engine data flows
@@ -92,10 +93,6 @@ Breakaway points are estimated heuristically from simulated finishing positions,
 ### Stage race scoring calibration
 
 `SCORING_STAGE` maps overall GC position to approximate total VG points accumulated across the race. Currently calibrated by rough inspection of historical VG grand tour results (winners typically 3000-4000 points, top 10 around 1000-2000). These values have not yet been validated against actual historical VG grand tour data. Systematic calibration against multiple historical VG stage race results would improve this.
-
-### No backtesting
-
-There is no systematic evaluation of prediction quality. We cannot currently measure whether the MC predictions are well-calibrated or whether the model improvements are actually helping.
 
 ---
 
