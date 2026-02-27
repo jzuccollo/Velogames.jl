@@ -28,6 +28,7 @@ struct RaceData
     odds_df::Union{DataFrame,Nothing}
     oracle_df::Union{DataFrame,Nothing}
     vg_history_df::Union{DataFrame,Nothing}
+    qualitative_df::Union{DataFrame,Nothing}
     actual_df::Union{DataFrame,Nothing}
 end
 

@@ -47,6 +47,7 @@ function _prepare_rider_data(
     force_refresh::Bool;
     pcs_check_col::Symbol = :oneday,
     filter_startlist::Bool = true,
+    qualitative_df::Union{DataFrame,Nothing} = nothing,
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -227,8 +228,13 @@ function _prepare_rider_data(
     else
         0
     end
+    n_qualitative = if qualitative_df !== nothing
+        length(intersect(riderdf.riderkey, qualitative_df.riderkey))
+    else
+        0
+    end
 
-    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total"
+    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" qualitative = "$n_qualitative/$n_total"
     if n_pcs == 0
         @warn "No riders have PCS specialty data — strength estimates will rely on VG season points only"
     end
@@ -236,7 +242,7 @@ function _prepare_rider_data(
         @warn "No riders matched to race history — historical finishing positions won't inform predictions"
     end
 
-    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, nothing)
+    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, qualitative_df, nothing)
 end
 
 
@@ -285,6 +291,7 @@ function solve_oneday(
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
+    qualitative_df::Union{DataFrame,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
 )
     data = _prepare_rider_data(
@@ -299,6 +306,7 @@ function solve_oneday(
         force_refresh;
         pcs_check_col = :oneday,
         filter_startlist = filter_startlist,
+        qualitative_df = qualitative_df,
     )
     if data === nothing
         return DataFrame(), DataFrame()
@@ -388,6 +396,7 @@ function solve_stage(
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
+    qualitative_df::Union{DataFrame,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
 )
     data = _prepare_rider_data(
@@ -402,6 +411,7 @@ function solve_stage(
         force_refresh;
         pcs_check_col = :gc,
         filter_startlist = filter_startlist,
+        qualitative_df = qualitative_df,
     )
     if data === nothing
         return DataFrame(), DataFrame()

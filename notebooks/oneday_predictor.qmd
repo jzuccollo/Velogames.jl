@@ -20,6 +20,10 @@ racehash = "#OmloopNieuwsblad"  # VG startlist hash filter (leave empty for all 
 betfair_market_id = ""  # Betfair Exchange market ID from the URL
 oracle_url = "https://www.cyclingoracle.com/en/blog/omloop-nieuwsblad-2026-prediction"
 
+# Qualitative intelligence (leave both empty to skip)
+qualitative_youtube_url = ""    # YouTube URL for auto-extraction via yt-dlp + Claude API
+qualitative_json_file = ""      # Path to manually saved JSON response file
+
 # Simulation
 n_sims = 1000         # Monte Carlo iterations (more = smoother, slower)
 history_years = 5     # Years of PCS race history to fetch
@@ -35,6 +39,44 @@ race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6)
 md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))
 ```
 
+::: {.callout-tip collapse="true"}
+## Using qualitative intelligence
+
+Two ways to incorporate expert assessments from podcasts, articles, or pre-race previews.
+
+**Automatic** (requires `ANTHROPIC_API_KEY` in `.envrc` and `yt-dlp` installed): set `qualitative_youtube_url` to a YouTube video URL. The pipeline fetches auto-captions via yt-dlp, sends them to the Claude API for structured extraction, and feeds the result into the Bayesian model.
+
+**Manual** (no API key needed):
+
+1. Run `build_qualitative_prompt(riders, race_name, date)` to generate a prompt containing the startlist — paste the output into any LLM chat (Claude, ChatGPT, etc.) along with your source material
+2. Save the JSON array response to a file
+3. Set `qualitative_json_file` to the file path
+
+To get the rider list for the prompt before running the full prediction:
+
+```julia
+config = suppress_output() do
+    setup_race(race_name, race_year; cache_config=race_cache)
+end
+riders = suppress_output() do
+    getvgriders(config.current_url; cache_config=race_cache)
+end
+prompt = build_qualitative_prompt(String.(riders.rider), race_name, string(Dates.today()))
+clipboard(prompt)  # or print(prompt)
+```
+
+The expected JSON format is an array of rider assessments:
+
+```json
+[
+  {"rider": "Mathieu van der Poel", "category": "moderate_positive", "confidence": "high", "reasoning": "Won recent Kuurne, top cobbled form."},
+  {"rider": "Wout van Aert", "category": "slight_negative", "confidence": "medium", "reasoning": "Returning from injury, unclear fitness."}
+]
+```
+
+Categories: `strong_positive`, `moderate_positive`, `slight_positive`, `neutral`, `slight_negative`, `moderate_negative`, `strong_negative`. Confidence: `high`, `medium`, `low`. Only include riders where you have specific intelligence.
+:::
+
 # Prediction
 
 ```{julia}
@@ -45,6 +87,32 @@ config = suppress_output() do
 end
 scoring = get_scoring(config.category > 0 ? config.category : 2)
 
+# --- Load qualitative intelligence (optional) ---
+qualitative_df = nothing
+if !isempty(qualitative_youtube_url)
+    try
+        riders_tmp = suppress_output() do
+            getvgriders(config.current_url; cache_config=race_cache)
+        end
+        qualitative_df = get_qualitative_auto(
+            qualitative_youtube_url,
+            String.(riders_tmp.rider),
+            race_name,
+            string(Dates.today()),
+        )
+        @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments extracted"
+    catch e
+        @warn "Failed to extract qualitative intelligence: $e"
+    end
+elseif !isempty(qualitative_json_file)
+    try
+        qualitative_df = load_qualitative_file(qualitative_json_file)
+        @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments loaded"
+    catch e
+        @warn "Failed to load qualitative file: $e"
+    end
+end
+
 predicted, chosenteam = suppress_output() do
     solve_oneday(config;
         racehash=racehash,
@@ -53,6 +121,7 @@ predicted, chosenteam = suppress_output() do
         oracle_url=oracle_url,
         n_sims=n_sims,
         excluded_riders=excluded_riders,
+        qualitative_df=qualitative_df,
         risk_aversion=risk_aversion)
 end
 
@@ -70,6 +139,7 @@ n_history = count(predicted.has_race_history)
 n_odds = count(predicted.has_odds)
 n_oracle = count(predicted.has_oracle)
 n_vg_hist = count(predicted.has_vg_history)
+n_qualitative = count(predicted.has_qualitative)
 pct(n) = round(Int, 100 * n / n_total)
 
 print("""
@@ -84,6 +154,7 @@ print("""
 | Similar races | $(let sr = get(SIMILAR_RACES, config.pcs_slug, String[]); isempty(sr) ? "None configured" : join(sr, ", "); end) | $(isempty(get(SIMILAR_RACES, config.pcs_slug, String[])) ? "N/A" : "Included with higher variance") |
 | VG race history | $(n_vg_hist)/$(n_total) riders ($(pct(n_vg_hist))%) | $(n_vg_hist > 0 ? "Active" : "No matches") |
 | Cycling Oracle | $(n_oracle)/$(n_total) riders ($(pct(n_oracle))%) | $(isempty(oracle_url) ? "Not provided" : (n_oracle > 0 ? "Active" : "No matches")) |
+| Qualitative intel | $(n_qualitative)/$(n_total) riders ($(pct(n_qualitative))%) | $(qualitative_df === nothing ? "Not provided" : (n_qualitative > 0 ? "Active" : "No matches")) |
 | Betfair odds | $(n_odds)/$(n_total) riders ($(pct(n_odds))%) | $(isempty(betfair_market_id) ? "Not provided" : (n_odds > 0 ? "Active" : "No matches")) |
 
 Signals are combined via Bayesian updating, from broadest to most precise. PCS specialty is the weakest prior (variance 4.0); race-specific history and VG season form are moderate signals; Cycling Oracle predictions and betting odds are the strongest when available (variance 1.5 and 0.5 respectively).
@@ -93,8 +164,8 @@ Signals are combined via Bayesian updating, from broadest to most precise. PCS s
 
 # --- Signal impact ---
 rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["VG season points", "PCS race history", "VG race history", "Cycling Oracle", "Betfair odds"]
-shift_cols = [:shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+signal_names = ["VG season points", "PCS race history", "VG race history", "Cycling Oracle", "Qualitative intel", "Betfair odds"]
+shift_cols = [:shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_qualitative, :shift_odds]
 affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
 

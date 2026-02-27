@@ -389,7 +389,7 @@ end
     default_result = estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5)
     @test default_result.mean > 0.0
 
-    custom_config = BayesianConfig(0.5, 0.5, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.0, 0.0)
+    custom_config = BayesianConfig(0.5, 0.5, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.5, 2.0, 0.0)
     custom_result =
         estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5, config = custom_config)
     @test custom_result.mean != default_result.mean
@@ -399,8 +399,8 @@ end
     @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.15
 
     # Equicorrelation discount: more signals → wider posterior with ρ > 0
-    no_corr = BayesianConfig(5.0, 1.4, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.0, 0.0)
-    with_corr = BayesianConfig(5.0, 1.4, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.0, 0.4)
+    no_corr = BayesianConfig(5.0, 1.4, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.0)
+    with_corr = BayesianConfig(5.0, 1.4, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.4)
     r_nocorr = estimate_rider_strength(
         pcs_score = 1.0,
         vg_points = 0.8,
@@ -1240,4 +1240,98 @@ end
         @test Dates.year(d) == 2024
         @test Dates.month(d) == Dates.month(Date(ri.date))
     end
+end
+
+# =========================================================================
+# Qualitative intelligence
+# =========================================================================
+
+@testset "Qualitative signal in estimate_rider_strength" begin
+    # Positive adjustment should increase strength
+    with_qual = estimate_rider_strength(
+        pcs_score = 0.0,
+        qualitative_adjustments = [0.5],
+        qualitative_confidences = [0.8],
+    )
+    without_qual = estimate_rider_strength(pcs_score = 0.0)
+    @test with_qual.mean > without_qual.mean
+    @test with_qual.variance < without_qual.variance
+    @test with_qual.shift_qualitative > 0.0
+
+    # Negative adjustment should decrease strength
+    neg = estimate_rider_strength(
+        pcs_score = 0.0,
+        qualitative_adjustments = [-0.5],
+        qualitative_confidences = [0.8],
+    )
+    @test neg.mean < without_qual.mean
+    @test neg.shift_qualitative < 0.0
+
+    # Higher confidence should have stronger effect
+    high_conf = estimate_rider_strength(
+        pcs_score = 0.0,
+        qualitative_adjustments = [1.0],
+        qualitative_confidences = [0.8],
+    )
+    low_conf = estimate_rider_strength(
+        pcs_score = 0.0,
+        qualitative_adjustments = [1.0],
+        qualitative_confidences = [0.3],
+    )
+    @test abs(high_conf.shift_qualitative) > abs(low_conf.shift_qualitative)
+
+    # Multiple sources should compound
+    multi = estimate_rider_strength(
+        pcs_score = 0.0,
+        qualitative_adjustments = [0.5, 0.5],
+        qualitative_confidences = [0.5, 0.5],
+    )
+    single = estimate_rider_strength(
+        pcs_score = 0.0,
+        qualitative_adjustments = [0.5],
+        qualitative_confidences = [0.5],
+    )
+    @test multi.mean > single.mean
+
+    # Zero confidence should be ignored
+    zero_conf = estimate_rider_strength(
+        pcs_score = 0.0,
+        qualitative_adjustments = [1.0],
+        qualitative_confidences = [0.0],
+    )
+    @test zero_conf.shift_qualitative == 0.0
+end
+
+@testset "Qualitative response parsing" begin
+    json = """[
+        {"rider": "Mathieu van der Poel", "category": "strong_positive", "confidence": "high", "reasoning": "Top form."},
+        {"rider": "Wout van Aert", "category": "slight_negative", "confidence": "medium", "reasoning": "Returning from injury."}
+    ]"""
+    df = parse_qualitative_response(json)
+    @test nrow(df) == 2
+    @test :riderkey in propertynames(df)
+    @test :adjustment in propertynames(df)
+    @test :confidence in propertynames(df)
+    @test df[1, :adjustment] == 1.0    # strong_positive
+    @test df[1, :confidence] == 0.8    # high
+    @test df[2, :adjustment] == -0.25  # slight_negative
+    @test df[2, :confidence] == 0.5    # medium
+
+    # Handles code fences
+    fenced = "```json\n$json\n```"
+    df2 = parse_qualitative_response(fenced)
+    @test nrow(df2) == 2
+
+    # Empty array returns empty DataFrame
+    df3 = parse_qualitative_response("[]")
+    @test nrow(df3) == 0
+    @test :riderkey in propertynames(df3)
+end
+
+@testset "Qualitative constants" begin
+    @test QUALITATIVE_ADJUSTMENTS["strong_positive"] == 1.0
+    @test QUALITATIVE_ADJUSTMENTS["strong_negative"] == -1.0
+    @test QUALITATIVE_ADJUSTMENTS["neutral"] == 0.0
+    @test QUALITATIVE_CONFIDENCES["high"] == 0.8
+    @test QUALITATIVE_CONFIDENCES["low"] == 0.3
 end

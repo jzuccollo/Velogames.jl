@@ -283,7 +283,7 @@ function prefetch_race_data(
         force_refresh = force_refresh,
     )
 
-    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, actual_df)
+    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, nothing, actual_df)
 end
 
 """
@@ -382,6 +382,9 @@ function backtest_race(
     odds_df = :odds in signals ? data.odds_df : nothing
     oracle_df = :oracle in signals ? data.oracle_df : nothing
 
+    # Qualitative intelligence
+    qualitative_df = :qualitative in signals ? data.qualitative_df : nothing
+
     # --- Run prediction pipeline ---
     scoring = get_scoring(race.category > 0 ? race.category : 2)
     predicted = predict_expected_points(
@@ -391,6 +394,7 @@ function backtest_race(
         odds_df = odds_df,
         oracle_df = oracle_df,
         vg_history_df = vg_history_df,
+        qualitative_df = qualitative_df,
         n_sims = n_sims,
         race_type = :oneday,
         bayesian_config = bayesian_config,
@@ -902,6 +906,7 @@ function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
         PARAM_BOUNDS.vg_hist_decay_rate[1],
         DEFAULT_BAYESIAN_CONFIG.odds_variance,
         DEFAULT_BAYESIAN_CONFIG.oracle_variance,
+        DEFAULT_BAYESIAN_CONFIG.qualitative_base_variance,
         DEFAULT_BAYESIAN_CONFIG.odds_normalisation,
         rand(rng) *
         (PARAM_BOUNDS.signal_correlation[2] - PARAM_BOUNDS.signal_correlation[1]) +
