@@ -660,6 +660,7 @@ function predict_expected_points(
     race_date::Union{Date,Nothing} = nothing,
     simulation_df::Union{Int,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
+    domestique_discount::Float64 = 0.0,
 )
     df = copy(rider_df)
     n_riders = nrow(df)
@@ -901,6 +902,25 @@ function predict_expected_points(
         shifts_odds[i] = est.shift_odds
     end
 
+    # --- Domestique discount: penalise non-leaders proportionally to strength gap ---
+    domestique_penalties = zeros(n_riders)
+    if domestique_discount > 0
+        teams_vec = String.(df.team)
+        for team in unique(teams_vec)
+            team_idx = findall(teams_vec .== team)
+            length(team_idx) <= 1 && continue
+            leader_strength = maximum(strengths[team_idx])
+            for i in team_idx
+                gap = leader_strength - strengths[i]
+                penalty = domestique_discount * gap
+                strengths[i] -= penalty
+                domestique_penalties[i] = penalty
+            end
+        end
+        n_penalised = count(domestique_penalties .> 0)
+        @info "Applied domestique discount ($domestique_discount) to $n_penalised riders"
+    end
+
     # --- Monte Carlo simulation ---
     @info "Running Monte Carlo simulation ($n_sims iterations, $n_riders riders)..."
     sim_positions = simulate_race(
@@ -1002,6 +1022,7 @@ function predict_expected_points(
     df[!, :shift_oracle] = round.(shifts_oracle, digits = 3)
     df[!, :shift_qualitative] = round.(shifts_qualitative, digits = 3)
     df[!, :shift_odds] = round.(shifts_odds, digits = 3)
+    df[!, :domestique_penalty] = round.(domestique_penalties, digits = 3)
 
     return df
 end
@@ -1023,6 +1044,7 @@ function predict_expected_points(
     race_date::Union{Date,Nothing} = nothing,
     simulation_df::Union{Int,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
+    domestique_discount::Float64 = 0.0,
 )
     predict_expected_points(
         data.rider_df,
@@ -1041,5 +1063,6 @@ function predict_expected_points(
         race_date = race_date,
         simulation_df = simulation_df,
         risk_aversion = risk_aversion,
+        domestique_discount = domestique_discount,
     )
 end

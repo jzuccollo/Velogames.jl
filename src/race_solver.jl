@@ -336,6 +336,8 @@ function solve_oneday(
     force_refresh::Bool = false,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
+    domestique_discount::Float64 = 0.0,
+    max_per_team::Int = 0,
 )
     data = _prepare_rider_data(
         config,
@@ -365,6 +367,7 @@ function solve_oneday(
         n_sims = n_sims,
         race_year = config.year,
         risk_aversion = risk_aversion,
+        domestique_discount = domestique_discount,
     )
 
     # --- 8. Optimise team selection ---
@@ -379,6 +382,7 @@ function solve_oneday(
         points_col,
         cost_col;
         totalcost = 100,
+        max_per_team = max_per_team,
     )
 
     if results === nothing
@@ -441,6 +445,8 @@ function solve_stage(
     force_refresh::Bool = false,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
+    domestique_discount::Float64 = 0.0,
+    max_per_team::Int = 0,
 )
     data = _prepare_rider_data(
         config,
@@ -471,6 +477,7 @@ function solve_stage(
         race_type = :stage,
         race_year = config.year,
         risk_aversion = risk_aversion,
+        domestique_discount = domestique_discount,
     )
 
     # --- 8. Optimise team selection with class constraints ---
@@ -485,6 +492,7 @@ function solve_stage(
         points_col,
         cost_col;
         totalcost = 100,
+        max_per_team = max_per_team,
     )
 
     if results === nothing

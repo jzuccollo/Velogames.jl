@@ -17,6 +17,7 @@ function build_model_oneday(
     points::Symbol = :expected_vg_points,
     cost::Symbol = :cost;
     totalcost::Integer = 100,
+    max_per_team::Int = 0,
 )
     model = JuMP.Model(HiGHS.Optimizer)
     JuMP.set_silent(model)
@@ -24,6 +25,12 @@ function build_model_oneday(
     JuMP.@objective(model, Max, inputdf[!, points]' * x) # maximise the total score
     JuMP.@constraint(model, inputdf[!, cost]' * x <= totalcost) # cost must be <= totalcost
     JuMP.@constraint(model, sum(x) == n) # exactly n riders must be chosen
+    if max_per_team > 0
+        for team in unique(inputdf.team)
+            team_keys = inputdf.riderkey[inputdf.team .== team]
+            JuMP.@constraint(model, sum(x[k] for k in team_keys) <= max_per_team)
+        end
+    end
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The model was not solved correctly.")
@@ -51,6 +58,7 @@ function build_model_stage(
     points::Symbol = :expected_vg_points,
     cost::Symbol = :cost;
     totalcost::Integer = 100,
+    max_per_team::Int = 0,
 )
     df = copy(inputdf)
 
@@ -69,6 +77,12 @@ function build_model_stage(
     JuMP.@constraint(model, df[!, :sprinter]' * x >= 1)
     JuMP.@constraint(model, df[!, :climber]' * x >= 2)
     JuMP.@constraint(model, df[!, :unclassed]' * x >= 3)
+    if max_per_team > 0
+        for team in unique(df.team)
+            team_keys = df.riderkey[df.team .== team]
+            JuMP.@constraint(model, sum(x[k] for k in team_keys) <= max_per_team)
+        end
+    end
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The model was not solved correctly.")
