@@ -417,6 +417,7 @@ function backtest_race(
     n_sims::Int = 2000,
     simulation_df::Union{Int,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
+    domestique_discount::Float64 = 0.0,
 )
     actual_df = data.actual_df
     if actual_df === nothing
@@ -474,6 +475,7 @@ function backtest_race(
         race_date = race.date,
         simulation_df = simulation_df,
         risk_aversion = risk_aversion,
+        domestique_discount = domestique_discount,
     )
 
     # --- Compute rank-based metrics ---
@@ -584,6 +586,7 @@ function backtest_race(
     force_refresh::Bool = false,
     simulation_df::Union{Int,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
+    domestique_discount::Float64 = 0.0,
 )
     data =
         prefetch_race_data(race; cache_config = cache_config, force_refresh = force_refresh)
@@ -595,6 +598,7 @@ function backtest_race(
         n_sims = n_sims,
         simulation_df = simulation_df,
         risk_aversion = risk_aversion,
+        domestique_discount = domestique_discount,
     )
 end
 
@@ -755,6 +759,7 @@ function backtest_season(
     force_refresh::Bool = false,
     simulation_df::Union{Int,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
+    domestique_discount::Float64 = 0.0,
 )
     results = BacktestResult[]
     for (i, race) in enumerate(races)
@@ -768,6 +773,7 @@ function backtest_season(
                     n_sims = n_sims,
                     simulation_df = simulation_df,
                     risk_aversion = risk_aversion,
+                    domestique_discount = domestique_discount,
                 )
             else
                 backtest_race(
@@ -779,6 +785,7 @@ function backtest_season(
                     force_refresh = force_refresh,
                     simulation_df = simulation_df,
                     risk_aversion = risk_aversion,
+                    domestique_discount = domestique_discount,
                 )
             end
             push!(results, result)
@@ -909,6 +916,7 @@ function ablation_study(
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
     simulation_df::Union{Int,Nothing} = nothing,
+    domestique_discount::Float64 = 0.0,
 )
     if race_data === nothing
         @info "Ablation study: pre-fetching data for $(length(races)) races..."
@@ -933,6 +941,7 @@ function ablation_study(
             bayesian_config = bayesian_config,
             n_sims = n_sims,
             simulation_df = simulation_df,
+            domestique_discount = domestique_discount,
         )
         if !isempty(results)
             summary = summarise_backtest(results)
@@ -1022,6 +1031,7 @@ function tune_hyperparameters(
     force_refresh::Bool = false,
     rng::AbstractRNG = Random.default_rng(),
     simulation_df::Union{Int,Nothing} = nothing,
+    domestique_discount::Float64 = 0.0,
 )
     if race_data === nothing
         @info "Tuning: pre-fetching data for $(length(races)) races..."
@@ -1057,6 +1067,7 @@ function tune_hyperparameters(
             bayesian_config = config,
             n_sims = n_sims,
             simulation_df = simulation_df,
+            domestique_discount = domestique_discount,
         )
         if isempty(results)
             continue
@@ -1141,6 +1152,7 @@ function tune_risk_aversion(
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     n_sims::Int = 2000,
     simulation_df::Union{Int,Nothing} = nothing,
+    domestique_discount::Float64 = 0.0,
 )
     best_gamma = 0.0
     best_pcr = -Inf
@@ -1155,6 +1167,7 @@ function tune_risk_aversion(
             n_sims = n_sims,
             simulation_df = simulation_df,
             risk_aversion = gamma,
+            domestique_discount = domestique_discount,
         )
         pcrs = [r.points_captured_ratio for r in results if !isnan(r.points_captured_ratio)]
         mean_pcr = isempty(pcrs) ? NaN : mean(pcrs)
@@ -1169,4 +1182,49 @@ function tune_risk_aversion(
 
     @info "Best γ=$(best_gamma) with mean PCR=$(round(best_pcr, digits=4))"
     return best_gamma, DataFrame(log_rows)
+end
+
+"""
+    tune_domestique_discount(races; discounts, ...) -> (Float64, DataFrame)
+
+Grid search over domestique discount values, optimising points_captured_ratio.
+"""
+function tune_domestique_discount(
+    races::Vector{BacktestRace};
+    discounts::Vector{Float64} = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0],
+    race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
+    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
+    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    n_sims::Int = 2000,
+    simulation_df::Union{Int,Nothing} = nothing,
+    risk_aversion::Float64 = 0.0,
+)
+    best_discount = 0.0
+    best_pcr = -Inf
+    log_rows = NamedTuple{(:discount, :mean_pcr),Tuple{Float64,Float64}}[]
+
+    for d in discounts
+        results = backtest_season(
+            races;
+            race_data = race_data,
+            signals = signals,
+            bayesian_config = bayesian_config,
+            n_sims = n_sims,
+            simulation_df = simulation_df,
+            risk_aversion = risk_aversion,
+            domestique_discount = d,
+        )
+        pcrs = [r.points_captured_ratio for r in results if !isnan(r.points_captured_ratio)]
+        mean_pcr = isempty(pcrs) ? NaN : mean(pcrs)
+        push!(log_rows, (discount = d, mean_pcr = mean_pcr))
+        @info "discount=$(d): mean PCR=$(round(mean_pcr, digits=4)) ($(length(pcrs)) races)"
+
+        if !isnan(mean_pcr) && mean_pcr > best_pcr
+            best_pcr = mean_pcr
+            best_discount = d
+        end
+    end
+
+    @info "Best discount=$(best_discount) with mean PCR=$(round(best_pcr, digits=4))"
+    return best_discount, DataFrame(log_rows)
 end

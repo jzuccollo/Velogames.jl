@@ -103,6 +103,7 @@ export BacktestRace,
     ablation_study,
     tune_hyperparameters,
     tune_risk_aversion,
+    tune_domestique_discount,
     build_race_catalogue,
     prefetch_race_data,
     prefetch_all_races
