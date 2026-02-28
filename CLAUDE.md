@@ -12,8 +12,8 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/data_assembly.jl` - Shared data assembly: `RaceData` struct, `join_pcs_specialty!`, `assemble_pcs_race_history`, `assemble_vg_race_history`, `prefetch_vg_racelists` (used by both production and backtesting pipelines)
 - `src/qualitative.jl` - Qualitative intelligence: YouTube transcript fetching (via yt-dlp), Claude API extraction, prompt generation, JSON response parsing, manual workflow support
 - `src/scoring.jl` - VG scoring tables by category (one-day Cat 1/2/3, stage race aggregate) and expected points functions
-- `src/simulation.jl` - Monte Carlo race simulation, Bayesian strength estimation, class-aware PCS blending for stage races
-- `src/build_model.jl` - JuMP optimisation models: `build_model_oneday` (6 riders), `build_model_stage` (9 riders + class constraints), `minimise_cost_stage`
+- `src/simulation.jl` - Monte Carlo race simulation, Bayesian strength estimation, class-aware PCS blending for stage races, domestique strength discount
+- `src/build_model.jl` - JuMP optimisation models: `build_model_oneday` (6 riders), `build_model_stage` (9 riders + class constraints), `minimise_cost_stage`, optional max-per-team constraint
 - `src/race_solver.jl` - High-level solvers: `solve_oneday` and `solve_stage` (MC pipelines)
 - `src/cache_utils.jl` - Feather-based caching with configurable TTL (default ~/.velogames_cache, 24h), plus permanent archival storage (~/.velogames_archive) for odds/oracle snapshots
 - `src/classification_utils.jl` - Rider classification (allrounder/sprinter/climber/unclassed) column management
@@ -32,8 +32,8 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Optimisation models (src/build_model.jl)
 
-- `build_model_oneday(df, n, points_col, cost_col)` - Maximise points, one-day (6 riders, cost <= 100)
-- `build_model_stage(df, n, points_col, cost_col)` - Maximise points, stage race (9 riders, class constraints)
+- `build_model_oneday(df, n, points_col, cost_col; max_per_team)` - Maximise points, one-day (6 riders, cost <= 100, optional per-team cap)
+- `build_model_stage(df, n, points_col, cost_col; max_per_team)` - Maximise points, stage race (9 riders, class constraints, optional per-team cap)
 - `minimise_cost_stage(df, target_score, n, cost_col)` - Minimise cost for target score
 
 ### Betfair odds (src/betfair.jl)
@@ -51,7 +51,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Simulation (src/simulation.jl)
 
-- `predict_expected_points(df, scoring; ...)` / `predict_expected_points(data::RaceData, scoring; ...)` - Full prediction pipeline (supports variance_penalty in race history, VG history, temporally-aware recency weighting, ratio-based risk-adjusted optimisation via `risk_aversion` parameter: `E / (1 + γ * CV_down)`)
+- `predict_expected_points(df, scoring; ...)` / `predict_expected_points(data::RaceData, scoring; ...)` - Full prediction pipeline (supports variance_penalty in race history, VG history, temporally-aware recency weighting, ratio-based risk-adjusted optimisation via `risk_aversion`, and domestique strength discount via `domestique_discount`)
 - `estimate_rider_strength(...)` - Bayesian posterior from multiple signals (PCS, VG, PCS race history with variance penalties, VG race history, odds, oracle, qualitative intelligence)
 - `simulate_race(strengths, n_sims)` - Monte Carlo position simulation
 - `simulate_vg_points(sim_positions, teams, scoring; include_breakaway)` - Per-rider mean and SD of VG points across simulations (finish + assist + optional breakaway, using Welford's online algorithm)
@@ -80,6 +80,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `ablation_study(races; ...)` - Test 9 signal subsets to measure marginal signal value
 - `tune_hyperparameters(races; ...)` - Two-stage hyperparameter optimisation with cross-validation
 - `tune_risk_aversion(races; gammas, ...)` - Grid search over risk aversion γ values, optimising points_captured_ratio via backtest_season
+- `tune_domestique_discount(races; discounts, ...)` - Grid search over domestique discount values, optimising points_captured_ratio via backtest_season
 - `BacktestResult` includes: rank metrics (Spearman ρ, top-N overlap), VG team metrics (actual scoring tables), and calibration diagnostics (z-scores, coverage rates)
 
 ## Key patterns

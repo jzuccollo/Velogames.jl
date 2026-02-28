@@ -206,20 +206,17 @@ The impact of ownership adjustment depends entirely on the contest type. Haugh &
 | Medium league | 20-100 | Moderate | Leverage-weighted $E[\text{points}]$ |
 | Large GPP | 100+ | Very high | Maximise $P(\text{winning})$ via simulation |
 
-### Phase 6: Leader/domestique role modelling (moderate impact)
+### Phase 6: Leader/domestique role modelling (moderate impact) — done
 
 The VeloRost paper (Rize, Saldanha & Moskovitch, 2025) found that separately modelling leader skill and helper/domestique contributions "significantly outperforms" approaches that treat riders independently. The current model already computes assist points per-simulation (the correct approach for capturing teammate correlation), but does not account for domestiques sacrificing individual results for their leader.
 
-**Implementation options:**
+**Implemented:** Two complementary mechanisms address the domestique problem:
 
-- Identify designated leaders from PCS startlist data or pre-race analysis
-- Apply a strength discount to domestiques (reflecting reduced individual ambition)
-- Cap the number of riders from a single team in the optimiser to limit concentration risk
-- Use historical data on team role allocation to estimate leader/helper probability
+1. **Domestique strength discount** (`domestique_discount` parameter, default 0.0): After Bayesian strength estimation and before Monte Carlo simulation, identifies team roles by finding the strongest rider per team (the leader). Non-leaders receive a strength penalty proportional to their gap from the leader: `penalty = discount × (leader_strength − rider_strength)`. This is self-scaling: co-leaders with similar strength get small penalties, clear domestiques get large penalties. Applied in `predict_expected_points()` and threaded through the full pipeline including backtesting and hyperparameter tuning. The `domestique_penalty` column is added to the output DataFrame for transparency.
 
-**Why this matters for VG:**
+2. **Max-per-team constraint** (`max_per_team` parameter, default 0 = no limit): Optional constraint in `build_model_oneday()` and `build_model_stage()` that limits how many riders can be selected from any single team. Directly limits concentration risk.
 
-A domestique on a strong team can outscore a weaker independent rider because of assist points, but the current model treats them as equivalent to a rider of similar raw strength. Modelling team roles would improve predictions for riders in supporting roles and better estimate the assist point component.
+**Limitations:** The heuristic identifies leaders purely by estimated strength within the field. It cannot distinguish a genuine secondary leader (e.g. a sprinter on a team with a strong GC rider in a flat race) from a domestique. The `domestique_discount` parameter should be calibrated via backtesting. No leader boost is applied because leaders' historical results already reflect having team support.
 
 ### Phase 7: Recent form signal (moderate-low impact) — done
 
@@ -374,7 +371,7 @@ Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCycli
 | 3 | Course profile matching | High | Strong (Kholkine, VeloRost) | Medium |
 | 4 | Stage-by-stage simulation | High (grand tours) | Moderate (community consensus) | High |
 | 5 | Ownership-adjusted optimisation | Very high for GPPs, low for small leagues | Strong (Haugh & Singal) | Medium |
-| 6 | Leader/domestique roles | Moderate | Moderate (VeloRost) | Medium |
+| 6 | ~~Leader/domestique roles~~ | Moderate | Moderate (VeloRost) | Medium (done) |
 | 7 | ~~Recent form signal~~ | Moderate-low | Weak (Kholkine: minimal weight) | Low (done) |
 | 8 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Medium |
 | 9 | ML models | Unknown | Weak (+3% over baseline) | High |
