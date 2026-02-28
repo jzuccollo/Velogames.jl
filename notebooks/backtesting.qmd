@@ -631,3 +631,39 @@ Risk aversion tuning is disabled (`run_tuning = false`). Set `run_tuning = true`
 """)
 end
 ```
+
+# Domestique discount tuning
+
+The domestique discount penalises non-leaders within each team proportionally to their strength gap from the team leader, reducing their simulated finishing positions. This section searches over discount values to find the level that maximises points captured.
+
+```{julia}
+#| echo: true
+#| output: asis
+
+if run_tuning
+    best_discount, discount_log = suppress_output() do
+        tune_domestique_discount(races;
+            race_data=race_data,
+            signals=baseline_signals,
+            n_sims=n_sims,
+            risk_aversion=risk_aversion,
+        )
+    end
+
+    print("""
+## Domestique discount grid search
+
+**Best discount:** $(best_discount)
+
+""")
+
+    round_numeric_columns!(discount_log; digits=4)
+    md_table(discount_log)
+    print("\n")
+else
+    print("""
+Domestique discount tuning is disabled (`run_tuning = false`). Set `run_tuning = true` in the configuration cell to enable it.
+
+""")
+end
+```

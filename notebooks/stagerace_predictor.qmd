@@ -24,6 +24,8 @@ oracle_url = ""
 n_sims = 1000         # Monte Carlo iterations (more = smoother, slower)
 history_years = 3     # Years of PCS race history to fetch
 risk_aversion = 0.5   # Penalise high-variance riders (0 = risk-neutral, higher = more conservative)
+domestique_discount = 0.3  # Penalise non-leaders proportionally to strength gap (0 = off)
+max_per_team = 0      # Max riders from any single team (0 = no limit)
 
 # Exclusions
 excluded_riders = String[]
@@ -52,7 +54,9 @@ predicted, chosenteam = suppress_output() do
         oracle_url=oracle_url,
         n_sims=n_sims,
         excluded_riders=excluded_riders,
-        risk_aversion=risk_aversion)
+        risk_aversion=risk_aversion,
+        domestique_discount=domestique_discount,
+        max_per_team=max_per_team)
 end
 
 # --- Race summary ---
