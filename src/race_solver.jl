@@ -59,11 +59,16 @@ function _prepare_rider_data(
 
     # Filter by startlist hash if provided
     if !isempty(racehash)
-        riderdf = filter(
+        filtered = filter(
             row -> hasproperty(row, :startlist) ? row.startlist == racehash : true,
             riderdf,
         )
-        @info "Filtered to $(nrow(riderdf)) riders for startlist: $racehash"
+        if nrow(filtered) > 0
+            riderdf = filtered
+            @info "Filtered to $(nrow(riderdf)) riders for startlist: $racehash"
+        else
+            @warn "No riders matched startlist hash '$racehash' — ignoring hash filter"
+        end
     end
 
     # Exclude riders
