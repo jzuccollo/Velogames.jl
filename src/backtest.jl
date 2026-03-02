@@ -434,6 +434,9 @@ function backtest_race(
                 riderdf[!, col] .= 0
             end
         end
+        if :has_pcs_data in propertynames(riderdf)
+            riderdf[!, :has_pcs_data] .= false
+        end
     end
 
     # Zero out VG season points if signal is disabled
@@ -540,7 +543,7 @@ function backtest_race(
     cov_2sigma = count(z -> abs(z) <= 2.0, z_scores) / length(z_scores)
 
     # --- Signal shift analysis ---
-    shift_cols = [:shift_vg, :shift_form, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+    shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_trajectory, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
     mean_shifts = Dict{Symbol,Float64}()
     for col in shift_cols
         if col in propertynames(predicted)
@@ -961,39 +964,34 @@ end
 const PARAM_BOUNDS = (
     pcs_variance = (1.0, 10.0),
     vg_variance = (1.0, 8.0),
+    trajectory_variance = (1.0, 8.0),
     hist_base_variance = (1.0, 6.0),
-    hist_decay_rate = (0.3, 2.0),
+    hist_decay_rate = (0.3, 3.5),
     vg_hist_base_variance = (1.0, 6.0),
-    vg_hist_decay_rate = (0.3, 2.0),
+    vg_hist_decay_rate = (0.3, 3.0),
     signal_correlation = (0.0, 0.7),
+    vg_season_penalty = (0.0, 10.0),
 )
 
 """Sample a random BayesianConfig within PARAM_BOUNDS."""
 function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
+    _rand(bounds) = rand(rng) * (bounds[2] - bounds[1]) + bounds[1]
     BayesianConfig(
-        rand(rng) * (PARAM_BOUNDS.pcs_variance[2] - PARAM_BOUNDS.pcs_variance[1]) +
-        PARAM_BOUNDS.pcs_variance[1],
-        rand(rng) * (PARAM_BOUNDS.vg_variance[2] - PARAM_BOUNDS.vg_variance[1]) +
-        PARAM_BOUNDS.vg_variance[1],
+        _rand(PARAM_BOUNDS.pcs_variance),
+        _rand(PARAM_BOUNDS.vg_variance),
         DEFAULT_BAYESIAN_CONFIG.form_variance,
-        rand(rng) *
-        (PARAM_BOUNDS.hist_base_variance[2] - PARAM_BOUNDS.hist_base_variance[1]) +
-        PARAM_BOUNDS.hist_base_variance[1],
-        rand(rng) * (PARAM_BOUNDS.hist_decay_rate[2] - PARAM_BOUNDS.hist_decay_rate[1]) +
-        PARAM_BOUNDS.hist_decay_rate[1],
-        rand(rng) *
-        (PARAM_BOUNDS.vg_hist_base_variance[2] - PARAM_BOUNDS.vg_hist_base_variance[1]) +
-        PARAM_BOUNDS.vg_hist_base_variance[1],
-        rand(rng) *
-        (PARAM_BOUNDS.vg_hist_decay_rate[2] - PARAM_BOUNDS.vg_hist_decay_rate[1]) +
-        PARAM_BOUNDS.vg_hist_decay_rate[1],
+        _rand(PARAM_BOUNDS.trajectory_variance),
+        _rand(PARAM_BOUNDS.hist_base_variance),
+        _rand(PARAM_BOUNDS.hist_decay_rate),
+        _rand(PARAM_BOUNDS.vg_hist_base_variance),
+        _rand(PARAM_BOUNDS.vg_hist_decay_rate),
         DEFAULT_BAYESIAN_CONFIG.odds_variance,
         DEFAULT_BAYESIAN_CONFIG.oracle_variance,
         DEFAULT_BAYESIAN_CONFIG.qualitative_base_variance,
         DEFAULT_BAYESIAN_CONFIG.odds_normalisation,
-        rand(rng) *
-        (PARAM_BOUNDS.signal_correlation[2] - PARAM_BOUNDS.signal_correlation[1]) +
-        PARAM_BOUNDS.signal_correlation[1],
+        _rand(PARAM_BOUNDS.signal_correlation),
+        _rand(PARAM_BOUNDS.vg_season_penalty),
+        DEFAULT_BAYESIAN_CONFIG.prior_variance,
     )
 end
 
@@ -1002,11 +1000,13 @@ function _config_to_dict(config::BayesianConfig)
     Dict(
         :pcs_variance => config.pcs_variance,
         :vg_variance => config.vg_variance,
+        :trajectory_variance => config.trajectory_variance,
         :hist_base_variance => config.hist_base_variance,
         :hist_decay_rate => config.hist_decay_rate,
         :vg_hist_base_variance => config.vg_hist_base_variance,
         :vg_hist_decay_rate => config.vg_hist_decay_rate,
         :signal_correlation => config.signal_correlation,
+        :vg_season_penalty => config.vg_season_penalty,
     )
 end
 

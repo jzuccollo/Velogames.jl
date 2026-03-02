@@ -34,8 +34,10 @@ that update step.
 struct StrengthEstimate
     mean::Float64
     variance::Float64
+    shift_pcs::Float64
     shift_vg::Float64
     shift_form::Float64
+    shift_trajectory::Float64
     shift_history::Float64
     shift_vg_history::Float64
     shift_oracle::Float64
@@ -48,13 +50,15 @@ end
 
 Hyperparameters for Bayesian rider strength estimation.
 
-These control how much weight each signal receives in the posterior.
-Lower variance means the signal is treated as more precise.
+An uninformative prior (mean=0, `prior_variance`) is updated sequentially
+by PCS specialty and other signals. Lower variance means the signal is
+treated as more precise.
 """
 struct BayesianConfig
     pcs_variance::Float64
     vg_variance::Float64
     form_variance::Float64
+    trajectory_variance::Float64
     hist_base_variance::Float64
     hist_decay_rate::Float64
     vg_hist_base_variance::Float64
@@ -64,17 +68,20 @@ struct BayesianConfig
     qualitative_base_variance::Float64
     odds_normalisation::Float64
     signal_correlation::Float64
+    vg_season_penalty::Float64
+    prior_variance::Float64
 end
 
 """Default Bayesian hyperparameters."""
 const DEFAULT_BAYESIAN_CONFIG = BayesianConfig(
-    5.5,   # pcs_variance: prior variance for PCS specialty score
-    1.2,   # vg_variance: observation variance for VG season points
+    2.6,   # pcs_variance: observation variance for PCS specialty signal
+    1.1,   # vg_variance: base observation variance for VG season points
     2.0,   # form_variance: observation variance for PCS form score
-    4.0,   # hist_base_variance: base variance for race history observations (z-scored scale)
-    1.2,   # hist_decay_rate: additional variance per year of age
-    3.0,   # vg_hist_base_variance: base variance for VG race history
-    0.65,  # vg_hist_decay_rate: additional variance per year for VG history
+    3.0,   # trajectory_variance: observation variance for PCS-vs-history trajectory signal
+    2.8,   # hist_base_variance: base variance for race history observations (z-scored scale)
+    1.45,  # hist_decay_rate: additional variance per year of age
+    4.9,   # vg_hist_base_variance: base variance for VG race history
+    0.9,   # vg_hist_decay_rate: additional variance per year for VG history
     0.5,   # odds_variance: observation variance for betting odds signal
     1.5,   # oracle_variance: observation variance for Cycling Oracle signal
     2.5,   # qualitative_base_variance: effective = base / confidence (range 3.1–8.3)
@@ -85,6 +92,10 @@ const DEFAULT_BAYESIAN_CONFIG = BayesianConfig(
     # With n signals at pairwise correlation ρ, effective precision is
     # Στ_i / (1 + ρ(n-1)) instead of Στ_i. Prevents over-concentration of
     # posterior for favourites who have many correlated signal sources.
+    5.0,   # vg_season_penalty: scales vg_variance early in the season when few riders
+    # have points. Effective variance = vg_variance * (1 + penalty * (1 - frac_nonzero)).
+    # At opening weekend (~10% with points): ~6.6. Late season (~80%): ~2.4.
+    100.0, # prior_variance: uninformative prior (SD=10 on z-score scale, not tunable)
 )
 
 """
@@ -148,6 +159,7 @@ Returns a `BayesianPosterior` with mean (strength) and variance (uncertainty).
 """
 function estimate_rider_strength(;
     pcs_score::Float64 = 0.0,
+    has_pcs::Bool = true,
     race_history::Vector{Float64} = Float64[],
     race_history_years_ago::Vector{Int} = Int[],
     race_history_variance_penalties::Vector{Float64} = Float64[],
@@ -157,16 +169,28 @@ function estimate_rider_strength(;
     vg_race_history_years_ago::Vector{Int} = Int[],
     odds_implied_prob::Float64 = 0.0,
     oracle_implied_prob::Float64 = 0.0,
+    trajectory_score::Float64 = 0.0,
     qualitative_adjustments::Vector{Float64} = Float64[],
     qualitative_confidences::Vector{Float64} = Float64[],
     n_starters::Int = 150,
     config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
 )
-    # --- Prior from PCS ---
-    # PCS score is our broadest signal. Wide variance reflects general uncertainty.
-    prior = BayesianPosterior(pcs_score, config.pcs_variance)
+    # --- Uninformative prior ---
+    # Start from a diffuse prior (mean=0, large variance). All signals,
+    # including PCS specialty, update this as observations.
+    prior = BayesianPosterior(0.0, config.prior_variance)
     posterior = prior
     n_signals = 0
+
+    # --- Update with PCS specialty ---
+    # PCS specialty z-score is the broadest signal: general rider ability.
+    # Only applied when the rider has real PCS data (not coalesced-from-missing).
+    mean_before = posterior.mean
+    if has_pcs
+        posterior = bayesian_update(posterior, pcs_score, config.pcs_variance)
+        n_signals += 1
+    end
+    shift_pcs = posterior.mean - mean_before
 
     # --- Update with VG season points ---
     # VG points reflect current season form. Moderate precision.
@@ -187,6 +211,17 @@ function estimate_rider_strength(;
         n_signals += 1
     end
     shift_form = posterior.mean - mean_before
+
+    # --- Update with trajectory signal ---
+    # Captures improving (positive) or declining (negative) riders by comparing
+    # current PCS ability to historical race performance. Only applied when
+    # the caller has computed a trajectory score (riders with race history).
+    mean_before = posterior.mean
+    if trajectory_score != 0.0
+        posterior = bayesian_update(posterior, trajectory_score, config.trajectory_variance)
+        n_signals += 1
+    end
+    shift_trajectory = posterior.mean - mean_before
 
     # --- Update with PCS race-specific history ---
     # Each past result in this or similar races is a strong signal.
@@ -285,8 +320,10 @@ function estimate_rider_strength(;
     return StrengthEstimate(
         posterior.mean,
         posterior.variance,
+        shift_pcs,
         shift_vg,
         shift_form,
+        shift_trajectory,
         shift_history,
         shift_vg_history,
         shift_oracle,
@@ -677,6 +714,32 @@ function predict_expected_points(
     vg_std = std(vg_pts)
     vg_z = vg_std > 0 ? (vg_pts .- vg_mean) ./ vg_std : zeros(n_riders)
 
+    # --- Season-adaptive VG variance ---
+    # Early in the season, few riders have VG points, making the signal noisy.
+    # Scale vg_variance up when few riders have scored.
+    frac_nonzero = count(vg_pts .> 0) / max(length(vg_pts), 1)
+    season_scale = 1.0 + bayesian_config.vg_season_penalty * (1.0 - frac_nonzero)
+    effective_vg_variance = bayesian_config.vg_variance * season_scale
+    effective_config = BayesianConfig(
+        bayesian_config.pcs_variance,
+        effective_vg_variance,
+        bayesian_config.form_variance,
+        bayesian_config.trajectory_variance,
+        bayesian_config.hist_base_variance,
+        bayesian_config.hist_decay_rate,
+        bayesian_config.vg_hist_base_variance,
+        bayesian_config.vg_hist_decay_rate,
+        bayesian_config.odds_variance,
+        bayesian_config.oracle_variance,
+        bayesian_config.qualitative_base_variance,
+        bayesian_config.odds_normalisation,
+        bayesian_config.signal_correlation,
+        bayesian_config.vg_season_penalty,
+        bayesian_config.prior_variance,
+    )
+    @info "Season-adaptive VG variance: $(round(effective_vg_variance, digits=2)) " *
+          "($(round(100 * frac_nonzero, digits=0))% with points, scale=$(round(season_scale, digits=2)))"
+
     # --- Compute PCS z-scores (race-type-dependent) ---
     pcs_z = zeros(n_riders)
     if race_type == :stage
@@ -843,11 +906,50 @@ function predict_expected_points(
         @info "VG history lookup: $(length(vg_history_lookup)) riders with historical VG scores"
     end
 
+    # --- Compute trajectory scores ---
+    # Trajectory = current PCS z-score minus mean of race history z-scores.
+    # Positive = improving rider (current ability exceeds historical), negative = declining.
+    # Only computed for riders with race history; others get 0 (no update).
+    trajectory_raw = zeros(n_riders)
+    for i = 1:n_riders
+        key = df.riderkey[i]
+        hist = get(history_lookup, key, Tuple{Float64,Int,Float64}[])
+        if !isempty(hist)
+            hist_mean = mean(h[1] for h in hist)
+            trajectory_raw[i] = pcs_z[i] - hist_mean
+        end
+    end
+    # Z-score trajectories across riders who have history
+    has_hist = [!isempty(get(history_lookup, df.riderkey[i], Tuple{Float64,Int,Float64}[])) for i in 1:n_riders]
+    if count(has_hist) > 1
+        traj_vals = trajectory_raw[has_hist]
+        traj_mean = mean(traj_vals)
+        traj_std = std(traj_vals)
+        if traj_std > 0
+            for i in 1:n_riders
+                if has_hist[i]
+                    trajectory_raw[i] = (trajectory_raw[i] - traj_mean) / traj_std
+                end
+            end
+        end
+    end
+
+    # --- PCS availability (needed for estimation) ---
+    has_pcs = if :has_pcs_data in propertynames(df)
+        Bool.(df.has_pcs_data)
+    else
+        specialty_cols =
+            intersect(propertynames(df), [:oneday, :gc, :tt, :sprint, :climber])
+        [any(df[i, col] != 0 for col in specialty_cols) for i = 1:n_riders]
+    end
+
     # --- Estimate strength for each rider ---
     strengths = Vector{Float64}(undef, n_riders)
     uncertainties = Vector{Float64}(undef, n_riders)
+    shifts_pcs = Vector{Float64}(undef, n_riders)
     shifts_vg = Vector{Float64}(undef, n_riders)
     shifts_form = Vector{Float64}(undef, n_riders)
+    shifts_trajectory = Vector{Float64}(undef, n_riders)
     shifts_history = Vector{Float64}(undef, n_riders)
     shifts_vg_history = Vector{Float64}(undef, n_riders)
     shifts_oracle = Vector{Float64}(undef, n_riders)
@@ -876,11 +978,13 @@ function predict_expected_points(
 
         est = estimate_rider_strength(
             pcs_score = pcs_z[i],
+            has_pcs = has_pcs[i],
             race_history = hist_strengths,
             race_history_years_ago = hist_years,
             race_history_variance_penalties = hist_penalties,
             vg_points = vg_z[i],
             form_score = form_val,
+            trajectory_score = trajectory_raw[i],
             vg_race_history = vg_hist_strengths,
             vg_race_history_years_ago = vg_hist_years,
             odds_implied_prob = odds_prob,
@@ -888,13 +992,15 @@ function predict_expected_points(
             qualitative_adjustments = qual_adjs,
             qualitative_confidences = qual_confs,
             n_starters = n_starters,
-            config = bayesian_config,
+            config = effective_config,
         )
 
         strengths[i] = est.mean
         uncertainties[i] = sqrt(est.variance)
+        shifts_pcs[i] = est.shift_pcs
         shifts_vg[i] = est.shift_vg
         shifts_form[i] = est.shift_form
+        shifts_trajectory[i] = est.shift_trajectory
         shifts_history[i] = est.shift_history
         shifts_vg_history[i] = est.shift_vg_history
         shifts_oracle[i] = est.shift_oracle
@@ -950,14 +1056,6 @@ function predict_expected_points(
     breakaway = total_evg .- evg_no_breakaway
 
     # --- Signal availability flags (for reporting data source coverage) ---
-    has_pcs = if :has_pcs_data in propertynames(df)
-        Bool.(df.has_pcs_data)
-    else
-        # Check raw specialty columns — z-scored values are non-zero even for missing riders
-        specialty_cols =
-            intersect(propertynames(df), [:oneday, :gc, :tt, :sprint, :climber])
-        [any(df[i, col] != 0 for col in specialty_cols) for i = 1:n_riders]
-    end
     has_race_history = [haskey(history_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_vg_history = [haskey(vg_history_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_odds = [haskey(odds_lookup, df.riderkey[i]) for i = 1:n_riders]
@@ -974,7 +1072,7 @@ function predict_expected_points(
     #    page with near-zero scores)
     # Only assist points are kept — they depend on teammate performance, not the
     # rider's own signal quality.
-    prior_uncertainty = sqrt(bayesian_config.pcs_variance)
+    prior_uncertainty = sqrt(bayesian_config.prior_variance)
     uninformative_mask = .!has_any_signal .| (uncertainties .> 0.9 * prior_uncertainty)
     if any(uninformative_mask)
         uninformative_names = String.(df.rider[uninformative_mask])
@@ -1015,8 +1113,10 @@ function predict_expected_points(
     df[!, :has_any_signal] = has_any_signal
 
     # --- Per-signal mean shifts (for diagnostics) ---
+    df[!, :shift_pcs] = round.(shifts_pcs, digits = 3)
     df[!, :shift_vg] = round.(shifts_vg, digits = 3)
     df[!, :shift_form] = round.(shifts_form, digits = 3)
+    df[!, :shift_trajectory] = round.(shifts_trajectory, digits = 3)
     df[!, :shift_history] = round.(shifts_history, digits = 3)
     df[!, :shift_vg_history] = round.(shifts_vg_history, digits = 3)
     df[!, :shift_oracle] = round.(shifts_oracle, digits = 3)

@@ -53,6 +53,10 @@ end
         @test createkey("José García") != ""
         @test createkey("") == ""
         @test createkey("Tadej Pogačar") == createkey("Tadej Pogačar")
+        # Smart quotes (U+2019, U+2018) must produce the same key as ASCII apostrophe
+        @test createkey("Ben O'Connor") == createkey("Ben O\u2019Connor")
+        @test createkey("Ben O'Connor") == createkey("Ben O\u2018Connor")
+        @test createkey("Andrea d'Amato") == createkey("Andrea d\u2019Amato")
     end
 
     @testset "normalisename and unpipe" begin
@@ -397,18 +401,19 @@ end
     default_result = estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5)
     @test default_result.mean > 0.0
 
-    custom_config = BayesianConfig(0.5, 0.5, 2.0, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.5, 2.0, 0.0)
+    custom_config = BayesianConfig(0.5, 0.5, 2.0, 3.0, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.5, 2.0, 0.0, 5.0, 100.0)
     custom_result =
         estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5, config = custom_config)
     @test custom_result.mean != default_result.mean
 
     @test DEFAULT_BAYESIAN_CONFIG isa BayesianConfig
-    @test DEFAULT_BAYESIAN_CONFIG.pcs_variance == 5.5
+    @test DEFAULT_BAYESIAN_CONFIG.pcs_variance == 2.6
     @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.15
+    @test DEFAULT_BAYESIAN_CONFIG.prior_variance == 100.0
 
     # Equicorrelation discount: more signals → wider posterior with ρ > 0
-    no_corr = BayesianConfig(5.0, 1.4, 2.0, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.0)
-    with_corr = BayesianConfig(5.0, 1.4, 2.0, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.4)
+    no_corr = BayesianConfig(5.0, 1.4, 2.0, 3.0, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.0, 5.0, 100.0)
+    with_corr = BayesianConfig(5.0, 1.4, 2.0, 3.0, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.4, 5.0, 100.0)
     r_nocorr = estimate_rider_strength(
         pcs_score = 1.0,
         vg_points = 0.8,
@@ -500,6 +505,7 @@ end
         :expected_finish_pts,
         :expected_assist_pts,
         :expected_breakaway_pts,
+        :shift_pcs,
     ]
         @test col in propertynames(result)
     end
@@ -507,6 +513,7 @@ end
     @test result.expected_vg_points[1] > result.expected_vg_points[6]
     @test result.strength[1] > result.strength[6]
     @test all(result.expected_vg_points .>= 0)
+    @test result.shift_pcs[1] > 0.0  # strong rider has positive PCS shift
 
     # Race history shifts strength estimates
     history_df = DataFrame(
@@ -1087,6 +1094,7 @@ end
         @test config.odds_variance == DEFAULT_BAYESIAN_CONFIG.odds_variance
         @test config.oracle_variance == DEFAULT_BAYESIAN_CONFIG.oracle_variance
         @test config.odds_normalisation == DEFAULT_BAYESIAN_CONFIG.odds_normalisation
+        @test config.prior_variance == DEFAULT_BAYESIAN_CONFIG.prior_variance
     end
 end
 
