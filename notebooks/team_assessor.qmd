@@ -1,0 +1,542 @@
+---
+title: "Team assessor"
+subtitle: "Compare a custom team against the optimal selection"
+format: html
+---
+
+# Configuration
+
+```{julia}
+#| echo: true
+#| output: false
+using Velogames, DataFrames, Statistics, MarkdownTables
+
+# Race — must match the oneday predictor config
+race_name = "kuurne"
+race_year = 2026
+
+# Fallback config — only used if no archived prediction exists
+racehash = ""  # VG startlist hash filter (leave empty for all riders)
+betfair_market_id = ""
+oracle_url = ""
+qualitative_youtube_url = ""
+qualitative_json_file = ""
+n_sims = 1000
+history_years = 5
+risk_aversion = 1.5
+domestique_discount = 0.3
+max_per_team = 0
+excluded_riders = String[]
+
+# Cache
+race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6)
+
+# Helper
+md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))
+```
+
+# Your team
+
+List the riders in your custom team. Names must match VG rider names exactly.
+
+```{julia}
+#| echo: true
+#| output: false
+my_team = [
+    "Jasper Philipsen",
+    "Christophe Laporte",
+    "Paul Magnier",
+    "Jonas Rickaert",
+    "Tobias Lund Andresen",
+    "Jakob Söderqvist",
+]
+my_keys = createkey.(my_team)
+```
+
+# Prediction
+
+```{julia}
+#| output: asis
+
+config = suppress_output() do
+    setup_race(race_name, race_year; cache_config=race_cache)
+end
+scoring = get_scoring(config.category > 0 ? config.category : 2)
+
+# Try loading archived prediction from the oneday predictor (no temporal leakage)
+archived_prediction = !isempty(config.pcs_slug) ?
+                      load_race_snapshot("prediction", config.pcs_slug, config.year) : nothing
+used_archive = false
+
+if archived_prediction !== nothing && nrow(archived_prediction) > 0
+    predicted = archived_prediction
+    used_archive = true
+
+    # Reconstruct model's optimal team from archived chosen column
+    optimal_team = if :chosen in propertynames(predicted)
+        filter(:chosen => ==(true), predicted)
+    else
+        points_col = :risk_adjusted_vg_points in propertynames(predicted) ? :risk_adjusted_vg_points : :expected_vg_points
+        sol = build_model_oneday(predicted, 6, points_col, :cost; totalcost=100)
+        sol !== nothing ? filter(row -> sol[row.riderkey] > 0.5, predicted) : DataFrame()
+    end
+else
+    # No archive — run fresh prediction (may have VG season points leakage if race is past)
+    qualitative_df = nothing
+    if !isempty(qualitative_youtube_url)
+        try
+            riders_tmp = suppress_output() do
+                getvgriders(config.current_url; cache_config=race_cache)
+            end
+            qualitative_df = get_qualitative_auto(
+                qualitative_youtube_url,
+                String.(riders_tmp.rider),
+                race_name,
+                string(Dates.today()),
+            )
+        catch e
+            @warn "Failed to extract qualitative intelligence: $e"
+        end
+    elseif !isempty(qualitative_json_file)
+        try
+            qualitative_df = load_qualitative_file(qualitative_json_file)
+        catch e
+            @warn "Failed to load qualitative file: $e"
+        end
+    end
+
+    predicted, optimal_team = suppress_output() do
+        solve_oneday(config;
+            racehash=racehash,
+            history_years=history_years,
+            betfair_market_id=betfair_market_id,
+            oracle_url=oracle_url,
+            n_sims=n_sims,
+            excluded_riders=excluded_riders,
+            qualitative_df=qualitative_df,
+            risk_aversion=risk_aversion,
+            domestique_discount=domestique_discount,
+            max_per_team=max_per_team)
+    end
+end
+
+prediction_ok = nrow(predicted) > 0
+
+if prediction_ok
+    source = used_archive ? "archived prediction (pre-race)" : "fresh prediction"
+    print("""
+**$(titlecase(config.name)) $(config.year)** — $(nrow(predicted)) riders, $(source)
+
+""")
+    if !used_archive
+        print("""
+::: {.callout-note}
+Using fresh prediction. If this race has already happened, VG season points may include results from this race. Run the oneday predictor before the race to archive a clean prediction.
+:::
+
+""")
+    end
+else
+    print("""
+::: {.callout-warning}
+Prediction failed — no riders returned. Check race configuration (name, year, racehash) and try again. The race may have already finished and VG data may no longer be available.
+:::
+
+""")
+end
+```
+
+# Your team assessment
+
+```{julia}
+#| output: asis
+
+if !prediction_ok
+    print("*Skipped — prediction not available.*\n")
+else
+
+    # Match riders by name
+    my_selection = filter(row -> row.riderkey in my_keys, predicted)
+
+    # Check for unmatched riders
+    matched_keys = Set(my_selection.riderkey)
+    for (name, key) in zip(my_team, my_keys)
+        if key ∉ matched_keys
+            print("""
+    ::: {.callout-warning}
+    **$(name)** not found in the rider list. Check the spelling matches VG exactly.
+    :::
+
+    """)
+        end
+    end
+
+    if nrow(my_selection) > 0
+        my_cost = sum(my_selection.cost)
+        my_evg = sum(my_selection.expected_vg_points)
+
+        print("""
+    **Total cost:** $(my_cost) / 100 credits | **Expected VG points:** $(round(my_evg, digits=1)) | **Budget remaining:** $(100 - my_cost)
+
+    """)
+
+        display_cols = [:rider, :team, :cost, :expected_vg_points, :std_vg_points, :strength, :uncertainty]
+        if risk_aversion > 0
+            insert!(display_cols, findfirst(==(:std_vg_points), display_cols) + 1, :risk_adjusted_vg_points)
+        end
+        for col in [:expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
+            if col in propertynames(my_selection)
+                push!(display_cols, col)
+            end
+        end
+        display_cols = filter(c -> c in propertynames(my_selection), display_cols)
+
+        my_display = my_selection[:, display_cols]
+        round_numeric_columns!(my_display)
+        clean_team_names!(my_display, [:team])
+        md_table(sort(my_display, :expected_vg_points, rev=true))
+        print("\n")
+    end
+
+end # prediction_ok
+```
+
+# Optimal team
+
+```{julia}
+#| output: asis
+if !prediction_ok
+    print("*Skipped — prediction not available.*\n")
+elseif nrow(optimal_team) > 0
+    opt_cost = sum(optimal_team.cost)
+    opt_evg = sum(optimal_team.expected_vg_points)
+
+    print("""
+**Total cost:** $(opt_cost) / 100 credits | **Expected VG points:** $(round(opt_evg, digits=1)) | **Budget remaining:** $(100 - opt_cost)
+
+""")
+
+    display_cols = [:rider, :team, :cost, :expected_vg_points, :std_vg_points, :strength, :uncertainty]
+    if risk_aversion > 0
+        insert!(display_cols, findfirst(==(:std_vg_points), display_cols) + 1, :risk_adjusted_vg_points)
+    end
+    for col in [:expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
+        if col in propertynames(optimal_team)
+            push!(display_cols, col)
+        end
+    end
+    display_cols = filter(c -> c in propertynames(optimal_team), display_cols)
+
+    opt_display = optimal_team[:, display_cols]
+    round_numeric_columns!(opt_display)
+    clean_team_names!(opt_display, [:team])
+    md_table(sort(opt_display, :expected_vg_points, rev=true))
+    print("\n")
+end
+```
+
+# Comparison
+
+```{julia}
+#| output: asis
+if !prediction_ok
+    print("*Skipped — prediction not available.*\n")
+elseif nrow(my_selection) > 0 && nrow(optimal_team) > 0
+    my_evg = sum(my_selection.expected_vg_points)
+    opt_evg = sum(optimal_team.expected_vg_points)
+    diff = my_evg - opt_evg
+    pct_diff = round(100 * diff / opt_evg, digits=1)
+
+    my_cost = sum(my_selection.cost)
+    opt_cost = sum(optimal_team.cost)
+
+    my_risk = risk_aversion > 0 ? sum(my_selection.risk_adjusted_vg_points) : my_evg
+    opt_risk = risk_aversion > 0 ? sum(optimal_team.risk_adjusted_vg_points) : opt_evg
+    risk_diff = my_risk - opt_risk
+
+    print("""
+| Metric | Your team | Optimal team | Difference |
+|--------|-----------|--------------|------------|
+| Expected VG points | $(round(my_evg, digits=1)) | $(round(opt_evg, digits=1)) | $(round(diff, digits=1)) ($(pct_diff)%) |
+""")
+    if risk_aversion > 0
+        print("| Risk-adjusted points | $(round(my_risk, digits=1)) | $(round(opt_risk, digits=1)) | $(round(risk_diff, digits=1)) |\n")
+    end
+    print("""| Total cost | $(my_cost) | $(opt_cost) | $(my_cost - opt_cost) |
+| Budget remaining | $(100 - my_cost) | $(100 - opt_cost) | $(opt_cost - my_cost) |
+| Riders | $(nrow(my_selection)) | $(nrow(optimal_team)) | |
+
+""")
+
+    # Show riders unique to each team
+    my_riders = Set(my_selection.riderkey)
+    opt_riders = Set(optimal_team.riderkey)
+    shared = intersect(my_riders, opt_riders)
+    only_mine = setdiff(my_riders, opt_riders)
+    only_optimal = setdiff(opt_riders, my_riders)
+
+    print("**Shared riders ($(length(shared))):** ")
+    shared_names = filter(row -> row.riderkey in shared, predicted).rider
+    print(join(sort(String.(shared_names)), ", "))
+    print("\n\n")
+
+    if !isempty(only_mine)
+        print("**Only in your team ($(length(only_mine))):** ")
+        mine_names = filter(row -> row.riderkey in only_mine, predicted).rider
+        print(join(sort(String.(mine_names)), ", "))
+        print("\n\n")
+    end
+
+    if !isempty(only_optimal)
+        print("**Only in optimal team ($(length(only_optimal))):** ")
+        opt_names = filter(row -> row.riderkey in only_optimal, predicted).rider
+        print(join(sort(String.(opt_names)), ", "))
+        print("\n\n")
+    end
+
+    # Swap analysis: for each rider in your team but not optimal, show what you'd gain by swapping
+    if !isempty(only_mine) && !isempty(only_optimal)
+        print("""
+### Swap analysis
+
+What you'd gain or lose by swapping each of your unique riders for their optimal counterpart, ordered by expected points.
+
+""")
+        my_unique = sort(filter(row -> row.riderkey in only_mine, predicted), :expected_vg_points, rev=true)
+        opt_unique = sort(filter(row -> row.riderkey in only_optimal, predicted), :expected_vg_points, rev=true)
+
+        print("| Your rider | Exp pts | Cost | Optimal rider | Exp pts | Cost |\n")
+        print("|------------|---------|------|---------------|---------|------|\n")
+        for i in 1:max(nrow(my_unique), nrow(opt_unique))
+            my_name = i <= nrow(my_unique) ? my_unique[i, :rider] : ""
+            my_pts = i <= nrow(my_unique) ? round(my_unique[i, :expected_vg_points], digits=1) : ""
+            my_c = i <= nrow(my_unique) ? my_unique[i, :cost] : ""
+            opt_name = i <= nrow(opt_unique) ? opt_unique[i, :rider] : ""
+            opt_pts = i <= nrow(opt_unique) ? round(opt_unique[i, :expected_vg_points], digits=1) : ""
+            opt_c = i <= nrow(opt_unique) ? opt_unique[i, :cost] : ""
+            print("| $my_name | $my_pts | $my_c | $opt_name | $opt_pts | $opt_c |\n")
+        end
+        print("\n")
+    end
+end
+```
+
+# Retrospective (after the race)
+
+Set `vg_race_number` to the VG race number (from races.php) once the race has been run. Leave at `0` to auto-detect from the race name, or `-1` to skip this section entirely.
+
+```{julia}
+#| echo: true
+#| output: false
+vg_race_number = 0  # 0 = auto-detect, -1 = skip, or set manually (e.g. 3)
+```
+
+```{julia}
+#| output: asis
+
+if !prediction_ok
+    print("""
+::: {.callout-warning}
+Retrospective analysis unavailable — prediction failed. Fix the race configuration above first.
+:::
+""")
+elseif vg_race_number == -1
+    print("""
+::: {.callout-note}
+Retrospective analysis skipped. Set `vg_race_number` to enable after the race.
+:::
+""")
+else
+    # Auto-detect race number if needed
+    actual_race_number = vg_race_number
+    if actual_race_number == 0
+        try
+            vg_racelist = suppress_output() do
+                getvgracelist(race_year; cache_config=race_cache)
+            end
+            race_info = find_race(race_name)
+            detected = match_vg_race_number(
+                race_info !== nothing ? race_info.name : race_name,
+                vg_racelist
+            )
+            if detected !== nothing
+                actual_race_number = detected
+            end
+        catch e
+            @warn "Auto-detection failed: $e"
+        end
+    end
+
+    if actual_race_number <= 0
+        print("""
+::: {.callout-warning}
+Could not auto-detect VG race number. Set `vg_race_number` manually.
+:::
+""")
+    else
+        # Fetch actual VG results
+        actual_results = nothing
+        try
+            actual_results = suppress_output() do
+                getvgraceresults(race_year, actual_race_number; cache_config=race_cache)
+            end
+        catch e
+            @warn "Failed to fetch VG race results: $e"
+        end
+
+        if actual_results === nothing || nrow(actual_results) == 0
+            print("""
+::: {.callout-note}
+No results available yet for race $(actual_race_number). Re-render after the race finishes.
+:::
+""")
+        else
+            # Fetch full VG rider list (all riders with costs, no startlist filter)
+            all_vg_riders = suppress_output() do
+                getvgriders(config.current_url; cache_config=race_cache)
+            end
+
+            # Build full retrospective pool: all VG riders, left-joined with actual scores
+            # (riders who scored 0 get actual_vg_points = 0)
+            retro = leftjoin(
+                all_vg_riders[:, [:rider, :team, :cost, :riderkey]],
+                actual_results[:, [:riderkey, :score]],
+                on=:riderkey
+            )
+            retro[!, :actual_vg_points] = coalesce.(retro.score, 0)
+            select!(retro, Not(:score))
+
+            # Left-join expected points from prediction (where available)
+            if prediction_ok
+                pred_cols = [:riderkey, :expected_vg_points, :strength]
+                pred_cols = filter(c -> c in propertynames(predicted), pred_cols)
+                retro = leftjoin(retro, predicted[:, pred_cols], on=:riderkey, makeunique=true)
+            else
+                retro[!, :expected_vg_points] .= missing
+                retro[!, :strength] .= missing
+            end
+
+            # --- Your team's actual performance ---
+            my_retro = filter(row -> row.riderkey in my_keys, retro)
+            model_retro = if prediction_ok && nrow(optimal_team) > 0
+                filter(row -> row.riderkey in Set(optimal_team.riderkey), retro)
+            else
+                DataFrame()
+            end
+
+            # --- Hindsight-optimal team ---
+            hindsight_sol = build_model_oneday(retro, 6, :actual_vg_points, :cost; totalcost=100)
+            hindsight_team = if hindsight_sol !== nothing
+                filter(row -> hindsight_sol[row.riderkey] > 0.5, retro)
+            else
+                DataFrame()
+            end
+
+            # --- Summary comparison ---
+            my_actual = nrow(my_retro) > 0 ? sum(my_retro.actual_vg_points) : 0
+            model_actual = nrow(model_retro) > 0 ? sum(model_retro.actual_vg_points) : 0
+            hindsight_actual = nrow(hindsight_team) > 0 ? sum(hindsight_team.actual_vg_points) : 0
+
+            sum_or_na(df, col) = nrow(df) > 0 && col in propertynames(df) && any(!ismissing, df[!, col]) ?
+                round(sum(skipmissing(df[!, col])), digits=1) : "—"
+
+            my_pcr = hindsight_actual > 0 ? round(100 * my_actual / hindsight_actual, digits=1) : 0.0
+            model_pcr = hindsight_actual > 0 && model_actual > 0 ?
+                round(100 * model_actual / hindsight_actual, digits=1) : "—"
+
+            print("""
+## Summary
+
+| Metric | Your team | Model's team | Hindsight optimal |
+|--------|-----------|--------------|-------------------|
+| Actual VG points | $(my_actual) | $(model_actual > 0 ? model_actual : "—") | $(hindsight_actual) |
+| Expected VG points | $(sum_or_na(my_retro, :expected_vg_points)) | $(sum_or_na(model_retro, :expected_vg_points)) | — |
+| Points captured | $(my_pcr)% | $(model_pcr isa Number ? "$(model_pcr)%" : model_pcr) | 100% |
+| Total cost | $(nrow(my_retro) > 0 ? sum(my_retro.cost) : "—") | $(nrow(model_retro) > 0 ? sum(model_retro.cost) : "—") | $(nrow(hindsight_team) > 0 ? sum(hindsight_team.cost) : "—") |
+
+""")
+
+            # --- Per-rider detail for each team ---
+            retro_cols = [:rider, :team, :cost, :actual_vg_points]
+            if :expected_vg_points in propertynames(retro)
+                push!(retro_cols, :expected_vg_points)
+            end
+            if :strength in propertynames(retro)
+                push!(retro_cols, :strength)
+            end
+
+            print("## Your team\n\n")
+            if nrow(my_retro) > 0
+                my_retro_display = sort(my_retro[:, retro_cols], :actual_vg_points, rev=true)
+                round_numeric_columns!(my_retro_display)
+                clean_team_names!(my_retro_display, [:team])
+                md_table(my_retro_display)
+                print("\n\n")
+            else
+                print("No riders matched to results.\n\n")
+            end
+
+            print("## Model's team\n\n")
+            if nrow(model_retro) > 0
+                model_retro_display = sort(model_retro[:, retro_cols], :actual_vg_points, rev=true)
+                round_numeric_columns!(model_retro_display)
+                clean_team_names!(model_retro_display, [:team])
+                md_table(model_retro_display)
+                print("\n\n")
+            else
+                print("No model team available.\n\n")
+            end
+
+            print("## Hindsight-optimal team\n\n")
+            if nrow(hindsight_team) > 0
+                hs_display = sort(hindsight_team[:, retro_cols], :actual_vg_points, rev=true)
+                round_numeric_columns!(hs_display)
+                clean_team_names!(hs_display, [:team])
+                md_table(hs_display)
+                print("\n\n")
+            end
+
+            # --- Prediction misses (only if predictions available) ---
+            retro_with_preds = filter(row -> !ismissing(row.expected_vg_points), retro)
+            if nrow(retro_with_preds) > 0
+                retro_with_preds[!, :prediction_error] = retro_with_preds.actual_vg_points .- retro_with_preds.expected_vg_points
+                retro_sorted = sort(retro_with_preds, :prediction_error, rev=true)
+
+                print("""
+## Prediction misses
+
+Riders where actual VG points differed most from expected, highlighting model blind spots.
+
+### Underestimated (actual > expected)
+
+""")
+                top_under = first(retro_sorted, min(10, nrow(retro_sorted)))
+                top_under = filter(row -> row.prediction_error > 0, top_under)
+                if nrow(top_under) > 0
+                    under_display = top_under[:, [:rider, :team, :cost, :expected_vg_points, :actual_vg_points, :prediction_error]]
+                    round_numeric_columns!(under_display)
+                    clean_team_names!(under_display, [:team])
+                    md_table(under_display)
+                    print("\n\n")
+                else
+                    print("No significant underestimates.\n\n")
+                end
+
+                print("### Overestimated (expected > actual)\n\n")
+                top_over = last(retro_sorted, min(10, nrow(retro_sorted)))
+                top_over = filter(row -> row.prediction_error < 0, top_over)
+                top_over = sort(top_over, :prediction_error)
+                if nrow(top_over) > 0
+                    over_display = top_over[:, [:rider, :team, :cost, :expected_vg_points, :actual_vg_points, :prediction_error]]
+                    round_numeric_columns!(over_display)
+                    clean_team_names!(over_display, [:team])
+                    md_table(over_display)
+                    print("\n")
+                else
+                    print("No significant overestimates.\n")
+                end
+            end
+        end
+    end
+end
+```

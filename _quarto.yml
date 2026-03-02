@@ -2,11 +2,9 @@ project:
   type: website
   output-dir: docs
   render:
-    - "race_notebooks/index.qmd"
-    - "race_notebooks/oneday_predictor.qmd"
-    - "race_notebooks/stagerace_predictor.qmd"
-    - "race_notebooks/historical_analysis.qmd"
-    - "race_notebooks/backtesting.qmd"
+    - "notebooks/oneday_predictor.qmd"
+    - "notebooks/team_assessor.qmd"
+    - "notebooks/backtesting.qmd"
 
 jupyter: julia-1.12
 
@@ -15,15 +13,11 @@ website:
   sidebar:
     style: "docked"
     contents:
-      - href: race_notebooks/index.qmd
-        text: "Overview"
-      - href: race_notebooks/oneday_predictor.qmd
+      - href: notebooks/oneday_predictor.qmd
         text: "One-day predictor"
-      - href: race_notebooks/stagerace_predictor.qmd
-        text: "Stage race predictor"
-      - href: race_notebooks/historical_analysis.qmd
-        text: "Historical analysis"
-      - href: race_notebooks/backtesting.qmd
+      - href: notebooks/team_assessor.qmd
+        text: "Team assessor"
+      - href: notebooks/backtesting.qmd
         text: "Backtesting"
 
 format:
