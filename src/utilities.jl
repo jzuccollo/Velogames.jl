@@ -37,7 +37,9 @@ function normalisename(ridername::String, iskey::Bool = false)
     )
     # Replace apostrophes/quotes with spaces — PCS treats them as word separators
     # (e.g. "Ben O'Connor" → "ben-o-connor", not "ben-oconnor")
-    expanded = replace(expanded, r"['ʼ`'']" => " ")
+    # Covers ASCII ' (U+0027), modifier ʼ (U+02BC), grave ` (U+0060),
+    # and smart quotes ' (U+2018) and ' (U+2019)
+    expanded = replace(expanded, r"['ʼ`''\u2018\u2019]" => " ")
     newname = replace(
         Unicode.normalize(expanded, stripmark = true, stripcc = true, casefold = true),
         " " => spacechar,
