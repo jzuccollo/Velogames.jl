@@ -12,13 +12,13 @@ format: html
 using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Race — use get_url_pattern("name") to check available names
-race_name = "omloop"
+race_name = "laigueglia"
 race_year = 2026
-racehash = "#OmloopNieuwsblad"  # VG startlist hash filter (leave empty for all riders)
+racehash = "#TrofeoLaigueglia"  # VG startlist hash filter (leave empty for all riders)
 
 # Optional data sources (leave empty to skip)
 betfair_market_id = ""  # Betfair Exchange market ID from the URL
-oracle_url = "https://www.cyclingoracle.com/en/blog/omloop-nieuwsblad-2026-prediction"
+oracle_url = ""
 
 # Qualitative intelligence (leave both empty to skip)
 qualitative_youtube_url = ""    # YouTube URL for auto-extraction via yt-dlp + Claude API
@@ -129,6 +129,16 @@ predicted, chosenteam = suppress_output() do
         max_per_team=max_per_team)
 end
 
+# Archive prediction snapshot for retrospective analysis in team_assessor
+if nrow(predicted) > 0 && !isempty(config.pcs_slug)
+    save_race_snapshot(predicted, "prediction", config.pcs_slug, config.year)
+end
+
+if nrow(predicted) == 0
+    print("**No riders found.** Check race name, year, and startlist hash filter.\n")
+    error("No riders — cannot continue")
+end
+
 # --- Race summary ---
 n_total = nrow(predicted)
 ra_str = risk_aversion > 0 ? "γ=$(risk_aversion)" : "risk-neutral"
@@ -152,7 +162,7 @@ print("""
 
 | Source | Coverage | Status |
 |--------|----------|--------|
-| PCS specialty ratings | $(n_pcs)/$(n_total) riders ($(pct(n_pcs))%) | Always used as prior |
+| PCS specialty ratings | $(n_pcs)/$(n_total) riders ($(pct(n_pcs))%) | Observation |
 | VG season points | $(n_total)/$(n_total) riders (100%) | Always used |
 | PCS race history ($(history_years) yrs) | $(n_history)/$(n_total) riders ($(pct(n_history))%) | $(n_history > 0 ? "Active" : "No matches") |
 | Similar races | $(let sr = get(SIMILAR_RACES, config.pcs_slug, String[]); isempty(sr) ? "None configured" : join(sr, ", "); end) | $(isempty(get(SIMILAR_RACES, config.pcs_slug, String[])) ? "N/A" : "Included with higher variance") |
@@ -161,15 +171,15 @@ print("""
 | Qualitative intel | $(n_qualitative)/$(n_total) riders ($(pct(n_qualitative))%) | $(qualitative_df === nothing ? "Not provided" : (n_qualitative > 0 ? "Active" : "No matches")) |
 | Betfair odds | $(n_odds)/$(n_total) riders ($(pct(n_odds))%) | $(isempty(betfair_market_id) ? "Not provided" : (n_odds > 0 ? "Active" : "No matches")) |
 
-Signals are combined via Bayesian updating, from broadest to most precise. PCS specialty is the weakest prior (variance 4.0); race-specific history and VG season form are moderate signals; Cycling Oracle predictions and betting odds are the strongest when available (variance 1.5 and 0.5 respectively).
+Signals are combined via Bayesian updating from an uninformative prior (mean 0, variance 100). PCS specialty is the broadest observation; race-specific history and VG season form are moderate signals; Cycling Oracle predictions and betting odds are the strongest when available.
 :::
 
 """)
 
 # --- Signal impact ---
 rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["VG season points", "PCS race history", "VG race history", "Cycling Oracle", "Qualitative intel", "Betfair odds"]
-shift_cols = [:shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_qualitative, :shift_odds]
+signal_names = ["PCS specialty", "VG season points", "PCS race history", "VG race history", "Cycling Oracle", "Qualitative intel", "Betfair odds"]
+shift_cols = [:shift_pcs, :shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_qualitative, :shift_odds]
 affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
 
@@ -177,7 +187,7 @@ print("""
 ::: {.callout-note collapse="true"}
 ## Signal impact
 
-How much each source shifted rider strength estimates from the PCS prior (root mean square shift across all riders).
+How much each source shifted rider strength estimates from the uninformative prior (root mean square shift across all riders).
 
 | Signal | Riders affected | RMS shift |
 |--------|-----------------|-----------|

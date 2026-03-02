@@ -81,7 +81,7 @@ print("""
 
 | Source | Coverage | Status |
 |--------|----------|--------|
-| PCS specialty ratings (class-blended) | $(n_pcs)/$(n_total) riders ($(pct(n_pcs))%) | Always used as prior |
+| PCS specialty ratings (class-blended) | $(n_pcs)/$(n_total) riders ($(pct(n_pcs))%) | Observation |
 | VG season points | $(n_total)/$(n_total) riders (100%) | Always used |
 | PCS race history ($(history_years) yrs) | $(n_history)/$(n_total) riders ($(pct(n_history))%) | $(n_history > 0 ? "Active" : "No matches") |
 | Similar races | $(let sr = get(SIMILAR_RACES, config.pcs_slug, String[]); isempty(sr) ? "None configured" : join(sr, ", "); end) | $(isempty(get(SIMILAR_RACES, config.pcs_slug, String[])) ? "N/A" : "Included with higher variance") |
@@ -89,15 +89,15 @@ print("""
 | Cycling Oracle | $(n_oracle)/$(n_total) riders ($(pct(n_oracle))%) | $(isempty(oracle_url) ? "Not provided" : (n_oracle > 0 ? "Active" : "No matches")) |
 | Betfair odds | $(n_odds)/$(n_total) riders ($(pct(n_odds))%) | $(isempty(betfair_market_id) ? "Not provided" : (n_odds > 0 ? "Active" : "No matches")) |
 
-PCS specialty scores are blended by rider classification: all-rounders weight GC + TT + climbing, climbers weight climbing heavily, sprinters weight sprint + one-day. Signals are combined via Bayesian updating from broadest to most precise, with betting odds the strongest signal when available (variance 0.5) and PCS specialty the weakest prior (variance 4.0).
+PCS specialty scores are blended by rider classification: all-rounders weight GC + TT + climbing, climbers weight climbing heavily, sprinters weight sprint + one-day. Signals are combined via Bayesian updating from an uninformative prior (mean 0, variance 100). PCS specialty is the broadest observation; betting odds are the strongest when available.
 :::
 
 """)
 
 # --- Signal impact ---
 rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["VG season points", "PCS race history", "VG race history", "Cycling Oracle", "Betfair odds"]
-shift_cols = [:shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+signal_names = ["PCS specialty", "VG season points", "PCS race history", "VG race history", "Cycling Oracle", "Betfair odds"]
+shift_cols = [:shift_pcs, :shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
 affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
 
@@ -105,7 +105,7 @@ print("""
 ::: {.callout-note collapse="true"}
 ## Signal impact
 
-How much each source shifted rider strength estimates from the PCS prior (root mean square shift across all riders).
+How much each source shifted rider strength estimates from the uninformative prior (root mean square shift across all riders).
 
 | Signal | Riders affected | RMS shift |
 |--------|-----------------|-----------|

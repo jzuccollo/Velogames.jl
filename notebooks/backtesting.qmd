@@ -307,12 +307,13 @@ end
 
 ## Signal contribution
 
-Mean |shift| per signal shows how much each data source moves the predicted strength away from the PCS prior, averaged across riders that have that signal.
+Mean |shift| per signal shows how much each data source moves the predicted strength away from the uninformative prior, averaged across riders that have that signal.
 
 ```{julia}
 #| output: asis
-shift_keys = [:shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+shift_keys = [:shift_pcs, :shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
 shift_labels = Dict(
+    :shift_pcs => "PCS specialty",
     :shift_vg => "VG season points",
     :shift_history => "PCS race history",
     :shift_vg_history => "VG race history",
