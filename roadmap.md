@@ -22,12 +22,13 @@ The strength model combines multiple signals, each with a variance hyperparamete
 
 | Signal                | Source                    | Variance  | Notes                                                                                        |
 | --------------------- | ------------------------- | --------- | -------------------------------------------------------------------------------------------- |
-| PCS specialty prior   | `getpcsriderpts_batch()`  | 4.0       | Z-scored across field. For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS`    |
-| VG season points      | `getvgriders()`           | 3.0       | Z-scored VG `points` column                                                                  |
+| PCS specialty prior   | `getpcsriderpts_batch()`  | 5.5       | Z-scored across field. For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS`    |
+| VG season points      | `getvgriders()`           | 1.2×scale | Season-adaptive: `effective = 1.2 * (1 + 5.0 * (1 - frac_nonzero))`. Early season ~6.6     |
 | PCS form score        | `getpcsraceform()`        | 2.0       | Z-scored across field. Top ~40-60 riders by recent cross-race results from PCS form page     |
-| PCS race history      | `getpcsracehistory()`     | 1.0-3.0   | Recency-weighted: recent years get lower variance (higher precision)                         |
-| Similar-race history  | `getpcsracehistory()`     | 2.0-4.0   | Same as race history but +1.0 variance penalty. Races from `SIMILAR_RACES` terrain mapping   |
-| VG race history       | `getvgracepoints()`       | 1.5-4.0   | Z-scored per year. Actual VG points from past editions (finish + assist + breakaway)         |
+| Trajectory            | Derived (PCS vs history)  | 3.0       | `pcs_z - mean(history_z)`, z-scored. Captures improving/declining riders                     |
+| PCS race history      | `getpcsracehistory()`     | 4.0+1.2/yr| Recency-weighted: recent years get lower variance (higher precision)                         |
+| Similar-race history  | `getpcsracehistory()`     | +1.0      | Same as race history but +1.0 variance penalty. Races from `SIMILAR_RACES` terrain mapping   |
+| VG race history       | `getvgracepoints()`       | 3.0+0.65/yr| Z-scored per year. Actual VG points from past editions (finish + assist + breakaway)         |
 | Cycling Oracle        | `get_cycling_oracle()`    | 1.5       | Independent signal from cyclingoracle.com predictions. Broader race coverage than Betfair    |
 | Betting odds          | `getodds()`               | 0.5       | Strongest single signal when available. Uses Betfair Exchange API (market ID required)       |
 
@@ -94,6 +95,16 @@ Breakaway points are estimated heuristically from simulated finishing positions,
 ### Stage race scoring calibration
 
 `SCORING_STAGE` maps overall GC position to approximate total VG points accumulated across the race. Currently calibrated by rough inspection of historical VG grand tour results (winners typically 3000-4000 points, top 10 around 1000-2000). These values have not yet been validated against actual historical VG grand tour data. Systematic calibration against multiple historical VG stage race results would improve this.
+
+### Notebooks requiring rewrite
+
+The following notebooks have not yet been updated to the current architecture and are excluded from the Quarto build:
+
+- `notebooks/index.qmd` — overview/landing page
+- `notebooks/stagerace_predictor.qmd` — stage race prediction workflow
+- `notebooks/historical_analysis.qmd` — historical analysis and exploration
+
+The rewritten notebooks (`oneday_predictor.qmd`, `team_assessor.qmd`, `backtesting.qmd`) use the current `RaceConfig`/`RaceData` architecture and serve as templates for updating the others.
 
 ---
 
@@ -226,7 +237,17 @@ Academic evidence on recent form is surprisingly lukewarm. Kholkine et al. (2021
 
 **Limitations:** The PCS form page only covers the top ~40-60 riders; those not listed receive no form update (the prior passes through unchanged). The signal is race-agnostic — it does not distinguish between terrain types, so a sprint result contributes equally to form for a hilly classic. A future refinement could filter form by terrain-similar race types (combining with phase 3 course profile matching) or weight by race quality.
 
-### Phase 8: Correlated position simulation (low-moderate impact)
+### Phase 8: Season-adaptive VG variance and trajectory signal — done
+
+Post-Kuurne 2026 analysis revealed systematic prediction errors: overpredicting riders who had a lucky day at the previous race (VG season points too influential early in the season), underpredicting breakout riders (Brennan-type), and overpredicting fading veterans (Degenkolb-type).
+
+**Implemented — season-adaptive VG variance:** VG season points variance now scales with the fraction of riders who have non-zero points. Early in the season (few riders with points), the effective variance is much higher (signal treated as noisy). Late in the season, it converges toward the base value. Formula: `effective_vg_variance = vg_variance * (1 + vg_season_penalty * (1 - frac_nonzero))`. The `vg_season_penalty` parameter (default 5.0) is exposed for hyperparameter tuning.
+
+**Implemented — trajectory signal:** A new Bayesian signal captures improving vs declining riders by comparing a rider's current PCS z-score to the mean of their race history z-scores. Positive trajectory (current PCS exceeds historical performance) suggests improvement; negative suggests decline. Z-scored across the field and fed as a Bayesian update with `trajectory_variance` (default 3.0). Only active for riders with race history; riders without history receive no trajectory update.
+
+**Also:** Widened hyperparameter search bounds for `hist_decay_rate` (0.3–3.5, up from 2.0) and `vg_hist_decay_rate` (0.3–3.0, up from 2.0) to allow the tuner to find steeper recency decay if warranted.
+
+### Phase 9: Correlated position simulation (low-moderate impact)
 
 The current approach of independent position simulation with per-simulation assist computation already captures the most important correlation effect (teammate assists). Adding explicit rider-rider correlation via Cholesky decomposition would produce more realistic variance profiles but the incremental gain is modest.
 
@@ -244,7 +265,7 @@ The Sharpstack paper and DFS community research shows that ignoring correlation 
 - Use Cholesky decomposition to generate correlated noise vectors in `simulate_race()`
 - The assist computation already runs per-simulation, so it would automatically benefit from correlated positions
 
-### Phase 9: Machine learning (unknown impact, requires prerequisites)
+### Phase 10: Machine learning (unknown impact, requires prerequisites)
 
 Replacing the Bayesian strength model with a trained ML model requires a backtesting dataset of 90-135+ races (2-3 full Superclasico seasons), which does not yet exist. Academic results in cycling prediction show marginal gains from ML over well-tuned baselines: Kholkine et al. (2021) achieved 0.82 NDCG@10 with learn-to-rank, but this was only ~3% above a tuned logistic regression baseline. The FPL literature confirms that Bayesian approaches provide "strong and stable baselines" and that ML augmentation yields "modest but consistent improvements."
 
