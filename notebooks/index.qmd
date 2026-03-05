@@ -6,10 +6,11 @@ Fantasy cycling team optimisation for [Velogames](https://www.velogames.com/). T
 
 # Notebooks
 
-Four notebooks cover the main use cases:
+Five notebooks cover the main use cases:
 
 - **[One-day predictor](oneday_predictor.qmd)**: Pre-race team selection for Sixes Classics one-day races. Monte Carlo simulation converts rider strength estimates into expected VG points, then optimises a 6-rider team.
 - **[Stage race predictor](stagerace_predictor.qmd)**: Pre-race team selection for grand tours and stage races. Class-aware strength estimation blends PCS specialties according to each rider's VG classification (all-rounder, climber, sprinter, unclassed), then optimises a 9-rider team with classification constraints.
+- **[Team assessor](team_assessor.qmd)**: Compare a custom team against the model's optimal selection. Useful for evaluating picks made before the predictor was run, or for sanity-checking a team that differs from the model's recommendation.
 - **[Historical analysis](historical_analysis.qmd)**: Retrospective analysis of completed races. Uses actual race results to find the optimal team you could have picked, the cheapest team that beats a benchmark, and rider value analysis. Works for both one-day and stage races.
 - **[Backtesting](backtesting.qmd)**: Model calibration and evaluation. Runs predictions against historical PCS race results to measure accuracy (Spearman correlation, top-N overlap), identifies which data sources improve predictions via ablation study, and tunes Bayesian hyperparameters.
 
@@ -20,34 +21,80 @@ Both predictors follow the same pipeline:
 1. Fetch VG rider data (costs, season points, and classifications for stage races)
 2. Fetch PCS specialty ratings (one-day, GC, TT, sprint, climber)
 3. Fetch PCS race-specific history from past editions
-4. Optionally fetch betting odds
+4. Optionally fetch betting odds (Betfair Exchange API or Oddschecker paste) and qualitative intelligence (YouTube transcripts or web articles via Claude API)
 5. Estimate rider strength via Bayesian updating of all signals
 6. Run Monte Carlo simulation to get finishing position probabilities
 7. Compute expected VG points (finish + assists + breakaway)
-8. Optimise team selection to maximise total expected VG points
+8. Optimise team selection to maximise risk-adjusted expected VG points (penalising high-variance riders and domestiques proportionally to their strength gap)
 
 The key difference between one-day and stage race prediction is how PCS specialty scores are combined. One-day races use the single relevant specialty (e.g. one-day points for a classic). Stage races blend specialties according to each rider's classification, so an all-rounder's strength reflects GC, TT, and climbing ability whilst a sprinter's reflects sprint and one-day points.
 
+# Strength estimation
+
+Each rider enters the model with a diffuse prior ($\mu_0 = 0$, $\sigma^2_0 = 100$) on a standardised strength scale. Signals update this prior sequentially using the normal-normal conjugate update:
+
+$$\mu_{\text{post}} = \frac{\mu_{\text{prior}} / \sigma^2_{\text{prior}} + \mu_{\text{obs}} / \sigma^2_{\text{obs}}}{1/\sigma^2_{\text{prior}} + 1/\sigma^2_{\text{obs}}}, \qquad \frac{1}{\sigma^2_{\text{post}}} = \frac{1}{\sigma^2_{\text{prior}}} + \frac{1}{\sigma^2_{\text{obs}}}$$
+
+The observation variance $\sigma^2_{\text{obs}}$ controls each signal's influence: lower variance means higher precision. Signals are applied from broadest to most specific; missing data leaves the prior unchanged.
+
+| Signal | Observation | $\sigma^2_{\text{obs}}$ |
+|--------|-------------|------------------------:|
+| PCS specialty rating | Z-scored specialty score (one-day, GC, TT, sprint, climber) | 7.9 |
+| VG season points | Z-scored season-to-date VG score (season-adaptive) | 1.4–8.3 |
+| PCS recent form | Z-scored form score across last ~6 weeks of racing | 0.9 |
+| Trajectory | Current PCS z-score minus mean history z-score | 3.5 |
+| PCS race history | Per-result: $3.0 + 3.2 \times \text{years ago}$ (+ 1.0 for similar races) | 3.0+ |
+| VG race history | Per-result: $4.8 + 1.3 \times \text{years ago}$ | 4.8+ |
+| Cycling Oracle | Log-odds of predicted win probability, divided by 2.0 | 1.0 |
+| Qualitative intelligence | Podcast/article adjustments weighted by confidence | 2.5–8.3 |
+| Betfair odds | Log-odds of market-implied win probability, divided by 2.0 | 0.5 |
+
+Race history observations are converted from finishing positions via a logit transform of fractional rank: $\text{strength} = -\log\!\left(\tfrac{k}{n+1} \big/ \left(1 - \tfrac{k}{n+1}\right)\right)$, which maps position 1 in a 150-rider field to roughly $+2.5$ and last to $-2.5$. Odds and Oracle predictions are converted via $\log(p / p_{\text{baseline}}) / 2.0$ where $p_{\text{baseline}} = 1/n_{\text{starters}}$ is the uniform probability.
+
+Early in the season, VG season points carry less information because most riders have zero. The effective variance inflates: $\sigma^2_{\text{VG}} = 1.4 \times (1 + 1.3 \times (1 - f_{\text{nonzero}}))$, where $f_{\text{nonzero}}$ is the fraction of riders with non-zero points — ranging from about 8.3 at the opening weekend to 1.4 by late season.
+
+Because all signals measure the same underlying quality, treating them as independent overstates certainty. After all updates, an equicorrelation discount is applied: if $n$ signals have been observed with assumed pairwise correlation $\rho = 0.1$, the effective total observation precision is divided by $1 + \rho(n-1)$.
+
+# Simulation and expected points
+
+With posterior mean $\mu_i$ and standard deviation $\sigma_i = \sqrt{\sigma^2_{i,\text{post}}}$ for each rider, a single simulation draws
+
+$$\tilde{s}_i = \mu_i + \sigma_i \, \varepsilon_i, \qquad \varepsilon_i \overset{\text{iid}}{\sim} t(\nu)$$
+
+and ranks riders by $\tilde{s}_i$ from highest to lowest to assign finishing positions. A Student's $t$ distribution is used for heavy-tailed noise, reflecting the occasional surprising result that Gaussian assumptions would underweight. Repeating for $n_{\text{sims}}$ draws produces an empirical position distribution for each rider.
+
+Expected VG points decompose into three components:
+
+$$E[\text{VG points}] = E[\text{finish}] + E[\text{assists}] + E[\text{breakaway}]$$
+
+Finish points follow directly: $E[\text{finish}] = \sum_{k=1}^{30} P(\text{pos} = k) \times \text{pts}_k$ from the VG scoring table. Assist points are computed within each simulation by checking whether any teammate finishes in the top three, so the correlation between a rider's performance and their team's performance is captured naturally. Breakaway points are estimated heuristically from simulated positions for one-day races; they are included implicitly in the stage-race aggregate scoring table.
+
 # Optimisation models
+
+The optimiser selects teams to maximise risk-adjusted expected points. When risk aversion $\gamma > 0$, the per-rider objective is
+
+$$\tilde{y}_j = \frac{E[\text{VG points}_j]}{1 + \gamma \cdot CV_{\text{down},j}}$$
+
+where $CV_{\text{down},j}$ is the downside coefficient of variation (standard deviation of below-mean outcomes divided by the mean), giving a scale-invariant penalty for high-variance riders. Setting $\gamma = 0$ recovers plain expected-points maximisation.
 
 ## One-day races
 
 For Sixes Classics one-day races, teams are 6 riders with no classification constraints:
 
-$$\max \sum_{j=1}^{n} x_j y_j$$
+$$\max \sum_{j=1}^{n} x_j \tilde{y}_j$$
 
 $$\text{s.t.} \quad \sum_{j=1}^{n} x_j = 6, \quad \sum_{j=1}^{n} x_j z_j \leq 100$$
 
-where $x_j \in \{0,1\}$ is whether rider $j$ is selected, $y_j$ is expected VG points, and $z_j$ is cost.
+where $x_j \in \{0,1\}$ is whether rider $j$ is selected and $z_j$ is their VG cost.
 
 ## Stage races
 
-For grand tours, teams are 9 riders with classification constraints:
+For grand tours, teams are 9 riders with classification constraints enforced by VG:
 
-$$\max \sum_{j=1}^{n} x_j y_j$$
+$$\max \sum_{j=1}^{n} x_j \tilde{y}_j$$
 
 $$\text{s.t.} \quad \sum x_j = 9, \quad \sum x_j z_j \leq 100$$
 
 $$\sum x_j a_j \geq 2, \quad \sum x_j c_j \geq 2, \quad \sum x_j s_j \geq 1, \quad \sum x_j u_j \geq 3$$
 
-where $a_j, c_j, s_j, u_j \in \{0,1\}$ indicate rider $j$'s classification (all-rounder, climber, sprinter, unclassed) with $a_j + c_j + s_j + u_j = 1$ for all $j$.
+where $a_j, c_j, s_j, u_j \in \{0,1\}$ indicate rider $j$'s VG classification (all-rounder, climber, sprinter, unclassed) with $a_j + c_j + s_j + u_j = 1$ for all $j$.

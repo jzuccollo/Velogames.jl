@@ -44,3 +44,6 @@ _site/
 # Not providing a website for now
 **/*.quarto_ipynb
 **/*.html
+
+# manual odds
+*.txt

@@ -96,15 +96,15 @@ Breakaway points are estimated heuristically from simulated finishing positions,
 
 `SCORING_STAGE` maps overall GC position to approximate total VG points accumulated across the race. Currently calibrated by rough inspection of historical VG grand tour results (winners typically 3000-4000 points, top 10 around 1000-2000). These values have not yet been validated against actual historical VG grand tour data. Systematic calibration against multiple historical VG stage race results would improve this.
 
-### Notebooks requiring rewrite
+### Notebooks excluded from the Quarto build
 
-The following notebooks have not yet been updated to the current architecture and are excluded from the Quarto build:
+The following notebooks have been rewritten to the current architecture but are not yet included in `_quarto.yml` and therefore not published to the site:
 
-- `notebooks/index.qmd` — overview/landing page
-- `notebooks/stagerace_predictor.qmd` — stage race prediction workflow
-- `notebooks/historical_analysis.qmd` — historical analysis and exploration
+- `notebooks/stagerace_predictor.qmd` — stage race prediction workflow. Has a small bug: references undefined `vg_history` variable at line 88 in the data sources callout. Fix: replace `$(isempty(vg_history) ? "Not provided" : "Active")` with a check on `n_vg_hist > 0`.
+- `notebooks/historical_analysis.qmd` — retrospective optimal team selection. Appears complete; uses `setup_race`, `build_model_oneday`, `build_model_stage`, and `minimise_cost_stage` correctly.
+- `notebooks/index.qmd` — overview/landing page. References all five notebooks in its prose, so adding the two above to `_quarto.yml` makes it accurate without edits.
 
-The rewritten notebooks (`oneday_predictor.qmd`, `team_assessor.qmd`, `backtesting.qmd`) use the current `RaceConfig`/`RaceData` architecture and serve as templates for updating the others.
+To publish: fix the `stagerace_predictor.qmd` bug, add all three to `_quarto.yml` render list and sidebar, and verify they render cleanly.
 
 ---
 
@@ -154,24 +154,19 @@ For each past Superclasico race:
 
 Academic evidence strongly supports terrain-aware prediction. Kholkine et al. (2021) found that for Liege-Bastogne-Liege, results from Fleche Wallonne (a similar hilly Ardennes race) were more predictive than overall PCS performance. The VeloRost paper (Rize, Saldanha & Moskovitch, 2025) achieved its best results partly by clustering races by elevation and surface type before applying TrueSkill ratings, outperforming approaches that used a single global skill rating.
 
-**Implementation:**
+**Implemented — terrain-similar race history:** `SIMILAR_RACES` in `src/race_helpers.jl` maps each race to a list of terrain-similar races derived from `RaceInfo.similar_races`. The prediction pipeline fetches race history for these similar races and feeds them into the Bayesian model with an additional +1.0 variance penalty. This is the most impactful part of the phase and is live for all classics.
 
-- PCS profile icons (p0-p5 difficulty) and race climb data
-- `getpcsraceprofile(pcs_slug, year)` - scrape profile data
-- `course_similarity(race_a, race_b)` - similarity metric based on terrain cluster
-- Weight specialty scores based on course fit; use results from similar courses as evidence in the Bayesian model
+**Not yet implemented — PCS profile scraping:**
 
-**Terrain clustering approach (from VeloRost):**
+- `getpcsraceprofile(pcs_slug, year)` — scrape PCS p0–p5 difficulty icons and climb data
+- `course_similarity(race_a, race_b)` — data-driven similarity metric from profile features
+- Automatic terrain clustering to replace the manually curated `SIMILAR_RACES` lists
 
-Rather than a continuous similarity metric, cluster races into discrete terrain types (flat sprint, cobbled, hilly classics, mountainous, time trial) and estimate separate skill ratings per cluster. PCS already provides profile scores: below 50 for flat/sprint, 50-100 for hilly, above 100 for mountain. This two-stage approach (cluster then estimate) outperformed single-skill models in the VeloRost study.
-
-**Impact on race history signal:**
-
-Course profile matching would primarily improve the race history signal by expanding the evidence base. Instead of relying solely on results from the exact same race in prior years, we could include results from terrain-similar races with appropriately increased variance. For a rider with no history in a specific race, results from similar courses would provide useful signal where currently there is none.
+The remaining work (automatic profile-driven clustering) would reduce manual curation effort but would not substantially change the model outputs, since the manually curated `SIMILAR_RACES` already captures the key terrain groupings. Low priority unless manual maintenance becomes burdensome.
 
 ### Phase 4: Stage-by-stage simulation (high impact for grand tours)
 
-The current aggregate approach (simulating overall GC position and mapping to total VG points) is a reasonable placeholder but misses important dynamics. Top VG players emphasise analysing the parcours to calibrate sprinter/climber allocation, and the stage composition directly determines which rider types accumulate the most points.
+The current aggregate approach (simulating overall GC position and mapping to total VG points) is the weakest part of the model. `solve_stage()` and `stagerace_predictor.qmd` are implemented and usable, but the underlying scoring model maps simulated overall GC rank directly to total VG points via `SCORING_STAGE`, which ignores stage composition entirely. Top VG players emphasise analysing the parcours to calibrate sprinter/climber allocation, and the stage composition directly determines which rider types accumulate the most points.
 
 PCS provides stage profile data at `/race/{slug}/{year}/route/stage-profiles` with difficulty, distance, elevation, and finish type. A proper stage race predictor would:
 
@@ -385,14 +380,16 @@ Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCycli
 
 ### Impact estimates summary
 
-| Priority | Improvement | Expected impact | Evidence strength | Effort |
+| Priority | Improvement | Expected impact | Evidence strength | Status |
 | --- | --- | --- | --- | --- |
-| 1 | ~~Fix odds integration~~ | Very high | Strong (market efficiency literature) | Low (done) |
-| 2 | Backtesting framework | High (indirect) | Strong (enables calibration) | Medium |
-| 3 | Course profile matching | High | Strong (Kholkine, VeloRost) | Medium |
-| 4 | Stage-by-stage simulation | High (grand tours) | Moderate (community consensus) | High |
-| 5 | Ownership-adjusted optimisation | Very high for GPPs, low for small leagues | Strong (Haugh & Singal) | Medium |
-| 6 | ~~Leader/domestique roles~~ | Moderate | Moderate (VeloRost) | Medium (done) |
-| 7 | ~~Recent form signal~~ | Moderate-low | Weak (Kholkine: minimal weight) | Low (done) |
-| 8 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Medium |
-| 9 | ML models | Unknown | Weak (+3% over baseline) | High |
+| 1 | ~~Fix odds integration~~ | Very high | Strong (market efficiency literature) | Done |
+| 2 | ~~Backtesting framework~~ | High (indirect) | Strong (enables calibration) | Done |
+| 3 | Course profile matching | High | Strong (Kholkine, VeloRost) | Partial — similar-race history done; PCS profile scraping not done |
+| 4 | Stage-by-stage simulation | High (grand tours) | Moderate (community consensus) | Not done — aggregate GC model only |
+| 5 | Publish missing notebooks | Medium | — | Small — fix `vg_history` bug, add to `_quarto.yml` |
+| 6 | Ownership-adjusted optimisation | Very high for GPPs, low for small leagues | Strong (Haugh & Singal) | Not done |
+| 7 | ~~Leader/domestique roles~~ | Moderate | Moderate (VeloRost) | Done |
+| 8 | ~~Recent form signal~~ | Moderate-low | Weak (Kholkine: minimal weight) | Done |
+| 9 | ~~Season-adaptive VG variance + trajectory~~ | Moderate | Post-Kuurne analysis | Done |
+| 10 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Not done |
+| 11 | ML models | Unknown | Weak (+3% over baseline) | Not done |
