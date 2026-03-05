@@ -106,7 +106,7 @@ if n_with_odds > 0 || n_with_oracle > 0
 else
     print("""
 ::: {.callout-warning}
-No archived odds or oracle data found. The `with_odds`, `with_oracle`, and `all_available` ablation sets will behave identically to `pcs_vg_history`. Run `solve_oneday` with `betfair_market_id` or `oracle_url` for upcoming races to start building the archive.
+No archived odds or oracle data found. The `baseline+odds` and `baseline+oracle` ablation sets will behave identically to `baseline`. Run `solve_oneday` with `betfair_market_id` or `oracle_url` for upcoming races to start building the archive.
 :::
 
 """)
@@ -115,11 +115,11 @@ end
 
 # Baseline evaluation
 
-Running the full prediction pipeline (PCS + VG season points + race history + VG history) on all historical races and comparing to actual PCS finishing positions.
+Running the full prediction pipeline on all historical races and comparing to actual PCS finishing positions.
 
 ```{julia}
 #| output: asis
-baseline_signals = [:pcs, :vg_season, :race_history, :vg_history]
+baseline_signals = [:pcs, :vg_season, :race_history, :vg_history, :form, :trajectory]
 
 results = suppress_output() do
     backtest_season(races;
@@ -127,6 +127,7 @@ results = suppress_output() do
         signals=baseline_signals,
         n_sims=n_sims,
         risk_aversion=risk_aversion,
+        store_rider_details=true,
     )
 end
 
@@ -167,6 +168,49 @@ The Spearman rank correlation measures how well predicted strength ranks match a
 | Races evaluated | $(length(valid_rho)) |
 
 """)
+end
+```
+
+## VG team points
+
+```{julia}
+#| output: asis
+# Filter to races with VG team data
+vg_results = filter(r -> !isnan(r.points_captured_ratio), results)
+
+if !isempty(vg_results)
+    print("""
+### By year
+
+| Year | Races | Mean PCR | Mean predicted pts | Mean optimal pts |
+|------|-------|----------|--------------------|------------------|
+""")
+    for year in sort(unique(r.race.year for r in vg_results))
+        yr = filter(r -> r.race.year == year, vg_results)
+        pcr = round(mean(r.points_captured_ratio for r in yr), digits=3)
+        pred = round(mean(r.predicted_team_vg_points for r in yr), digits=1)
+        opt = round(mean(r.optimal_team_vg_points for r in yr), digits=1)
+        print("| $year | $(length(yr)) | $pcr | $pred | $opt |\n")
+    end
+    print("\n")
+
+    print("""
+### By category
+
+| Category | Races | Mean PCR | Mean predicted pts | Mean optimal pts |
+|----------|-------|----------|--------------------|------------------|
+""")
+    for cat in sort(unique(r.race.category for r in vg_results))
+        cr = filter(r -> r.race.category == cat, vg_results)
+        pcr = round(mean(r.points_captured_ratio for r in cr), digits=3)
+        pred = round(mean(r.predicted_team_vg_points for r in cr), digits=1)
+        opt = round(mean(r.optimal_team_vg_points for r in cr), digits=1)
+        label = get(cat_label, cat, "Cat $cat")
+        print("| $label | $(length(cr)) | $pcr | $pred | $opt |\n")
+    end
+    print("\n")
+else
+    print("No races with VG team data available.\n\n")
 end
 ```
 
@@ -311,10 +355,12 @@ Mean |shift| per signal shows how much each data source moves the predicted stre
 
 ```{julia}
 #| output: asis
-shift_keys = [:shift_pcs, :shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+shift_keys = [:shift_pcs, :shift_vg, :shift_form, :shift_trajectory, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
 shift_labels = Dict(
     :shift_pcs => "PCS specialty",
     :shift_vg => "VG season points",
+    :shift_form => "PCS form",
+    :shift_trajectory => "Trajectory",
     :shift_history => "PCS race history",
     :shift_vg_history => "VG race history",
     :shift_oracle => "Cycling Oracle",
@@ -389,14 +435,14 @@ end
 
 ## Signal ablation study
 
-Testing which data sources improve predictions by running with different signal subsets. Each row shows the mean metric across all races for that signal configuration.
+Testing which data sources improve predictions by removing one signal at a time from the baseline. Each row shows the mean metric across all races for that signal configuration.
 
 ```{julia}
 #| output: asis
 ablation_df = suppress_output() do
     ablation_study(races;
         race_data=race_data,
-        n_sims=n_sims,
+        n_sims=500,
     )
 end
 
@@ -426,16 +472,9 @@ if nrow(ablation_df) > 0
 
 **Best configuration:** `$best_set` | **Worst:** `$worst_set`
 
-Key questions answered:
+Each `no_X` row shows what happens when signal X is removed from the baseline. If removing a signal hurts performance, that signal adds value. Compare against `no_signals` (uninformative prior) and `pcs_only` as floor references.
 
-- **Does race history help?** Compare `pcs_only` vs `pcs_history`.
-- **Does VG season form add value?** Compare `pcs_history` vs `pcs_vg_history`.
-- **Is PCS essential?** Compare `no_pcs` vs `pcs_vg_history`.
-- **Do odds improve predictions?** Compare `pcs_vg_history` vs `with_odds`.
-- **Does oracle add value?** Compare `pcs_vg_history` vs `with_oracle`.
-- **What is the baseline?** `pcs_only` shows prediction quality from PCS specialty scores alone.
-
-Note: VG season points on historical pages reflect end-of-season totals, not the value at race time. This introduces mild optimistic bias for the `:vg_season` signal; interpret its marginal value with caution. Odds and oracle signals are only available for races where archived data exists.
+Note: VG season points use cumulative-to-date values (not end-of-season totals) to maintain temporal integrity. The remaining limitation is that this relies on VG deadline dates being parseable for each race. Odds and oracle signals are only available for races where archived data exists.
 :::
 
 """)
@@ -509,6 +548,37 @@ print("""
 """)
 ```
 
+## Worst predictions
+
+The races with the lowest Spearman ρ, with the biggest individual prediction misses for each.
+
+```{julia}
+#| output: asis
+# Find 5 worst races by Spearman ρ
+worst_results = sort(filter(r -> r.rider_details !== nothing, results), by=r -> r.spearman_rho)
+n_worst = min(5, length(worst_results))
+
+if n_worst > 0
+    for r in worst_results[1:n_worst]
+        detail = sort(r.rider_details, :rank_error, rev=true)
+        top_misses = first(detail, min(5, nrow(detail)))
+
+        print("""
+### $(r.race.name) $(r.race.year) (ρ = $(round(r.spearman_rho, digits=3)))
+
+| Rider | Predicted rank | Actual rank | Rank error |
+|-------|----------------|-------------|------------|
+""")
+        for row in eachrow(top_misses)
+            print("| $(row.riderkey) | $(row.predicted_rank) | $(row.actual_rank) | $(row.rank_error) |\n")
+        end
+        print("\n")
+    end
+else
+    print("No rider-level detail available.\n\n")
+end
+```
+
 # Hyperparameter sensitivity
 
 ```{julia}
@@ -516,7 +586,7 @@ print("""
 #| output: asis
 
 if run_tuning
-    # Tune against the baseline signal set with calibration-aware objective
+    # Tune against the baseline signal set with calibration-aware objective and CV
     best_config, tuning_log = suppress_output() do
         tune_hyperparameters(races;
             race_data=race_data,
@@ -524,6 +594,7 @@ if run_tuning
             n_iter=50,
             signals=baseline_signals,
             n_sims=n_sims,
+            cv=true,
         )
     end
 
@@ -535,10 +606,14 @@ if run_tuning
     default_params = Dict(
         :pcs_variance => DEFAULT_BAYESIAN_CONFIG.pcs_variance,
         :vg_variance => DEFAULT_BAYESIAN_CONFIG.vg_variance,
+        :form_variance => DEFAULT_BAYESIAN_CONFIG.form_variance,
+        :trajectory_variance => DEFAULT_BAYESIAN_CONFIG.trajectory_variance,
         :hist_base_variance => DEFAULT_BAYESIAN_CONFIG.hist_base_variance,
         :hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.hist_decay_rate,
         :vg_hist_base_variance => DEFAULT_BAYESIAN_CONFIG.vg_hist_base_variance,
         :vg_hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.vg_hist_decay_rate,
+        :signal_correlation => DEFAULT_BAYESIAN_CONFIG.signal_correlation,
+        :vg_season_penalty => DEFAULT_BAYESIAN_CONFIG.vg_season_penalty,
     )
 
     print("""
@@ -546,10 +621,14 @@ if run_tuning
 |-----------|---------|-------|--------|
 | `pcs_variance` | $(default_params[:pcs_variance]) | $(round(best_config.pcs_variance, digits=2)) | $(round(best_config.pcs_variance - default_params[:pcs_variance], digits=2)) |
 | `vg_variance` | $(default_params[:vg_variance]) | $(round(best_config.vg_variance, digits=2)) | $(round(best_config.vg_variance - default_params[:vg_variance], digits=2)) |
+| `form_variance` | $(default_params[:form_variance]) | $(round(best_config.form_variance, digits=2)) | $(round(best_config.form_variance - default_params[:form_variance], digits=2)) |
+| `trajectory_variance` | $(default_params[:trajectory_variance]) | $(round(best_config.trajectory_variance, digits=2)) | $(round(best_config.trajectory_variance - default_params[:trajectory_variance], digits=2)) |
 | `hist_base_variance` | $(default_params[:hist_base_variance]) | $(round(best_config.hist_base_variance, digits=2)) | $(round(best_config.hist_base_variance - default_params[:hist_base_variance], digits=2)) |
 | `hist_decay_rate` | $(default_params[:hist_decay_rate]) | $(round(best_config.hist_decay_rate, digits=2)) | $(round(best_config.hist_decay_rate - default_params[:hist_decay_rate], digits=2)) |
 | `vg_hist_base_variance` | $(default_params[:vg_hist_base_variance]) | $(round(best_config.vg_hist_base_variance, digits=2)) | $(round(best_config.vg_hist_base_variance - default_params[:vg_hist_base_variance], digits=2)) |
 | `vg_hist_decay_rate` | $(default_params[:vg_hist_decay_rate]) | $(round(best_config.vg_hist_decay_rate, digits=2)) | $(round(best_config.vg_hist_decay_rate - default_params[:vg_hist_decay_rate], digits=2)) |
+| `signal_correlation` | $(default_params[:signal_correlation]) | $(round(best_config.signal_correlation, digits=2)) | $(round(best_config.signal_correlation - default_params[:signal_correlation], digits=2)) |
+| `vg_season_penalty` | $(default_params[:vg_season_penalty]) | $(round(best_config.vg_season_penalty, digits=2)) | $(round(best_config.vg_season_penalty - default_params[:vg_season_penalty], digits=2)) |
 
 """)
 else
@@ -566,11 +645,11 @@ if run_tuning && @isdefined(tuning_log) && nrow(tuning_log) > 0
     print("""
 ## Search landscape
 
-Top 10 candidates by calibrated score (Spearman \$\\rho\$ with calibration penalty):
+Top 10 candidates by calibrated score (Spearman \$\\rho\$ with calibration penalty, leave-one-year-out CV):
 
 """)
     top10 = first(sort(tuning_log, :mean_score, rev=true), min(10, nrow(tuning_log)))
-    display_cols = [:candidate, :mean_score, :n_races, :pcs_variance, :vg_variance, :hist_base_variance, :hist_decay_rate, :signal_correlation]
+    display_cols = [:candidate, :mean_score, :n_races, :pcs_variance, :vg_variance, :form_variance, :trajectory_variance, :hist_base_variance, :hist_decay_rate, :signal_correlation]
     avail_cols = intersect(display_cols, Symbol.(names(tuning_log)))
     round_numeric_columns!(top10; digits=3)
     md_table(top10[:, avail_cols])
@@ -588,7 +667,7 @@ if run_tuning && @isdefined(tuning_log) && nrow(tuning_log) > 1
 ::: {.callout-note collapse="true"}
 ## Tuning summary
 
-Searched $(nrow(tuning_log)) configurations. Score range: $(round(minimum(scores), digits=4)) to $(round(maximum(scores), digits=4)).
+Searched $(nrow(tuning_log)) configurations using leave-one-year-out cross-validation. Score range: $(round(minimum(scores), digits=4)) to $(round(maximum(scores), digits=4)).
 
 The default configuration scored $(round(default_score, digits=4)). The objective combines Spearman ρ with a penalty for miscalibrated uncertainty (z-score std deviating from 1.0).
 :::
@@ -600,7 +679,7 @@ end
 
 # Risk aversion tuning
 
-The optimiser can penalise high-variance riders using `risk_adjusted_vg = E[pts] - γ * SD[pts]`. This section searches over γ values to find the level that maximises the points captured ratio in backtesting.
+The optimiser can penalise high-variance riders using `risk_adjusted_vg = E[pts] / (1 + γ * CV_down)`. This section searches over γ values to find the level that maximises the points captured ratio in backtesting.
 
 ```{julia}
 #| echo: true

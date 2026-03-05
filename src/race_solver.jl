@@ -185,6 +185,31 @@ function _prepare_rider_data(
         end
     end
 
+    # --- 3d. Fetch cross-season PCS points for trajectory (automatic) ---
+    seasons_df = nothing
+    if !isempty(pcs_slug_map)
+        try
+            seasons_df = getpcsriderseasons_batch(
+                pcs_slug_map;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            if nrow(seasons_df) > 0
+                n_riders_with_seasons = length(unique(seasons_df.riderkey))
+                @info "Got cross-season PCS points for $n_riders_with_seasons riders"
+                if !isempty(config.pcs_slug)
+                    try
+                        save_race_snapshot(seasons_df, "pcs_seasons", config.pcs_slug, config.year)
+                    catch e
+                        @debug "Failed to archive PCS seasons data: $e"
+                    end
+                end
+            end
+        catch e
+            @warn "Failed to fetch PCS seasons data: $e"
+        end
+    end
+
     # --- 4. Fetch Betfair odds (optional) ---
     odds_df = nothing
     if !isempty(betfair_market_id)
@@ -281,8 +306,13 @@ function _prepare_rider_data(
     else
         0
     end
+    n_seasons = if seasons_df !== nothing
+        length(intersect(riderdf.riderkey, unique(seasons_df.riderkey)))
+    else
+        0
+    end
 
-    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" qualitative = "$n_qualitative/$n_total" form = "$n_form/$n_total"
+    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" qualitative = "$n_qualitative/$n_total" form = "$n_form/$n_total" seasons = "$n_seasons/$n_total"
     if n_pcs == 0
         @warn "No riders have PCS specialty data — strength estimates will rely on VG season points only"
     end
@@ -290,7 +320,7 @@ function _prepare_rider_data(
         @warn "No riders matched to race history — historical finishing positions won't inform predictions"
     end
 
-    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, qualitative_df, form_df, nothing)
+    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, qualitative_df, form_df, seasons_df, nothing)
 end
 
 

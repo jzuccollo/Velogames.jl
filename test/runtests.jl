@@ -1022,6 +1022,7 @@ end
                 0.68,
                 0.94,
                 Dict{Symbol,Float64}(:shift_vg => 0.1, :shift_history => -0.2),
+                nothing,
             ),
             BacktestResult(
                 BacktestRace("Race B", 2024, "race-b", 1),
@@ -1041,6 +1042,7 @@ end
                 0.70,
                 0.96,
                 Dict{Symbol,Float64}(:shift_vg => -0.05),
+                nothing,
             ),
         ]
         df = summarise_backtest(results)
@@ -1056,9 +1058,9 @@ end
         for (label, sigs) in Velogames.ABLATION_SETS
             @test label isa String
             @test sigs isa Vector{Symbol}
-            @test !isempty(sigs)
         end
         labels = [l for (l, _) in Velogames.ABLATION_SETS]
+        @test "no_signals" in labels
         @test "baseline" in labels
         @test "baseline+odds" in labels
         @test "baseline+oracle" in labels
@@ -1089,12 +1091,115 @@ end
         @test config.pcs_variance <= Velogames.PARAM_BOUNDS.pcs_variance[2]
         @test config.vg_variance >= Velogames.PARAM_BOUNDS.vg_variance[1]
         @test config.vg_variance <= Velogames.PARAM_BOUNDS.vg_variance[2]
+        @test config.form_variance >= Velogames.PARAM_BOUNDS.form_variance[1]
+        @test config.form_variance <= Velogames.PARAM_BOUNDS.form_variance[2]
         @test config.hist_base_variance >= Velogames.PARAM_BOUNDS.hist_base_variance[1]
         @test config.hist_base_variance <= Velogames.PARAM_BOUNDS.hist_base_variance[2]
         @test config.odds_variance == DEFAULT_BAYESIAN_CONFIG.odds_variance
         @test config.oracle_variance == DEFAULT_BAYESIAN_CONFIG.oracle_variance
         @test config.odds_normalisation == DEFAULT_BAYESIAN_CONFIG.odds_normalisation
         @test config.prior_variance == DEFAULT_BAYESIAN_CONFIG.prior_variance
+    end
+end
+
+# =========================================================================
+# Cross-season trajectory
+# =========================================================================
+
+@testset "Cross-season trajectory signal" begin
+    @testset "trajectory shifts strength for improving rider" begin
+        rider_df = DataFrame(
+            rider = ["Rising", "Declining", "Stable"],
+            team = ["A", "B", "C"],
+            cost = [15, 15, 15],
+            points = [300.0, 300.0, 300.0],
+            riderkey = ["rising", "declining", "stable"],
+            oneday = [1000, 1000, 1000],
+            has_pcs_data = [true, true, true],
+        )
+
+        # Seasons data: Rising rider improving, Declining rider getting worse
+        seasons_df = DataFrame(
+            riderkey = repeat(["rising", "declining", "stable"], inner = 5),
+            year = repeat([2022, 2023, 2024, 2025, 2026], 3),
+            pcs_points = [
+                # Rising: 500 -> 600 -> 800 -> 1200 -> 1500
+                500.0, 600.0, 800.0, 1200.0, 1500.0,
+                # Declining: 1500 -> 1200 -> 800 -> 600 -> 500
+                1500.0, 1200.0, 800.0, 600.0, 500.0,
+                # Stable: 800 all years
+                800.0, 800.0, 800.0, 800.0, 800.0,
+            ],
+            pcs_rank = fill(100, 15),
+        )
+
+        with_traj = predict_expected_points(
+            rider_df, SCORING_CAT2;
+            n_sims = 5000,
+            seasons_df = seasons_df,
+            race_year = 2026,
+        )
+
+        without_traj = predict_expected_points(
+            rider_df, SCORING_CAT2;
+            n_sims = 5000,
+            disable_trajectory = true,
+            seasons_df = seasons_df,
+            race_year = 2026,
+        )
+
+        # Trajectory should produce different expected points
+        @test with_traj.shift_trajectory[1] > 0.0   # Rising rider gets positive shift
+        @test with_traj.shift_trajectory[2] < 0.0   # Declining rider gets negative shift
+        @test with_traj.has_seasons[1] == true
+        @test with_traj.has_seasons[2] == true
+
+        # Disabled trajectory should have zero shifts
+        @test all(without_traj.shift_trajectory .== 0.0)
+    end
+
+    @testset "trajectory handles missing seasons data" begin
+        rider_df = DataFrame(
+            rider = ["A", "B"],
+            team = ["X", "Y"],
+            cost = [10, 10],
+            points = [200.0, 200.0],
+            riderkey = ["a", "b"],
+            oneday = [500, 500],
+            has_pcs_data = [true, true],
+        )
+
+        # No seasons data at all
+        result = predict_expected_points(
+            rider_df, SCORING_CAT2;
+            n_sims = 1000,
+            seasons_df = nothing,
+        )
+        @test all(result.shift_trajectory .== 0.0)
+
+        # Only one season (not enough for trajectory)
+        single_season = DataFrame(
+            riderkey = ["a"],
+            year = [2026],
+            pcs_points = [1000.0],
+            pcs_rank = [50],
+        )
+        result2 = predict_expected_points(
+            rider_df, SCORING_CAT2;
+            n_sims = 1000,
+            seasons_df = single_season,
+            race_year = 2026,
+        )
+        @test result2.shift_trajectory[1] == 0.0
+    end
+
+    @testset "getpcsriderseasons_batch empty input" begin
+        result = getpcsriderseasons_batch(Dict{String,String}())
+        @test nrow(result) == 0
+        @test :year in propertynames(result)
+        @test :pcs_points in propertynames(result)
+        @test :pcs_rank in propertynames(result)
+        @test :riderkey in propertynames(result)
     end
 end
 

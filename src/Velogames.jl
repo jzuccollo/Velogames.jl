@@ -28,7 +28,9 @@ export getvgriders,
     getpcsraceresults,
     getpcsracestartlist,
     getpcsraceform,
-    getpcsracehistory
+    getpcsracehistory,
+    getpcsriderseasons,
+    getpcsriderseasons_batch
 
 # Betfair API
 export betfair_login, betfair_get_market_odds

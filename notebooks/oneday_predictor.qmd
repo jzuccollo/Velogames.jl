@@ -12,9 +12,9 @@ format: html
 using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Race — use get_url_pattern("name") to check available names
-race_name = "laigueglia"
+race_name = "strade"
 race_year = 2026
-racehash = "#TrofeoLaigueglia"  # VG startlist hash filter (leave empty for all riders)
+racehash = "#StradeBianche"  # VG startlist hash filter (leave empty for all riders)
 
 # Optional data sources (leave empty to skip)
 betfair_market_id = ""  # Betfair Exchange market ID from the URL
@@ -28,7 +28,7 @@ qualitative_json_file = ""      # Path to manually saved JSON response file
 n_sims = 1000         # Monte Carlo iterations (more = smoother, slower)
 history_years = 5     # Years of PCS race history to fetch
 risk_aversion = 1.5   # Penalise high-variance riders (0 = risk-neutral, higher = more conservative)
-domestique_discount = 0.3  # Penalise non-leaders proportionally to strength gap (0 = off)
+domestique_discount = 0.5  # Penalise non-leaders proportionally to strength gap (0 = off)
 max_per_team = 0      # Max riders from any single team (0 = no limit)
 
 # Exclusions
@@ -154,6 +154,8 @@ n_odds = count(predicted.has_odds)
 n_oracle = count(predicted.has_oracle)
 n_vg_hist = count(predicted.has_vg_history)
 n_qualitative = count(predicted.has_qualitative)
+n_form = count(predicted.has_form)
+n_seasons = count(predicted.has_seasons)
 pct(n) = round(Int, 100 * n / n_total)
 
 print("""
@@ -164,6 +166,8 @@ print("""
 |--------|----------|--------|
 | PCS specialty ratings | $(n_pcs)/$(n_total) riders ($(pct(n_pcs))%) | Observation |
 | VG season points | $(n_total)/$(n_total) riders (100%) | Always used |
+| PCS form (6 weeks) | $(n_form)/$(n_total) riders ($(pct(n_form))%) | $(n_form > 0 ? "Active" : "No data") |
+| Career trajectory | $(n_seasons)/$(n_total) riders ($(pct(n_seasons))%) | $(n_seasons > 0 ? "Active" : "No data") |
 | PCS race history ($(history_years) yrs) | $(n_history)/$(n_total) riders ($(pct(n_history))%) | $(n_history > 0 ? "Active" : "No matches") |
 | Similar races | $(let sr = get(SIMILAR_RACES, config.pcs_slug, String[]); isempty(sr) ? "None configured" : join(sr, ", "); end) | $(isempty(get(SIMILAR_RACES, config.pcs_slug, String[])) ? "N/A" : "Included with higher variance") |
 | VG race history | $(n_vg_hist)/$(n_total) riders ($(pct(n_vg_hist))%) | $(n_vg_hist > 0 ? "Active" : "No matches") |
@@ -178,8 +182,8 @@ Signals are combined via Bayesian updating from an uninformative prior (mean 0, 
 
 # --- Signal impact ---
 rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["PCS specialty", "VG season points", "PCS race history", "VG race history", "Cycling Oracle", "Qualitative intel", "Betfair odds"]
-shift_cols = [:shift_pcs, :shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_qualitative, :shift_odds]
+signal_names = ["PCS specialty", "VG season points", "PCS form", "Trajectory", "PCS race history", "VG race history", "Cycling Oracle", "Qualitative intel", "Betfair odds"]
+shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_trajectory, :shift_history, :shift_vg_history, :shift_oracle, :shift_qualitative, :shift_odds]
 affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
 

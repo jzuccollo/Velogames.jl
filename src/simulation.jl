@@ -689,6 +689,7 @@ function predict_expected_points(
     vg_history_df::Union{DataFrame,Nothing} = nothing,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
     form_df::Union{DataFrame,Nothing} = nothing,
+    seasons_df::Union{DataFrame,Nothing} = nothing,
     n_sims::Int = 10000,
     race_type::Symbol = :oneday,
     rng::AbstractRNG = Random.default_rng(),
@@ -698,6 +699,7 @@ function predict_expected_points(
     simulation_df::Union{Int,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
+    disable_trajectory::Bool = false,
 )
     df = copy(rider_df)
     n_riders = nrow(df)
@@ -907,31 +909,57 @@ function predict_expected_points(
     end
 
     # --- Compute trajectory scores ---
-    # Trajectory = current PCS z-score minus mean of race history z-scores.
-    # Positive = improving rider (current ability exceeds historical), negative = declining.
-    # Only computed for riders with race history; others get 0 (no update).
+    # Career trajectory from cross-season PCS ranking points: are they on the
+    # up or down? Compare recent seasons (last 1-2 years) to older seasons
+    # (3+ years ago). Riders without multi-season data get 0 (no update).
     trajectory_raw = zeros(n_riders)
-    for i = 1:n_riders
-        key = df.riderkey[i]
-        hist = get(history_lookup, key, Tuple{Float64,Int,Float64}[])
-        if !isempty(hist)
-            hist_mean = mean(h[1] for h in hist)
-            trajectory_raw[i] = pcs_z[i] - hist_mean
+    seasons_lookup = Dict{String,DataFrame}()
+    if seasons_df !== nothing &&
+       :riderkey in propertynames(seasons_df) &&
+       :pcs_points in propertynames(seasons_df) &&
+       :year in propertynames(seasons_df)
+        for g in groupby(seasons_df, :riderkey)
+            seasons_lookup[first(g.riderkey)] = DataFrame(g)
         end
     end
-    # Z-score trajectories across riders who have history
-    has_hist = [!isempty(get(history_lookup, df.riderkey[i], Tuple{Float64,Int,Float64}[])) for i in 1:n_riders]
-    if count(has_hist) > 1
-        traj_vals = trajectory_raw[has_hist]
+
+    has_trajectory = falses(n_riders)
+    for i = 1:n_riders
+        key = df.riderkey[i]
+        rider_seasons = get(seasons_lookup, key, nothing)
+        rider_seasons === nothing && continue
+        nrow(rider_seasons) < 2 && continue
+
+        sorted = sort(rider_seasons, :year, rev = true)
+        # Recent: last 1-2 seasons; older: 3+ years ago
+        recent = filter(r -> r.year >= current_year - 1, sorted)
+        older = filter(r -> r.year <= current_year - 3, sorted)
+
+        nrow(recent) == 0 && continue
+        nrow(older) == 0 && continue
+
+        trajectory_raw[i] = mean(recent.pcs_points) - mean(older.pcs_points)
+        has_trajectory[i] = true
+    end
+
+    # Z-score trajectories across riders who have multi-season data
+    if count(has_trajectory) > 1
+        traj_vals = trajectory_raw[has_trajectory]
         traj_mean = mean(traj_vals)
         traj_std = std(traj_vals)
         if traj_std > 0
             for i in 1:n_riders
-                if has_hist[i]
+                if has_trajectory[i]
                     trajectory_raw[i] = (trajectory_raw[i] - traj_mean) / traj_std
+                else
+                    trajectory_raw[i] = 0.0
                 end
             end
         end
+    end
+
+    if disable_trajectory
+        trajectory_raw .= 0.0
     end
 
     # --- PCS availability (needed for estimation) ---
@@ -1062,6 +1090,7 @@ function predict_expected_points(
     has_oracle = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_qualitative = [haskey(qualitative_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_form = [haskey(form_lookup, df.riderkey[i]) for i = 1:n_riders]
+    has_seasons = [haskey(seasons_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_any_signal = has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle .| has_qualitative .| has_form
 
     # Zero out finish and breakaway points for uninformative riders. Two criteria:
@@ -1110,6 +1139,7 @@ function predict_expected_points(
     df[!, :has_oracle] = has_oracle
     df[!, :has_qualitative] = has_qualitative
     df[!, :has_form] = has_form
+    df[!, :has_seasons] = has_seasons
     df[!, :has_any_signal] = has_any_signal
 
     # --- Per-signal mean shifts (for diagnostics) ---
@@ -1145,6 +1175,7 @@ function predict_expected_points(
     simulation_df::Union{Int,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
+    disable_trajectory::Bool = false,
 )
     predict_expected_points(
         data.rider_df,
@@ -1155,6 +1186,7 @@ function predict_expected_points(
         vg_history_df = data.vg_history_df,
         qualitative_df = data.qualitative_df,
         form_df = data.form_df,
+        seasons_df = data.seasons_df,
         n_sims = n_sims,
         race_type = race_type,
         rng = rng,
@@ -1164,5 +1196,6 @@ function predict_expected_points(
         simulation_df = simulation_df,
         risk_aversion = risk_aversion,
         domestique_discount = domestique_discount,
+        disable_trajectory = disable_trajectory,
     )
 end

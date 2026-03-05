@@ -297,6 +297,129 @@ end
 
 
 """
+## `getpcsriderseasons`
+
+Scrapes year-by-year PCS ranking points from a rider's profile page.
+
+The rider profile page contains a summary table (the second `<table>`) with
+columns for year, PCS points, and PCS ranking. This function extracts that
+table to provide cross-season trajectory data.
+
+Returns a DataFrame with columns:
+
+    * `year` - season year (Int)
+    * `pcs_points` - PCS ranking points for that season (Float64)
+    * `pcs_rank` - PCS ranking position for that season (Int)
+
+# Arguments
+- `pcs_slug` - the PCS rider slug, e.g. `"antonio-tiberi"`
+
+# Keyword Arguments
+- `force_refresh` - bypass the cache and fetch fresh data (default: `false`)
+- `cache_config` - cache configuration (default: `DEFAULT_CACHE`)
+"""
+function getpcsriderseasons(
+    pcs_slug::String;
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
+    pageurl = "https://www.procyclingstats.com/rider/$(pcs_slug)"
+
+    function fetch_seasons(url, params)
+        response = try
+            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+        catch e
+            if e isa HTTP.Exceptions.StatusError && e.status in (400, 403, 404)
+                return DataFrame(year = Int[], pcs_points = Float64[], pcs_rank = Int[])
+            end
+            rethrow()
+        end
+
+        page = parsehtml(String(response.body))
+
+        # The season summary is the second table on the profile page
+        tables = collect(eachmatch(sel"table", page.root))
+        if length(tables) < 2
+            @warn "No season summary table found on $url"
+            return DataFrame(year = Int[], pcs_points = Float64[], pcs_rank = Int[])
+        end
+
+        season_table = tables[2]
+        rows = collect(eachmatch(sel"tr", season_table))
+
+        years = Int[]
+        points = Float64[]
+        ranks = Int[]
+
+        for row in rows
+            cells = collect(eachmatch(sel"td, th", row))
+            length(cells) >= 3 || continue
+
+            cell_texts = [strip(nodeText(c)) for c in cells]
+
+            yr = tryparse(Int, cell_texts[1])
+            yr === nothing && continue
+
+            pts = tryparse(Float64, cell_texts[2])
+            pts === nothing && continue
+
+            rnk = tryparse(Int, cell_texts[3])
+            rnk === nothing && (rnk = UNRANKED_POSITION)
+
+            push!(years, yr)
+            push!(points, pts)
+            push!(ranks, rnk)
+        end
+
+        return DataFrame(year = years, pcs_points = points, pcs_rank = ranks)
+    end
+
+    params = Dict("slug" => pcs_slug)
+    return cached_fetch(
+        fetch_seasons,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
+end
+
+
+"""
+## `getpcsriderseasons_batch`
+
+Batch version — get season-by-season PCS points for multiple riders.
+Returns a single DataFrame with an additional `riderkey` column.
+"""
+function getpcsriderseasons_batch(
+    rider_slugs::Dict{String,String};
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
+    all_dfs = DataFrame[]
+
+    for (riderkey, slug) in rider_slugs
+        try
+            df = getpcsriderseasons(
+                slug;
+                force_refresh = force_refresh,
+                cache_config = cache_config,
+            )
+            if nrow(df) > 0
+                df[!, :riderkey] .= riderkey
+                push!(all_dfs, df)
+            end
+        catch e
+            @warn "Failed to fetch seasons for $riderkey ($slug): $e"
+        end
+    end
+
+    return isempty(all_dfs) ? DataFrame(year = Int[], pcs_points = Float64[], pcs_rank = Int[], riderkey = String[]) :
+           vcat(all_dfs...; cols = :union)
+end
+
+
+"""
 ## `getpcsracehistory`
 
 Convenience function that fetches finishing results for a race across multiple years

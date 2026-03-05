@@ -96,8 +96,8 @@ PCS specialty scores are blended by rider classification: all-rounders weight GC
 
 # --- Signal impact ---
 rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["PCS specialty", "VG season points", "PCS race history", "VG race history", "Cycling Oracle", "Betfair odds"]
-shift_cols = [:shift_pcs, :shift_vg, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+signal_names = ["PCS specialty", "VG season points", "PCS form", "Trajectory", "PCS race history", "VG race history", "Cycling Oracle", "Betfair odds"]
+shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_trajectory, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
 affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
 

@@ -30,6 +30,7 @@ struct RaceData
     vg_history_df::Union{DataFrame,Nothing}
     qualitative_df::Union{DataFrame,Nothing}
     form_df::Union{DataFrame,Nothing}
+    seasons_df::Union{DataFrame,Nothing}
     actual_df::Union{DataFrame,Nothing}
 end
 
