@@ -117,7 +117,8 @@ end
 
 function _extract_rider_slugs(pageurl::String)::Dict{String,String}
     slug_map = Dict{String,String}()
-    response = HTTP.get(pageurl, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+    response =
+        HTTP.get(pageurl, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
     pagehtml = Gumbo.parsehtml(String(response.body))
     for link in eachmatch(Selector("a"), pagehtml.root)
         href = get(link.attributes, "href", "")
@@ -414,8 +415,13 @@ function getpcsriderseasons_batch(
         end
     end
 
-    return isempty(all_dfs) ? DataFrame(year = Int[], pcs_points = Float64[], pcs_rank = Int[], riderkey = String[]) :
-           vcat(all_dfs...; cols = :union)
+    return isempty(all_dfs) ?
+           DataFrame(
+        year = Int[],
+        pcs_points = Float64[],
+        pcs_rank = Int[],
+        riderkey = String[],
+    ) : vcat(all_dfs...; cols = :union)
 end
 
 

@@ -74,25 +74,25 @@ end
 
 """Default Bayesian hyperparameters."""
 const DEFAULT_BAYESIAN_CONFIG = BayesianConfig(
-    2.6,   # pcs_variance: observation variance for PCS specialty signal
-    1.1,   # vg_variance: base observation variance for VG season points
-    2.0,   # form_variance: observation variance for PCS form score
-    3.0,   # trajectory_variance: observation variance for PCS-vs-history trajectory signal
-    2.8,   # hist_base_variance: base variance for race history observations (z-scored scale)
-    1.45,  # hist_decay_rate: additional variance per year of age
-    4.9,   # vg_hist_base_variance: base variance for VG race history
-    0.9,   # vg_hist_decay_rate: additional variance per year for VG history
+    7.9,   # pcs_variance: observation variance for PCS specialty signal
+    1.4,   # vg_variance: base observation variance for VG season points
+    0.9,   # form_variance: observation variance for PCS form score
+    3.5,   # trajectory_variance: observation variance for PCS-vs-history trajectory signal
+    3.0,   # hist_base_variance: base variance for race history observations (z-scored scale)
+    3.2,  # hist_decay_rate: additional variance per year of age
+    4.8,   # vg_hist_base_variance: base variance for VG race history
+    1.3,   # vg_hist_decay_rate: additional variance per year for VG history
     0.5,   # odds_variance: observation variance for betting odds signal
-    1.5,   # oracle_variance: observation variance for Cycling Oracle signal
+    1.0,   # oracle_variance: observation variance for Cycling Oracle signal
     2.5,   # qualitative_base_variance: effective = base / confidence (range 3.1–8.3)
     2.0,   # odds_normalisation: heuristic divisor to scale log-odds to z-score range.
     # With ~150 starters, a 10% favourite produces log(0.1 / 0.0067) ≈ 2.7,
     # which / 2.0 gives ~1.35 — a reasonable "1.35 SD above average" strength signal.
-    0.15,  # signal_correlation: equicorrelation discount for correlated signals.
+    0.1,  # signal_correlation: equicorrelation discount for correlated signals.
     # With n signals at pairwise correlation ρ, effective precision is
     # Στ_i / (1 + ρ(n-1)) instead of Στ_i. Prevents over-concentration of
     # posterior for favourites who have many correlated signal sources.
-    5.0,   # vg_season_penalty: scales vg_variance early in the season when few riders
+    1.3,   # vg_season_penalty: scales vg_variance early in the season when few riders
     # have points. Effective variance = vg_variance * (1 + penalty * (1 - frac_nonzero)).
     # At opening weekend (~10% with points): ~6.6. Late season (~80%): ~2.4.
     100.0, # prior_variance: uninformative prior (SD=10 on z-score scale, not tunable)
@@ -587,8 +587,7 @@ function simulate_vg_points(
     end
 
     std_pts = [n_sims > 1 ? sqrt(m2[i] / (n_sims - 1)) : 0.0 for i = 1:n_riders]
-    downside_std =
-        [n_sims > 1 ? sqrt(m2_down[i] / (n_sims - 1)) : 0.0 for i = 1:n_riders]
+    downside_std = [n_sims > 1 ? sqrt(m2_down[i] / (n_sims - 1)) : 0.0 for i = 1:n_riders]
     return (mean_pts, std_pts, downside_std)
 end
 
@@ -948,7 +947,7 @@ function predict_expected_points(
         traj_mean = mean(traj_vals)
         traj_std = std(traj_vals)
         if traj_std > 0
-            for i in 1:n_riders
+            for i = 1:n_riders
                 if has_trajectory[i]
                     trajectory_raw[i] = (trajectory_raw[i] - traj_mean) / traj_std
                 else
@@ -1091,7 +1090,9 @@ function predict_expected_points(
     has_qualitative = [haskey(qualitative_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_form = [haskey(form_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_seasons = [haskey(seasons_lookup, df.riderkey[i]) for i = 1:n_riders]
-    has_any_signal = has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle .| has_qualitative .| has_form
+    has_any_signal =
+        has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle .|
+        has_qualitative .| has_form
 
     # Zero out finish and breakaway points for uninformative riders. Two criteria:
     # 1. No external signal at all (no PCS specialty, race history, VG history, odds,
@@ -1119,7 +1120,8 @@ function predict_expected_points(
     # absolute expected points. The floor max(E, 1) prevents division by zero and
     # treats near-zero expected riders as having high CV (appropriately penalised).
     # γ=0 recovers pure expected-value optimisation; σ_down=0 recovers E exactly.
-    risk_adjusted = total_evg ./ (1.0 .+ risk_aversion .* downside_std ./ max.(total_evg, 1.0))
+    risk_adjusted =
+        total_evg ./ (1.0 .+ risk_aversion .* downside_std ./ max.(total_evg, 1.0))
 
     # --- Add results to DataFrame ---
     df[!, :strength] = round.(strengths, digits = 3)

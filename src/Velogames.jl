@@ -38,10 +38,12 @@ export betfair_login, betfair_get_market_odds
 
 # Qualitative intelligence
 export get_qualitative_auto,
+    get_qualitative_article,
     load_qualitative_file,
     build_qualitative_prompt,
     parse_qualitative_response,
     fetch_transcript,
+    fetch_article_text,
     QUALITATIVE_ADJUSTMENTS,
     QUALITATIVE_CONFIDENCES
 

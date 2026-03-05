@@ -223,7 +223,10 @@ function _supplement_missing_pcs!(
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
 )
-    specialty_cols = [c for c in [:gc, :tt, :sprint, :climber, :oneday] if c in propertynames(archived_pcs)]
+    specialty_cols = [
+        c for
+        c in [:gc, :tt, :sprint, :climber, :oneday] if c in propertynames(archived_pcs)
+    ]
     isempty(specialty_cols) && return
 
     race_keys = Set(riderdf.riderkey)
@@ -235,7 +238,8 @@ function _supplement_missing_pcs!(
     end
     isempty(missing_keys) && return
 
-    missing_names = String.([r.rider for r in eachrow(riderdf) if r.riderkey in missing_keys])
+    missing_names =
+        String.([r.rider for r in eachrow(riderdf) if r.riderkey in missing_keys])
     isempty(missing_names) && return
 
     @debug "Supplementing $(length(missing_names)) riders with missing archived PCS data"
@@ -296,13 +300,20 @@ function prefetch_race_data(
     rider_names = String.(riderdf.rider)
 
     # Build slug map from startlist (shared by both archive-supplement and fresh-fetch paths)
-    pcs_slug_map = _build_pcs_slug_map(race.pcs_slug, race.year; cache_config, force_refresh)
+    pcs_slug_map =
+        _build_pcs_slug_map(race.pcs_slug, race.year; cache_config, force_refresh)
 
     archived_pcs = load_race_snapshot("pcs_specialty", race.pcs_slug, race.year)
     pcspts = if archived_pcs !== nothing
         @info "Using archived PCS specialty scores for $(race.name) $(race.year)"
         # Supplement riders with all-missing specialty (archive may predate URL fixes)
-        _supplement_missing_pcs!(archived_pcs, riderdf, pcs_slug_map; cache_config, force_refresh)
+        _supplement_missing_pcs!(
+            archived_pcs,
+            riderdf,
+            pcs_slug_map;
+            cache_config,
+            force_refresh,
+        )
         archived_pcs
     else
         @debug "No archived PCS scores for $(race.name) $(race.year) — using current PCS data"
@@ -358,7 +369,17 @@ function prefetch_race_data(
         force_refresh = force_refresh,
     )
 
-    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, nothing, form_df, seasons_df, actual_df)
+    return RaceData(
+        riderdf,
+        race_history_df,
+        odds_df,
+        oracle_df,
+        vg_history_df,
+        nothing,
+        form_df,
+        seasons_df,
+        actual_df,
+    )
 end
 
 """
@@ -556,7 +577,16 @@ function backtest_race(
     cov_2sigma = count(z -> abs(z) <= 2.0, z_scores) / length(z_scores)
 
     # --- Signal shift analysis ---
-    shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_trajectory, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+    shift_cols = [
+        :shift_pcs,
+        :shift_vg,
+        :shift_form,
+        :shift_trajectory,
+        :shift_history,
+        :shift_vg_history,
+        :shift_oracle,
+        :shift_odds,
+    ]
     mean_shifts = Dict{Symbol,Float64}()
     for col in shift_cols
         if col in propertynames(predicted)
@@ -569,10 +599,22 @@ function backtest_race(
     # Build rider-level detail for diagnostic deep dives
     rider_detail_df = if store_rider_details
         detail = copy(metrics_df)
-        detail[!, :predicted_rank] = invperm(sortperm(detail.expected_vg_points, rev=true))
+        detail[!, :predicted_rank] =
+            invperm(sortperm(detail.expected_vg_points, rev = true))
         detail[!, :actual_rank] = invperm(sortperm(detail.position))
         detail[!, :rank_error] = abs.(detail.predicted_rank .- detail.actual_rank)
-        detail[:, [:riderkey, :strength, :expected_vg_points, :position, :predicted_rank, :actual_rank, :rank_error]]
+        detail[
+            :,
+            [
+                :riderkey,
+                :strength,
+                :expected_vg_points,
+                :position,
+                :predicted_rank,
+                :actual_rank,
+                :rank_error,
+            ],
+        ]
     else
         nothing
     end

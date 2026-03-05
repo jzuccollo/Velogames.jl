@@ -200,7 +200,12 @@ function _prepare_rider_data(
                 @info "Got cross-season PCS points for $n_riders_with_seasons riders"
                 if !isempty(config.pcs_slug)
                     try
-                        save_race_snapshot(seasons_df, "pcs_seasons", config.pcs_slug, config.year)
+                        save_race_snapshot(
+                            seasons_df,
+                            "pcs_seasons",
+                            config.pcs_slug,
+                            config.year,
+                        )
                     catch e
                         @debug "Failed to archive PCS seasons data: $e"
                     end
@@ -216,7 +221,11 @@ function _prepare_rider_data(
         odds_df
     elseif !isempty(betfair_market_id)
         try
-            df = getodds(betfair_market_id; cache_config = cache_config, force_refresh = force_refresh)
+            df = getodds(
+                betfair_market_id;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
             if nrow(df) > 0
                 @info "Got Betfair odds for $(nrow(df)) riders"
                 df
@@ -322,7 +331,17 @@ function _prepare_rider_data(
         @warn "No riders matched to race history — historical finishing positions won't inform predictions"
     end
 
-    return RaceData(riderdf, race_history_df, final_odds_df, oracle_df, vg_history_df, qualitative_df, form_df, seasons_df, nothing)
+    return RaceData(
+        riderdf,
+        race_history_df,
+        final_odds_df,
+        oracle_df,
+        vg_history_df,
+        qualitative_df,
+        form_df,
+        seasons_df,
+        nothing,
+    )
 end
 
 

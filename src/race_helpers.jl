@@ -56,7 +56,13 @@ const CLASSICS_RACES_2026 = [
         "trofeo-laigueglia",
         ["gran-piemonte", "coppa-sabatini"],
     ),
-    RaceInfo("Strade Bianche", "2026-03-07", 2, "strade-bianche", ["milano-sanremo"]),
+    RaceInfo(
+        "Strade Bianche",
+        "2026-03-07",
+        2,
+        "strade-bianche",
+        ["il-lombardia", "liege-bastogne-liege", "amstel-gold-race"],
+    ),
     RaceInfo(
         "Danilith Nokere Koerse",
         "2026-03-18",

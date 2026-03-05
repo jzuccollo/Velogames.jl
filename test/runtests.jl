@@ -437,19 +437,67 @@ end
     default_result = estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5)
     @test default_result.mean > 0.0
 
-    custom_config = BayesianConfig(0.5, 0.5, 2.0, 3.0, 1.0, 0.5, 1.5, 0.5, 0.5, 1.5, 2.5, 2.0, 0.0, 5.0, 100.0)
+    custom_config = BayesianConfig(
+        0.5,
+        0.5,
+        2.0,
+        3.0,
+        1.0,
+        0.5,
+        1.5,
+        0.5,
+        0.5,
+        1.5,
+        2.5,
+        2.0,
+        0.0,
+        5.0,
+        100.0,
+    )
     custom_result =
         estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5, config = custom_config)
     @test custom_result.mean != default_result.mean
 
     @test DEFAULT_BAYESIAN_CONFIG isa BayesianConfig
-    @test DEFAULT_BAYESIAN_CONFIG.pcs_variance == 2.6
-    @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.15
+    @test DEFAULT_BAYESIAN_CONFIG.pcs_variance == 7.9
+    @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.1
     @test DEFAULT_BAYESIAN_CONFIG.prior_variance == 100.0
 
     # Equicorrelation discount: more signals → wider posterior with ρ > 0
-    no_corr = BayesianConfig(5.0, 1.4, 2.0, 3.0, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.0, 5.0, 100.0)
-    with_corr = BayesianConfig(5.0, 1.4, 2.0, 3.0, 3.0, 1.5, 3.0, 0.65, 0.5, 1.5, 2.5, 2.0, 0.4, 5.0, 100.0)
+    no_corr = BayesianConfig(
+        5.0,
+        1.4,
+        2.0,
+        3.0,
+        3.0,
+        1.5,
+        3.0,
+        0.65,
+        0.5,
+        1.5,
+        2.5,
+        2.0,
+        0.0,
+        5.0,
+        100.0,
+    )
+    with_corr = BayesianConfig(
+        5.0,
+        1.4,
+        2.0,
+        3.0,
+        3.0,
+        1.5,
+        3.0,
+        0.65,
+        0.5,
+        1.5,
+        2.5,
+        2.0,
+        0.4,
+        5.0,
+        100.0,
+    )
     r_nocorr = estimate_rider_strength(
         pcs_score = 1.0,
         vg_points = 0.8,
@@ -876,7 +924,8 @@ end
     @test all(mean_brk .>= mean_pts .- 0.01)  # breakaway adds points (tolerance for float)
 
     # Stage race scoring has no breakaway points
-    mean_stage, _, _ = simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = false)
+    mean_stage, _, _ =
+        simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = false)
     mean_stage_brk, _, _ =
         simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = true)
     # SCORING_STAGE.breakaway_points == 0, so include_breakaway has no effect
@@ -957,9 +1006,8 @@ end
         oneday = [2000, 800, 0],
         has_pcs_data = [true, true, false],
     )
-    result = predict_expected_points(
-        rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 1.0,
-    )
+    result =
+        predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 1.0)
     # Ratio formula is always non-negative
     @test all(result.risk_adjusted_vg_points .>= 0.0)
     # Known riders should have higher risk-adjusted points than the unknown rider
@@ -1161,24 +1209,38 @@ end
             year = repeat([2022, 2023, 2024, 2025, 2026], 3),
             pcs_points = [
                 # Rising: 500 -> 600 -> 800 -> 1200 -> 1500
-                500.0, 600.0, 800.0, 1200.0, 1500.0,
+                500.0,
+                600.0,
+                800.0,
+                1200.0,
+                1500.0,
                 # Declining: 1500 -> 1200 -> 800 -> 600 -> 500
-                1500.0, 1200.0, 800.0, 600.0, 500.0,
+                1500.0,
+                1200.0,
+                800.0,
+                600.0,
+                500.0,
                 # Stable: 800 all years
-                800.0, 800.0, 800.0, 800.0, 800.0,
+                800.0,
+                800.0,
+                800.0,
+                800.0,
+                800.0,
             ],
             pcs_rank = fill(100, 15),
         )
 
         with_traj = predict_expected_points(
-            rider_df, SCORING_CAT2;
+            rider_df,
+            SCORING_CAT2;
             n_sims = 5000,
             seasons_df = seasons_df,
             race_year = 2026,
         )
 
         without_traj = predict_expected_points(
-            rider_df, SCORING_CAT2;
+            rider_df,
+            SCORING_CAT2;
             n_sims = 5000,
             disable_trajectory = true,
             seasons_df = seasons_df,
@@ -1208,7 +1270,8 @@ end
 
         # No seasons data at all
         result = predict_expected_points(
-            rider_df, SCORING_CAT2;
+            rider_df,
+            SCORING_CAT2;
             n_sims = 1000,
             seasons_df = nothing,
         )
@@ -1222,7 +1285,8 @@ end
             pcs_rank = [50],
         )
         result2 = predict_expected_points(
-            rider_df, SCORING_CAT2;
+            rider_df,
+            SCORING_CAT2;
             n_sims = 1000,
             seasons_df = single_season,
             race_year = 2026,
@@ -1492,4 +1556,30 @@ end
     @test QUALITATIVE_ADJUSTMENTS["neutral"] == 0.0
     @test QUALITATIVE_CONFIDENCES["high"] == 0.8
     @test QUALITATIVE_CONFIDENCES["low"] == 0.3
+end
+
+@testset "fetch_article_text HTML parsing" begin
+    # Verifies that Gumbo tag symbols are converted to strings before lowercasing
+    # (Gumbo.tag returns a Symbol, not a String)
+    import Gumbo
+    html = """<html><body><p>This is article content that is long enough to keep.</p>
+              <script>var x = 1;</script><nav>skip this</nav></body></html>"""
+    page = Gumbo.parsehtml(html)
+    texts = String[]
+    function collect_text(node)
+        if isa(node, Gumbo.HTMLElement)
+            tag = lowercase(string(Gumbo.tag(node)))
+            tag in ("script", "style", "nav", "footer", "header", "aside") && return
+            for child in Gumbo.children(node)
+                collect_text(child)
+            end
+        elseif isa(node, Gumbo.HTMLText)
+            t = strip(node.text)
+            length(t) > 20 && push!(texts, t)
+        end
+    end
+    @test_nowarn collect_text(page.root)
+    @test any(contains(t, "article content") for t in texts)
+    @test !any(contains(t, "skip this") for t in texts)
+    @test !any(contains(t, "var x") for t in texts)
 end

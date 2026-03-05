@@ -16,14 +16,10 @@ const QUALITATIVE_ADJUSTMENTS = Dict(
 )
 
 # Confidence level mapping
-const QUALITATIVE_CONFIDENCES = Dict(
-    "high" => 0.8,
-    "medium" => 0.5,
-    "low" => 0.3,
-)
+const QUALITATIVE_CONFIDENCES = Dict("high" => 0.8, "medium" => 0.5, "low" => 0.3)
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-const ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
 
 """
@@ -212,6 +208,60 @@ end
 
 
 """
+    fetch_article_text(url) -> String
+
+Fetch a web article and extract its main text content. Strips navigation,
+scripts, styles, and other boilerplate, returning the article body as plain text.
+"""
+function fetch_article_text(url::String)
+    response = HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+    page = Gumbo.parsehtml(String(response.body))
+
+    # Remove script and style nodes by collecting only text-bearing nodes
+    texts = String[]
+    function collect_text(node)
+        if isa(node, Gumbo.HTMLElement)
+            tag = lowercase(string(Gumbo.tag(node)))
+            tag in ("script", "style", "nav", "footer", "header", "aside") && return
+            for child in Gumbo.children(node)
+                collect_text(child)
+            end
+        elseif isa(node, Gumbo.HTMLText)
+            t = strip(node.text)
+            length(t) > 20 && push!(texts, t)  # skip nav fragments and whitespace
+        end
+    end
+    collect_text(page.root)
+
+    return join(texts, " ")
+end
+
+
+"""
+    get_qualitative_article(article_url, riders, race_name, race_date) -> DataFrame
+
+Full automated pipeline: fetch article text → extract intelligence
+via Claude API → parse into DataFrame.
+"""
+function get_qualitative_article(
+    article_url::String,
+    riders::Vector{String},
+    race_name::String,
+    race_date::String,
+)
+    @info "Fetching article from $article_url..."
+    text = fetch_article_text(article_url)
+    @info "Got $(length(text)) characters of article text"
+
+    prompt = build_qualitative_prompt(riders, race_name, race_date; transcript = text)
+    @info "Calling Claude API for qualitative extraction..."
+    response_text = extract_qualitative_claude(prompt)
+    @info "Parsing qualitative response..."
+    return parse_qualitative_response(response_text)
+end
+
+
+"""
     get_qualitative_auto(youtube_url, riders, race_name, race_date) -> DataFrame
 
 Full automated pipeline: fetch YouTube transcript → extract intelligence
@@ -227,8 +277,7 @@ function get_qualitative_auto(
     transcript = fetch_transcript(youtube_url)
     @info "Got $(length(transcript)) characters of transcript"
 
-    prompt =
-        build_qualitative_prompt(riders, race_name, race_date; transcript = transcript)
+    prompt = build_qualitative_prompt(riders, race_name, race_date; transcript = transcript)
     @info "Calling Claude API for qualitative extraction..."
     response_text = extract_qualitative_claude(prompt)
     @info "Parsing qualitative response..."
