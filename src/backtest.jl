@@ -494,6 +494,8 @@ function backtest_race(
 
     # --- Run prediction pipeline ---
     scoring = get_scoring(race.category > 0 ? race.category : 2)
+    ri = _find_race_by_slug(race.pcs_slug)
+    race_distance_km = ri !== nothing ? ri.total_distance_km : 0.0
     predicted = predict_expected_points(
         riderdf,
         scoring;
@@ -513,6 +515,7 @@ function backtest_race(
         risk_aversion = risk_aversion,
         domestique_discount = domestique_discount,
         disable_trajectory = !(:trajectory in signals),
+        total_distance_km = race_distance_km,
     )
 
     # --- Compute rank-based metrics ---

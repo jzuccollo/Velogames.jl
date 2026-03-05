@@ -13,7 +13,7 @@ standard URL patterns and configurations for common races.
     RaceInfo
 
 Metadata for a one-day classics race: name, template date, scoring category,
-PCS slug, and terrain-similar races.
+PCS slug, terrain-similar races, and total race distance in km.
 """
 struct RaceInfo
     name::String
@@ -21,13 +21,16 @@ struct RaceInfo
     category::Int
     pcs_slug::String
     similar_races::Vector{String}
+    total_distance_km::Float64
 end
 
-# Convenience constructor without similar_races (defaults to empty)
+# Convenience constructors
+RaceInfo(name, date, category, pcs_slug, similar_races) =
+    RaceInfo(name, date, category, pcs_slug, similar_races, 0.0)
 RaceInfo(name, date, category, pcs_slug) =
-    RaceInfo(name, date, category, pcs_slug, String[])
+    RaceInfo(name, date, category, pcs_slug, String[], 0.0)
 
-"""Complete 2026 Sixes Classics race schedule with categories, PCS slugs, and terrain similarity."""
+"""Complete 2026 Sixes Classics race schedule with categories, PCS slugs, terrain similarity, and distances."""
 const CLASSICS_RACES_2026 = [
     # Flemish hilly (bergs + short cobbled sections)
     RaceInfo(
@@ -41,6 +44,7 @@ const CLASSICS_RACES_2026 = [
             "dwars-door-vlaanderen",
             "classic-brugge-de-panne",
         ],
+        200.0,
     ),
     RaceInfo(
         "Kuurne - Brussel - Kuurne",
@@ -48,6 +52,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "kuurne-brussel-kuurne",
         ["scheldeprijs", "classic-brugge-de-panne", "paris-tours", "eschborn-frankfurt"],
+        197.0,
     ),
     RaceInfo(
         "Trofeo Laigueglia",
@@ -55,6 +60,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "trofeo-laigueglia",
         ["gran-piemonte", "coppa-sabatini"],
+        204.0,
     ),
     RaceInfo(
         "Strade Bianche",
@@ -62,6 +68,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "strade-bianche",
         ["il-lombardia", "liege-bastogne-liege", "amstel-gold-race"],
+        215.0,
     ),
     RaceInfo(
         "Danilith Nokere Koerse",
@@ -69,14 +76,23 @@ const CLASSICS_RACES_2026 = [
         3,
         "nokere-koerse",
         ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "scheldeprijs"],
+        192.0,
     ),
-    RaceInfo("Milano-Sanremo", "2026-03-21", 1, "milano-sanremo", ["strade-bianche"]),
+    RaceInfo(
+        "Milano-Sanremo",
+        "2026-03-21",
+        1,
+        "milano-sanremo",
+        ["strade-bianche"],
+        294.0,
+    ),
     RaceInfo(
         "Ronde Van Brugge",
         "2026-03-25",
         2,
         "classic-brugge-de-panne",
         ["gent-wevelgem", "omloop-het-nieuwsblad", "kuurne-brussel-kuurne"],
+        201.0,
     ),
     RaceInfo(
         "E3 Saxo Classic",
@@ -89,6 +105,7 @@ const CLASSICS_RACES_2026 = [
             "dwars-door-vlaanderen",
             "gent-wevelgem",
         ],
+        204.0,
     ),
     RaceInfo(
         "In Flanders Fields - From Middelkerke to Wevelgem",
@@ -101,6 +118,7 @@ const CLASSICS_RACES_2026 = [
             "classic-brugge-de-panne",
             "dwars-door-vlaanderen",
         ],
+        253.0,
     ),
     RaceInfo(
         "Dwars door Vlaanderen",
@@ -108,6 +126,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "dwars-door-vlaanderen",
         ["e3-harelbeke", "omloop-het-nieuwsblad", "ronde-van-vlaanderen", "gent-wevelgem"],
+        183.0,
     ),
     RaceInfo(
         "Ronde van Vlaanderen",
@@ -115,6 +134,7 @@ const CLASSICS_RACES_2026 = [
         1,
         "ronde-van-vlaanderen",
         ["e3-harelbeke", "dwars-door-vlaanderen", "omloop-het-nieuwsblad"],
+        273.0,
     ),
     RaceInfo(
         "Scheldeprijs",
@@ -122,6 +142,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "scheldeprijs",
         ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "eschborn-frankfurt"],
+        198.0,
     ),
     RaceInfo(
         "Paris-Roubaix",
@@ -129,6 +150,7 @@ const CLASSICS_RACES_2026 = [
         1,
         "paris-roubaix",
         ["e3-harelbeke", "ronde-van-vlaanderen", "dwars-door-vlaanderen"],
+        257.0,
     ),
     # Ardennes hilly (steep punchy climbs)
     RaceInfo(
@@ -137,6 +159,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "brabantse-pijl",
         ["la-fleche-wallonne", "amstel-gold-race", "liege-bastogne-liege"],
+        203.0,
     ),
     RaceInfo(
         "Amstel Gold Race",
@@ -144,6 +167,7 @@ const CLASSICS_RACES_2026 = [
         1,
         "amstel-gold-race",
         ["la-fleche-wallonne", "liege-bastogne-liege", "brabantse-pijl"],
+        253.0,
     ),
     RaceInfo(
         "La Fleche Wallonne",
@@ -151,6 +175,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "la-fleche-wallonne",
         ["liege-bastogne-liege", "amstel-gold-race", "brabantse-pijl"],
+        202.0,
     ),
     RaceInfo(
         "Liege-Bastogne-Liege",
@@ -158,6 +183,7 @@ const CLASSICS_RACES_2026 = [
         1,
         "liege-bastogne-liege",
         ["la-fleche-wallonne", "amstel-gold-race", "brabantse-pijl"],
+        257.0,
     ),
     RaceInfo(
         "Eschborn-Frankfurt",
@@ -165,6 +191,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "eschborn-frankfurt",
         ["kuurne-brussel-kuurne", "scheldeprijs", "cyclassics-hamburg"],
+        238.0,
     ),
     # French regional
     RaceInfo(
@@ -173,6 +200,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "gp-de-plumelec",
         ["tro-bro-leon", "quatre-jours-de-dunkerque"],
+        175.0,
     ),
     RaceInfo(
         "Tro-Bro Leon",
@@ -180,6 +208,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "tro-bro-leon",
         ["gp-de-plumelec", "quatre-jours-de-dunkerque"],
+        197.0,
     ),
     RaceInfo(
         "Classique Dunkerque",
@@ -187,6 +216,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "quatre-jours-de-dunkerque",
         ["gp-de-plumelec", "circuit-franco-belge"],
+        200.0,
     ),
     # Belgian hilly
     RaceInfo(
@@ -195,6 +225,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "brussels-cycling-classic",
         ["dwars-door-het-hageland", "omloop-het-nieuwsblad"],
+        201.0,
     ),
     RaceInfo(
         "Circuit Franco-Belge",
@@ -202,6 +233,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "circuit-franco-belge",
         ["quatre-jours-de-dunkerque", "kuurne-brussel-kuurne"],
+        185.0,
     ),
     RaceInfo(
         "Duracell Dwars door het Hageland",
@@ -209,6 +241,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "dwars-door-het-hageland",
         ["brussels-cycling-classic", "classic-brugge-de-panne"],
+        205.0,
     ),
     # Flat sprint
     RaceInfo(
@@ -217,6 +250,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "copenhagen-sprint",
         ["scheldeprijs", "kuurne-brussel-kuurne"],
+        178.0,
     ),
     # Punchy hilly (mixed terrain, moderate climbs)
     RaceInfo(
@@ -225,6 +259,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "san-sebastian",
         ["bretagne-classic", "gp-quebec", "gp-montreal"],
+        218.0,
     ),
     RaceInfo(
         "ADAC Cyclassics Hamburg",
@@ -232,6 +267,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "cyclassics-hamburg",
         ["eschborn-frankfurt", "gp-montreal"],
+        231.0,
     ),
     RaceInfo(
         "Bretagne Classic - CIC",
@@ -239,6 +275,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "bretagne-classic",
         ["san-sebastian", "gp-quebec"],
+        249.0,
     ),
     RaceInfo(
         "GP Industria & Artigianato",
@@ -246,6 +283,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "gp-industria-e-artigianato-di-larciano",
         ["coppa-sabatini", "coppa-bernocchi"],
+        185.0,
     ),
     RaceInfo(
         "Coppa Sabatini",
@@ -253,6 +291,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "coppa-sabatini",
         ["giro-dell-emilia", "trofeo-laigueglia"],
+        197.0,
     ),
     RaceInfo(
         "Grand Prix Cycliste de Quebec",
@@ -260,6 +299,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "gp-quebec",
         ["gp-montreal", "san-sebastian", "bretagne-classic"],
+        203.0,
     ),
     RaceInfo(
         "Grand Prix Cycliste de Montreal",
@@ -267,6 +307,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "gp-montreal",
         ["gp-quebec", "san-sebastian", "cyclassics-hamburg"],
+        224.0,
     ),
     RaceInfo(
         "Lotto Grand Prix de Wallonie",
@@ -274,6 +315,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "gp-de-wallonie",
         ["la-fleche-wallonne", "brabantse-pijl"],
+        199.0,
     ),
     RaceInfo(
         "SUPER 8 Classic",
@@ -281,12 +323,15 @@ const CLASSICS_RACES_2026 = [
         3,
         "super-8-classic",
         ["brussels-cycling-classic", "dwars-door-het-hageland"],
+        181.0,
     ),
     RaceInfo(
         "World Championships - Elite Road Race",
         "2026-09-27",
         1,
         "world-championship",
+        String[],
+        270.0,
     ),
     # Italian/European autumn classics
     RaceInfo(
@@ -295,6 +340,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "giro-dell-emilia",
         ["il-lombardia", "tre-valli-varesine", "coppa-sabatini"],
+        197.0,
     ),
     RaceInfo(
         "European Championships - Elite Road Race",
@@ -302,6 +348,7 @@ const CLASSICS_RACES_2026 = [
         2,
         "uec-road-european-championships-me",
         ["world-championship", "gp-quebec", "gp-montreal"],
+        230.0,
     ),
     RaceInfo(
         "Coppa Bernocchi",
@@ -309,6 +356,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "coppa-bernocchi",
         ["tre-valli-varesine", "gran-piemonte"],
+        180.0,
     ),
     RaceInfo(
         "Tre Valli Varesine",
@@ -316,6 +364,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "tre-valli-varesine",
         ["giro-dell-emilia", "il-lombardia", "gran-piemonte"],
+        193.0,
     ),
     RaceInfo(
         "Gran Piemonte",
@@ -323,6 +372,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "gran-piemonte",
         ["tre-valli-varesine", "giro-dell-emilia"],
+        197.0,
     ),
     RaceInfo(
         "Il Lombardia",
@@ -330,6 +380,7 @@ const CLASSICS_RACES_2026 = [
         1,
         "il-lombardia",
         ["giro-dell-emilia", "tre-valli-varesine", "gran-piemonte"],
+        247.0,
     ),
     RaceInfo(
         "Paris - Tours Elite",
@@ -337,6 +388,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "paris-tours",
         ["kuurne-brussel-kuurne", "eschborn-frankfurt", "scheldeprijs"],
+        234.0,
     ),
     RaceInfo(
         "Giro del Veneto",
@@ -344,6 +396,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "giro-del-veneto",
         ["veneto-classic", "gran-piemonte"],
+        183.0,
     ),
     RaceInfo(
         "Veneto Classic",
@@ -351,6 +404,7 @@ const CLASSICS_RACES_2026 = [
         3,
         "veneto-classic",
         ["giro-del-veneto", "gran-piemonte"],
+        174.0,
     ),
 ]
 
@@ -394,6 +448,7 @@ Fields:
 - `cache`: Cache configuration
 - `category`: VG scoring category (1, 2, or 3). 0 = unknown/not applicable.
 - `pcs_slug`: PCS race identifier for historical lookups. Empty string if unknown.
+- `total_distance_km`: Total race distance in km (used for breakaway sector calculation). 0.0 if unknown.
 """
 struct RaceConfig
     name::String
@@ -405,6 +460,7 @@ struct RaceConfig
     cache::CacheConfig
     category::Int
     pcs_slug::String
+    total_distance_km::Float64
 end
 
 """
@@ -459,6 +515,8 @@ function setup_race(
     end
     team_size = race_type == :stage ? 9 : 6
 
+    total_distance_km = pattern.total_distance_km
+
     # Create and display config
     config = RaceConfig(
         race_name,
@@ -470,6 +528,7 @@ function setup_race(
         cache_config,
         category,
         pcs_slug,
+        total_distance_km,
     )
 
     println("Race Setup: $(titlecase(race_name)) $year")
@@ -587,8 +646,8 @@ const _CLASSICS_ALIASES = Dict{String,String}(
 
 Get the URL pattern for a given race name.
 
-Returns a NamedTuple with (slug, template, category, pcs_slug) where template
-uses {year} placeholder. Looks up classics aliases against the canonical
+Returns a NamedTuple with (slug, template, category, pcs_slug, total_distance_km) where
+template uses {year} placeholder. Looks up classics aliases against the canonical
 race schedule; grand tours have their own URL patterns.
 """
 function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()))
@@ -597,7 +656,13 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
     # Grand tours have their own URL templates
     if haskey(_GRAND_TOUR_PATTERNS, race_lower)
         gt = _GRAND_TOUR_PATTERNS[race_lower]
-        return (slug = gt.slug, template = gt.template, category = 0, pcs_slug = "")
+        return (
+            slug = gt.slug,
+            template = gt.template,
+            category = 0,
+            pcs_slug = "",
+            total_distance_km = 0.0,
+        )
     end
 
     slug = vg_classics_slug(year)
@@ -613,6 +678,7 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
                 template = template,
                 category = ri.category,
                 pcs_slug = ri.pcs_slug,
+                total_distance_km = ri.total_distance_km,
             )
         end
     end
@@ -625,6 +691,7 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
             template = template,
             category = ri.category,
             pcs_slug = ri.pcs_slug,
+            total_distance_km = ri.total_distance_km,
         )
     end
 
@@ -644,6 +711,7 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
         template = "https://www.velogames.com/$sanitized/{year}/riders.php",
         category = 0,
         pcs_slug = "",
+        total_distance_km = 0.0,
     )
 end
 

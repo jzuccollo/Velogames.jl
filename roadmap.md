@@ -92,6 +92,30 @@ The model treats riders independently but VG assists create team-level correlati
 
 Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see `_breakaway_sectors()` in `src/simulation.jl`). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this. The heuristic is a small fraction of total expected points for most riders, so the impact is limited.
 
+### Uncertainty-as-upside bias (Jensen's inequality)
+
+The Monte Carlo simulation inflates expected VG points for riders with high posterior uncertainty. The mechanism is Jensen's inequality applied to the scoring floor: positions 31+ score 0, so the payoff function is convex around the 30th-place cutoff. A mean-preserving spread in the position distribution increases expected points because upside (scoring when finishing top 30) is captured whilst downside (finishing 31st vs 100th) is capped at zero. This is mathematically identical to the option value of volatility.
+
+**Observed symptoms:** Riders like Turconi (strength 0.3, uncertainty 1.5) and Iacchi (strength 0.1, uncertainty 1.5) receive ~90-100 expected VG points despite being unlikely to finish top 30 in most simulations. Their high uncertainty means they occasionally draw very high noisy strengths, and the right-skewed scoring (480 pts for 1st, 9 pts for 30th, 0 for 31st+) makes these rare good outcomes dominate the expectation. The risk-adjusted metric (`E / (1 + γ * σ_down / E)`) partially compensates but not enough — these riders still rank in the top 10 by risk-adjusted score at their price points.
+
+**Why this happens in the Bayesian model:** Riders with few informative signals have posterior variance reduced from the prior (100) but not by much. A rider with PCS data and one or two history results might reach uncertainty ~1.5 (variance ~2.25), which is "informed" enough to pass the uninformative filter (threshold: uncertainty > 9.0) but still wide enough to generate substantial option value.
+
+**The field distribution amplifies the effect:** In a typical one-day classic, only 5-10 riders have strength above 1.0. The remaining ~160 riders cluster between -0.5 and 0.4 with uncertainty 1.0-1.5. This compressed field means a rider at strength 0.3 is already near the median, and high uncertainty gives them a meaningful probability of cracking the top 30 in any given simulation.
+
+**Potential solutions from the literature:**
+
+1. **Bayesian shrinkage** (Jorion 1986, Black & Litterman 1992): scale the posterior mean toward zero in proportion to remaining uncertainty. The standard James-Stein shrinkage factor is `strength × (1 - posterior_variance / prior_variance)`. However, with prior variance 100 and posterior variance ~2.25, the shrinkage factor is ~0.98 — too mild to help.
+
+2. **Uncertainty cap**: limit posterior uncertainty to the field median or a fixed ceiling (e.g., 1.0). Rationale: "ignorance about a rider should not count as upside." Simple and directly addresses the mechanism, but the threshold is arbitrary.
+
+3. **Resampled optimisation** (used by SaberSim, Stokastic in DFS): run the optimiser many times, each time drawing a single set of strengths from the posterior and simulating a race. The team appearing most frequently across optimisation runs is robust to estimation noise. High-uncertainty riders only appear in optimal teams when they happen to draw high strength, so they appear less often than riders with reliable expected value. This is the most theoretically principled approach and naturally handles the convex payoff without arbitrary thresholds.
+
+4. **Explicit uncertainty penalty**: subtract `k × uncertainty` from expected points before optimisation. Crude but effective; common in practical fantasy optimisers.
+
+5. **Tighten the uninformative filter**: lower the threshold from uncertainty > 9.0 to something like the 75th percentile of field uncertainty.
+
+**Current status:** Investigating resampled optimisation (option 3) as the primary fix.
+
 ### Stage race scoring calibration
 
 `SCORING_STAGE` maps overall GC position to approximate total VG points accumulated across the race. Currently calibrated by rough inspection of historical VG grand tour results (winners typically 3000-4000 points, top 10 around 1000-2000). These values have not yet been validated against actual historical VG grand tour data. Systematic calibration against multiple historical VG stage race results would improve this.

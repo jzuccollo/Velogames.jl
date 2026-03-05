@@ -59,21 +59,71 @@ end
 
 Download a web page and extract all HTML tables as DataFrames.
 This is the lowest-level scraping function, shared by both VG and PCS paths.
+
+Uses HTTP.jl + Gumbo for parsing. Column names come from `<th>` elements in
+the first row; if none are present, the first `<td>` row is used as headers
+(common on VG pages). Duplicate column names are deduplicated with a suffix.
 """
 function scrape_html_tables(pageurl::String)::Vector{DataFrame}
-    page = try
-        TableScraper.scrape_tables(pageurl)
+    response = try
+        HTTP.get(pageurl, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
     catch e
-        # TableScraper has a bug: calls `raise` (Python) instead of `error` on HTTP failure
-        error("Failed to scrape tables from $pageurl: $e")
+        error("Failed to fetch $pageurl: $e")
     end
-    if isempty(page)
-        error(
-            "No tables found at: $pageurl. " *
-            "Check the URL in your browser to verify it loads correctly.",
-        )
+    page = Gumbo.parsehtml(String(response.body))
+    raw_tables = collect(eachmatch(sel"table", page.root))
+    isempty(raw_tables) && error(
+        "No tables found at: $pageurl. " *
+        "Check the URL in your browser to verify it loads correctly.",
+    )
+
+    result = DataFrame[]
+    for table in raw_tables
+        rows = collect(eachmatch(sel"tr", table))
+        isempty(rows) && continue
+
+        # Use <th> in first row for headers; fall back to first-row <td> values
+        # (VG pages use <td> throughout, including the header row)
+        first_row_ths = collect(eachmatch(sel"th", rows[1]))
+        if !isempty(first_row_ths)
+            header_cells = first_row_ths
+            data_rows = rows[2:end]
+        else
+            first_row_tds = collect(eachmatch(sel"td", rows[1]))
+            isempty(first_row_tds) && continue
+            header_cells = first_row_tds
+            data_rows = rows[2:end]
+        end
+
+        # Build deduplicated column names
+        raw_headers = [strip(nodeText(c)) for c in header_cells]
+        col_names = String[]
+        seen = Dict{String,Int}()
+        for h in raw_headers
+            name = isempty(h) ? "col" : h
+            count = get(seen, name, 0)
+            seen[name] = count + 1
+            push!(col_names, count == 0 ? name : "$(name)_$(count + 1)")
+        end
+
+        n_cols = length(col_names)
+        columns = [String[] for _ = 1:n_cols]
+        for row in data_rows
+            cells = collect(eachmatch(sel"td", row))
+            for j = 1:n_cols
+                push!(columns[j], j <= length(cells) ? strip(nodeText(cells[j])) : "")
+            end
+        end
+
+        isempty(columns[1]) && continue
+        push!(result, DataFrame(col_names .=> columns))
     end
-    return [DataFrame(tbl) for tbl in page]
+
+    isempty(result) && error(
+        "No tables found at: $pageurl. " *
+        "Check the URL in your browser to verify it loads correctly.",
+    )
+    return result
 end
 
 """

@@ -426,6 +426,7 @@ function solve_oneday(
         race_year = config.year,
         risk_aversion = risk_aversion,
         domestique_discount = domestique_discount,
+        total_distance_km = config.total_distance_km,
     )
 
     # --- 8. Optimise team selection ---

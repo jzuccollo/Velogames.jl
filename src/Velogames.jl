@@ -1,17 +1,6 @@
 module Velogames
 
-using HTTP,
-    DataFrames,
-    TableScraper,
-    Cascadia,
-    Gumbo,
-    Unicode,
-    HiGHS,
-    JuMP,
-    Feather,
-    Dates,
-    JSON3,
-    SHA
+using HTTP, DataFrames, Cascadia, Gumbo, Unicode, HiGHS, JuMP, Feather, Dates, JSON3, SHA
 using Random, Statistics
 
 # Core data retrieval
@@ -96,7 +85,8 @@ export BayesianConfig,
     position_probabilities,
     expected_vg_points,
     simulate_vg_points,
-    compute_stage_race_pcs_score
+    compute_stage_race_pcs_score,
+    breakaway_sectors_from_km
 
 # Backtesting
 export BacktestRace,

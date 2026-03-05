@@ -10,10 +10,13 @@ column resolution — when PCS renames a column, add one string to the alias lis
 
 Downloads and parses the finishing results for a specific race edition from the PCS website.
 
-URL pattern: `https://www.procyclingstats.com/race/{slug}/{year}`
+URL pattern: `https://www.procyclingstats.com/race/{slug}/{year}/result`
 
-Uses `scrape_pcs_table(url; min_rows=20)` to skip the 10-row summary table and
-get the full results. Uses `find_column()` with alias lists for resilient column matching.
+Uses `scrape_pcs_table` + `find_column` to parse the static HTML results table.
+The `div.svg_shield` breakaway indicator is only present in JavaScript-rendered HTML
+(browser), not in raw HTTP responses, so `in_breakaway` is always `false` and
+`breakaway_km` is always `missing`. The empirical breakaway model in
+`predict_expected_points` falls back to field-average rates as a result.
 
 Returns a DataFrame with the following columns:
 
@@ -21,6 +24,8 @@ Returns a DataFrame with the following columns:
     * `rider` - rider name
     * `team` - team name
     * `riderkey` - normalised rider key created via `createkey(rider)`
+    * `in_breakaway` - true if rider was in a breakaway for >50% of race distance
+    * `breakaway_km` - km spent in the break (Union{Float64,Missing}; missing if shield has no title)
 
 # Arguments
 - `pcs_race_slug` - the PCS race slug, e.g. `"tour-de-france"` or `"liege-bastogne-liege"`
@@ -32,7 +37,7 @@ Returns a DataFrame with the following columns:
 
 # Example
 ```julia
-getpcsraceresults("tour-de-france", 2023)
+getpcsraceresults("trofeo-laigueglia", 2026)
 ```
 """
 function getpcsraceresults(
@@ -42,66 +47,65 @@ function getpcsraceresults(
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
 
-    # The main race page only shows a 10-row summary; full results are at /result
     pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/result"
 
     function fetch_race_results(url, params)
-        # Use min_rows=20 to skip any small summary/nav tables
-        df = scrape_pcs_table(url; min_rows = 20)
+        # Parse directly with Gumbo to extract rider names from <a href="rider/..."> links.
+        # The PCS results table concatenates rider name + team name in one cell (full cell text),
+        # so scrape_pcs_table gives wrong rider names; the link text is always the clean rider name.
+        # div.svg_shield breakaway indicators are only present in JavaScript-rendered HTML, not
+        # in raw HTTP responses, so in_breakaway is always false.
+        response = try
+            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+        catch e
+            error("Failed to fetch $url: $e")
+        end
+        page = Gumbo.parsehtml(String(response.body))
+        tables = collect(eachmatch(sel"table", page.root))
+        isempty(tables) && error("No tables found at $url")
+        rows = collect(eachmatch(sel"tr", tables[1]))[2:end]  # skip header
 
-        rider_col = find_column(df, PCS_RIDER_ALIASES)
-        rank_col = find_column(df, PCS_RANK_ALIASES)
-        team_col = find_column(df, PCS_TEAM_ALIASES)
+        positions = Int[]
+        riders = String[]
+        teams = String[]
 
-        rider_col === nothing && error(
-            "No rider column found in race results from $url. " *
-            "Columns: $(names(df)). " *
-            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl",
+        for row in rows
+            cells = collect(eachmatch(sel"td", row))
+            isempty(cells) && continue
+            rider_links = filter(
+                l -> startswith(getattr(l, "href", ""), "rider/"),
+                collect(eachmatch(sel"a", row)),
+            )
+            isempty(rider_links) && continue
+            rider_name = strip(nodeText(rider_links[1]))
+            team_links = filter(
+                l -> startswith(getattr(l, "href", ""), "team/"),
+                collect(eachmatch(sel"a", row)),
+            )
+            team_name = isempty(team_links) ? "" : strip(nodeText(team_links[1]))
+            pos_text = strip(nodeText(cells[1]))
+            pos = something(tryparse(Int, pos_text), DNF_POSITION)
+            push!(positions, pos)
+            push!(riders, rider_name)
+            push!(teams, team_name)
+        end
+
+        isempty(riders) && error("No rider rows found at $url")
+
+        result = DataFrame(
+            position = positions,
+            rider = riders,
+            team = teams,
+            riderkey = createkey.(riders),
+            in_breakaway = falses(length(riders)),
+            breakaway_km = Vector{Union{Float64,Missing}}(fill(missing, length(riders))),
         )
-
-        # Build standardized result DataFrame
-        result = DataFrame()
-
-        # PCS full results pages concatenate the team name onto the rider name
-        # (e.g. "Tratnik JanTeam Visma | Lease a Bike"). Clean by stripping
-        # the team suffix when we have a separate team column.
-        raw_riders = String.(df[!, rider_col])
-        if team_col !== nothing
-            raw_teams = String.(df[!, team_col])
-            result.rider = map(zip(raw_riders, raw_teams)) do (r, t)
-                if !isempty(t) && endswith(r, t)
-                    # Use ncodeunits for byte-safe slicing of UTF-8 strings
-                    cut = ncodeunits(r) - ncodeunits(t)
-                    return String(strip(String(codeunits(r)[1:cut])))
-                end
-                return r
-            end
-        else
-            result.rider = raw_riders
-        end
-
-        # Parse position values; non-numeric strings (DNF, DNS, OTL, DSQ,
-        # ABD, etc.) become DNF_POSITION to keep them in the DataFrame but
-        # distinguishable from finishers.
-        if rank_col !== nothing
-            result.position = map(df[!, rank_col]) do val
-                s = strip(string(val))
-                parsed = tryparse(Int, s)
-                parsed !== nothing ? parsed : DNF_POSITION
-            end
-        else
-            @warn "No position column found in race results from $url; position will be set to $DNF_POSITION"
-            result.position = fill(DNF_POSITION, nrow(df))
-        end
-
-        result.team = team_col !== nothing ? String.(df[!, team_col]) : fill("", nrow(df))
-        result.riderkey = createkey.(result.rider)
-
-        # Drop rows with empty riderkey
         result = filter(row -> !isempty(row.riderkey), result)
         result = unique(result, :riderkey)
-
-        return result[:, [:position, :rider, :team, :riderkey]]
+        return result[
+            :,
+            [:position, :rider, :team, :riderkey, :in_breakaway, :breakaway_km],
+        ]
     end
 
     params = Dict("slug" => pcs_race_slug, "year" => string(year))
@@ -485,7 +489,7 @@ function getpcsracehistory(
     end
 
     # Move year column to the front for readability
-    col_order = [:year, :position, :rider, :team, :riderkey]
+    col_order = [:year, :position, :rider, :team, :riderkey, :in_breakaway, :breakaway_km]
     present_core = [c for c in col_order if c in Symbol.(names(all_results))]
     extra_cols = [c for c in Symbol.(names(all_results)) if c ∉ col_order]
     all_results = all_results[:, [present_core; extra_cols]]

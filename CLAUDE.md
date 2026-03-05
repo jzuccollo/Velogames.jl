@@ -88,7 +88,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - Betfair API credentials via environment variables (`BETFAIR_USERNAME`, `BETFAIR_PASSWORD`, `BETFAIR_APP_KEY`); Anthropic API key via `ANTHROPIC_API_KEY`; see `.envrc.example`
 - All data functions use `cached_fetch()` with `CacheConfig` and `force_refresh` parameter
 - Rider matching across sources uses `riderkey` (from `createkey()` name normalisation)
-- Web scraping: `gettable()` -> `process_rider_table()` via TableScraper/Gumbo/Cascadia
+- Web scraping: `gettable()` -> `process_rider_table()` via HTTP/Gumbo/Cascadia; `scrape_html_tables()` parses `<table>` elements directly
 - Optimisation: JuMP + HiGHS, binary variables for rider selection
 - PCS URLs: `https://www.procyclingstats.com/race/{slug}/{year}`
 - VG URLs: `https://www.velogames.com/{race-slug}/{year}/riders.php`

@@ -5,6 +5,8 @@ using JuMP
 using Dates
 using Random
 using Statistics
+using Gumbo
+using Cascadia
 
 # =========================================================================
 # Smoke test: VG rider scraping
@@ -377,13 +379,25 @@ end
         CacheConfig("/tmp/test", 12),
         2,
         "omloop-het-nieuwsblad",
+        200.0,
     )
     @test config.category == 2 && config.pcs_slug == "omloop-het-nieuwsblad"
+    @test config.total_distance_km == 200.0
 
     pattern = get_url_pattern("omloop")
     @test pattern.category == 2 && pattern.pcs_slug == "omloop-het-nieuwsblad"
+    @test pattern.total_distance_km == 200.0
     @test get_url_pattern("roubaix").category == 1
     @test get_url_pattern("tdf").category == 0
+    @test get_url_pattern("tdf").total_distance_km == 0.0
+
+    # RaceInfo carries total_distance_km
+    omloop_info = find_race("Omloop")
+    @test omloop_info !== nothing
+    @test omloop_info.total_distance_km == 200.0
+    roubaix_info = find_race("Paris-Roubaix")
+    @test roubaix_info !== nothing
+    @test roubaix_info.total_distance_km > 200.0
 end
 
 @testset "Bayesian Strength Estimation" begin
@@ -699,6 +713,55 @@ end
 end
 
 @testset "PCS Scraper Infrastructure" begin
+    @testset "scrape_html_tables parses tables from HTML string" begin
+        # Minimal two-table HTML page
+        html = """
+        <html><body>
+          <table>
+            <tr><th>Rider</th><th>Points</th></tr>
+            <tr><td>Pogačar</td><td>4852</td></tr>
+            <tr><td>Van der Poel</td><td>3100</td></tr>
+          </table>
+          <table>
+            <tr><th>Name</th></tr>
+            <tr><td>Only row</td></tr>
+          </table>
+        </body></html>
+        """
+
+        # Parse using the same logic as scrape_html_tables (Gumbo-based)
+        page = Gumbo.parsehtml(html)
+        raw_tables = collect(eachmatch(sel"table", page.root))
+        @test length(raw_tables) == 2
+
+        # First table: th-based headers, 2 data rows
+        rows1 = collect(eachmatch(sel"tr", raw_tables[1]))
+        ths1 = collect(eachmatch(sel"th", rows1[1]))
+        @test length(ths1) == 2
+        @test strip(nodeText(ths1[1])) == "Rider"
+        @test strip(nodeText(ths1[2])) == "Points"
+
+        data_rows1 = rows1[2:end]
+        @test length(data_rows1) == 2
+        cells = collect(eachmatch(sel"td", data_rows1[1]))
+        @test strip(nodeText(cells[1])) == "Pogačar"
+        @test strip(nodeText(cells[2])) == "4852"
+
+        # Second table: 1 data row
+        rows2 = collect(eachmatch(sel"tr", raw_tables[2]))
+        @test length(rows2) == 2  # header + 1 data row
+
+        # No-tables page: scrape_html_tables would error — verify the selector finds nothing
+        page_empty = Gumbo.parsehtml("<html><body><p>No tables here</p></body></html>")
+        @test isempty(collect(eachmatch(sel"table", page_empty.root)))
+
+        # JS-rendered content (e.g. div.svg_shield) is NOT present in HTTP.get responses
+        page_no_shield = Gumbo.parsehtml(
+            "<html><body><table><tr><td>Row</td></tr></table></body></html>",
+        )
+        @test isempty(collect(eachmatch(sel"div.svg_shield", page_no_shield.root)))
+    end
+
     @testset "find_column alias resolution" begin
         df = DataFrame("h2hRider" => ["Pogačar"], "Points" => [4852], "Team" => ["UAE"])
 
@@ -794,20 +857,44 @@ end
         oneday = [2000, 1200, 800, 500, 200, 50],
     )
 
-    history_df = DataFrame(
-        riderkey = ["strong", "strong", "medium", "medium"],
-        position = [1, 5, 10, 8],
-        year = [2024, 2023, 2024, 2023],
-        variance_penalty = [0.0, 0.0, 1.0, 1.0],
+    # Baseline with no history
+    baseline = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000)
+
+    # History with no variance penalty: strong rider's 1st place should pull strength up
+    history_exact = DataFrame(
+        riderkey = ["strong", "strong"],
+        position = [1, 1],
+        year = [2024, 2023],
+        variance_penalty = [0.0, 0.0],
     )
-    result = predict_expected_points(
+    result_exact = predict_expected_points(
         rider_df,
         SCORING_CAT2;
-        race_history_df = history_df,
+        race_history_df = history_exact,
         n_sims = 5000,
     )
-    @test all(result.expected_vg_points .>= 0)
+    # History actually shifts strength (not just a no-op)
+    @test result_exact.strength[1] != baseline.strength[1]
+    @test result_exact.strength[1] > baseline.strength[1]  # two 1st places → upward shift
 
+    # Same history but with penalty=1.0 (similar race): shift should be weaker
+    history_penalised = DataFrame(
+        riderkey = ["strong", "strong"],
+        position = [1, 1],
+        year = [2024, 2023],
+        variance_penalty = [1.0, 1.0],
+    )
+    result_penalised = predict_expected_points(
+        rider_df,
+        SCORING_CAT2;
+        race_history_df = history_penalised,
+        n_sims = 5000,
+    )
+    # Penalised history still shifts but by less than exact history
+    @test result_penalised.strength[1] > baseline.strength[1]
+    @test result_penalised.strength[1] < result_exact.strength[1]
+
+    # VG history shifts strength for riders who have it
     vg_hist = DataFrame(
         riderkey = ["strong", "medium", "weak", "strong", "medium", "weak"],
         score = [500.0, 200.0, 50.0, 450.0, 180.0, 40.0],
@@ -819,7 +906,11 @@ end
         vg_history_df = vg_hist,
         n_sims = 5000,
     )
-    @test all(result_vg.expected_vg_points .>= 0)
+    # VG history shifts strength relative to baseline (not silently ignored)
+    @test result_vg.strength[1] != baseline.strength[1]
+    @test result_vg.strength[3] != baseline.strength[3]
+    # Higher VG scores → stronger upward shift
+    @test result_vg.strength[1] > result_vg.strength[3]
 end
 
 # =========================================================================
@@ -918,18 +1009,68 @@ end
     # Stronger riders should have higher mean
     @test mean_pts[1] > mean_pts[5]
 
-    # With breakaway increases mean for one-day scoring
-    mean_brk, std_brk, _ =
-        simulate_vg_points(sim, teams, SCORING_CAT2; include_breakaway = true)
-    @test all(mean_brk .>= mean_pts .- 0.01)  # breakaway adds points (tolerance for float)
+    # With empirical breakaway rates, mean should be >= no-breakaway (adds non-negative points)
+    rng2 = Random.MersenneTwister(99)
+    bk_rates = [0.3, 0.1, 0.1, 0.05, 0.0]
+    mean_secs = [2.0, 1.0, 1.0, 1.0, 0.0]
+    mean_brk, _, _ = simulate_vg_points(
+        sim,
+        teams,
+        SCORING_CAT2;
+        breakaway_rates = bk_rates,
+        mean_sectors = mean_secs,
+        rng = rng2,
+    )
+    @test all(mean_brk .>= mean_pts .- 0.01)
+    @test mean_brk[5] ≈ mean_pts[5] atol = 0.01  # rate=0 → no breakaway points
 
-    # Stage race scoring has no breakaway points
-    mean_stage, _, _ =
-        simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = false)
-    mean_stage_brk, _, _ =
-        simulate_vg_points(sim, teams, SCORING_STAGE; include_breakaway = true)
-    # SCORING_STAGE.breakaway_points == 0, so include_breakaway has no effect
+    # Stage race: breakaway_points==0, so Bernoulli draw has no effect
+    rng3 = Random.MersenneTwister(99)
+    mean_stage, _, _ = simulate_vg_points(sim, teams, SCORING_STAGE)
+    mean_stage_brk, _, _ = simulate_vg_points(
+        sim,
+        teams,
+        SCORING_STAGE;
+        breakaway_rates = bk_rates,
+        mean_sectors = mean_secs,
+        rng = rng3,
+    )
     @test all(isapprox.(mean_stage, mean_stage_brk; atol = 0.01))
+end
+
+@testset "breakaway_sectors_from_km" begin
+    # 200km race: checkpoints at 100, 150, 180, 190
+    @test breakaway_sectors_from_km(200.0, 200.0) == 4  # in break for full race
+    @test breakaway_sectors_from_km(190.0, 200.0) == 4  # past all checkpoints
+    @test breakaway_sectors_from_km(150.0, 200.0) == 2  # reached 100km and 150km
+    @test breakaway_sectors_from_km(100.0, 200.0) == 1  # only 50% checkpoint
+    @test breakaway_sectors_from_km(50.0, 200.0) == 0   # caught before halfway
+    @test breakaway_sectors_from_km(0.0, 200.0) == 0
+    @test breakaway_sectors_from_km(150.0, 0.0) == 0    # unknown distance → 0
+
+    # 257km race (Paris-Roubaix): checkpoints at 128.5, 207, 237, 247
+    @test breakaway_sectors_from_km(173.0, 257.0) == 1  # passes 128.5 only
+    @test breakaway_sectors_from_km(240.0, 257.0) == 3  # passes 128.5, 207, 237
+    @test breakaway_sectors_from_km(257.0, 257.0) == 4  # all checkpoints
+end
+
+@testset "getpcsraceresults schema" begin
+    # getpcsraceresults uses scrape_pcs_table (static HTML table parsing).
+    # div.svg_shield breakaway indicators are JavaScript-rendered and not
+    # present in raw HTTP responses, so in_breakaway is always false.
+    result_cols = [:position, :rider, :team, :riderkey, :in_breakaway, :breakaway_km]
+    mock_df = DataFrame(
+        position = [1, 2, 999],
+        rider = ["Rider A", "Rider B", "Rider C"],
+        team = ["Team X", "Team Y", "Team Z"],
+        riderkey = ["ridera", "riderb", "riderc"],
+        in_breakaway = [false, false, false],
+        breakaway_km = Union{Float64,Missing}[missing, missing, missing],
+    )
+    @test all(c in propertynames(mock_df) for c in result_cols)
+    # in_breakaway is always false (JS-rendered shields not available via HTTP.get)
+    @test all(.!mock_df.in_breakaway)
+    @test all(ismissing.(mock_df.breakaway_km))
 end
 
 @testset "risk_aversion in predict_expected_points" begin

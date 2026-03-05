@@ -485,35 +485,33 @@ function expected_vg_points(
 end
 
 """
-Heuristic breakaway sector count for a given finishing position.
+    breakaway_sectors_from_km(breakaway_km, total_distance_km) -> Int
 
-Sector allocation per simulated finishing position:
-- Position 1-14:  2 late sectors (20km, 10km)                   = 2 sectors
-- Position 15-19: 2 late + 1 early sector (50% distance)        = 3 sectors
-- Position 20:    2 late + 2 early sectors (50% + 50km)          = 4 sectors max
-- Position 21-30: 1 late (20km) + 2 early sectors (50% + 50km)  = 3 sectors
-- Position 31-50: 2 early sectors (50% + 50km)                   = 2 sectors
-- Position 51-60: 1 early sector (50% distance)                  = 1 sector
-- Position 61+:   0 sectors
+Count the number of VG breakaway sectors a rider earns based on how far they
+were in the break and the total race distance.
+
+VG awards points at four sector checkpoints:
+- 50% of total distance
+- 50 km to go
+- 20 km to go
+- 10 km to go
+
+A rider earns a sector point for each checkpoint they were still ahead of the
+peloton, i.e. where `breakaway_km >= checkpoint > 0`.
 """
-function _breakaway_sectors(pos::Int)
-    sectors = 0
-    if pos <= 20
-        sectors += 2
-    elseif pos <= 30
-        sectors += 1
-    end
-    if 15 <= pos <= 60
-        sectors += 1
-    end
-    if 20 <= pos <= 50
-        sectors += 1
-    end
-    return sectors
+function breakaway_sectors_from_km(breakaway_km::Float64, total_distance_km::Float64)::Int
+    total_distance_km <= 0.0 && return 0
+    checkpoints = [
+        0.5 * total_distance_km,
+        total_distance_km - 50.0,
+        total_distance_km - 20.0,
+        total_distance_km - 10.0,
+    ]
+    return count(cp -> cp > 0.0 && breakaway_km >= cp, checkpoints)
 end
 
 """
-    simulate_vg_points(sim_positions, rider_teams, scoring; include_breakaway=false)
+    simulate_vg_points(sim_positions, rider_teams, scoring; breakaway_rates, mean_sectors, rng)
         -> (mean_pts, std_pts, downside_std)
 
 Compute per-rider mean, standard deviation, and downside semi-deviation of VG
@@ -522,6 +520,10 @@ points across simulations.
 Scores each simulation using finish points, assist points, and optionally breakaway
 sector points. Uses Welford's online algorithm for numerically stable variance
 computation without materialising the full n_riders × n_sims matrix.
+
+When `breakaway_rates` is non-empty, each rider gets a Bernoulli draw per
+simulation: if the draw succeeds (probability = `breakaway_rates[i]`), they
+earn `mean_sectors[i] * scoring.breakaway_points` additional points.
 
 The downside semi-deviation only accumulates squared deviations for simulations
 where the rider scores *below* the running mean, so upside variance (scoring
@@ -534,11 +536,14 @@ function simulate_vg_points(
     sim_positions::Matrix{Int},
     rider_teams::Vector{String},
     scoring::ScoringTable;
-    include_breakaway::Bool = false,
+    breakaway_rates::Vector{Float64} = Float64[],
+    mean_sectors::Vector{Float64} = Float64[],
+    rng::AbstractRNG = Random.default_rng(),
 )
     n_riders, n_sims = size(sim_positions)
     @assert length(rider_teams) == n_riders "Length mismatch: rider_teams"
 
+    use_breakaway = !isempty(breakaway_rates) && length(breakaway_rates) == n_riders
     points_per_sector = scoring.breakaway_points
 
     # Welford's online mean and variance
@@ -566,10 +571,12 @@ function simulate_vg_points(
             end
         end
 
-        # --- Breakaway points (one-day only) ---
-        if include_breakaway
+        # --- Breakaway points (one-day only, empirical Bernoulli) ---
+        if use_breakaway
             for i = 1:n_riders
-                sim_pts[i] += _breakaway_sectors(sim_positions[i, s]) * points_per_sector
+                if breakaway_rates[i] > 0.0 && rand(rng) < breakaway_rates[i]
+                    sim_pts[i] += mean_sectors[i] * points_per_sector
+                end
             end
         end
 
@@ -699,6 +706,7 @@ function predict_expected_points(
     risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
     disable_trajectory::Bool = false,
+    total_distance_km::Float64 = 0.0,
 )
     df = copy(rider_df)
     n_riders = nrow(df)
@@ -1066,13 +1074,66 @@ function predict_expected_points(
 
     # --- Compute expected points with per-rider variance ---
     teams = String.(df.team)
-    include_breakaway = (race_type == :oneday)
+
+    # --- Compute empirical breakaway rates from race history ---
+    # For one-day races with a known distance, estimate each rider's probability
+    # of being in a breakaway (from historical PCS svg_shield data) and their
+    # expected sector count if they are. Riders with no history get field-average rates.
+    breakaway_rates = Float64[]
+    mean_sectors_vec = Float64[]
+    if race_type == :oneday &&
+       total_distance_km > 0.0 &&
+       race_history_df !== nothing &&
+       :in_breakaway in propertynames(race_history_df) &&
+       :riderkey in propertynames(race_history_df)
+
+        # Accumulate (n_appearances, n_breaks, sum_breakaway_km) per rider
+        bk_lookup = Dict{String,Tuple{Int,Int,Float64}}()
+        for row in eachrow(race_history_df)
+            key = row.riderkey
+            n_app, n_brk, sum_km = get(bk_lookup, key, (0, 0, 0.0))
+            n_app += 1
+            if row.in_breakaway
+                n_brk += 1
+                sum_km += Float64(coalesce(row.breakaway_km, 0.0))
+            end
+            bk_lookup[key] = (n_app, n_brk, sum_km)
+        end
+
+        # Field-average rate and sectors (fallback for riders with no history)
+        all_rates =
+            Float64[n_brk / n_app for (n_app, n_brk, _) in values(bk_lookup) if n_app > 0]
+        field_avg_rate = isempty(all_rates) ? 0.1 : mean(all_rates)
+        all_mean_kms =
+            Float64[sum_km / n_brk for (_, n_brk, sum_km) in values(bk_lookup) if n_brk > 0]
+        field_avg_km = isempty(all_mean_kms) ? 0.6 * total_distance_km : mean(all_mean_kms)
+        field_avg_sectors =
+            Float64(breakaway_sectors_from_km(field_avg_km, total_distance_km))
+
+        breakaway_rates = Vector{Float64}(undef, n_riders)
+        mean_sectors_vec = Vector{Float64}(undef, n_riders)
+        for i = 1:n_riders
+            key = df.riderkey[i]
+            if haskey(bk_lookup, key)
+                n_app, n_brk, sum_km = bk_lookup[key]
+                breakaway_rates[i] = n_brk / n_app
+                mean_km = n_brk > 0 ? sum_km / n_brk : field_avg_km
+                mean_sectors_vec[i] =
+                    Float64(breakaway_sectors_from_km(mean_km, total_distance_km))
+            else
+                breakaway_rates[i] = field_avg_rate
+                mean_sectors_vec[i] = field_avg_sectors
+            end
+        end
+    end
 
     total_evg, std_pts, downside_std = simulate_vg_points(
         sim_positions,
         teams,
         scoring;
-        include_breakaway = include_breakaway,
+        breakaway_rates = breakaway_rates,
+        mean_sectors = mean_sectors_vec,
+        rng = rng,
     )
 
     # Decompose finish and assist points for reporting
@@ -1178,6 +1239,7 @@ function predict_expected_points(
     risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
     disable_trajectory::Bool = false,
+    total_distance_km::Float64 = 0.0,
 )
     predict_expected_points(
         data.rider_df,
@@ -1199,5 +1261,6 @@ function predict_expected_points(
         risk_aversion = risk_aversion,
         domestique_discount = domestique_discount,
         disable_trajectory = disable_trajectory,
+        total_distance_km = total_distance_km,
     )
 end
