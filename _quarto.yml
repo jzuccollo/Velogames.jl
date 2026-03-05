@@ -35,8 +35,8 @@ link-external-icon: true
 
 execute:
   echo: false
-  warning: false
+  warning: true
   cache: false
-  freeze: auto
+  freeze: false
 
 date-format: long
