@@ -9,7 +9,7 @@ format: html
 ```{julia}
 #| echo: true
 #| output: false
-using Velogames, DataFrames, Statistics, MarkdownTables
+using Velogames, DataFrames, Statistics, MarkdownTables, Dates
 
 # Race — use get_url_pattern("name") to check available names
 race_name = "strade"
@@ -51,7 +51,9 @@ md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))
 
 Two ways to incorporate expert assessments from podcasts, articles, or pre-race previews.
 
-**Automatic** (requires `ANTHROPIC_API_KEY` in `.envrc` and `yt-dlp` installed): set `qualitative_youtube_url` to a YouTube video URL. The pipeline fetches auto-captions via yt-dlp, sends them to the Claude API for structured extraction, and feeds the result into the Bayesian model.
+**Automatic from YouTube** (requires `ANTHROPIC_API_KEY` in `.envrc` and `yt-dlp` installed): set `qualitative_youtube_url` to a YouTube video URL. The pipeline fetches auto-captions via yt-dlp, sends them to the Claude API for structured extraction, and feeds the result into the Bayesian model.
+
+**Automatic from article** (requires `ANTHROPIC_API_KEY` in `.envrc`): set `qualitative_article_url` to any web article URL (race previews, news pieces, etc.). The pipeline fetches and strips the article text, then sends it to the Claude API for extraction.
 
 **Manual** (no API key needed):
 
@@ -110,6 +112,21 @@ if !isempty(qualitative_youtube_url)
         @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments extracted"
     catch e
         @warn "Failed to extract qualitative intelligence: $e"
+    end
+elseif !isempty(qualitative_article_url)
+    try
+        riders_tmp = suppress_output() do
+            getvgriders(config.current_url; cache_config=race_cache)
+        end
+        qualitative_df = get_qualitative_article(
+            qualitative_article_url,
+            String.(riders_tmp.rider),
+            race_name,
+            string(Dates.today()),
+        )
+        @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments extracted"
+    catch e
+        @warn "Failed to extract qualitative intelligence from article: $e"
     end
 elseif !isempty(qualitative_json_file)
     try
