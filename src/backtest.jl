@@ -1004,6 +1004,7 @@ const PARAM_BOUNDS = (
     vg_hist_decay_rate = (0.3, 3.0),
     signal_correlation = (0.0, 0.7),
     vg_season_penalty = (0.0, 10.0),
+    odds_variance = (0.1, 2.0),
 )
 
 """Sample a random BayesianConfig within PARAM_BOUNDS."""
@@ -1018,7 +1019,7 @@ function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
         _rand(PARAM_BOUNDS.hist_decay_rate),
         _rand(PARAM_BOUNDS.vg_hist_base_variance),
         _rand(PARAM_BOUNDS.vg_hist_decay_rate),
-        DEFAULT_BAYESIAN_CONFIG.odds_variance,
+        _rand(PARAM_BOUNDS.odds_variance),
         DEFAULT_BAYESIAN_CONFIG.oracle_variance,
         DEFAULT_BAYESIAN_CONFIG.qualitative_base_variance,
         DEFAULT_BAYESIAN_CONFIG.odds_normalisation,
@@ -1041,6 +1042,7 @@ function _config_to_dict(config::BayesianConfig)
         :vg_hist_decay_rate => config.vg_hist_decay_rate,
         :signal_correlation => config.signal_correlation,
         :vg_season_penalty => config.vg_season_penalty,
+        :odds_variance => config.odds_variance,
     )
 end
 

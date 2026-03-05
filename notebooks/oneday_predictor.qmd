@@ -20,6 +20,11 @@ racehash = "#StradeBianche"  # VG startlist hash filter (leave empty for all rid
 betfair_market_id = ""  # Betfair Exchange market ID from the URL
 oracle_url = ""
 
+# Optional: paste Oddschecker winner market text into oddschecker_paste.txt (project root), then uncomment:
+odds_df = parse_oddschecker_odds(read(joinpath(@__DIR__, "..", "oddschecker_paste.txt"), String))
+# Overrides Betfair if both are provided.
+# odds_df = nothing
+
 # Qualitative intelligence (leave both empty to skip)
 qualitative_youtube_url = ""    # YouTube URL for auto-extraction via yt-dlp + Claude API
 qualitative_json_file = ""      # Path to manually saved JSON response file
@@ -124,6 +129,7 @@ predicted, chosenteam = suppress_output() do
         n_sims=n_sims,
         excluded_riders=excluded_riders,
         qualitative_df=qualitative_df,
+        odds_df=odds_df,
         risk_aversion=risk_aversion,
         domestique_discount=domestique_discount,
         max_per_team=max_per_team)
@@ -173,7 +179,7 @@ print("""
 | VG race history | $(n_vg_hist)/$(n_total) riders ($(pct(n_vg_hist))%) | $(n_vg_hist > 0 ? "Active" : "No matches") |
 | Cycling Oracle | $(n_oracle)/$(n_total) riders ($(pct(n_oracle))%) | $(isempty(oracle_url) ? "Not provided" : (n_oracle > 0 ? "Active" : "No matches")) |
 | Qualitative intel | $(n_qualitative)/$(n_total) riders ($(pct(n_qualitative))%) | $(qualitative_df === nothing ? "Not provided" : (n_qualitative > 0 ? "Active" : "No matches")) |
-| Betfair odds | $(n_odds)/$(n_total) riders ($(pct(n_odds))%) | $(isempty(betfair_market_id) ? "Not provided" : (n_odds > 0 ? "Active" : "No matches")) |
+| Odds | $(n_odds)/$(n_total) riders ($(pct(n_odds))%) | $(odds_df !== nothing ? "Oddschecker" : isempty(betfair_market_id) ? "Not provided" : (n_odds > 0 ? "Betfair" : "No matches")) |
 
 Signals are combined via Bayesian updating from an uninformative prior (mean 0, variance 100). PCS specialty is the broadest observation; race-specific history and VG season form are moderate signals; Cycling Oracle predictions and betting odds are the strongest when available.
 :::

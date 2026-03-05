@@ -614,6 +614,7 @@ if run_tuning
         :vg_hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.vg_hist_decay_rate,
         :signal_correlation => DEFAULT_BAYESIAN_CONFIG.signal_correlation,
         :vg_season_penalty => DEFAULT_BAYESIAN_CONFIG.vg_season_penalty,
+        :odds_variance => DEFAULT_BAYESIAN_CONFIG.odds_variance,
     )
 
     print("""
@@ -629,6 +630,7 @@ if run_tuning
 | `vg_hist_decay_rate` | $(default_params[:vg_hist_decay_rate]) | $(round(best_config.vg_hist_decay_rate, digits=2)) | $(round(best_config.vg_hist_decay_rate - default_params[:vg_hist_decay_rate], digits=2)) |
 | `signal_correlation` | $(default_params[:signal_correlation]) | $(round(best_config.signal_correlation, digits=2)) | $(round(best_config.signal_correlation - default_params[:signal_correlation], digits=2)) |
 | `vg_season_penalty` | $(default_params[:vg_season_penalty]) | $(round(best_config.vg_season_penalty, digits=2)) | $(round(best_config.vg_season_penalty - default_params[:vg_season_penalty], digits=2)) |
+| `odds_variance` | $(default_params[:odds_variance]) | $(round(best_config.odds_variance, digits=2)) | $(round(best_config.odds_variance - default_params[:odds_variance], digits=2)) |
 
 """)
 else

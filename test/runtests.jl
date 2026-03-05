@@ -81,6 +81,42 @@ end
     @test names(result) == ["rider", "win_prob", "riderkey"]
 end
 
+@testset "parse_oddschecker_odds" begin
+    # Typical Oddschecker copy-paste: name line followed by tab-separated fractional odds
+    sample = """
+    Strade Bianche Winner
+    Some header text
+    POGACAR TADEJ
+    1/4\t1/3\t\t2/7\t
+    VAN DER POEL MATHIEU
+    9\t8\t\t10\t
+    UNKNOWN RIDER
+    header text here
+    """
+
+    df = parse_oddschecker_odds(sample)
+
+    @test df isa DataFrame
+    @test names(df) == ["rider", "odds", "riderkey"]
+    @test nrow(df) == 2
+
+    # Pogacar: best (minimum decimal) of 1/4+1=1.25, 1/3+1=1.333, 2/7+1=1.286 → 1.25
+    pog = df[df.riderkey .== createkey("POGACAR TADEJ"), :]
+    @test nrow(pog) == 1
+    @test pog.odds[1] ≈ 1.25
+
+    # Van der Poel: best of 9+1=10, 8+1=9, 10+1=11 → 9.0
+    vdp = df[df.riderkey .== createkey("VAN DER POEL MATHIEU"), :]
+    @test nrow(vdp) == 1
+    @test vdp.odds[1] ≈ 9.0
+
+    # Empty input returns empty DataFrame with correct schema
+    empty_df = parse_oddschecker_odds("")
+    @test empty_df isa DataFrame
+    @test nrow(empty_df) == 0
+    @test names(empty_df) == ["rider", "odds", "riderkey"]
+end
+
 # =========================================================================
 # Caching
 # =========================================================================
@@ -1095,7 +1131,8 @@ end
         @test config.form_variance <= Velogames.PARAM_BOUNDS.form_variance[2]
         @test config.hist_base_variance >= Velogames.PARAM_BOUNDS.hist_base_variance[1]
         @test config.hist_base_variance <= Velogames.PARAM_BOUNDS.hist_base_variance[2]
-        @test config.odds_variance == DEFAULT_BAYESIAN_CONFIG.odds_variance
+        @test config.odds_variance >= Velogames.PARAM_BOUNDS.odds_variance[1]
+        @test config.odds_variance <= Velogames.PARAM_BOUNDS.odds_variance[2]
         @test config.oracle_variance == DEFAULT_BAYESIAN_CONFIG.oracle_variance
         @test config.odds_normalisation == DEFAULT_BAYESIAN_CONFIG.odds_normalisation
         @test config.prior_variance == DEFAULT_BAYESIAN_CONFIG.prior_variance

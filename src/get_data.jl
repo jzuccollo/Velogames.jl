@@ -373,6 +373,89 @@ function getodds(
 end
 
 """
+    parse_oddschecker_odds(text::String) -> DataFrame
+
+Parse odds copied from an Oddschecker winner market page into the standard
+odds DataFrame schema.
+
+**How to use:**
+1. Open the Oddschecker winner market for the race (e.g.
+   `https://www.oddschecker.com/cycling/strade-bianche/winner`)
+2. Select all text on the page, copy, paste into a `.txt` file
+3. Call `parse_oddschecker_odds(read("odds.txt", String))`
+
+The format is alternating lines: rider name, then a tab-separated row of
+fractional odds from each bookmaker (empty cells where no price is offered).
+Fractional odds `"8/1"` → 9.0 decimal; integers like `"9"` mean 9/1 → 10.0.
+
+Returns `DataFrame(rider, odds, riderkey)` with the best (lowest decimal) odds
+per rider across all bookmakers. Identical schema to `betfair_get_market_odds()`.
+"""
+function parse_oddschecker_odds(text::String)
+    # Convert a fractional odds token to decimal. Returns nothing on failure.
+    function to_decimal(s::AbstractString)
+        s = strip(s)
+        isempty(s) && return nothing
+        if contains(s, "/")
+            parts = split(s, "/")
+            length(parts) == 2 || return nothing
+            n = tryparse(Float64, parts[1])
+            d = tryparse(Float64, parts[2])
+            (n === nothing || d === nothing || d == 0.0) && return nothing
+            return n / d + 1.0
+        else
+            n = tryparse(Float64, s)
+            n === nothing && return nothing
+            return n + 1.0
+        end
+    end
+
+    # An odds line has ≥3 tab-separated tokens, all non-empty ones parseable as odds.
+    # Requiring ≥3 rules out the each-way terms section (single values per line).
+    function is_odds_line(line::AbstractString)
+        tokens = split(line, '\t')
+        non_empty = [strip(t) for t in tokens if !isempty(strip(t))]
+        length(non_empty) < 3 && return false
+        return all(to_decimal(t) !== nothing for t in non_empty)
+    end
+
+    lines = split(replace(text, "\r\n" => "\n", "\r" => "\n"), '\n')
+
+    riders = String[]
+    best_odds = Float64[]
+
+    i = 1
+    while i <= length(lines) - 1
+        name_line = strip(lines[i])
+        odds_line = lines[i+1]
+
+        # Name must contain at least one letter (rules out "3" each-way rows)
+        if !isempty(name_line) && any(isletter, name_line) && is_odds_line(odds_line)
+            tokens = split(odds_line, '\t')
+            parsed = [to_decimal(t) for t in tokens]
+            decimals = Float64[d for d in parsed if d !== nothing && d > 1.0]
+            if !isempty(decimals)
+                push!(riders, name_line)
+                push!(best_odds, minimum(decimals))
+                i += 2
+                continue
+            end
+        end
+        i += 1
+    end
+
+    if isempty(riders)
+        @warn "parse_oddschecker_odds: no rider/odds pairs found — check the pasted text"
+        return DataFrame(rider = String[], odds = Float64[], riderkey = String[])
+    end
+
+    df = DataFrame(rider = riders, odds = best_odds)
+    df.riderkey = createkey.(df.rider)
+    @info "Parsed Oddschecker odds for $(nrow(df)) riders"
+    return df
+end
+
+"""
     get_cycling_oracle(prediction_url; force_refresh=false, cache_config=DEFAULT_CACHE)
 
 Fetch win probability predictions from Cycling Oracle.

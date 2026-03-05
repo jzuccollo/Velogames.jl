@@ -48,6 +48,7 @@ function _prepare_rider_data(
     pcs_check_col::Symbol = :oneday,
     filter_startlist::Bool = true,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
+    odds_df::Union{DataFrame,Nothing} = nothing,
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -210,30 +211,31 @@ function _prepare_rider_data(
         end
     end
 
-    # --- 4. Fetch Betfair odds (optional) ---
-    odds_df = nothing
-    if !isempty(betfair_market_id)
+    # --- 4. Odds (Betfair Exchange or pre-parsed Oddschecker) ---
+    final_odds_df = if odds_df !== nothing
+        odds_df
+    elseif !isempty(betfair_market_id)
         try
-            odds_df = getodds(
-                betfair_market_id;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
-            )
-            if nrow(odds_df) > 0
-                @info "Got Betfair odds for $(nrow(odds_df)) riders"
-                # Archive for future backtesting
-                if !isempty(config.pcs_slug)
-                    try
-                        save_race_snapshot(odds_df, "odds", config.pcs_slug, config.year)
-                    catch e
-                        @warn "Failed to archive odds: $e"
-                    end
-                end
+            df = getodds(betfair_market_id; cache_config = cache_config, force_refresh = force_refresh)
+            if nrow(df) > 0
+                @info "Got Betfair odds for $(nrow(df)) riders"
+                df
             else
                 @info "Betfair market returned no active runners"
+                nothing
             end
         catch e
             @warn "Failed to fetch Betfair odds: $e"
+            nothing
+        end
+    else
+        nothing
+    end
+    if !isnothing(final_odds_df) && nrow(final_odds_df) > 0 && !isempty(config.pcs_slug)
+        try
+            save_race_snapshot(final_odds_df, "odds", config.pcs_slug, config.year)
+        catch e
+            @warn "Failed to archive odds: $e"
         end
     end
 
@@ -281,8 +283,8 @@ function _prepare_rider_data(
     else
         0
     end
-    n_odds = if odds_df !== nothing
-        length(intersect(riderdf.riderkey, odds_df.riderkey))
+    n_odds = if final_odds_df !== nothing
+        length(intersect(riderdf.riderkey, final_odds_df.riderkey))
     else
         0
     end
@@ -320,7 +322,7 @@ function _prepare_rider_data(
         @warn "No riders matched to race history — historical finishing positions won't inform predictions"
     end
 
-    return RaceData(riderdf, race_history_df, odds_df, oracle_df, vg_history_df, qualitative_df, form_df, seasons_df, nothing)
+    return RaceData(riderdf, race_history_df, final_odds_df, oracle_df, vg_history_df, qualitative_df, form_df, seasons_df, nothing)
 end
 
 
@@ -370,6 +372,7 @@ function solve_oneday(
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
+    odds_df::Union{DataFrame,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
@@ -387,6 +390,7 @@ function solve_oneday(
         pcs_check_col = :oneday,
         filter_startlist = filter_startlist,
         qualitative_df = qualitative_df,
+        odds_df = odds_df,
     )
     if data === nothing
         return DataFrame(), DataFrame()
@@ -479,6 +483,7 @@ function solve_stage(
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
+    odds_df::Union{DataFrame,Nothing} = nothing,
     risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
@@ -496,6 +501,7 @@ function solve_stage(
         pcs_check_col = :gc,
         filter_startlist = filter_startlist,
         qualitative_df = qualitative_df,
+        odds_df = odds_df,
     )
     if data === nothing
         return DataFrame(), DataFrame()
