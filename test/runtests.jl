@@ -508,7 +508,8 @@ end
     # Floor strength should lower the posterior mean
     no_floor = estimate_rider_strength(pcs_score = 0.5, vg_points = 0.3)
     with_floor = estimate_rider_strength(
-        pcs_score = 0.5, vg_points = 0.3,
+        pcs_score = 0.5,
+        vg_points = 0.3,
         odds_floor_strength = -0.8,
     )
     @test with_floor.mean < no_floor.mean
@@ -517,11 +518,14 @@ end
 
     # Floor uses higher variance than direct odds (wider posterior)
     direct_odds = estimate_rider_strength(
-        pcs_score = 0.5, vg_points = 0.3,
-        odds_implied_prob = 0.002, n_starters = 150,
+        pcs_score = 0.5,
+        vg_points = 0.3,
+        odds_implied_prob = 0.002,
+        n_starters = 150,
     )
     with_floor_same = estimate_rider_strength(
-        pcs_score = 0.5, vg_points = 0.3,
+        pcs_score = 0.5,
+        vg_points = 0.3,
         odds_floor_strength = -0.8,
     )
     # Floor observation should leave more uncertainty than a direct price
@@ -529,7 +533,8 @@ end
 
     # Oracle floor works the same way
     with_oracle_floor = estimate_rider_strength(
-        pcs_score = 0.5, vg_points = 0.3,
+        pcs_score = 0.5,
+        vg_points = 0.3,
         oracle_floor_strength = -0.6,
     )
     @test with_oracle_floor.mean < no_floor.mean
@@ -537,13 +542,17 @@ end
 
     # Direct odds overrides floor (floor only applies when odds_implied_prob == 0)
     direct_with_floor = estimate_rider_strength(
-        pcs_score = 0.5, vg_points = 0.3,
-        odds_implied_prob = 0.05, n_starters = 150,
+        pcs_score = 0.5,
+        vg_points = 0.3,
+        odds_implied_prob = 0.05,
+        n_starters = 150,
         odds_floor_strength = -0.8,
     )
     direct_without_floor = estimate_rider_strength(
-        pcs_score = 0.5, vg_points = 0.3,
-        odds_implied_prob = 0.05, n_starters = 150,
+        pcs_score = 0.5,
+        vg_points = 0.3,
+        odds_implied_prob = 0.05,
+        n_starters = 150,
     )
     @test direct_with_floor.mean ≈ direct_without_floor.mean
 end
@@ -560,11 +569,7 @@ end
     )
 
     # Odds cover only Rider A
-    odds_df = DataFrame(
-        rider = ["Rider A"],
-        riderkey = ["ridera"],
-        odds = [5.0],
-    )
+    odds_df = DataFrame(rider = ["Rider A"], riderkey = ["ridera"], odds = [5.0])
 
     # Without odds: all riders get no odds signal
     result_no_odds = estimate_strengths(rider_df)
@@ -1303,12 +1308,18 @@ end
     @testset "_random_bayesian_config produces valid configs" begin
         rng = Random.MersenneTwister(42)
         config = Velogames._random_bayesian_config(rng)
-        @test config.market_precision_scale >= Velogames.PARAM_BOUNDS.market_precision_scale[1]
-        @test config.market_precision_scale <= Velogames.PARAM_BOUNDS.market_precision_scale[2]
-        @test config.history_precision_scale >= Velogames.PARAM_BOUNDS.history_precision_scale[1]
-        @test config.history_precision_scale <= Velogames.PARAM_BOUNDS.history_precision_scale[2]
-        @test config.ability_precision_scale >= Velogames.PARAM_BOUNDS.ability_precision_scale[1]
-        @test config.ability_precision_scale <= Velogames.PARAM_BOUNDS.ability_precision_scale[2]
+        @test config.market_precision_scale >=
+              Velogames.PARAM_BOUNDS.market_precision_scale[1]
+        @test config.market_precision_scale <=
+              Velogames.PARAM_BOUNDS.market_precision_scale[2]
+        @test config.history_precision_scale >=
+              Velogames.PARAM_BOUNDS.history_precision_scale[1]
+        @test config.history_precision_scale <=
+              Velogames.PARAM_BOUNDS.history_precision_scale[2]
+        @test config.ability_precision_scale >=
+              Velogames.PARAM_BOUNDS.ability_precision_scale[1]
+        @test config.ability_precision_scale <=
+              Velogames.PARAM_BOUNDS.ability_precision_scale[2]
         @test config.hist_decay_rate >= Velogames.PARAM_BOUNDS.hist_decay_rate[1]
         @test config.hist_decay_rate <= Velogames.PARAM_BOUNDS.hist_decay_rate[2]
         @test config.vg_hist_decay_rate >= Velogames.PARAM_BOUNDS.vg_hist_decay_rate[1]

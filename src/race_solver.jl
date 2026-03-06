@@ -26,10 +26,21 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     # Select the key columns for archival
     cols = intersect(
         propertynames(predicted),
-        [:riderkey, :rider, :strength, :uncertainty,
-         :shift_pcs, :shift_vg, :shift_form, :shift_trajectory,
-         :shift_history, :shift_vg_history, :shift_oracle,
-         :shift_qualitative, :shift_odds],
+        [
+            :riderkey,
+            :rider,
+            :strength,
+            :uncertainty,
+            :shift_pcs,
+            :shift_vg,
+            :shift_form,
+            :shift_trajectory,
+            :shift_history,
+            :shift_vg_history,
+            :shift_oracle,
+            :shift_qualitative,
+            :shift_odds,
+        ],
     )
     try
         save_race_snapshot(predicted[:, cols], "predictions", config.pcs_slug, config.year)
@@ -55,9 +66,10 @@ function archive_race_results(
     # Archive PCS race results
     try
         pcs_results = getpcsraceresults(
-            pcs_slug, year;
-            cache_config=cache_config,
-            force_refresh=force_refresh,
+            pcs_slug,
+            year;
+            cache_config = cache_config,
+            force_refresh = force_refresh,
         )
         if nrow(pcs_results) > 0
             save_race_snapshot(pcs_results, "pcs_results", pcs_slug, year)
@@ -69,8 +81,12 @@ function archive_race_results(
     # Archive VG race results if race number provided
     if vg_race_number > 0
         try
-            vg_results = getvgraceresults(year, vg_race_number;
-                cache_config=cache_config, force_refresh=force_refresh)
+            vg_results = getvgraceresults(
+                year,
+                vg_race_number;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
             if nrow(vg_results) > 0
                 save_race_snapshot(vg_results, "vg_results", pcs_slug, year)
             end

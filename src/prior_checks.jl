@@ -16,7 +16,11 @@ function _normal_cdf(z::Float64)
     end
     t = 1.0 / (1.0 + 0.2316419 * abs(z))
     d = 0.3989422804014327  # 1/sqrt(2π)
-    poly = t * (0.319381530 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))))
+    poly =
+        t * (
+            0.319381530 +
+            t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429)))
+        )
     p = d * exp(-0.5 * z^2) * poly
     return z >= 0 ? 1.0 - p : p
 end
@@ -52,7 +56,14 @@ function _generate_synthetic_signals(
     true_strength::Float64,
     config::BayesianConfig;
     available_signals::Set{Symbol} = Set([
-        :pcs, :vg, :form, :trajectory, :history, :vg_history, :odds, :oracle,
+        :pcs,
+        :vg,
+        :form,
+        :trajectory,
+        :history,
+        :vg_history,
+        :odds,
+        :oracle,
     ]),
     n_history::Int = 3,
     n_starters::Int = 150,
@@ -86,7 +97,8 @@ function _generate_synthetic_signals(
 
     # Trajectory
     if :trajectory in available_signals
-        kwargs[:trajectory_score] = true_strength * 0.3 + randn(rng) * sqrt(trajectory_variance(config))
+        kwargs[:trajectory_score] =
+            true_strength * 0.3 + randn(rng) * sqrt(trajectory_variance(config))
     else
         kwargs[:trajectory_score] = 0.0
     end
@@ -95,7 +107,7 @@ function _generate_synthetic_signals(
     if :history in available_signals
         hist = Float64[]
         years = Int[]
-        for y in 0:(n_history-1)
+        for y = 0:(n_history-1)
             var = hist_base_variance(config) + config.hist_decay_rate * y
             push!(hist, true_strength + randn(rng) * sqrt(var))
             push!(years, y)
@@ -113,7 +125,7 @@ function _generate_synthetic_signals(
     if :vg_history in available_signals
         vg_hist = Float64[]
         vg_years = Int[]
-        for y in 0:(n_history-1)
+        for y = 0:(n_history-1)
             var = vg_hist_base_variance(config) + config.vg_hist_decay_rate * y
             push!(vg_hist, true_strength + randn(rng) * sqrt(var))
             push!(vg_years, y)
@@ -129,10 +141,8 @@ function _generate_synthetic_signals(
     if :odds in available_signals
         odds_strength = true_strength + randn(rng) * sqrt(odds_variance(config))
         baseline = 1.0 / n_starters
-        kwargs[:odds_implied_prob] = clamp(
-            baseline * exp(odds_strength * config.odds_normalisation),
-            0.001, 0.99,
-        )
+        kwargs[:odds_implied_prob] =
+            clamp(baseline * exp(odds_strength * config.odds_normalisation), 0.001, 0.99)
     else
         kwargs[:odds_implied_prob] = 0.0
     end
@@ -141,10 +151,8 @@ function _generate_synthetic_signals(
     if :oracle in available_signals
         oracle_strength = true_strength + randn(rng) * sqrt(oracle_variance(config))
         baseline = 1.0 / n_starters
-        kwargs[:oracle_implied_prob] = clamp(
-            baseline * exp(oracle_strength * config.odds_normalisation),
-            0.001, 0.99,
-        )
+        kwargs[:oracle_implied_prob] =
+            clamp(baseline * exp(oracle_strength * config.odds_normalisation), 0.001, 0.99)
     else
         kwargs[:oracle_implied_prob] = 0.0
     end
@@ -194,7 +202,14 @@ function prior_predictive_check(
     n_riders::Int = 150,
     rng::AbstractRNG = Random.default_rng(),
     available_signals::Set{Symbol} = Set([
-        :pcs, :vg, :form, :trajectory, :history, :vg_history, :odds, :oracle,
+        :pcs,
+        :vg,
+        :form,
+        :trajectory,
+        :history,
+        :vg_history,
+        :odds,
+        :oracle,
     ]),
     sparse_signals::Set{Symbol} = Set([:pcs]),
 )
@@ -207,7 +222,7 @@ function prior_predictive_check(
     posterior_sds = Float64[]
     posterior_sds_sparse = Float64[]
 
-    for _ in 1:n_races
+    for _ = 1:n_races
         true_strengths = randn(rng, n_riders)
 
         # First 30 riders are "well-covered", rest are sparse
@@ -215,11 +230,14 @@ function prior_predictive_check(
         posterior_means = zeros(n_riders)
         posterior_vars = zeros(n_riders)
 
-        for i in 1:n_riders
+        for i = 1:n_riders
             signals = i <= n_covered ? available_signals : sparse_signals
             kwargs = _generate_synthetic_signals(
-                rng, true_strengths[i], config;
-                available_signals=signals, n_starters=n_riders,
+                rng,
+                true_strengths[i],
+                config;
+                available_signals = signals,
+                n_starters = n_riders,
             )
             est = estimate_rider_strength(; kwargs...)
             posterior_means[i] = est.mean
@@ -290,7 +308,11 @@ function check_stylised_facts(
         ("top5_from_top10", facts.top5_from_top10, result.top5_from_top10),
         ("top10_from_top30", facts.top10_from_top30, result.top10_from_top30),
         ("rank_correlation", facts.rank_correlation, result.rank_correlation),
-        ("posterior_sd_well_covered", facts.posterior_sd_well_covered, result.mean_posterior_sd),
+        (
+            "posterior_sd_well_covered",
+            facts.posterior_sd_well_covered,
+            result.mean_posterior_sd,
+        ),
         ("posterior_sd_sparse", facts.posterior_sd_sparse, result.mean_posterior_sd_sparse),
     ]
 
@@ -298,7 +320,7 @@ function check_stylised_facts(
         fact = [c[1] for c in checks],
         lower = [c[2][1] for c in checks],
         upper = [c[2][2] for c in checks],
-        observed = [round(c[3], digits=3) for c in checks],
+        observed = [round(c[3], digits = 3) for c in checks],
         pass = [c[2][1] <= c[3] <= c[2][2] for c in checks],
     )
 end
@@ -329,14 +351,17 @@ function sensitivity_sweep(
         fields[param] = v
         test_config = BayesianConfig(; fields...)
 
-        result = prior_predictive_check(test_config; n_races=100, kwargs...)
-        push!(rows, (;
-            param_value = v,
-            favourite_win_rate = round(result.favourite_win_rate, digits=3),
-            top5_from_top10 = round(result.top5_from_top10, digits=3),
-            rank_correlation = round(result.rank_correlation, digits=3),
-            posterior_sd = round(result.mean_posterior_sd, digits=3),
-        ))
+        result = prior_predictive_check(test_config; n_races = 100, kwargs...)
+        push!(
+            rows,
+            (;
+                param_value = v,
+                favourite_win_rate = round(result.favourite_win_rate, digits = 3),
+                top5_from_top10 = round(result.top5_from_top10, digits = 3),
+                rank_correlation = round(result.rank_correlation, digits = 3),
+                posterior_sd = round(result.mean_posterior_sd, digits = 3),
+            ),
+        )
     end
     DataFrame(rows)
 end
@@ -371,16 +396,25 @@ function simulation_based_calibration(
     n_bins::Int = 20,
     rng::AbstractRNG = Random.default_rng(),
     available_signals::Set{Symbol} = Set([
-        :pcs, :vg, :form, :trajectory, :history, :vg_history, :odds, :oracle,
+        :pcs,
+        :vg,
+        :form,
+        :trajectory,
+        :history,
+        :vg_history,
+        :odds,
+        :oracle,
     ]),
 )
     ranks = Float64[]
 
-    for _ in 1:n_sims
+    for _ = 1:n_sims
         true_strength = randn(rng)
         kwargs = _generate_synthetic_signals(
-            rng, true_strength, config;
-            available_signals=available_signals,
+            rng,
+            true_strength,
+            config;
+            available_signals = available_signals,
         )
         est = estimate_rider_strength(; kwargs...)
 

@@ -199,7 +199,8 @@ function resample_optimise(
     # from volatile outcomes (many zeroes, occasional big scores).
     # Uses downside coefficient of variation for scale-invariant penalty.
     downside_semi_dev = sqrt.(m2_down ./ n_resamples)
-    cv_down = [ep > 0 ? dsd / ep : 0.0 for (ep, dsd) in zip(expected_pts, downside_semi_dev)]
+    cv_down =
+        [ep > 0 ? dsd / ep : 0.0 for (ep, dsd) in zip(expected_pts, downside_semi_dev)]
     risk_adjusted_pts = expected_pts ./ (1.0 .+ risk_aversion .* cv_down)
 
     df[!, :selection_frequency] = round.(selection_counts ./ n_resamples, digits = 3)

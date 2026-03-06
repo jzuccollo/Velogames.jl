@@ -28,8 +28,10 @@ function evaluate_prospective(
     year::Int;
     archive_dir::String = DEFAULT_ARCHIVE_DIR,
 )
-    predictions = load_race_snapshot("predictions", pcs_slug, year; archive_dir=archive_dir)
-    pcs_results = load_race_snapshot("pcs_results", pcs_slug, year; archive_dir=archive_dir)
+    predictions =
+        load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
+    pcs_results =
+        load_race_snapshot("pcs_results", pcs_slug, year; archive_dir = archive_dir)
 
     if predictions === nothing || pcs_results === nothing
         return nothing
@@ -40,7 +42,7 @@ function evaluate_prospective(
         return nothing
     end
 
-    matched = innerjoin(predictions, pcs_results; on=:riderkey, makeunique=true)
+    matched = innerjoin(predictions, pcs_results; on = :riderkey, makeunique = true)
     n = nrow(matched)
     if n < 5
         @warn "Only $n matched riders for $pcs_slug $year — skipping"
@@ -48,8 +50,9 @@ function evaluate_prospective(
     end
 
     # Compute actual positions (rank by PCS result position)
-    pos_col = hasproperty(matched, :position) ? :position :
-              hasproperty(matched, :rnk) ? :rnk : nothing
+    pos_col =
+        hasproperty(matched, :position) ? :position :
+        hasproperty(matched, :rnk) ? :rnk : nothing
     if pos_col === nothing
         @warn "No position column found in PCS results for $pcs_slug $year"
         return nothing
@@ -87,8 +90,13 @@ function evaluate_prospective(
     end
 
     ProspectiveResult(
-        pcs_slug, year, n, rho,
-        top5_overlap, top10_overlap, mare,
+        pcs_slug,
+        year,
+        n,
+        rho,
+        top5_overlap,
+        top10_overlap,
+        mare,
         mean_shifts,
     )
 end
@@ -99,10 +107,7 @@ end
 Load all archived predictions and results for a year. Returns per-race metrics.
 Scans the predictions archive directory for available races.
 """
-function prospective_season_summary(
-    year::Int;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
-)
+function prospective_season_summary(year::Int; archive_dir::String = DEFAULT_ARCHIVE_DIR)
     pred_dir = joinpath(archive_dir, "predictions")
     if !isdir(pred_dir)
         @info "No predictions archive found at $pred_dir"
@@ -110,24 +115,27 @@ function prospective_season_summary(
     end
 
     rows = []
-    for race_dir in readdir(pred_dir; join=true)
+    for race_dir in readdir(pred_dir; join = true)
         isdir(race_dir) || continue
         pcs_slug = basename(race_dir)
         feather_path = joinpath(race_dir, "$year.feather")
         isfile(feather_path) || continue
 
-        result = evaluate_prospective(pcs_slug, year; archive_dir=archive_dir)
+        result = evaluate_prospective(pcs_slug, year; archive_dir = archive_dir)
         result === nothing && continue
 
-        push!(rows, (;
-            race = pcs_slug,
-            year = year,
-            n_matched = result.n_matched,
-            spearman_rho = round(result.spearman_rho, digits=3),
-            top5_overlap = result.top5_overlap,
-            top10_overlap = result.top10_overlap,
-            mean_abs_rank_error = round(result.mean_abs_rank_error, digits=1),
-        ))
+        push!(
+            rows,
+            (;
+                race = pcs_slug,
+                year = year,
+                n_matched = result.n_matched,
+                spearman_rho = round(result.spearman_rho, digits = 3),
+                top5_overlap = result.top5_overlap,
+                top10_overlap = result.top10_overlap,
+                mean_abs_rank_error = round(result.mean_abs_rank_error, digits = 1),
+            ),
+        )
     end
 
     isempty(rows) && return DataFrame()
@@ -144,10 +152,7 @@ For each signal, compute:
 Requires archived predictions. Signal direction correctness requires
 actual results (computed only for races with both).
 """
-function signal_value_analysis(
-    year::Int;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
-)
+function signal_value_analysis(year::Int; archive_dir::String = DEFAULT_ARCHIVE_DIR)
     pred_dir = joinpath(archive_dir, "predictions")
     if !isdir(pred_dir)
         return DataFrame()
@@ -156,19 +161,18 @@ function signal_value_analysis(
     # Accumulate per-signal stats across races
     signal_totals = Dict{Symbol,Vector{Float64}}()
 
-    for race_dir in readdir(pred_dir; join=true)
+    for race_dir in readdir(pred_dir; join = true)
         isdir(race_dir) || continue
         pcs_slug = basename(race_dir)
         feather_path = joinpath(race_dir, "$year.feather")
         isfile(feather_path) || continue
 
-        predictions = load_race_snapshot("predictions", pcs_slug, year; archive_dir=archive_dir)
+        predictions =
+            load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
         predictions === nothing && continue
 
-        shift_cols = filter(
-            c -> startswith(string(c), "shift_"),
-            propertynames(predictions),
-        )
+        shift_cols =
+            filter(c -> startswith(string(c), "shift_"), propertynames(predictions))
         for col in shift_cols
             signal = Symbol(replace(string(col), "shift_" => ""))
             vals = abs.(predictions[!, col])
@@ -184,11 +188,13 @@ function signal_value_analysis(
 
     isempty(signal_totals) && return DataFrame()
 
-    rows = [(;
-        signal = k,
-        mean_abs_shift = round(mean(v), digits=3),
-        n_observations = length(v),
-    ) for (k, v) in sort(collect(signal_totals); by=x -> -mean(x[2]))]
+    rows = [
+        (;
+            signal = k,
+            mean_abs_shift = round(mean(v), digits = 3),
+            n_observations = length(v),
+        ) for (k, v) in sort(collect(signal_totals); by = x -> -mean(x[2]))
+    ]
 
     DataFrame(rows)
 end

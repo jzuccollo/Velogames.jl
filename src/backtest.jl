@@ -544,7 +544,8 @@ function backtest_race(
 
     # --- VG team metrics (if costs available) ---
     pcr, pred_pts, opt_pts = NaN, NaN, NaN
-    prediction_col = risk_aversion > 0 && :risk_adjusted_vg_points in propertynames(predicted) ?
+    prediction_col =
+        risk_aversion > 0 && :risk_adjusted_vg_points in propertynames(predicted) ?
         :risk_adjusted_vg_points : :expected_vg_points
     if :cost in propertynames(predicted) && any(predicted.cost .> 0)
         try
