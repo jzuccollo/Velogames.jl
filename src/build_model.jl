@@ -92,6 +92,148 @@ function build_model_stage(
 end
 
 """
+    resample_optimise(df, scoring, build_model_fn; n_resamples=500, rng, max_per_team=0)
+
+Resampled optimisation: draw noisy strengths, score VG points for that draw,
+optimise per draw to compute selection frequencies and expected points that
+account for Jensen's inequality (scoring floor at position 31+). A final
+deterministic optimisation on the resampled expected points selects the team.
+
+Returns `(df, top_teams)` where:
+- `df` gains columns `:selection_frequency` and `:expected_vg_points`
+- `top_teams` is a `Vector{DataFrame}` containing the optimal team
+"""
+function resample_optimise(
+    df::DataFrame,
+    scoring::ScoringTable,
+    build_model_fn::Function;
+    team_size::Int = 6,
+    n_resamples::Int = 500,
+    rng::AbstractRNG = Random.default_rng(),
+    max_per_team::Int = 0,
+    risk_aversion::Float64 = 0.5,
+)
+    n_riders = nrow(df)
+    strengths = Float64.(df.strength)
+    uncertainties = Float64.(df.uncertainty)
+    teams = String.(df.team)
+
+    # Track how often each rider is selected and accumulate VG points per resample
+    selection_counts = zeros(Int, n_riders)
+    vg_points_sum = zeros(Float64, n_riders)
+    n_successful = 0
+
+    # Welford accumulators for downside semi-deviation (risk-adjusted scoring)
+    welford_mean = zeros(Float64, n_riders)
+    m2_down = zeros(Float64, n_riders)
+
+    noisy_strengths = Vector{Float64}(undef, n_riders)
+    resample_df = copy(df)
+
+    for r = 1:n_resamples
+        # 1. Draw noisy strengths from posterior
+        for i = 1:n_riders
+            noisy_strengths[i] = strengths[i] + uncertainties[i] * randn(rng)
+        end
+
+        # 2. Convert to finishing positions via sortperm
+        order = sortperm(noisy_strengths, rev = true)
+        positions = Vector{Int}(undef, n_riders)
+        for (pos, rider_idx) in enumerate(order)
+            positions[rider_idx] = pos
+        end
+
+        # 3. Score VG points for this draw (finish + assist)
+        sim_pts = zeros(Float64, n_riders)
+        for i = 1:n_riders
+            sim_pts[i] = Float64(finish_points_for_position(positions[i], scoring))
+        end
+        # Assist points: teammates of top-3 finishers
+        for i = 1:n_riders
+            if positions[i] <= 3
+                top_team = teams[i]
+                for j = 1:n_riders
+                    if j != i && teams[j] == top_team
+                        sim_pts[j] += scoring.assist_points[positions[i]]
+                    end
+                end
+            end
+        end
+
+        # Accumulate for expected VG points calculation and Welford variance tracking
+        for i = 1:n_riders
+            vg_points_sum[i] += sim_pts[i]
+            delta = sim_pts[i] - welford_mean[i]
+            welford_mean[i] += delta / r
+            delta2 = sim_pts[i] - welford_mean[i]
+            if sim_pts[i] < welford_mean[i]
+                m2_down[i] += delta * delta2
+            end
+        end
+
+        # 4. Optimise for this draw's realised points
+        resample_df[!, :_resample_pts] = sim_pts
+        result = build_model_fn(
+            resample_df,
+            team_size,
+            :_resample_pts,
+            :cost;
+            totalcost = 100,
+            max_per_team = max_per_team,
+        )
+        result === nothing && continue
+        n_successful += 1
+
+        # Record selected riders
+        for (i, key) in enumerate(df.riderkey)
+            if JuMP.value(result[key]) > 0.5
+                selection_counts[i] += 1
+            end
+        end
+    end
+
+    # Compute expected VG points as mean across resamples
+    expected_pts = vg_points_sum ./ n_resamples
+
+    # Risk-adjusted scoring: penalise riders whose high expected points come
+    # from volatile outcomes (many zeroes, occasional big scores).
+    # Uses downside coefficient of variation for scale-invariant penalty.
+    downside_semi_dev = sqrt.(m2_down ./ n_resamples)
+    cv_down = [ep > 0 ? dsd / ep : 0.0 for (ep, dsd) in zip(expected_pts, downside_semi_dev)]
+    risk_adjusted_pts = expected_pts ./ (1.0 .+ risk_aversion .* cv_down)
+
+    df[!, :selection_frequency] = round.(selection_counts ./ n_resamples, digits = 3)
+    df[!, :expected_vg_points] = round.(expected_pts, digits = 1)
+    df[!, :downside_semi_dev] = round.(downside_semi_dev, digits = 1)
+
+    @info "Resampled optimisation: $n_successful/$n_resamples successful"
+
+    # Final optimisation using risk-adjusted expected VG points.
+    # Per-resample team-frequency tracking is too noisy (hundreds of unique
+    # compositions with ~150 riders), so we optimise once on the risk-adjusted
+    # points that account for both Jensen's inequality and uncertainty bias.
+    df[!, :_final_pts] = risk_adjusted_pts
+    top_teams = DataFrame[]
+    final_result = build_model_fn(
+        df,
+        team_size,
+        :_final_pts,
+        :cost;
+        totalcost = 100,
+        max_per_team = max_per_team,
+    )
+    if final_result !== nothing
+        final_keys = Set(k for k in df.riderkey if JuMP.value(final_result[k]) > 0.5)
+        final_team = filter(row -> row.riderkey in final_keys, df)
+        push!(top_teams, final_team)
+    end
+
+    select!(df, Not(:_final_pts))
+    return df, top_teams
+end
+
+
+"""
     minimise_cost_stage(inputdf::DataFrame, target_score::Real, n::Integer=9, points::Symbol=:points, cost::Symbol=:cost; totalcost::Integer=100)
 
 Minimise team cost whilst achieving at least the target score.

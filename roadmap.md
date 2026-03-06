@@ -31,8 +31,11 @@ The strength model combines multiple signals, each with a variance hyperparamete
 | VG race history       | `getvgracepoints()`       | 3.0+0.65/yr| Z-scored per year. Actual VG points from past editions (finish + assist + breakaway)         |
 | Cycling Oracle        | `get_cycling_oracle()`    | 1.5       | Independent signal from cyclingoracle.com predictions. Broader race coverage than Betfair    |
 | Betting odds          | `getodds()`               | 0.5       | Strongest single signal when available. Uses Betfair Exchange API (market ID required)       |
+| Odds/Oracle floor     | Derived (absence signal)  | var × 2.0 | When market data exists but rider absent, floor observation from residual probability mass    |
 
 Odds are converted to strength via log-odds relative to a uniform baseline, then divided by a normalisation constant (default 2.0, heuristic) to match the z-score scale of other signals. This divisor is also an exposed parameter (`odds_normalisation`).
+
+When odds or oracle data is available for a race, riders absent from the market receive a floor observation. The floor probability is computed as the residual probability mass (1 − sum of listed probabilities) divided by the number of absent riders. If the overround pushes residual probability below 0.001, the floor defaults to half the minimum listed probability. Floor observations use `floor_variance_multiplier` (default 2.0) times the base odds/oracle variance, reflecting lower precision than direct pricing.
 
 ### Bayesian updating
 
@@ -92,29 +95,23 @@ The model treats riders independently but VG assists create team-level correlati
 
 Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see `_breakaway_sectors()` in `src/simulation.jl`). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this. The heuristic is a small fraction of total expected points for most riders, so the impact is limited.
 
-### Uncertainty-as-upside bias (Jensen's inequality)
+### Uncertainty-as-upside bias (Jensen's inequality) — largely resolved
 
-The Monte Carlo simulation inflates expected VG points for riders with high posterior uncertainty. The mechanism is Jensen's inequality applied to the scoring floor: positions 31+ score 0, so the payoff function is convex around the 30th-place cutoff. A mean-preserving spread in the position distribution increases expected points because upside (scoring when finishing top 30) is captured whilst downside (finishing 31st vs 100th) is capped at zero. This is mathematically identical to the option value of volatility.
+The Monte Carlo simulation inflates expected VG points for riders with high posterior uncertainty. The mechanism is Jensen's inequality applied to the scoring floor: positions 31+ score 0, so the payoff function is convex around the 30th-place cutoff. A mean-preserving spread in the position distribution increases expected points because upside (scoring when finishing top 30) is captured whilst downside (finishing 31st vs 100th) is capped at zero.
 
-**Observed symptoms:** Riders like Turconi (strength 0.3, uncertainty 1.5) and Iacchi (strength 0.1, uncertainty 1.5) receive ~90-100 expected VG points despite being unlikely to finish top 30 in most simulations. Their high uncertainty means they occasionally draw very high noisy strengths, and the right-skewed scoring (480 pts for 1st, 9 pts for 30th, 0 for 31st+) makes these rare good outcomes dominate the expectation. The risk-adjusted metric (`E / (1 + γ * σ_down / E)`) partially compensates but not enough — these riders still rank in the top 10 by risk-adjusted score at their price points.
+**Mitigations implemented:**
 
-**Why this happens in the Bayesian model:** Riders with few informative signals have posterior variance reduced from the prior (100) but not by much. A rider with PCS data and one or two history results might reach uncertainty ~1.5 (variance ~2.25), which is "informed" enough to pass the uninformative filter (threshold: uncertainty > 9.0) but still wide enough to generate substantial option value.
+1. **Resampled optimisation** (option 3 below): the optimiser runs many times, each drawing noisy strengths from the posterior. High-uncertainty riders only appear in optimal teams when they happen to draw high strength, so they appear less frequently than riders with reliable expected value. This is the primary fix.
 
-**The field distribution amplifies the effect:** In a typical one-day classic, only 5-10 riders have strength above 1.0. The remaining ~160 riders cluster between -0.5 and 0.4 with uncertainty 1.0-1.5. This compressed field means a rider at strength 0.3 is already near the median, and high uncertainty gives them a meaningful probability of cracking the top 30 in any given simulation.
+2. **Floor observations** (absence-as-signal): when odds or oracle data exists for a race but a rider is absent, they receive a negative floor observation derived from the residual probability mass. This treats market absence as information — the market evaluated all starters and implicitly priced absent riders below threshold. Floor observations use higher variance than directly priced riders (controlled by `floor_variance_multiplier`, default 2.0). This directly addresses the root cause for riders like Turconi, who previously had high uncertainty from few signals; the floor observations add two additional negative signals, pulling strength down and reducing uncertainty.
 
-**Potential solutions from the literature:**
+3. **Risk-adjusted scoring**: the `E / (1 + γ * CV_down)` penalty discounts high-variance riders.
 
-1. **Bayesian shrinkage** (Jorion 1986, Black & Litterman 1992): scale the posterior mean toward zero in proportion to remaining uncertainty. The standard James-Stein shrinkage factor is `strength × (1 - posterior_variance / prior_variance)`. However, with prior variance 100 and posterior variance ~2.25, the shrinkage factor is ~0.98 — too mild to help.
+Together these three mechanisms largely resolve the bias. In testing, riders like Turconi dropped from top-10 to ~84th in expected VG points after floor observations were added.
 
-2. **Uncertainty cap**: limit posterior uncertainty to the field median or a fixed ceiling (e.g., 1.0). Rationale: "ignorance about a rider should not count as upside." Simple and directly addresses the mechanism, but the threshold is arbitrary.
+**Background on the original problem and alternative approaches considered:**
 
-3. **Resampled optimisation** (used by SaberSim, Stokastic in DFS): run the optimiser many times, each time drawing a single set of strengths from the posterior and simulating a race. The team appearing most frequently across optimisation runs is robust to estimation noise. High-uncertainty riders only appear in optimal teams when they happen to draw high strength, so they appear less often than riders with reliable expected value. This is the most theoretically principled approach and naturally handles the convex payoff without arbitrary thresholds.
-
-4. **Explicit uncertainty penalty**: subtract `k × uncertainty` from expected points before optimisation. Crude but effective; common in practical fantasy optimisers.
-
-5. **Tighten the uninformative filter**: lower the threshold from uncertainty > 9.0 to something like the 75th percentile of field uncertainty.
-
-**Current status:** Investigating resampled optimisation (option 3) as the primary fix.
+The original symptom was riders with few signals (strength ~0.3, uncertainty ~1.5) receiving ~90-100 expected VG points despite being unlikely to finish top 30. Other approaches considered but not implemented: Bayesian shrinkage (James-Stein factor ~0.98, too mild), uncertainty cap (effective but arbitrary threshold), explicit uncertainty penalty (crude), and tightening the uninformative filter.
 
 ### Stage race scoring calibration
 

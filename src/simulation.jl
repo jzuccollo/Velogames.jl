@@ -53,50 +53,56 @@ Hyperparameters for Bayesian rider strength estimation.
 An uninformative prior (mean=0, `prior_variance`) is updated sequentially
 by PCS specialty and other signals. Lower variance means the signal is
 treated as more precise.
-"""
-struct BayesianConfig
-    pcs_variance::Float64
-    vg_variance::Float64
-    form_variance::Float64
-    trajectory_variance::Float64
-    hist_base_variance::Float64
-    hist_decay_rate::Float64
-    vg_hist_base_variance::Float64
-    vg_hist_decay_rate::Float64
-    odds_variance::Float64
-    oracle_variance::Float64
-    qualitative_base_variance::Float64
-    odds_normalisation::Float64
-    signal_correlation::Float64
-    vg_season_penalty::Float64
-    prior_variance::Float64
-end
 
-"""Default Bayesian hyperparameters."""
-const DEFAULT_BAYESIAN_CONFIG = BayesianConfig(
-    7.9,   # pcs_variance: observation variance for PCS specialty signal
-    1.4,   # vg_variance: base observation variance for VG season points
-    0.9,   # form_variance: observation variance for PCS form score
-    3.5,   # trajectory_variance: observation variance for PCS-vs-history trajectory signal
-    3.0,   # hist_base_variance: base variance for race history observations (z-scored scale)
-    3.2,  # hist_decay_rate: additional variance per year of age
-    4.8,   # vg_hist_base_variance: base variance for VG race history
-    1.3,   # vg_hist_decay_rate: additional variance per year for VG history
-    0.5,   # odds_variance: observation variance for betting odds signal
-    1.0,   # oracle_variance: observation variance for Cycling Oracle signal
-    2.5,   # qualitative_base_variance: effective = base / confidence (range 3.1–8.3)
-    2.0,   # odds_normalisation: heuristic divisor to scale log-odds to z-score range.
+The posterior mean is a precision-weighted average, where precision = 1/variance. So:
+
+    - Doubling the variance halves the precision, which halves that signal's weight in the weighted average — so yes, it contributes roughly half as much to the posterior mean.
+    - But "half as much" is relative to the other signals' precisions. The actual influence of any one signal depends on the ratio of its precision to the sum of all precisions (prior + all observations so far).
+"""
+@kwdef struct BayesianConfig
+    pcs_variance::Float64 = 7.9
+    vg_variance::Float64 = 1.4
+    form_variance::Float64 = 0.9
+    trajectory_variance::Float64 = 3.5
+    hist_base_variance::Float64 = 3.0
+    hist_decay_rate::Float64 = 3.2
+    vg_hist_base_variance::Float64 = 4.8
+    vg_hist_decay_rate::Float64 = 1.3
+    odds_variance::Float64 = 0.3
+    oracle_variance::Float64 = 0.5
+    qualitative_base_variance::Float64 = 2.0
+    # Heuristic divisor to scale log-odds to z-score range.
     # With ~150 starters, a 10% favourite produces log(0.1 / 0.0067) ≈ 2.7,
     # which / 2.0 gives ~1.35 — a reasonable "1.35 SD above average" strength signal.
-    0.1,  # signal_correlation: equicorrelation discount for correlated signals.
+    odds_normalisation::Float64 = 2.0
+    # Equicorrelation discount for correlated signals.
     # With n signals at pairwise correlation ρ, effective precision is
     # Στ_i / (1 + ρ(n-1)) instead of Στ_i. Prevents over-concentration of
     # posterior for favourites who have many correlated signal sources.
-    1.3,   # vg_season_penalty: scales vg_variance early in the season when few riders
-    # have points. Effective variance = vg_variance * (1 + penalty * (1 - frac_nonzero)).
+    signal_correlation::Float64 = 0.1
+    # Scales vg_variance early in the season when few riders have points.
+    # Effective variance = vg_variance * (1 + penalty * (1 - frac_nonzero)).
     # At opening weekend (~10% with points): ~6.6. Late season (~80%): ~2.4.
-    100.0, # prior_variance: uninformative prior (SD=10 on z-score scale, not tunable)
-)
+    vg_season_penalty::Float64 = 1.3
+    prior_variance::Float64 = 100.0  # uninformative prior (SD=10 on z-score scale)
+    # --- Absence floors ---
+    # When a signal covers the field but a rider is missing, absence is
+    # informative. `floor_signals` controls which signals apply this logic.
+    # All floor observations use `floor_variance_multiplier × base_variance`
+    # (less precise than direct observations).
+    #
+    # Two floor mechanisms:
+    #   :odds, :oracle — market-based: absent riders share the residual
+    #       probability mass (data-driven, varies per race).
+    #   :form, :qualitative — fixed: absent riders get `absence_floor_strength`
+    #       as a z-score observation (same for every race, tunable below).
+    floor_signals::Set{Symbol} = Set([:odds, :oracle])
+    floor_variance_multiplier::Float64 = 2.0
+    absence_floor_strength::Float64 = -0.5
+end
+
+"""Default Bayesian hyperparameters."""
+const DEFAULT_BAYESIAN_CONFIG = BayesianConfig()
 
 """
     bayesian_update(prior::BayesianPosterior, observation::Float64, obs_variance::Float64) -> BayesianPosterior
@@ -158,22 +164,26 @@ Returns a `BayesianPosterior` with mean (strength) and variance (uncertainty).
 - `config`: `BayesianConfig` controlling variance hyperparameters (default: `DEFAULT_BAYESIAN_CONFIG`)
 """
 function estimate_rider_strength(;
-    pcs_score::Float64 = 0.0,
-    has_pcs::Bool = true,
-    race_history::Vector{Float64} = Float64[],
-    race_history_years_ago::Vector{Int} = Int[],
-    race_history_variance_penalties::Vector{Float64} = Float64[],
-    vg_points::Float64 = 0.0,
-    form_score::Float64 = 0.0,
-    vg_race_history::Vector{Float64} = Float64[],
-    vg_race_history_years_ago::Vector{Int} = Int[],
-    odds_implied_prob::Float64 = 0.0,
-    oracle_implied_prob::Float64 = 0.0,
-    trajectory_score::Float64 = 0.0,
-    qualitative_adjustments::Vector{Float64} = Float64[],
-    qualitative_confidences::Vector{Float64} = Float64[],
-    n_starters::Int = 150,
-    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    pcs_score::Float64=0.0,
+    has_pcs::Bool=true,
+    race_history::Vector{Float64}=Float64[],
+    race_history_years_ago::Vector{Int}=Int[],
+    race_history_variance_penalties::Vector{Float64}=Float64[],
+    vg_points::Float64=0.0,
+    form_score::Float64=0.0,
+    vg_race_history::Vector{Float64}=Float64[],
+    vg_race_history_years_ago::Vector{Int}=Int[],
+    odds_implied_prob::Float64=0.0,
+    oracle_implied_prob::Float64=0.0,
+    odds_floor_strength::Float64=0.0,
+    oracle_floor_strength::Float64=0.0,
+    form_floor_strength::Float64=0.0,
+    qualitative_floor_strength::Float64=0.0,
+    trajectory_score::Float64=0.0,
+    qualitative_adjustments::Vector{Float64}=Float64[],
+    qualitative_confidences::Vector{Float64}=Float64[],
+    n_starters::Int=150,
+    config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
 )
     # --- Uninformative prior ---
     # Start from a diffuse prior (mean=0, large variance). All signals,
@@ -208,6 +218,10 @@ function estimate_rider_strength(;
     mean_before = posterior.mean
     if form_score != 0.0
         posterior = bayesian_update(posterior, form_score, config.form_variance)
+        n_signals += 1
+    elseif form_floor_strength != 0.0
+        floor_var = config.form_variance * config.floor_variance_multiplier
+        posterior = bayesian_update(posterior, form_floor_strength, floor_var)
         n_signals += 1
     end
     shift_form = posterior.mean - mean_before
@@ -268,6 +282,10 @@ function estimate_rider_strength(;
             log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, oracle_strength, config.oracle_variance)
         n_signals += 1
+    elseif oracle_floor_strength != 0.0
+        floor_var = config.oracle_variance * config.floor_variance_multiplier
+        posterior = bayesian_update(posterior, oracle_floor_strength, floor_var)
+        n_signals += 1
     end
     shift_oracle = posterior.mean - mean_before
 
@@ -277,12 +295,18 @@ function estimate_rider_strength(;
     # so high-confidence intelligence (0.8) gets variance ~3.1 and low (0.3)
     # gets ~8.3 — placing it between oracle and the diffuse prior.
     mean_before = posterior.mean
-    for (adj, conf) in zip(qualitative_adjustments, qualitative_confidences)
-        if conf > 0.0
-            eff_var = config.qualitative_base_variance / conf
-            posterior = bayesian_update(posterior, adj, eff_var)
-            n_signals += 1
+    if !isempty(qualitative_adjustments)
+        for (adj, conf) in zip(qualitative_adjustments, qualitative_confidences)
+            if conf > 0.0
+                eff_var = config.qualitative_base_variance / conf
+                posterior = bayesian_update(posterior, adj, eff_var)
+                n_signals += 1
+            end
         end
+    elseif qualitative_floor_strength != 0.0
+        floor_var = config.qualitative_base_variance * config.floor_variance_multiplier
+        posterior = bayesian_update(posterior, qualitative_floor_strength, floor_var)
+        n_signals += 1
     end
     shift_qualitative = posterior.mean - mean_before
 
@@ -293,6 +317,10 @@ function estimate_rider_strength(;
         baseline_prob = 1.0 / n_starters
         odds_strength = log(odds_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, odds_strength, config.odds_variance)
+        n_signals += 1
+    elseif odds_floor_strength != 0.0
+        floor_var = config.odds_variance * config.floor_variance_multiplier
+        posterior = bayesian_update(posterior, odds_floor_strength, floor_var)
         n_signals += 1
     end
     shift_odds = posterior.mean - mean_before
@@ -375,9 +403,9 @@ position in simulation s.
 function simulate_race(
     strengths::Vector{Float64},
     uncertainties::Vector{Float64};
-    n_sims::Int = 10000,
-    rng::AbstractRNG = Random.default_rng(),
-    simulation_df::Union{Int,Nothing} = nothing,
+    n_sims::Int=10000,
+    rng::AbstractRNG=Random.default_rng(),
+    simulation_df::Union{Int,Nothing}=nothing,
 )
     n_riders = length(strengths)
     @assert length(uncertainties) == n_riders "Length mismatch: strengths and uncertainties"
@@ -390,7 +418,7 @@ function simulate_race(
             noise = simulation_df === nothing ? randn(rng) : _rand_t(rng, simulation_df)
             noisy_strengths[i] = strengths[i] + uncertainties[i] * noise
         end
-        order = sortperm(noisy_strengths, rev = true)
+        order = sortperm(noisy_strengths, rev=true)
         for (pos, rider_idx) in enumerate(order)
             positions[rider_idx, s] = pos
         end
@@ -407,7 +435,7 @@ Convert simulation results to probability distributions over positions.
 Returns a `n_riders x max_position` matrix where entry [i, k] is the probability
 that rider i finishes in position k.
 """
-function position_probabilities(sim_positions::Matrix{Int}; max_position::Int = 30)
+function position_probabilities(sim_positions::Matrix{Int}; max_position::Int=30)
     n_riders, n_sims = size(sim_positions)
     probs = zeros(Float64, n_riders, max_position)
 
@@ -450,11 +478,16 @@ function expected_vg_points(
 
     total_points = zeros(Float64, n_riders)
 
+    # Welford accumulators for downside semi-deviation
+    welford_mean = zeros(Float64, n_riders)
+    m2_down = zeros(Float64, n_riders)
+    sim_pts = zeros(Float64, n_riders)
+
     for s = 1:n_sims
         # --- Finish points ---
         for i = 1:n_riders
             pos = sim_positions[i, s]
-            total_points[i] += finish_points_for_position(pos, scoring)
+            sim_pts[i] = Float64(finish_points_for_position(pos, scoring))
         end
 
         # --- Assist points ---
@@ -474,14 +507,26 @@ function expected_vg_points(
             top_team = rider_teams[top_rider]
             for i = 1:n_riders
                 if i != top_rider && rider_teams[i] == top_team
-                    total_points[i] += scoring.assist_points[top_pos]
+                    sim_pts[i] += scoring.assist_points[top_pos]
                 end
+            end
+        end
+
+        # Accumulate totals and Welford downside tracking
+        for i = 1:n_riders
+            total_points[i] += sim_pts[i]
+            delta = sim_pts[i] - welford_mean[i]
+            welford_mean[i] += delta / s
+            delta2 = sim_pts[i] - welford_mean[i]
+            if sim_pts[i] < welford_mean[i]
+                m2_down[i] += delta * delta2
             end
         end
     end
 
-    # Average across simulations
-    return total_points ./ n_sims
+    mean_pts = total_points ./ n_sims
+    downside_semi_dev = sqrt.(m2_down ./ n_sims)
+    return mean_pts, downside_semi_dev
 end
 
 """
@@ -536,9 +581,9 @@ function simulate_vg_points(
     sim_positions::Matrix{Int},
     rider_teams::Vector{String},
     scoring::ScoringTable;
-    breakaway_rates::Vector{Float64} = Float64[],
-    mean_sectors::Vector{Float64} = Float64[],
-    rng::AbstractRNG = Random.default_rng(),
+    breakaway_rates::Vector{Float64}=Float64[],
+    mean_sectors::Vector{Float64}=Float64[],
+    rng::AbstractRNG=Random.default_rng(),
 )
     n_riders, n_sims = size(sim_positions)
     @assert length(rider_teams) == n_riders "Length mismatch: rider_teams"
@@ -644,69 +689,37 @@ end
 # ---------------------------------------------------------------------------
 
 """
-    predict_expected_points(rider_df::DataFrame, scoring::ScoringTable;
-                            race_history_df=nothing, odds_df=nothing,
-                            oracle_df=nothing, vg_history_df=nothing,
-                            n_sims::Int=10000, race_type::Symbol=:oneday,
-                            rng::AbstractRNG=Random.default_rng(),
-                            bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG) -> DataFrame
+    estimate_strengths(rider_df, race_type; kwargs...) -> DataFrame
 
-Full prediction pipeline: takes rider data, computes expected VG points for each rider.
+Bayesian strength estimation pipeline: takes rider data from multiple sources
+and computes posterior strength and uncertainty for each rider.
 
 ## Race types
-- `:oneday` — uses PCS one-day specialty as the prior, includes breakaway heuristic
-- `:stage` — uses class-aware PCS blending as the prior, higher base uncertainty,
-  no breakaway heuristic (stage race points already include these implicitly)
-
-## Required columns in `rider_df`:
-- `rider::String`, `team::String`, `riderkey::String`
-- `cost::Int` - VG cost
-- `points::Float64` - VG season points
-
-## Optional PCS columns (from `getpcsriderpts_batch`):
-- `oneday`, `gc`, `tt`, `sprint`, `climber` (all Float64)
-
-## Optional columns for stage races:
-- `classraw::String` or `class::String` - rider classification
-
-## Optional DataFrames:
-- `race_history_df` — PCS race history with `:position`, `:year`, `:riderkey`,
-  and optional `:variance_penalty` (0.0 for exact-race, 1.0 for similar-race)
-- `odds_df` — Betfair odds with `:odds`, `:riderkey`
-- `oracle_df` — Cycling Oracle predictions with `:win_prob`, `:riderkey`
-- `vg_history_df` — VG race points from past editions with `:score`, `:year`, `:riderkey`.
-  Scores are z-scored per year before feeding as Bayesian updates.
+- `:oneday` — uses PCS one-day specialty as the prior
+- `:stage` — uses class-aware PCS blending as the prior
 
 ## Returns
 The input DataFrame augmented with:
-- `strength`, `uncertainty` - posterior estimates
-- `expected_vg_points` - total expected VG points (mean across simulations)
-- `std_vg_points` - standard deviation of VG points across simulations
-- `downside_std_vg_points` - downside semi-deviation (only below-mean variance)
-- `risk_adjusted_vg_points` - `expected_vg_points / (1 + risk_aversion * CV_down)` where `CV_down = downside_std / max(expected, 1)`
-- `expected_finish_pts`, `expected_assist_pts`, `expected_breakaway_pts` - components
+- `strength`, `uncertainty` — posterior estimates
+- `has_pcs`, `has_race_history`, etc. — signal availability flags
+- `shift_pcs`, `shift_vg`, etc. — per-signal mean shifts (diagnostics)
+- `domestique_penalty` — applied domestique discount
 """
-function predict_expected_points(
-    rider_df::DataFrame,
-    scoring::ScoringTable;
-    race_history_df::Union{DataFrame,Nothing} = nothing,
-    odds_df::Union{DataFrame,Nothing} = nothing,
-    oracle_df::Union{DataFrame,Nothing} = nothing,
-    vg_history_df::Union{DataFrame,Nothing} = nothing,
-    qualitative_df::Union{DataFrame,Nothing} = nothing,
-    form_df::Union{DataFrame,Nothing} = nothing,
-    seasons_df::Union{DataFrame,Nothing} = nothing,
-    n_sims::Int = 10000,
-    race_type::Symbol = :oneday,
-    rng::AbstractRNG = Random.default_rng(),
-    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
-    race_year::Union{Int,Nothing} = nothing,
-    race_date::Union{Date,Nothing} = nothing,
-    simulation_df::Union{Int,Nothing} = nothing,
-    risk_aversion::Float64 = 0.0,
-    domestique_discount::Float64 = 0.0,
-    disable_trajectory::Bool = false,
-    total_distance_km::Float64 = 0.0,
+function estimate_strengths(
+    rider_df::DataFrame;
+    race_history_df::Union{DataFrame,Nothing}=nothing,
+    odds_df::Union{DataFrame,Nothing}=nothing,
+    oracle_df::Union{DataFrame,Nothing}=nothing,
+    vg_history_df::Union{DataFrame,Nothing}=nothing,
+    qualitative_df::Union{DataFrame,Nothing}=nothing,
+    form_df::Union{DataFrame,Nothing}=nothing,
+    seasons_df::Union{DataFrame,Nothing}=nothing,
+    race_type::Symbol=:oneday,
+    bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
+    race_year::Union{Int,Nothing}=nothing,
+    race_date::Union{Date,Nothing}=nothing,
+    domestique_discount::Float64=0.0,
+    disable_trajectory::Bool=false,
 )
     df = copy(rider_df)
     n_riders = nrow(df)
@@ -730,21 +743,24 @@ function predict_expected_points(
     season_scale = 1.0 + bayesian_config.vg_season_penalty * (1.0 - frac_nonzero)
     effective_vg_variance = bayesian_config.vg_variance * season_scale
     effective_config = BayesianConfig(
-        bayesian_config.pcs_variance,
-        effective_vg_variance,
-        bayesian_config.form_variance,
-        bayesian_config.trajectory_variance,
-        bayesian_config.hist_base_variance,
-        bayesian_config.hist_decay_rate,
-        bayesian_config.vg_hist_base_variance,
-        bayesian_config.vg_hist_decay_rate,
-        bayesian_config.odds_variance,
-        bayesian_config.oracle_variance,
-        bayesian_config.qualitative_base_variance,
-        bayesian_config.odds_normalisation,
-        bayesian_config.signal_correlation,
-        bayesian_config.vg_season_penalty,
-        bayesian_config.prior_variance,
+        pcs_variance=bayesian_config.pcs_variance,
+        vg_variance=effective_vg_variance,
+        form_variance=bayesian_config.form_variance,
+        trajectory_variance=bayesian_config.trajectory_variance,
+        hist_base_variance=bayesian_config.hist_base_variance,
+        hist_decay_rate=bayesian_config.hist_decay_rate,
+        vg_hist_base_variance=bayesian_config.vg_hist_base_variance,
+        vg_hist_decay_rate=bayesian_config.vg_hist_decay_rate,
+        odds_variance=bayesian_config.odds_variance,
+        oracle_variance=bayesian_config.oracle_variance,
+        qualitative_base_variance=bayesian_config.qualitative_base_variance,
+        odds_normalisation=bayesian_config.odds_normalisation,
+        signal_correlation=bayesian_config.signal_correlation,
+        vg_season_penalty=bayesian_config.vg_season_penalty,
+        prior_variance=bayesian_config.prior_variance,
+        floor_variance_multiplier=bayesian_config.floor_variance_multiplier,
+        floor_signals=bayesian_config.floor_signals,
+        absence_floor_strength=bayesian_config.absence_floor_strength,
     )
     @info "Season-adaptive VG variance: $(round(effective_vg_variance, digits=2)) " *
           "($(round(100 * frac_nonzero, digits=0))% with points, scale=$(round(season_scale, digits=2)))"
@@ -797,6 +813,49 @@ function predict_expected_points(
         end
     end
 
+    # --- Compute market-based floor strengths (odds/oracle) ---
+    # See BayesianConfig.floor_signals for the two floor mechanisms.
+    # Odds/oracle: absent riders share the residual probability mass.
+    rider_keys = Set(df.riderkey)
+    odds_floor_strength_val = 0.0
+    if :odds in effective_config.floor_signals && !isempty(odds_lookup)
+        listed_prob = sum(values(odds_lookup))
+        n_listed = length(intersect(keys(odds_lookup), rider_keys))
+        n_absent = n_riders - n_listed
+        if n_absent > 0
+            # Residual probability shared among absent riders. If overround
+            # leaves no residual, use half the smallest listed probability
+            # as a conservative floor (the market priced them below the worst listed).
+            residual_prob = 1.0 - listed_prob
+            floor_prob = if residual_prob > 0.001
+                residual_prob / n_absent
+            else
+                minimum(values(odds_lookup)) * 0.5
+            end
+            baseline_prob = 1.0 / n_starters
+            odds_floor_strength_val = log(floor_prob / baseline_prob) / effective_config.odds_normalisation
+        end
+        @info "Odds floor: $n_listed priced, $n_absent with floor (strength=$(round(odds_floor_strength_val, digits=2)))"
+    end
+
+    oracle_floor_strength_val = 0.0
+    if :oracle in effective_config.floor_signals && !isempty(oracle_lookup)
+        listed_prob = sum(values(oracle_lookup))
+        n_listed = length(intersect(keys(oracle_lookup), rider_keys))
+        n_absent = n_riders - n_listed
+        if n_absent > 0
+            residual_prob = 1.0 - listed_prob
+            floor_prob = if residual_prob > 0.001
+                residual_prob / n_absent
+            else
+                minimum(values(oracle_lookup)) * 0.5
+            end
+            baseline_prob = 1.0 / n_starters
+            oracle_floor_strength_val = log(floor_prob / baseline_prob) / effective_config.odds_normalisation
+        end
+        @info "Oracle floor: $n_listed listed, $n_absent with floor (strength=$(round(oracle_floor_strength_val, digits=2)))"
+    end
+
     # --- Build qualitative intelligence lookup ---
     # Each entry is (adjustment, confidence) — multiple sources per rider are separate observations
     qualitative_lookup = Dict{String,Vector{Tuple{Float64,Float64}}}()
@@ -829,6 +888,21 @@ function predict_expected_points(
                 form_lookup[row.riderkey] = (form_raw[i] - form_mean) / form_std
             end
         end
+    end
+
+    # --- Compute floor strengths for non-market signals ---
+    form_floor_strength_val = 0.0
+    if :form in effective_config.floor_signals && !isempty(form_lookup)
+        form_floor_strength_val = effective_config.absence_floor_strength
+        n_with_form = length(intersect(keys(form_lookup), rider_keys))
+        @info "Form floor: $n_with_form with form, $(n_riders - n_with_form) with floor (strength=$(round(form_floor_strength_val, digits=2)))"
+    end
+
+    qualitative_floor_strength_val = 0.0
+    if :qualitative in effective_config.floor_signals && !isempty(qualitative_lookup)
+        qualitative_floor_strength_val = effective_config.absence_floor_strength
+        n_with_qual = length(intersect(keys(qualitative_lookup), rider_keys))
+        @info "Qualitative floor: $n_with_qual with intel, $(n_riders - n_with_qual) with floor (strength=$(round(qualitative_floor_strength_val, digits=2)))"
     end
 
     # --- Build race history lookup ---
@@ -937,7 +1011,7 @@ function predict_expected_points(
         rider_seasons === nothing && continue
         nrow(rider_seasons) < 2 && continue
 
-        sorted = sort(rider_seasons, :year, rev = true)
+        sorted = sort(rider_seasons, :year, rev=true)
         # Recent: last 1-2 seasons; older: 3+ years ago
         recent = filter(r -> r.year >= current_year - 1, sorted)
         older = filter(r -> r.year <= current_year - 3, sorted)
@@ -1007,27 +1081,37 @@ function predict_expected_points(
         oracle_prob = get(oracle_lookup, key, 0.0)
         form_val = get(form_lookup, key, 0.0)
 
+        # Floor strengths: applied only to riders absent from the signal source
+        odds_floor = haskey(odds_lookup, key) ? 0.0 : odds_floor_strength_val
+        oracle_floor = haskey(oracle_lookup, key) ? 0.0 : oracle_floor_strength_val
+        form_floor = haskey(form_lookup, key) ? 0.0 : form_floor_strength_val
+        qual_floor = haskey(qualitative_lookup, key) ? 0.0 : qualitative_floor_strength_val
+
         qual_entries = get(qualitative_lookup, key, Tuple{Float64,Float64}[])
         qual_adjs = Float64[q[1] for q in qual_entries]
         qual_confs = Float64[q[2] for q in qual_entries]
 
         est = estimate_rider_strength(
-            pcs_score = pcs_z[i],
-            has_pcs = has_pcs[i],
-            race_history = hist_strengths,
-            race_history_years_ago = hist_years,
-            race_history_variance_penalties = hist_penalties,
-            vg_points = vg_z[i],
-            form_score = form_val,
-            trajectory_score = trajectory_raw[i],
-            vg_race_history = vg_hist_strengths,
-            vg_race_history_years_ago = vg_hist_years,
-            odds_implied_prob = odds_prob,
-            oracle_implied_prob = oracle_prob,
-            qualitative_adjustments = qual_adjs,
-            qualitative_confidences = qual_confs,
-            n_starters = n_starters,
-            config = effective_config,
+            pcs_score=pcs_z[i],
+            has_pcs=has_pcs[i],
+            race_history=hist_strengths,
+            race_history_years_ago=hist_years,
+            race_history_variance_penalties=hist_penalties,
+            vg_points=vg_z[i],
+            form_score=form_val,
+            trajectory_score=trajectory_raw[i],
+            vg_race_history=vg_hist_strengths,
+            vg_race_history_years_ago=vg_hist_years,
+            odds_implied_prob=odds_prob,
+            oracle_implied_prob=oracle_prob,
+            odds_floor_strength=odds_floor,
+            oracle_floor_strength=oracle_floor,
+            form_floor_strength=form_floor,
+            qualitative_floor_strength=qual_floor,
+            qualitative_adjustments=qual_adjs,
+            qualitative_confidences=qual_confs,
+            n_starters=n_starters,
+            config=effective_config,
         )
 
         strengths[i] = est.mean
@@ -1062,87 +1146,6 @@ function predict_expected_points(
         @info "Applied domestique discount ($domestique_discount) to $n_penalised riders"
     end
 
-    # --- Monte Carlo simulation ---
-    @info "Running Monte Carlo simulation ($n_sims iterations, $n_riders riders)..."
-    sim_positions = simulate_race(
-        strengths,
-        uncertainties;
-        n_sims = n_sims,
-        rng = rng,
-        simulation_df = simulation_df,
-    )
-
-    # --- Compute expected points with per-rider variance ---
-    teams = String.(df.team)
-
-    # --- Compute empirical breakaway rates from race history ---
-    # For one-day races with a known distance, estimate each rider's probability
-    # of being in a breakaway (from historical PCS svg_shield data) and their
-    # expected sector count if they are. Riders with no history get field-average rates.
-    breakaway_rates = Float64[]
-    mean_sectors_vec = Float64[]
-    if race_type == :oneday &&
-       total_distance_km > 0.0 &&
-       race_history_df !== nothing &&
-       :in_breakaway in propertynames(race_history_df) &&
-       :riderkey in propertynames(race_history_df)
-
-        # Accumulate (n_appearances, n_breaks, sum_breakaway_km) per rider
-        bk_lookup = Dict{String,Tuple{Int,Int,Float64}}()
-        for row in eachrow(race_history_df)
-            key = row.riderkey
-            n_app, n_brk, sum_km = get(bk_lookup, key, (0, 0, 0.0))
-            n_app += 1
-            if row.in_breakaway
-                n_brk += 1
-                sum_km += Float64(coalesce(row.breakaway_km, 0.0))
-            end
-            bk_lookup[key] = (n_app, n_brk, sum_km)
-        end
-
-        # Field-average rate and sectors (fallback for riders with no history)
-        all_rates =
-            Float64[n_brk / n_app for (n_app, n_brk, _) in values(bk_lookup) if n_app > 0]
-        field_avg_rate = isempty(all_rates) ? 0.1 : mean(all_rates)
-        all_mean_kms =
-            Float64[sum_km / n_brk for (_, n_brk, sum_km) in values(bk_lookup) if n_brk > 0]
-        field_avg_km = isempty(all_mean_kms) ? 0.6 * total_distance_km : mean(all_mean_kms)
-        field_avg_sectors =
-            Float64(breakaway_sectors_from_km(field_avg_km, total_distance_km))
-
-        breakaway_rates = Vector{Float64}(undef, n_riders)
-        mean_sectors_vec = Vector{Float64}(undef, n_riders)
-        for i = 1:n_riders
-            key = df.riderkey[i]
-            if haskey(bk_lookup, key)
-                n_app, n_brk, sum_km = bk_lookup[key]
-                breakaway_rates[i] = n_brk / n_app
-                mean_km = n_brk > 0 ? sum_km / n_brk : field_avg_km
-                mean_sectors_vec[i] =
-                    Float64(breakaway_sectors_from_km(mean_km, total_distance_km))
-            else
-                breakaway_rates[i] = field_avg_rate
-                mean_sectors_vec[i] = field_avg_sectors
-            end
-        end
-    end
-
-    total_evg, std_pts, downside_std = simulate_vg_points(
-        sim_positions,
-        teams,
-        scoring;
-        breakaway_rates = breakaway_rates,
-        mean_sectors = mean_sectors_vec,
-        rng = rng,
-    )
-
-    # Decompose finish and assist points for reporting
-    pos_probs = position_probabilities(sim_positions; max_position = 30)
-    finish_pts = [expected_finish_points(pos_probs[i, :], scoring) for i = 1:n_riders]
-    evg_no_breakaway = expected_vg_points(sim_positions, teams, scoring)
-    assist_pts = evg_no_breakaway .- finish_pts
-    breakaway = total_evg .- evg_no_breakaway
-
     # --- Signal availability flags (for reporting data source coverage) ---
     has_race_history = [haskey(history_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_vg_history = [haskey(vg_history_lookup, df.riderkey[i]) for i = 1:n_riders]
@@ -1151,49 +1154,10 @@ function predict_expected_points(
     has_qualitative = [haskey(qualitative_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_form = [haskey(form_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_seasons = [haskey(seasons_lookup, df.riderkey[i]) for i = 1:n_riders]
-    has_any_signal =
-        has_pcs .| has_race_history .| has_vg_history .| has_odds .| has_oracle .|
-        has_qualitative .| has_form
-
-    # Zero out finish and breakaway points for uninformative riders. Two criteria:
-    # 1. No external signal at all (no PCS specialty, race history, VG history, odds,
-    #    or oracle) — VG season points alone are not enough to trust simulated positions
-    # 2. Posterior uncertainty barely reduced from prior (>90% of prior σ) — rider has
-    #    technically-present signals that are too weak to be informative (e.g. a PCS
-    #    page with near-zero scores)
-    # Only assist points are kept — they depend on teammate performance, not the
-    # rider's own signal quality.
-    prior_uncertainty = sqrt(bayesian_config.prior_variance)
-    uninformative_mask = .!has_any_signal .| (uncertainties .> 0.9 * prior_uncertainty)
-    if any(uninformative_mask)
-        uninformative_names = String.(df.rider[uninformative_mask])
-        @warn "$(sum(uninformative_mask)) riders have uninformative signals — finish/breakaway points set to 0" riders =
-            uninformative_names
-        finish_pts[uninformative_mask] .= 0.0
-        breakaway[uninformative_mask] .= 0.0
-        total_evg .= finish_pts .+ assist_pts .+ breakaway
-    end
-
-    # Risk-adjusted VG points: E / (1 + γ * CV_down)
-    # where CV_down = downside_semi_dev / max(E, 1).
-    # This ratio-based penalty is scale-invariant: riders with the same downside
-    # coefficient of variation receive the same proportional penalty regardless of
-    # absolute expected points. The floor max(E, 1) prevents division by zero and
-    # treats near-zero expected riders as having high CV (appropriately penalised).
-    # γ=0 recovers pure expected-value optimisation; σ_down=0 recovers E exactly.
-    risk_adjusted =
-        total_evg ./ (1.0 .+ risk_aversion .* downside_std ./ max.(total_evg, 1.0))
 
     # --- Add results to DataFrame ---
-    df[!, :strength] = round.(strengths, digits = 3)
-    df[!, :uncertainty] = round.(uncertainties, digits = 3)
-    df[!, :expected_vg_points] = round.(total_evg, digits = 1)
-    df[!, :std_vg_points] = round.(std_pts, digits = 1)
-    df[!, :downside_std_vg_points] = round.(downside_std, digits = 1)
-    df[!, :risk_adjusted_vg_points] = round.(risk_adjusted, digits = 1)
-    df[!, :expected_finish_pts] = round.(finish_pts, digits = 1)
-    df[!, :expected_assist_pts] = round.(assist_pts, digits = 1)
-    df[!, :expected_breakaway_pts] = round.(breakaway, digits = 1)
+    df[!, :strength] = round.(strengths, digits=3)
+    df[!, :uncertainty] = round.(uncertainties, digits=3)
 
     df[!, :has_pcs] = has_pcs
     df[!, :has_race_history] = has_race_history
@@ -1203,64 +1167,158 @@ function predict_expected_points(
     df[!, :has_qualitative] = has_qualitative
     df[!, :has_form] = has_form
     df[!, :has_seasons] = has_seasons
-    df[!, :has_any_signal] = has_any_signal
 
     # --- Per-signal mean shifts (for diagnostics) ---
-    df[!, :shift_pcs] = round.(shifts_pcs, digits = 3)
-    df[!, :shift_vg] = round.(shifts_vg, digits = 3)
-    df[!, :shift_form] = round.(shifts_form, digits = 3)
-    df[!, :shift_trajectory] = round.(shifts_trajectory, digits = 3)
-    df[!, :shift_history] = round.(shifts_history, digits = 3)
-    df[!, :shift_vg_history] = round.(shifts_vg_history, digits = 3)
-    df[!, :shift_oracle] = round.(shifts_oracle, digits = 3)
-    df[!, :shift_qualitative] = round.(shifts_qualitative, digits = 3)
-    df[!, :shift_odds] = round.(shifts_odds, digits = 3)
-    df[!, :domestique_penalty] = round.(domestique_penalties, digits = 3)
+    df[!, :shift_pcs] = round.(shifts_pcs, digits=3)
+    df[!, :shift_vg] = round.(shifts_vg, digits=3)
+    df[!, :shift_form] = round.(shifts_form, digits=3)
+    df[!, :shift_trajectory] = round.(shifts_trajectory, digits=3)
+    df[!, :shift_history] = round.(shifts_history, digits=3)
+    df[!, :shift_vg_history] = round.(shifts_vg_history, digits=3)
+    df[!, :shift_oracle] = round.(shifts_oracle, digits=3)
+    df[!, :shift_qualitative] = round.(shifts_qualitative, digits=3)
+    df[!, :shift_odds] = round.(shifts_odds, digits=3)
+    df[!, :domestique_penalty] = round.(domestique_penalties, digits=3)
 
     return df
 end
 
 
 """
-    predict_expected_points(data::RaceData, scoring::ScoringTable; kwargs...) -> DataFrame
+    estimate_strengths(data::RaceData; kwargs...) -> DataFrame
 
-Convenience method that unpacks `RaceData` fields into the standard kwargs.
+Convenience method that unpacks `RaceData` fields.
 """
+function estimate_strengths(
+    data::RaceData;
+    race_type::Symbol=:oneday,
+    bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
+    race_year::Union{Int,Nothing}=nothing,
+    race_date::Union{Date,Nothing}=nothing,
+    domestique_discount::Float64=0.0,
+    disable_trajectory::Bool=false,
+)
+    estimate_strengths(
+        data.rider_df;
+        race_history_df=data.race_history_df,
+        odds_df=data.odds_df,
+        oracle_df=data.oracle_df,
+        vg_history_df=data.vg_history_df,
+        qualitative_df=data.qualitative_df,
+        form_df=data.form_df,
+        seasons_df=data.seasons_df,
+        race_type=race_type,
+        bayesian_config=bayesian_config,
+        race_year=race_year,
+        race_date=race_date,
+        domestique_discount=domestique_discount,
+        disable_trajectory=disable_trajectory,
+    )
+end
+
+
+"""
+    predict_expected_points(rider_df, scoring; kwargs...) -> DataFrame
+
+Backward-compatible wrapper: estimates strengths then runs MC simulation to
+compute expected VG points. Used by backtesting where we need expected points
+without team optimisation.
+"""
+function predict_expected_points(
+    rider_df::DataFrame,
+    scoring::ScoringTable;
+    race_history_df::Union{DataFrame,Nothing}=nothing,
+    odds_df::Union{DataFrame,Nothing}=nothing,
+    oracle_df::Union{DataFrame,Nothing}=nothing,
+    vg_history_df::Union{DataFrame,Nothing}=nothing,
+    qualitative_df::Union{DataFrame,Nothing}=nothing,
+    form_df::Union{DataFrame,Nothing}=nothing,
+    seasons_df::Union{DataFrame,Nothing}=nothing,
+    n_sims::Int=10000,
+    race_type::Symbol=:oneday,
+    rng::AbstractRNG=Random.default_rng(),
+    bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
+    race_year::Union{Int,Nothing}=nothing,
+    race_date::Union{Date,Nothing}=nothing,
+    simulation_df::Union{Int,Nothing}=nothing,
+    risk_aversion::Float64=0.0,
+    domestique_discount::Float64=0.0,
+    disable_trajectory::Bool=false,
+    total_distance_km::Float64=0.0,
+)
+    df = estimate_strengths(
+        rider_df;
+        race_history_df=race_history_df,
+        odds_df=odds_df,
+        oracle_df=oracle_df,
+        vg_history_df=vg_history_df,
+        qualitative_df=qualitative_df,
+        form_df=form_df,
+        seasons_df=seasons_df,
+        race_type=race_type,
+        bayesian_config=bayesian_config,
+        race_year=race_year,
+        race_date=race_date,
+        domestique_discount=domestique_discount,
+        disable_trajectory=disable_trajectory,
+    )
+
+    # MC simulation for expected points (used by backtesting)
+    n_riders = nrow(df)
+    strengths = Float64.(df.strength)
+    uncertainties = Float64.(df.uncertainty)
+
+    sim_positions = simulate_race(
+        strengths,
+        uncertainties;
+        n_sims=n_sims,
+        rng=rng,
+        simulation_df=simulation_df,
+    )
+
+    teams = String.(df.team)
+    evg, dsd = expected_vg_points(sim_positions, teams, scoring)
+    df[!, :expected_vg_points] = round.(evg, digits=1)
+    df[!, :downside_semi_dev] = round.(dsd, digits=1)
+
+    return df
+end
+
 function predict_expected_points(
     data::RaceData,
     scoring::ScoringTable;
-    n_sims::Int = 10000,
-    race_type::Symbol = :oneday,
-    rng::AbstractRNG = Random.default_rng(),
-    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
-    race_year::Union{Int,Nothing} = nothing,
-    race_date::Union{Date,Nothing} = nothing,
-    simulation_df::Union{Int,Nothing} = nothing,
-    risk_aversion::Float64 = 0.0,
-    domestique_discount::Float64 = 0.0,
-    disable_trajectory::Bool = false,
-    total_distance_km::Float64 = 0.0,
+    n_sims::Int=10000,
+    race_type::Symbol=:oneday,
+    rng::AbstractRNG=Random.default_rng(),
+    bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
+    race_year::Union{Int,Nothing}=nothing,
+    race_date::Union{Date,Nothing}=nothing,
+    simulation_df::Union{Int,Nothing}=nothing,
+    risk_aversion::Float64=0.0,
+    domestique_discount::Float64=0.0,
+    disable_trajectory::Bool=false,
+    total_distance_km::Float64=0.0,
 )
     predict_expected_points(
         data.rider_df,
         scoring;
-        race_history_df = data.race_history_df,
-        odds_df = data.odds_df,
-        oracle_df = data.oracle_df,
-        vg_history_df = data.vg_history_df,
-        qualitative_df = data.qualitative_df,
-        form_df = data.form_df,
-        seasons_df = data.seasons_df,
-        n_sims = n_sims,
-        race_type = race_type,
-        rng = rng,
-        bayesian_config = bayesian_config,
-        race_year = race_year,
-        race_date = race_date,
-        simulation_df = simulation_df,
-        risk_aversion = risk_aversion,
-        domestique_discount = domestique_discount,
-        disable_trajectory = disable_trajectory,
-        total_distance_km = total_distance_km,
+        race_history_df=data.race_history_df,
+        odds_df=data.odds_df,
+        oracle_df=data.oracle_df,
+        vg_history_df=data.vg_history_df,
+        qualitative_df=data.qualitative_df,
+        form_df=data.form_df,
+        seasons_df=data.seasons_df,
+        n_sims=n_sims,
+        race_type=race_type,
+        rng=rng,
+        bayesian_config=bayesian_config,
+        race_year=race_year,
+        race_date=race_date,
+        simulation_df=simulation_df,
+        risk_aversion=risk_aversion,
+        domestique_discount=domestique_discount,
+        disable_trajectory=disable_trajectory,
+        total_distance_km=total_distance_km,
     )
 end

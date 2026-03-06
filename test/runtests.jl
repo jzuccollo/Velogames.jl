@@ -452,21 +452,20 @@ end
     @test default_result.mean > 0.0
 
     custom_config = BayesianConfig(
-        0.5,
-        0.5,
-        2.0,
-        3.0,
-        1.0,
-        0.5,
-        1.5,
-        0.5,
-        0.5,
-        1.5,
-        2.5,
-        2.0,
-        0.0,
-        5.0,
-        100.0,
+        pcs_variance = 0.5,
+        vg_variance = 0.5,
+        form_variance = 2.0,
+        trajectory_variance = 3.0,
+        hist_base_variance = 1.0,
+        hist_decay_rate = 0.5,
+        vg_hist_base_variance = 1.5,
+        vg_hist_decay_rate = 0.5,
+        odds_variance = 0.5,
+        oracle_variance = 1.5,
+        qualitative_base_variance = 2.5,
+        odds_normalisation = 2.0,
+        signal_correlation = 0.0,
+        vg_season_penalty = 5.0,
     )
     custom_result =
         estimate_rider_strength(pcs_score = 1.0, vg_points = 0.5, config = custom_config)
@@ -479,38 +478,20 @@ end
 
     # Equicorrelation discount: more signals → wider posterior with ρ > 0
     no_corr = BayesianConfig(
-        5.0,
-        1.4,
-        2.0,
-        3.0,
-        3.0,
-        1.5,
-        3.0,
-        0.65,
-        0.5,
-        1.5,
-        2.5,
-        2.0,
-        0.0,
-        5.0,
-        100.0,
+        pcs_variance = 5.0,
+        hist_decay_rate = 1.5,
+        vg_hist_base_variance = 3.0,
+        vg_hist_decay_rate = 0.65,
+        signal_correlation = 0.0,
+        vg_season_penalty = 5.0,
     )
     with_corr = BayesianConfig(
-        5.0,
-        1.4,
-        2.0,
-        3.0,
-        3.0,
-        1.5,
-        3.0,
-        0.65,
-        0.5,
-        1.5,
-        2.5,
-        2.0,
-        0.4,
-        5.0,
-        100.0,
+        pcs_variance = 5.0,
+        hist_decay_rate = 1.5,
+        vg_hist_base_variance = 3.0,
+        vg_hist_decay_rate = 0.65,
+        signal_correlation = 0.4,
+        vg_season_penalty = 5.0,
     )
     r_nocorr = estimate_rider_strength(
         pcs_score = 1.0,
@@ -528,6 +509,81 @@ end
     )
     @test r_corr.variance > r_nocorr.variance  # correlation widens posterior
     @test abs(r_corr.mean - r_nocorr.mean) < 0.3  # mean shifts toward prior but stays close
+end
+
+@testset "Floor observations (odds/oracle absence-as-signal)" begin
+    # Floor strength should lower the posterior mean
+    no_floor = estimate_rider_strength(pcs_score = 0.5, vg_points = 0.3)
+    with_floor = estimate_rider_strength(
+        pcs_score = 0.5, vg_points = 0.3,
+        odds_floor_strength = -0.8,
+    )
+    @test with_floor.mean < no_floor.mean
+    @test with_floor.shift_odds < 0.0
+    @test no_floor.shift_odds == 0.0
+
+    # Floor uses higher variance than direct odds (wider posterior)
+    direct_odds = estimate_rider_strength(
+        pcs_score = 0.5, vg_points = 0.3,
+        odds_implied_prob = 0.002, n_starters = 150,
+    )
+    with_floor_same = estimate_rider_strength(
+        pcs_score = 0.5, vg_points = 0.3,
+        odds_floor_strength = -0.8,
+    )
+    # Floor observation should leave more uncertainty than a direct price
+    @test with_floor_same.variance > direct_odds.variance
+
+    # Oracle floor works the same way
+    with_oracle_floor = estimate_rider_strength(
+        pcs_score = 0.5, vg_points = 0.3,
+        oracle_floor_strength = -0.6,
+    )
+    @test with_oracle_floor.mean < no_floor.mean
+    @test with_oracle_floor.shift_oracle < 0.0
+
+    # Direct odds overrides floor (floor only applies when odds_implied_prob == 0)
+    direct_with_floor = estimate_rider_strength(
+        pcs_score = 0.5, vg_points = 0.3,
+        odds_implied_prob = 0.05, n_starters = 150,
+        odds_floor_strength = -0.8,
+    )
+    direct_without_floor = estimate_rider_strength(
+        pcs_score = 0.5, vg_points = 0.3,
+        odds_implied_prob = 0.05, n_starters = 150,
+    )
+    @test direct_with_floor.mean ≈ direct_without_floor.mean
+end
+
+@testset "Floor observations in estimate_strengths pipeline" begin
+    # Build a small rider DataFrame
+    rider_df = DataFrame(
+        rider = ["Rider A", "Rider B", "Rider C"],
+        riderkey = ["ridera", "riderb", "riderc"],
+        team = ["Team1", "Team1", "Team2"],
+        cost = [20, 10, 6],
+        points = [100.0, 50.0, 0.0],
+        oneday = [200, 100, 50],
+    )
+
+    # Odds cover only Rider A
+    odds_df = DataFrame(
+        rider = ["Rider A"],
+        riderkey = ["ridera"],
+        odds = [5.0],
+    )
+
+    # Without odds: all riders get no odds signal
+    result_no_odds = estimate_strengths(rider_df)
+    @test all(result_no_odds.shift_odds .== 0.0)
+
+    # With odds: absent riders should get nonzero odds shifts (floor applied)
+    result_with_odds = estimate_strengths(rider_df; odds_df = odds_df)
+    @test result_with_odds[result_with_odds.riderkey .== "riderb", :shift_odds][1] != 0.0
+    @test result_with_odds[result_with_odds.riderkey .== "riderc", :shift_odds][1] != 0.0
+
+    # Direct-priced rider should also get a nonzero odds shift
+    @test result_with_odds[result_with_odds.riderkey .== "ridera", :shift_odds][1] != 0.0
 end
 
 @testset "_rand_t distribution" begin
@@ -579,12 +635,13 @@ end
         n_sims = 10000,
         rng = rng3,
     )
-    evg = expected_vg_points(pos3, teams, SCORING_CAT2)
+    evg, dsd = expected_vg_points(pos3, teams, SCORING_CAT2)
     @test evg[1] > evg[5] && all(evg .>= 0)
     @test evg[2] > 0  # TeamA rider 2 gets assist points from strong rider 1
+    @test all(dsd .>= 0)
 end
 
-@testset "predict_expected_points end-to-end" begin
+@testset "estimate_strengths and predict_expected_points" begin
     rider_df = DataFrame(
         rider = ["Strong", "Medium", "Weak", "Also Weak", "Very Weak", "Last"],
         team = ["A", "A", "B", "B", "C", "C"],
@@ -594,24 +651,22 @@ end
         oneday = [2000, 1200, 800, 500, 200, 50],
     )
 
-    result = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000)
+    # estimate_strengths returns strength/uncertainty/signal columns
+    strengths_df = estimate_strengths(rider_df)
+    for col in [:strength, :uncertainty, :shift_pcs, :has_pcs]
+        @test col in propertynames(strengths_df)
+    end
+    @test strengths_df.strength[1] > strengths_df.strength[6]
+    @test strengths_df.shift_pcs[1] > 0.0
 
-    for col in [
-        :expected_vg_points,
-        :strength,
-        :uncertainty,
-        :expected_finish_pts,
-        :expected_assist_pts,
-        :expected_breakaway_pts,
-        :shift_pcs,
-    ]
+    # predict_expected_points adds expected_vg_points via MC simulation
+    result = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000)
+    for col in [:expected_vg_points, :strength, :uncertainty, :shift_pcs]
         @test col in propertynames(result)
     end
-
     @test result.expected_vg_points[1] > result.expected_vg_points[6]
     @test result.strength[1] > result.strength[6]
     @test all(result.expected_vg_points .>= 0)
-    @test result.shift_pcs[1] > 0.0  # strong rider has positive PCS shift
 
     # Race history shifts strength estimates
     history_df = DataFrame(
@@ -625,7 +680,7 @@ end
         race_history_df = history_df,
         n_sims = 5000,
     )
-    @test result_hist.strength[1] != result.strength[1]  # history shifts the mean
+    @test result_hist.strength[1] != result.strength[1]
 
     # Stage race mode uses class-aware blending
     rider_df_stage = copy(rider_df)
@@ -642,12 +697,10 @@ end
         n_sims = 5000,
         race_type = :stage,
     )
-
     for col in [:expected_vg_points, :strength, :uncertainty]
         @test col in propertynames(result_stage)
     end
     @test all(result_stage.expected_vg_points .>= 0)
-    @test all(result_stage.expected_breakaway_pts .== 0)
 end
 
 @testset "join_pcs_specialty! tracks data provenance" begin
@@ -676,10 +729,7 @@ end
     @test result2.has_pcs_data[1] == false
 end
 
-@testset "predict_expected_points zeros out uninformative riders" begin
-    # Unknown rider on same team as a strong rider — gets assist points but no finish/breakaway
-    # Zeroing uses two criteria: no external signal (has_any_signal=false) OR
-    # posterior uncertainty barely reduced from prior (catches e.g. PCS pages with tiny scores)
+@testset "estimate_strengths handles uninformative riders" begin
     rider_df = DataFrame(
         rider = ["Known", "Unknown", "KnownTeammate"],
         team = ["A", "B", "B"],
@@ -689,18 +739,13 @@ end
         oneday = [2000, 0, 1800],
         has_pcs_data = [true, false, true],
     )
-    result = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000)
-    @test result.expected_vg_points[1] > 0
-    # Unknown rider has no external signal — finish/breakaway zeroed,
-    # but assist preserved (depends on teammate, not rider's own signal)
-    @test result.has_any_signal[2] == false
-    @test result.expected_finish_pts[2] == 0.0
-    @test result.expected_breakaway_pts[2] == 0.0
-    @test result.expected_assist_pts[2] > 0.0  # teammate finishes top 3 sometimes
-    @test result.expected_vg_points[2] ≈ result.expected_assist_pts[2] atol = 0.1
-    # Known riders have signals and keep their points
-    @test result.has_any_signal[1] == true
-    @test result.expected_finish_pts[1] > 0
+    result = estimate_strengths(rider_df)
+    # Unknown rider has high uncertainty and low strength
+    @test result.uncertainty[2] > result.uncertainty[1]
+    @test result.strength[1] > result.strength[2]
+    # Known riders have PCS signal
+    @test result.has_pcs[1] == true
+    @test result.has_pcs[2] == false
 end
 
 @testset "Stage race PCS blending" begin
@@ -994,7 +1039,7 @@ end
 
     # Without breakaway should match expected_vg_points
     mean_pts, std_pts, down_std = simulate_vg_points(sim, teams, SCORING_CAT2)
-    evg = expected_vg_points(sim, teams, SCORING_CAT2)
+    evg, evg_dsd = expected_vg_points(sim, teams, SCORING_CAT2)
     @test length(mean_pts) == 5
     @test length(std_pts) == 5
     @test length(down_std) == 5
@@ -1073,43 +1118,8 @@ end
     @test all(ismissing.(mock_df.breakaway_km))
 end
 
-@testset "risk_aversion in predict_expected_points" begin
-    rider_df = DataFrame(
-        rider = ["Strong", "Medium", "Weak", "Uncertain"],
-        team = ["A", "A", "B", "B"],
-        cost = [20, 15, 10, 4],
-        points = [500.0, 300.0, 150.0, 0.0],
-        riderkey = ["strong", "medium", "weak", "uncertain"],
-        oneday = [2000, 1200, 800, 50],
-        has_pcs_data = [true, true, true, true],
-    )
-
-    # gamma=0 recovers current behaviour
-    result0 =
-        predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 0.0)
-    @test :std_vg_points in propertynames(result0)
-    @test :downside_std_vg_points in propertynames(result0)
-    @test :risk_adjusted_vg_points in propertynames(result0)
-    @test all(result0.risk_adjusted_vg_points .== result0.expected_vg_points)
-    # Downside semi-deviation should be <= full SD
-    @test all(result0.downside_std_vg_points .<= result0.std_vg_points .+ 0.1)
-
-    # gamma>0 penalises high-uncertainty riders
-    result1 =
-        predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 0.5)
-    @test all(result1.risk_adjusted_vg_points .<= result1.expected_vg_points .+ 0.1)
-    # Ratio-based formula always produces non-negative values
-    @test all(result1.risk_adjusted_vg_points .>= 0.0)
-    # The uncertain rider (low PCS, high prior variance) should be penalised more
-    strong_penalty = result1.expected_vg_points[1] - result1.risk_adjusted_vg_points[1]
-    uncertain_penalty = result1.expected_vg_points[4] - result1.risk_adjusted_vg_points[4]
-    @test uncertain_penalty >= 0
-    @test strong_penalty >= 0
-end
-
-@testset "risk-adjusted team selection integration" begin
+@testset "resample_optimise" begin
     rng = Random.MersenneTwister(42)
-    # Create a field with some reliable riders and some lottery tickets
     rider_df = DataFrame(
         rider = ["R$i" for i = 1:12],
         team = repeat(["A", "B", "C", "D"], 3),
@@ -1120,40 +1130,28 @@ end
         has_pcs_data = [trues(9); trues(3)],
     )
 
-    predicted = predict_expected_points(
-        rider_df,
-        SCORING_CAT2;
-        n_sims = 5000,
+    strengths_df = estimate_strengths(rider_df)
+
+    result_df, top_teams = resample_optimise(
+        strengths_df,
+        SCORING_CAT2,
+        build_model_oneday;
+        team_size = 6,
+        n_resamples = 100,
         rng = rng,
-        risk_aversion = 0.5,
     )
 
-    # Optimise on risk-adjusted column
-    sol = build_model_oneday(predicted, 6, :risk_adjusted_vg_points, :cost; totalcost = 100)
-    @test sol !== nothing
-
-    chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
-    @test nrow(chosen) == 6
-    @test sum(chosen.cost) <= 100
-end
-
-@testset "ratio risk metric handles no-signal riders correctly" begin
-    rider_df = DataFrame(
-        rider = ["Star", "Solid", "Unknown"],
-        team = ["A", "B", "C"],
-        cost = [20, 12, 4],
-        points = [500.0, 200.0, 0.0],
-        riderkey = ["star", "solid", "unknown"],
-        oneday = [2000, 800, 0],
-        has_pcs_data = [true, true, false],
-    )
-    result =
-        predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, risk_aversion = 1.0)
-    # Ratio formula is always non-negative
-    @test all(result.risk_adjusted_vg_points .>= 0.0)
-    # Known riders should have higher risk-adjusted points than the unknown rider
-    @test result.risk_adjusted_vg_points[1] > result.risk_adjusted_vg_points[3]
-    @test result.risk_adjusted_vg_points[2] > result.risk_adjusted_vg_points[3]
+    @test :selection_frequency in propertynames(result_df)
+    @test :expected_vg_points in propertynames(result_df)
+    @test :downside_semi_dev in propertynames(result_df)
+    @test !isempty(top_teams)
+    @test nrow(top_teams[1]) == 6
+    @test sum(top_teams[1].cost) <= 100
+    @test all(result_df.selection_frequency .>= 0.0)
+    @test all(result_df.selection_frequency .<= 1.0)
+    @test all(result_df.downside_semi_dev .>= 0.0)
+    # _final_pts working column should be cleaned up
+    @test :_final_pts ∉ propertynames(result_df)
 end
 
 # =========================================================================

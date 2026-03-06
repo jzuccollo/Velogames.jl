@@ -444,8 +444,8 @@ function backtest_race(
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     n_sims::Int = 2000,
     simulation_df::Union{Int,Nothing} = nothing,
-    risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
+    risk_aversion::Float64 = 0.0,
     store_rider_details::Bool = false,
 )
     actual_df = data.actual_df
@@ -512,11 +512,19 @@ function backtest_race(
         race_year = race.year,
         race_date = race.date,
         simulation_df = simulation_df,
-        risk_aversion = risk_aversion,
         domestique_discount = domestique_discount,
         disable_trajectory = !(:trajectory in signals),
         total_distance_km = race_distance_km,
     )
+
+    # --- Apply risk adjustment if risk_aversion > 0 ---
+    if risk_aversion > 0 && :downside_semi_dev in propertynames(predicted)
+        evg = predicted.expected_vg_points
+        dsd = predicted.downside_semi_dev
+        cv_down = [ep > 0 ? d / ep : 0.0 for (ep, d) in zip(evg, dsd)]
+        predicted[!, :risk_adjusted_vg_points] =
+            round.(evg ./ (1.0 .+ risk_aversion .* cv_down), digits = 1)
+    end
 
     # --- Compute rank-based metrics ---
     metrics_df = innerjoin(
@@ -536,7 +544,8 @@ function backtest_race(
 
     # --- VG team metrics (if costs available) ---
     pcr, pred_pts, opt_pts = NaN, NaN, NaN
-    prediction_col = risk_aversion > 0 ? :risk_adjusted_vg_points : :expected_vg_points
+    prediction_col = risk_aversion > 0 && :risk_adjusted_vg_points in propertynames(predicted) ?
+        :risk_adjusted_vg_points : :expected_vg_points
     if :cost in propertynames(predicted) && any(predicted.cost .> 0)
         try
             pcr, pred_pts, opt_pts = _compute_team_metrics(
@@ -658,8 +667,8 @@ function backtest_race(
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
     simulation_df::Union{Int,Nothing} = nothing,
-    risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
+    risk_aversion::Float64 = 0.0,
     store_rider_details::Bool = false,
 )
     data =
@@ -671,8 +680,8 @@ function backtest_race(
         bayesian_config = bayesian_config,
         n_sims = n_sims,
         simulation_df = simulation_df,
-        risk_aversion = risk_aversion,
         domestique_discount = domestique_discount,
+        risk_aversion = risk_aversion,
         store_rider_details = store_rider_details,
     )
 end
@@ -833,8 +842,8 @@ function backtest_season(
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
     simulation_df::Union{Int,Nothing} = nothing,
-    risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
+    risk_aversion::Float64 = 0.0,
     store_rider_details::Bool = false,
 )
     results = BacktestResult[]
@@ -848,8 +857,8 @@ function backtest_season(
                     bayesian_config = bayesian_config,
                     n_sims = n_sims,
                     simulation_df = simulation_df,
-                    risk_aversion = risk_aversion,
                     domestique_discount = domestique_discount,
+                    risk_aversion = risk_aversion,
                     store_rider_details = store_rider_details,
                 )
             else
@@ -861,8 +870,8 @@ function backtest_season(
                     cache_config = cache_config,
                     force_refresh = force_refresh,
                     simulation_df = simulation_df,
-                    risk_aversion = risk_aversion,
                     domestique_discount = domestique_discount,
+                    risk_aversion = risk_aversion,
                     store_rider_details = store_rider_details,
                 )
             end
@@ -1050,27 +1059,25 @@ const PARAM_BOUNDS = (
     signal_correlation = (0.0, 0.7),
     vg_season_penalty = (0.0, 10.0),
     odds_variance = (0.1, 2.0),
+    floor_variance_multiplier = (1.0, 5.0),
 )
 
 """Sample a random BayesianConfig within PARAM_BOUNDS."""
 function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
     _rand(bounds) = rand(rng) * (bounds[2] - bounds[1]) + bounds[1]
     BayesianConfig(
-        _rand(PARAM_BOUNDS.pcs_variance),
-        _rand(PARAM_BOUNDS.vg_variance),
-        _rand(PARAM_BOUNDS.form_variance),
-        _rand(PARAM_BOUNDS.trajectory_variance),
-        _rand(PARAM_BOUNDS.hist_base_variance),
-        _rand(PARAM_BOUNDS.hist_decay_rate),
-        _rand(PARAM_BOUNDS.vg_hist_base_variance),
-        _rand(PARAM_BOUNDS.vg_hist_decay_rate),
-        _rand(PARAM_BOUNDS.odds_variance),
-        DEFAULT_BAYESIAN_CONFIG.oracle_variance,
-        DEFAULT_BAYESIAN_CONFIG.qualitative_base_variance,
-        DEFAULT_BAYESIAN_CONFIG.odds_normalisation,
-        _rand(PARAM_BOUNDS.signal_correlation),
-        _rand(PARAM_BOUNDS.vg_season_penalty),
-        DEFAULT_BAYESIAN_CONFIG.prior_variance,
+        pcs_variance = _rand(PARAM_BOUNDS.pcs_variance),
+        vg_variance = _rand(PARAM_BOUNDS.vg_variance),
+        form_variance = _rand(PARAM_BOUNDS.form_variance),
+        trajectory_variance = _rand(PARAM_BOUNDS.trajectory_variance),
+        hist_base_variance = _rand(PARAM_BOUNDS.hist_base_variance),
+        hist_decay_rate = _rand(PARAM_BOUNDS.hist_decay_rate),
+        vg_hist_base_variance = _rand(PARAM_BOUNDS.vg_hist_base_variance),
+        vg_hist_decay_rate = _rand(PARAM_BOUNDS.vg_hist_decay_rate),
+        odds_variance = _rand(PARAM_BOUNDS.odds_variance),
+        signal_correlation = _rand(PARAM_BOUNDS.signal_correlation),
+        vg_season_penalty = _rand(PARAM_BOUNDS.vg_season_penalty),
+        floor_variance_multiplier = _rand(PARAM_BOUNDS.floor_variance_multiplier),
     )
 end
 
@@ -1088,6 +1095,7 @@ function _config_to_dict(config::BayesianConfig)
         :signal_correlation => config.signal_correlation,
         :vg_season_penalty => config.vg_season_penalty,
         :odds_variance => config.odds_variance,
+        :floor_variance_multiplier => config.floor_variance_multiplier,
     )
 end
 
@@ -1251,54 +1259,6 @@ end
 # ---------------------------------------------------------------------------
 
 """
-    tune_risk_aversion(races; gammas, objective, race_data, kwargs...) -> (best_gamma, log_df)
-
-Grid search over risk aversion values γ. Default objective is `points_captured_ratio`
-(since γ affects team selection, not rank prediction).
-
-Returns `(best_gamma, log_df)` where `log_df` has columns `:gamma` and `:mean_score`.
-"""
-function tune_risk_aversion(
-    races::Vector{BacktestRace};
-    gammas::Vector{Float64} = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0],
-    objective::Symbol = :points_captured_ratio,
-    race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
-    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
-    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
-    n_sims::Int = 2000,
-    simulation_df::Union{Int,Nothing} = nothing,
-    domestique_discount::Float64 = 0.0,
-)
-    best_gamma = 0.0
-    best_score = -Inf
-    log_rows = NamedTuple{(:gamma, :mean_score),Tuple{Float64,Float64}}[]
-
-    for gamma in gammas
-        results = backtest_season(
-            races;
-            race_data = race_data,
-            signals = signals,
-            bayesian_config = bayesian_config,
-            n_sims = n_sims,
-            simulation_df = simulation_df,
-            risk_aversion = gamma,
-            domestique_discount = domestique_discount,
-        )
-        score, _ = _compute_objective_score(results, objective)
-        push!(log_rows, (gamma = gamma, mean_score = score))
-        @info "γ=$(gamma): $objective=$(round(score, digits=4))"
-
-        if !isnan(score) && score > best_score
-            best_score = score
-            best_gamma = gamma
-        end
-    end
-
-    @info "Best γ=$(best_gamma) with $objective=$(round(best_score, digits=4))"
-    return best_gamma, DataFrame(log_rows)
-end
-
-"""
     tune_domestique_discount(races; discounts, objective, ...) -> (Float64, DataFrame)
 
 Grid search over domestique discount values. Default objective is `points_captured_ratio`.
@@ -1312,7 +1272,6 @@ function tune_domestique_discount(
     bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     n_sims::Int = 2000,
     simulation_df::Union{Int,Nothing} = nothing,
-    risk_aversion::Float64 = 0.0,
 )
     best_discount = 0.0
     best_score = -Inf
@@ -1326,7 +1285,6 @@ function tune_domestique_discount(
             bayesian_config = bayesian_config,
             n_sims = n_sims,
             simulation_df = simulation_df,
-            risk_aversion = risk_aversion,
             domestique_discount = d,
         )
         score, _ = _compute_objective_score(results, objective)
@@ -1341,4 +1299,49 @@ function tune_domestique_discount(
 
     @info "Best discount=$(best_discount) with $objective=$(round(best_score, digits=4))"
     return best_discount, DataFrame(log_rows)
+end
+
+"""
+    tune_risk_aversion(races; risk_aversions, objective, ...) -> (Float64, DataFrame)
+
+Grid search over risk aversion values. Default objective is `points_captured_ratio`.
+"""
+function tune_risk_aversion(
+    races::Vector{BacktestRace};
+    risk_aversions::Vector{Float64} = [0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0],
+    objective::Symbol = :points_captured_ratio,
+    race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
+    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
+    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    n_sims::Int = 2000,
+    simulation_df::Union{Int,Nothing} = nothing,
+    domestique_discount::Float64 = 0.0,
+)
+    best_ra = 0.0
+    best_score = -Inf
+    log_rows = NamedTuple{(:risk_aversion, :mean_score),Tuple{Float64,Float64}}[]
+
+    for ra in risk_aversions
+        results = backtest_season(
+            races;
+            race_data = race_data,
+            signals = signals,
+            bayesian_config = bayesian_config,
+            n_sims = n_sims,
+            simulation_df = simulation_df,
+            domestique_discount = domestique_discount,
+            risk_aversion = ra,
+        )
+        score, _ = _compute_objective_score(results, objective)
+        push!(log_rows, (risk_aversion = ra, mean_score = score))
+        @info "risk_aversion=$(ra): $objective=$(round(score, digits=4))"
+
+        if !isnan(score) && score > best_score
+            best_score = score
+            best_ra = ra
+        end
+    end
+
+    @info "Best risk_aversion=$(best_ra) with $objective=$(round(best_score, digits=4))"
+    return best_ra, DataFrame(log_rows)
 end

@@ -71,11 +71,17 @@ export ScoringTable,
     finish_points_for_position
 
 # Solvers and optimisation
-export solve_oneday, solve_stage, build_model_oneday, build_model_stage, minimise_cost_stage
+export solve_oneday,
+    solve_stage,
+    build_model_oneday,
+    build_model_stage,
+    minimise_cost_stage,
+    resample_optimise
 
 # Simulation and prediction (public API)
 export BayesianConfig,
     DEFAULT_BAYESIAN_CONFIG,
+    estimate_strengths,
     predict_expected_points,
     BayesianPosterior,
     bayesian_update,
@@ -97,14 +103,15 @@ export BacktestRace,
     summarise_backtest,
     ablation_study,
     tune_hyperparameters,
-    tune_risk_aversion,
     tune_domestique_discount,
+    tune_risk_aversion,
     build_race_catalogue,
     prefetch_race_data,
     prefetch_all_races
 
 # Utilities
-export createkey, unpipe, round_numeric_columns!, clean_team_names!, suppress_output
+export createkey, unpipe, round_numeric_columns!, clean_team_names!, suppress_output,
+    format_signal_waterfall
 
 # Include all modules (order matters for dependencies)
 include("cache_utils.jl")

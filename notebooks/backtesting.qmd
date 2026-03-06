@@ -18,9 +18,6 @@ backtest_years = [2023, 2024, 2025]
 n_sims = 1000
 history_years = 5
 
-# Risk aversion (0 = risk-neutral baseline, >0 penalises high-variance riders)
-risk_aversion = 0.0
-
 # Whether to run the (slow) tuning sections
 run_tuning = true
 
@@ -73,12 +70,20 @@ n_fetched = length(race_data)
 n_with_odds = count(d -> d.odds_df !== nothing, values(race_data))
 n_with_oracle = count(d -> d.oracle_df !== nothing, values(race_data))
 n_with_history = count(d -> d.race_history_df !== nothing, values(race_data))
+n_with_vg_history = count(d -> d.vg_history_df !== nothing, values(race_data))
+n_with_form = count(d -> d.form_df !== nothing, values(race_data))
+n_with_seasons = count(d -> d.seasons_df !== nothing, values(race_data))
 
 print("""
 | Signal | Races with data | Coverage |
 |--------|-----------------|----------|
 | PCS results (ground truth) | $n_fetched / $n_total | $(round(100 * n_fetched / n_total, digits=0))% |
+| PCS specialty ratings | $n_fetched / $n_fetched | 100% |
+| VG season points (cumulative) | $n_fetched / $n_fetched | 100% |
 | PCS race history | $n_with_history / $n_fetched | $(round(100 * n_with_history / max(n_fetched, 1), digits=0))% |
+| VG race history | $n_with_vg_history / $n_fetched | $(round(100 * n_with_vg_history / max(n_fetched, 1), digits=0))% |
+| Archived PCS form | $n_with_form / $n_fetched | $(round(100 * n_with_form / max(n_fetched, 1), digits=0))% |
+| Archived PCS seasons (trajectory) | $n_with_seasons / $n_fetched | $(round(100 * n_with_seasons / max(n_fetched, 1), digits=0))% |
 | Archived Betfair odds | $n_with_odds / $n_fetched | $(round(100 * n_with_odds / max(n_fetched, 1), digits=0))% |
 | Archived Cycling Oracle | $n_with_oracle / $n_fetched | $(round(100 * n_with_oracle / max(n_fetched, 1), digits=0))% |
 
@@ -126,7 +131,6 @@ results = suppress_output() do
         race_data=race_data,
         signals=baseline_signals,
         n_sims=n_sims,
-        risk_aversion=risk_aversion,
         store_rider_details=true,
     )
 end
@@ -679,41 +683,6 @@ The default configuration scored $(round(default_score, digits=4)). The objectiv
 end
 ```
 
-# Risk aversion tuning
-
-The optimiser can penalise high-variance riders using `risk_adjusted_vg = E[pts] / (1 + γ * CV_down)`. This section searches over γ values to find the level that maximises the points captured ratio in backtesting.
-
-```{julia}
-#| echo: true
-#| output: asis
-
-if run_tuning
-    best_gamma, gamma_log = suppress_output() do
-        tune_risk_aversion(races;
-            race_data=race_data,
-            signals=baseline_signals,
-            n_sims=n_sims,
-        )
-    end
-
-    print("""
-## Risk aversion grid search
-
-**Best γ:** $(best_gamma)
-
-""")
-
-    round_numeric_columns!(gamma_log; digits=4)
-    md_table(gamma_log)
-    print("\n")
-else
-    print("""
-Risk aversion tuning is disabled (`run_tuning = false`). Set `run_tuning = true` in the configuration cell to enable it.
-
-""")
-end
-```
-
 # Domestique discount tuning
 
 The domestique discount penalises non-leaders within each team proportionally to their strength gap from the team leader, reducing their simulated finishing positions. This section searches over discount values to find the level that maximises points captured.
@@ -728,7 +697,6 @@ if run_tuning
             race_data=race_data,
             signals=baseline_signals,
             n_sims=n_sims,
-            risk_aversion=risk_aversion,
         )
     end
 

@@ -51,6 +51,8 @@ The observation variance $\sigma^2_{\text{obs}}$ controls each signal's influenc
 
 Race history observations are converted from finishing positions via a logit transform of fractional rank: $\text{strength} = -\log\!\left(\tfrac{k}{n+1} \big/ \left(1 - \tfrac{k}{n+1}\right)\right)$, which maps position 1 in a 150-rider field to roughly $+2.5$ and last to $-2.5$. Odds and Oracle predictions are converted via $\log(p / p_{\text{baseline}}) / 2.0$ where $p_{\text{baseline}} = 1/n_{\text{starters}}$ is the uniform probability.
 
+When odds or oracle data is available for a race, riders absent from the market receive a floor observation derived from the residual probability mass. This treats absence as a signal: the market evaluated all starters and implicitly priced absent riders below threshold. Floor observations use higher variance than directly priced riders (base variance $\times$ 2.0), reflecting the lower precision of a pooled estimate versus individual pricing.
+
 Early in the season, VG season points carry less information because most riders have zero. The effective variance inflates: $\sigma^2_{\text{VG}} = 1.4 \times (1 + 1.3 \times (1 - f_{\text{nonzero}}))$, where $f_{\text{nonzero}}$ is the fraction of riders with non-zero points — ranging from about 8.3 at the opening weekend to 1.4 by late season.
 
 Because all signals measure the same underlying quality, treating them as independent overstates certainty. After all updates, an equicorrelation discount is applied: if $n$ signals have been observed with assumed pairwise correlation $\rho = 0.1$, the effective total observation precision is divided by $1 + \rho(n-1)$.

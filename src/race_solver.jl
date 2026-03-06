@@ -2,13 +2,18 @@
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-"""Extract the chosen team from optimisation results and log a summary."""
-function _extract_chosen_team(results, predicted::DataFrame, cost_col::Symbol)
-    chosen_vec = [results[r] for r in predicted.riderkey]
-    predicted[!, :chosen] = chosen_vec .> 0.5
+"""Extract the chosen team (highest selection_frequency riders) and mark all riders."""
+function _extract_chosen_team(predicted::DataFrame, top_teams::Vector{DataFrame})
+    if isempty(top_teams)
+        predicted[!, :chosen] .= false
+        return predicted, DataFrame()
+    end
+    best_team = top_teams[1]
+    best_keys = Set(best_team.riderkey)
+    predicted[!, :chosen] = [k in best_keys for k in predicted.riderkey]
     chosenteam = filter(:chosen => ==(true), predicted)
 
-    total_cost = sum(chosenteam[!, cost_col])
+    total_cost = sum(chosenteam.cost)
     total_evg = sum(chosenteam.expected_vg_points)
     @info "Selected $(nrow(chosenteam)) riders | Cost: $total_cost | Expected VG points: $(round(total_evg, digits=1))"
 
@@ -352,8 +357,8 @@ end
 """
 ## `solve_oneday`
 
-Construct an optimal team for a Sixes Classics one-day race using Monte Carlo
-simulation of expected Velogames points.
+Construct an optimal team for a Sixes Classics one-day race using resampled
+optimisation of expected Velogames points.
 
 ## Pipeline:
 1. Fetch VG rider data (costs, season points, teams)
@@ -361,23 +366,13 @@ simulation of expected Velogames points.
 3. Fetch PCS race-specific history (past editions)
 4. Optionally fetch betting odds and Cycling Oracle predictions
 5. Estimate rider strength via Bayesian updating
-6. Monte Carlo simulate finishing positions
-7. Compute expected VG points per rider
-8. Optimise team selection to maximise expected VG points
-
-## Arguments
-- `config::RaceConfig` - race configuration (from `setup_race`)
-- `racehash::String` - VG startlist hash filter (default: "" for all riders)
-- `history_years::Int` - how many years of race history to use (default: 5)
-- `betfair_market_id::String` - Betfair Exchange market ID (default: "" for no odds)
-- `oracle_url::String` - Cycling Oracle prediction URL (default: "" for no oracle)
-- `n_sims::Int` - Monte Carlo simulations (default: 10000)
-- `excluded_riders::Vector{String}` - rider names to exclude
-- `filter_startlist::Bool` - filter against PCS confirmed startlist (default: true)
+6. Resampled optimisation: draw strengths, score, optimise, repeat
 
 ## Returns
-A tuple `(predicted, chosenteam)` where `predicted` is a DataFrame of all riders
-with expected VG points, and `chosenteam` is the optimal 6-rider team.
+A tuple `(predicted, chosenteam, top_teams)` where `predicted` is a DataFrame
+of all riders with expected VG points and selection frequency, `chosenteam` is
+the most frequently selected team, and `top_teams` is a vector of the top
+alternative teams.
 """
 function solve_oneday(
     config::RaceConfig;
@@ -385,16 +380,16 @@ function solve_oneday(
     history_years::Int = 5,
     betfair_market_id::String = "",
     oracle_url::String = "",
-    n_sims::Int = 10000,
+    n_resamples::Int = 500,
     excluded_riders::Vector{String} = String[],
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
     odds_df::Union{DataFrame,Nothing} = nothing,
-    risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
+    risk_aversion::Float64 = 0.5,
 )
     data = _prepare_rider_data(
         config,
@@ -412,84 +407,47 @@ function solve_oneday(
         odds_df = odds_df,
     )
     if data === nothing
-        return DataFrame(), DataFrame()
+        return DataFrame(), DataFrame(), DataFrame[]
     end
 
-    # --- 5-7. Predict expected VG points ---
-    scoring = get_scoring(config.category > 0 ? config.category : 2)  # default Cat 2 if unknown
+    # --- 5. Estimate rider strengths ---
+    scoring = get_scoring(config.category > 0 ? config.category : 2)
 
-    @info "Predicting expected VG points (Cat $(config.category), $n_sims sims)..."
-    predicted = predict_expected_points(
-        data,
-        scoring;
-        n_sims = n_sims,
+    @info "Estimating rider strengths (Cat $(config.category))..."
+    predicted = estimate_strengths(
+        data;
         race_year = config.year,
-        risk_aversion = risk_aversion,
         domestique_discount = domestique_discount,
-        total_distance_km = config.total_distance_km,
     )
 
-    # --- 8. Optimise team selection ---
-    @info "Optimising team selection..."
-
-    cost_col = :cost
-    points_col = risk_aversion > 0 ? :risk_adjusted_vg_points : :expected_vg_points
-
-    results = build_model_oneday(
+    # --- 6. Resampled optimisation ---
+    @info "Running resampled optimisation ($n_resamples resamples)..."
+    predicted, top_teams = resample_optimise(
         predicted,
-        config.team_size,
-        points_col,
-        cost_col;
-        totalcost = 100,
+        scoring,
+        build_model_oneday;
+        team_size = config.team_size,
+        n_resamples = n_resamples,
         max_per_team = max_per_team,
+        risk_aversion = risk_aversion,
     )
 
-    if results === nothing
-        @warn "Optimisation failed - no feasible solution found"
-        return DataFrame(), DataFrame()
-    end
+    predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
 
-    return _extract_chosen_team(results, predicted, cost_col)
+    return predicted, chosenteam, top_teams
 end
 
 
 """
 ## `solve_stage`
 
-Construct an optimal team for a stage race using Monte Carlo simulation of
-expected Velogames points.
+Construct an optimal team for a stage race using resampled optimisation.
 
-Uses class-aware strength estimation: rider PCS specialty scores are blended
-according to their VG classification (all-rounder, climber, sprinter, unclassed)
-to produce a single strength estimate that reflects their likely contribution
-across the whole stage race.
-
-This is an aggregate approach — it simulates overall finishing positions rather
-than individual stages. See the roadmap for planned stage-by-stage simulation.
-
-## Pipeline:
-1. Fetch VG rider data (costs, season points, teams, classifications)
-2. Fetch PCS specialty ratings for each rider
-3. Fetch PCS race history (past editions, optional)
-4. Optionally fetch betting odds and Cycling Oracle predictions
-5. Estimate strength via class-aware Bayesian updating
-6. Monte Carlo simulate overall finishing positions
-7. Compute expected VG points via stage race scoring table
-8. Optimise team selection with rider classification constraints
-
-## Arguments
-- `config::RaceConfig` - race configuration (from `setup_race`)
-- `racehash::String` - VG startlist hash filter (default: "" for all riders)
-- `history_years::Int` - how many years of race history to use (default: 3)
-- `betfair_market_id::String` - Betfair Exchange market ID (default: "" for no odds)
-- `oracle_url::String` - Cycling Oracle prediction URL (default: "" for no oracle)
-- `n_sims::Int` - Monte Carlo simulations (default: 10000)
-- `excluded_riders::Vector{String}` - rider names to exclude
-- `filter_startlist::Bool` - filter against PCS confirmed startlist (default: true)
+Uses class-aware strength estimation and enforces VG classification constraints
+(all-rounders, climbers, sprinters, unclassed) during optimisation.
 
 ## Returns
-A tuple `(predicted, chosenteam)` where `predicted` is a DataFrame of all riders
-with expected VG points, and `chosenteam` is the optimal 9-rider team.
+A tuple `(predicted, chosenteam, top_teams)`.
 """
 function solve_stage(
     config::RaceConfig;
@@ -497,16 +455,16 @@ function solve_stage(
     history_years::Int = 3,
     betfair_market_id::String = "",
     oracle_url::String = "",
-    n_sims::Int = 10000,
+    n_resamples::Int = 500,
     excluded_riders::Vector{String} = String[],
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
     odds_df::Union{DataFrame,Nothing} = nothing,
-    risk_aversion::Float64 = 0.0,
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
+    risk_aversion::Float64 = 0.5,
 )
     data = _prepare_rider_data(
         config,
@@ -524,42 +482,31 @@ function solve_stage(
         odds_df = odds_df,
     )
     if data === nothing
-        return DataFrame(), DataFrame()
+        return DataFrame(), DataFrame(), DataFrame[]
     end
 
-    # --- 5-7. Predict expected VG points (stage race mode) ---
     scoring = get_scoring(:stage)
 
-    @info "Predicting expected VG points (stage race, $n_sims sims)..."
-    predicted = predict_expected_points(
-        data,
-        scoring;
-        n_sims = n_sims,
+    @info "Estimating rider strengths (stage race)..."
+    predicted = estimate_strengths(
+        data;
         race_type = :stage,
         race_year = config.year,
-        risk_aversion = risk_aversion,
         domestique_discount = domestique_discount,
     )
 
-    # --- 8. Optimise team selection with class constraints ---
-    @info "Optimising team selection (9 riders, class constraints)..."
-
-    cost_col = :cost
-    points_col = risk_aversion > 0 ? :risk_adjusted_vg_points : :expected_vg_points
-
-    results = build_model_stage(
+    @info "Running resampled optimisation ($n_resamples resamples, class constraints)..."
+    predicted, top_teams = resample_optimise(
         predicted,
-        config.team_size,
-        points_col,
-        cost_col;
-        totalcost = 100,
+        scoring,
+        build_model_stage;
+        team_size = config.team_size,
+        n_resamples = n_resamples,
         max_per_team = max_per_team,
+        risk_aversion = risk_aversion,
     )
 
-    if results === nothing
-        @warn "Optimisation failed - no feasible solution found"
-        return DataFrame(), DataFrame()
-    end
+    predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
 
-    return _extract_chosen_team(results, predicted, cost_col)
+    return predicted, chosenteam, top_teams
 end

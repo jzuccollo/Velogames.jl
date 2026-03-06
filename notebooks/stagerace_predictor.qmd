@@ -20,11 +20,11 @@ racehash = ""  # VG startlist hash filter (leave empty for all riders)
 betfair_market_id = ""  # Betfair Exchange market ID from the URL
 oracle_url = ""
 
-# Simulation
-n_sims = 1000         # Monte Carlo iterations (more = smoother, slower)
+# Optimisation
+n_resamples = 500     # Resampled optimisation iterations (more = smoother, slower)
 history_years = 3     # Years of PCS race history to fetch
-risk_aversion = 0.5   # Penalise high-variance riders (0 = risk-neutral, higher = more conservative)
 domestique_discount = 0.3  # Penalise non-leaders proportionally to strength gap (0 = off)
+risk_aversion = 0.5   # Penalise volatile riders via downside CV (0 = off)
 max_per_team = 0      # Max riders from any single team (0 = no limit)
 
 # Exclusions
@@ -46,24 +46,23 @@ config = suppress_output() do
     setup_race(race_name, race_year; cache_config=race_cache)
 end
 
-predicted, chosenteam = suppress_output() do
+predicted, chosenteam, top_teams = suppress_output() do
     solve_stage(config;
         racehash=racehash,
         history_years=history_years,
         betfair_market_id=betfair_market_id,
         oracle_url=oracle_url,
-        n_sims=n_sims,
+        n_resamples=n_resamples,
         excluded_riders=excluded_riders,
-        risk_aversion=risk_aversion,
         domestique_discount=domestique_discount,
+        risk_aversion=risk_aversion,
         max_per_team=max_per_team)
 end
 
 # --- Race summary ---
 n_total = nrow(predicted)
-ra_str = risk_aversion > 0 ? "γ=$(risk_aversion)" : "risk-neutral"
 print("""
-**$(titlecase(config.name)) $(config.year)** — Stage race, $(n_total) riders, $(n_sims) simulations, $(ra_str)
+**$(titlecase(config.name)) $(config.year)** — Stage race, $(n_total) riders, $(n_resamples) resamples
 
 """)
 
@@ -141,15 +140,7 @@ if @isdefined(chosenteam) && nrow(chosenteam) > 0
         print("**Classes:** $(class_str)\n\n")
     end
 
-    display_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :std_vg_points, :strength, :uncertainty]
-    if risk_aversion > 0
-        insert!(display_cols, findfirst(==(:std_vg_points), display_cols) + 1, :risk_adjusted_vg_points)
-    end
-    for col in [:expected_finish_pts, :expected_assist_pts]
-        if col in propertynames(chosenteam)
-            push!(display_cols, col)
-        end
-    end
+    display_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :selection_frequency, :strength, :uncertainty]
     display_cols = filter(c -> c in propertynames(chosenteam), display_cols)
 
     team_display = chosenteam[:, display_cols]
@@ -157,6 +148,19 @@ if @isdefined(chosenteam) && nrow(chosenteam) > 0
     clean_team_names!(team_display, [:team])
     md_table(sort(team_display, :expected_vg_points, rev=true))
     print("\n")
+
+    # Signal breakdown for each team member
+    print("""
+
+::: {.callout-note collapse="true"}
+## Signal breakdown
+
+How each signal shifted the strength estimate for riders in your team. Flags highlight riders where few signals drove the estimate or a single signal dominates.
+
+$(format_signal_waterfall(sort(chosenteam, :expected_vg_points, rev=true)))
+:::
+
+""")
 else
     print("""
 ::: {.callout-warning}
@@ -173,15 +177,7 @@ Top 30 riders by expected VG points:
 ```{julia}
 #| output: asis
 if @isdefined(predicted) && nrow(predicted) > 0
-    ranking_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :std_vg_points, :strength, :uncertainty]
-    if risk_aversion > 0
-        insert!(ranking_cols, findfirst(==(:std_vg_points), ranking_cols) + 1, :risk_adjusted_vg_points)
-    end
-    for col in [:expected_finish_pts, :expected_assist_pts]
-        if col in propertynames(predicted)
-            push!(ranking_cols, col)
-        end
-    end
+    ranking_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :selection_frequency, :strength, :uncertainty]
     if :chosen in propertynames(predicted)
         push!(ranking_cols, :chosen)
     end

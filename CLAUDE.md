@@ -1,6 +1,6 @@
 # Velogames.jl
 
-Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Velogames and ProCyclingStats, estimates expected Velogames points via Monte Carlo simulation, and selects optimal teams using JuMP/HiGHS linear programming.
+Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Velogames and ProCyclingStats, estimates rider strength via Bayesian updating, and selects optimal teams using resampled optimisation (JuMP/HiGHS).
 
 ## Architecture
 
@@ -12,9 +12,9 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/data_assembly.jl` - Shared data assembly: `RaceData` struct, `join_pcs_specialty!`, `assemble_pcs_race_history`, `assemble_vg_race_history`, `prefetch_vg_racelists` (used by both production and backtesting pipelines)
 - `src/qualitative.jl` - Qualitative intelligence: YouTube transcript fetching (via yt-dlp), Claude API extraction, prompt generation, JSON response parsing, manual workflow support
 - `src/scoring.jl` - VG scoring tables by category (one-day Cat 1/2/3, stage race aggregate) and expected points functions
-- `src/simulation.jl` - Monte Carlo race simulation, Bayesian strength estimation (uninformative prior with PCS as observation, trajectory signal, season-adaptive VG variance), class-aware PCS blending for stage races, domestique strength discount
-- `src/build_model.jl` - JuMP optimisation models: `build_model_oneday` (6 riders), `build_model_stage` (9 riders + class constraints), `minimise_cost_stage`, optional max-per-team constraint
-- `src/race_solver.jl` - High-level solvers: `solve_oneday` and `solve_stage` (MC pipelines)
+- `src/simulation.jl` - Bayesian strength estimation (`estimate_strengths`): uninformative prior with PCS as observation, trajectory signal, season-adaptive VG variance, class-aware PCS blending for stage races, domestique strength discount. Also retains `predict_expected_points` (MC simulation) for backtesting compatibility.
+- `src/build_model.jl` - JuMP optimisation models: `build_model_oneday` (6 riders), `build_model_stage` (9 riders + class constraints), `resample_optimise` (resampled optimisation that draws noisy strengths, scores VG points, and optimises per draw), `minimise_cost_stage`
+- `src/race_solver.jl` - High-level solvers: `solve_oneday` and `solve_stage` (estimate strengths → resampled optimisation pipeline, returns top teams)
 - `src/cache_utils.jl` - Feather-based caching with configurable TTL (default ~/.velogames_cache, 24h), plus permanent archival storage (~/.velogames_archive) for odds/oracle snapshots
 - `src/classification_utils.jl` - Rider classification (allrounder/sprinter/climber/unclassed) column management
 - `src/race_helpers.jl` - `RaceInfo` struct (canonical race metadata), `RaceConfig` struct, `setup_race()`, URL alias lookup, `CLASSICS_RACES_2026` schedule, `SIMILAR_RACES` (derived from `RaceInfo`), year-aware VG slug/URL/game ID functions
@@ -27,11 +27,12 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Solvers (src/race_solver.jl)
 
-- `solve_oneday(config; ...)` - MC prediction pipeline for one-day classics races (PCS startlist filter, similar-race history, VG history)
-- `solve_stage(config; ...)` - MC prediction pipeline for stage races (class-aware strength, PCS startlist filter, similar-race history, VG history)
+- `solve_oneday(config; ...)` - Resampled optimisation pipeline for one-day classics. Returns `(predicted, chosenteam, top_teams)`.
+- `solve_stage(config; ...)` - Resampled optimisation pipeline for stage races (class constraints). Returns `(predicted, chosenteam, top_teams)`.
 
 ### Optimisation models (src/build_model.jl)
 
+- `resample_optimise(df, scoring, build_model_fn; team_size, n_resamples=500, max_per_team)` - Draw noisy strengths from posterior, score VG points, optimise team per draw, repeat. Returns `(df, top_teams)` where df gains `:selection_frequency` and `:expected_vg_points`, and `top_teams` is a `Vector{DataFrame}` of the most frequently selected teams.
 - `build_model_oneday(df, n, points_col, cost_col; max_per_team)` - Maximise points, one-day (6 riders, cost <= 100, optional per-team cap)
 - `build_model_stage(df, n, points_col, cost_col; max_per_team)` - Maximise points, stage race (9 riders, class constraints, optional per-team cap)
 - `minimise_cost_stage(df, target_score, n, cost_col)` - Minimise cost for target score
@@ -51,10 +52,10 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Simulation (src/simulation.jl)
 
-- `predict_expected_points(df, scoring; ...)` / `predict_expected_points(data::RaceData, scoring; ...)` - Full prediction pipeline (supports variance_penalty in race history, VG history, temporally-aware recency weighting, trajectory signal, season-adaptive VG variance, ratio-based risk-adjusted optimisation via `risk_aversion`, and domestique strength discount via `domestique_discount`)
+- `estimate_strengths(rider_df; ...)` / `estimate_strengths(data::RaceData; ...)` - Bayesian strength estimation pipeline. Returns DataFrame with `strength`, `uncertainty`, signal flags, signal shifts, and domestique penalty. Used by production solvers.
+- `predict_expected_points(df, scoring; ...)` - Backward-compatible wrapper: calls `estimate_strengths` then runs MC simulation to compute `expected_vg_points`. Used by backtesting.
 - `estimate_rider_strength(...)` - Bayesian posterior from uninformative prior (mean=0, variance=100), updated with PCS specialty (gated on `has_pcs`), VG, PCS form, trajectory, PCS race history with variance penalties, VG race history, odds, oracle, qualitative intelligence
-- `simulate_race(strengths, n_sims)` - Monte Carlo position simulation
-- `simulate_vg_points(sim_positions, teams, scoring; include_breakaway)` - Per-rider mean and SD of VG points across simulations (finish + assist + optional breakaway, using Welford's online algorithm)
+- `simulate_race(strengths, uncertainties; n_sims)` - Monte Carlo position simulation (used by backtesting)
 - `compute_stage_race_pcs_score(row, class)` - Class-aware PCS blending for stage races
 
 ### Qualitative intelligence (src/qualitative.jl)
@@ -79,7 +80,6 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `summarise_backtest(results)` - Convert results to summary DataFrame with aggregates
 - `ablation_study(races; ...)` - Test 9 signal subsets to measure marginal signal value
 - `tune_hyperparameters(races; ...)` - Two-stage hyperparameter optimisation with cross-validation
-- `tune_risk_aversion(races; gammas, ...)` - Grid search over risk aversion γ values, optimising points_captured_ratio via backtest_season
 - `tune_domestique_discount(races; discounts, ...)` - Grid search over domestique discount values, optimising points_captured_ratio via backtest_season
 - `BacktestResult` includes: rank metrics (Spearman ρ, top-N overlap), VG team metrics (actual scoring tables), and calibration diagnostics (z-scores, coverage rates)
 
@@ -96,7 +96,8 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - Archival storage: `_prepare_rider_data` automatically archives odds/oracle/PCS specialty data on successful fetch; `prefetch_race_data` loads archived data for backtesting
 - Archival paths: `~/.velogames_archive/{data_type}/{pcs_slug}/{year}.feather` — data_type includes odds, oracle, pcs_specialty, vg_results
 - VG race URLs: `ridescore.php?ga={game_id}&st={race_number}` where game_id is from `vg_classics_game_id(year)`, `st` is race number 1-44 from races.php
-- Backtesting temporal integrity: `predict_expected_points` accepts `race_year`/`race_date` for correct recency weighting; cumulative VG season points prevent end-of-year leakage; archived PCS specialty scores prevent current-day leakage
+- Backtesting temporal integrity: `estimate_strengths`/`predict_expected_points` accept `race_year`/`race_date` for correct recency weighting; cumulative VG season points prevent end-of-year leakage; archived PCS specialty scores prevent current-day leakage
+- Production pipeline: `estimate_strengths` → `resample_optimise` (avoids Jensen's inequality bias from scoring floor at position 31+). Backtesting pipeline: `predict_expected_points` (MC simulation) for rank-based metrics.
 
 ## Commands
 

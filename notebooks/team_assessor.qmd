@@ -12,7 +12,7 @@ format: html
 using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Race — must match the oneday predictor config
-race_name = "laigueglia"
+race_name = "strade"
 race_year = 2026
 
 # Fallback config — only used if no archived prediction exists
@@ -21,10 +21,10 @@ betfair_market_id = ""
 oracle_url = ""
 qualitative_youtube_url = ""
 qualitative_json_file = ""
-n_sims = 1000
+n_resamples = 500
 history_years = 5
-risk_aversion = 1.5
 domestique_discount = 0.3
+risk_aversion = 0.5
 max_per_team = 0
 excluded_riders = String[]
 
@@ -43,6 +43,12 @@ List the riders in your custom team. Names must match VG rider names exactly.
 #| echo: true
 #| output: false
 my_team = [
+    "Tadej Pogacar",
+    "Thomas Pidcock",
+    "Paul Seixas",
+    "Gianmarco Garofoli",
+    "Aaron Dockx",
+    "Pietro Mattio"
 ]
 my_keys = createkey.(my_team)
 ```
@@ -70,8 +76,7 @@ if archived_prediction !== nothing && nrow(archived_prediction) > 0
     optimal_team = if :chosen in propertynames(predicted)
         filter(:chosen => ==(true), predicted)
     else
-        points_col = :risk_adjusted_vg_points in propertynames(predicted) ? :risk_adjusted_vg_points : :expected_vg_points
-        sol = build_model_oneday(predicted, 6, points_col, :cost; totalcost=100)
+        sol = build_model_oneday(predicted, 6, :expected_vg_points, :cost; totalcost=100)
         sol !== nothing ? filter(row -> sol[row.riderkey] > 0.5, predicted) : DataFrame()
     end
 else
@@ -99,17 +104,17 @@ else
         end
     end
 
-    predicted, optimal_team = suppress_output() do
+    predicted, optimal_team, _ = suppress_output() do
         solve_oneday(config;
             racehash=racehash,
             history_years=history_years,
             betfair_market_id=betfair_market_id,
             oracle_url=oracle_url,
-            n_sims=n_sims,
+            n_resamples=n_resamples,
             excluded_riders=excluded_riders,
             qualitative_df=qualitative_df,
-            risk_aversion=risk_aversion,
             domestique_discount=domestique_discount,
+            risk_aversion=risk_aversion,
             max_per_team=max_per_team)
     end
 end
@@ -174,15 +179,7 @@ else
 
     """)
 
-        display_cols = [:rider, :team, :cost, :expected_vg_points, :std_vg_points, :strength, :uncertainty]
-        if risk_aversion > 0
-            insert!(display_cols, findfirst(==(:std_vg_points), display_cols) + 1, :risk_adjusted_vg_points)
-        end
-        for col in [:expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
-            if col in propertynames(my_selection)
-                push!(display_cols, col)
-            end
-        end
+        display_cols = [:rider, :team, :cost, :expected_vg_points, :selection_frequency, :strength, :uncertainty]
         display_cols = filter(c -> c in propertynames(my_selection), display_cols)
 
         my_display = my_selection[:, display_cols]
@@ -210,15 +207,7 @@ elseif nrow(optimal_team) > 0
 
 """)
 
-    display_cols = [:rider, :team, :cost, :expected_vg_points, :std_vg_points, :strength, :uncertainty]
-    if risk_aversion > 0
-        insert!(display_cols, findfirst(==(:std_vg_points), display_cols) + 1, :risk_adjusted_vg_points)
-    end
-    for col in [:expected_finish_pts, :expected_assist_pts, :expected_breakaway_pts]
-        if col in propertynames(optimal_team)
-            push!(display_cols, col)
-        end
-    end
+    display_cols = [:rider, :team, :cost, :expected_vg_points, :selection_frequency, :strength, :uncertainty]
     display_cols = filter(c -> c in propertynames(optimal_team), display_cols)
 
     opt_display = optimal_team[:, display_cols]
@@ -244,19 +233,11 @@ elseif nrow(my_selection) > 0 && nrow(optimal_team) > 0
     my_cost = sum(my_selection.cost)
     opt_cost = sum(optimal_team.cost)
 
-    my_risk = risk_aversion > 0 ? sum(my_selection.risk_adjusted_vg_points) : my_evg
-    opt_risk = risk_aversion > 0 ? sum(optimal_team.risk_adjusted_vg_points) : opt_evg
-    risk_diff = my_risk - opt_risk
-
     print("""
 | Metric | Your team | Optimal team | Difference |
 |--------|-----------|--------------|------------|
 | Expected VG points | $(round(my_evg, digits=1)) | $(round(opt_evg, digits=1)) | $(round(diff, digits=1)) ($(pct_diff)%) |
-""")
-    if risk_aversion > 0
-        print("| Risk-adjusted points | $(round(my_risk, digits=1)) | $(round(opt_risk, digits=1)) | $(round(risk_diff, digits=1)) |\n")
-    end
-    print("""| Total cost | $(my_cost) | $(opt_cost) | $(my_cost - opt_cost) |
+| Total cost | $(my_cost) | $(opt_cost) | $(my_cost - opt_cost) |
 | Budget remaining | $(100 - my_cost) | $(100 - opt_cost) | $(opt_cost - my_cost) |
 | Riders | $(nrow(my_selection)) | $(nrow(optimal_team)) | |
 
