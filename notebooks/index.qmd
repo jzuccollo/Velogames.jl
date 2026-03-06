@@ -6,13 +6,13 @@ Fantasy cycling team optimisation for [Velogames](https://www.velogames.com/). T
 
 # Notebooks
 
-Five notebooks cover the main use cases:
+Six notebooks cover the main use cases:
 
 - **[One-day predictor](oneday_predictor.qmd)**: Pre-race team selection for Sixes Classics one-day races. Monte Carlo simulation converts rider strength estimates into expected VG points, then optimises a 6-rider team.
 - **[Stage race predictor](stagerace_predictor.qmd)**: Pre-race team selection for grand tours and stage races. Class-aware strength estimation blends PCS specialties according to each rider's VG classification (all-rounder, climber, sprinter, unclassed), then optimises a 9-rider team with classification constraints.
-- **[Team assessor](team_assessor.qmd)**: Compare a custom team against the model's optimal selection. Useful for evaluating picks made before the predictor was run, or for sanity-checking a team that differs from the model's recommendation.
+- **[Team assessor](team_assessor.qmd)**: Post-race review comparing a custom team against the model's optimal selection, and archiving actual results for prospective evaluation. Running this after every race builds the dataset used by the prospective evaluation section in backtesting.
 - **[Historical analysis](historical_analysis.qmd)**: Retrospective analysis of completed races. Uses actual race results to find the optimal team you could have picked, the cheapest team that beats a benchmark, and rider value analysis. Works for both one-day and stage races.
-- **[Backtesting](backtesting.qmd)**: Model calibration and evaluation. Runs predictions against historical PCS race results to measure accuracy (Spearman correlation, top-N overlap), identifies which data sources improve predictions via ablation study, and tunes Bayesian hyperparameters.
+- **[Backtesting and calibration](backtesting.qmd)**: The primary calibration interface. Validates the model via prior predictive checks (simulated outcomes vs domain knowledge), simulation-based calibration (posterior correctness), historical backtesting (Spearman correlation, top-N overlap, ablation study), and prospective evaluation (archived predictions vs actual results). See the notebook's overview section for the calibration philosophy.
 
 # Prediction pipeline
 
@@ -20,9 +20,9 @@ Both predictors follow the same pipeline:
 
 1. Fetch VG rider data (costs, season points, and classifications for stage races)
 2. Fetch PCS specialty ratings (one-day, GC, TT, sprint, climber)
-3. Fetch PCS race-specific history from past editions
+3. Fetch PCS race-specific history, recent form scores, and multi-season trajectory data
 4. Optionally fetch betting odds (Betfair Exchange API or Oddschecker paste) and qualitative intelligence (YouTube transcripts or web articles via Claude API)
-5. Estimate rider strength via Bayesian updating of all signals
+5. Estimate rider strength via Bayesian updating of all available signals
 6. Run Monte Carlo simulation to get finishing position probabilities
 7. Compute expected VG points (finish + assists + breakaway)
 8. Optimise team selection to maximise risk-adjusted expected VG points (penalising high-variance riders and domestiques proportionally to their strength gap)
@@ -37,7 +37,9 @@ $$\mu_{\text{post}} = \frac{\mu_{\text{prior}} / \sigma^2_{\text{prior}} + \mu_{
 
 The observation variance $\sigma^2_{\text{obs}}$ controls each signal's influence: lower variance means higher precision. Signals are applied from broadest to most specific; missing data leaves the prior unchanged.
 
-| Signal | Observation | $\sigma^2_{\text{obs}}$ |
+Default variances are shown below. These are computed from base variances and fixed within-group ratios, scaled by three precision scale factors (`market_precision_scale`, `history_precision_scale`, `ability_precision_scale`). All defaults assume scale factor = 1.0. See `BayesianConfig` in `src/simulation.jl` for details.
+
+| Signal | Observation | Default $\sigma^2_{\text{obs}}$ |
 |--------|-------------|------------------------:|
 | PCS specialty rating | Z-scored specialty score (one-day, GC, TT, sprint, climber) | 7.9 |
 | VG season points | Z-scored season-to-date VG score (season-adaptive) | 1.4–8.3 |
@@ -45,9 +47,9 @@ The observation variance $\sigma^2_{\text{obs}}$ controls each signal's influenc
 | Trajectory | Current PCS z-score minus mean history z-score | 3.5 |
 | PCS race history | Per-result: $3.0 + 3.2 \times \text{years ago}$ (+ 1.0 for similar races) | 3.0+ |
 | VG race history | Per-result: $4.8 + 1.3 \times \text{years ago}$ | 4.8+ |
-| Cycling Oracle | Log-odds of predicted win probability, divided by 2.0 | 1.0 |
+| Cycling Oracle | Log-odds of predicted win probability, divided by 2.0 | 0.5 |
 | Qualitative intelligence | Podcast/article adjustments weighted by confidence | 2.5–8.3 |
-| Betfair odds | Log-odds of market-implied win probability, divided by 2.0 | 0.5 |
+| Betfair odds | Log-odds of market-implied win probability, divided by 2.0 | 0.3 |
 
 Race history observations are converted from finishing positions via a logit transform of fractional rank: $\text{strength} = -\log\!\left(\tfrac{k}{n+1} \big/ \left(1 - \tfrac{k}{n+1}\right)\right)$, which maps position 1 in a 150-rider field to roughly $+2.5$ and last to $-2.5$. Odds and Oracle predictions are converted via $\log(p / p_{\text{baseline}}) / 2.0$ where $p_{\text{baseline}} = 1/n_{\text{starters}}$ is the uniform probability.
 

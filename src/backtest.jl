@@ -1046,56 +1046,41 @@ end
 # Hyperparameter tuning
 # ---------------------------------------------------------------------------
 
-"""Bounded parameter ranges for hyperparameter search."""
+"""Bounded parameter ranges for hyperparameter search.
+
+Only 5 parameters: 3 precision scale factors (controlling signal group weights)
+plus 2 decay rates. The within-group ratios are fixed from domain knowledge.
+With ~100 historical observations, 5 parameters gives ~20 obs/param — far more
+reliable than the previous 12-parameter search.
+"""
 const PARAM_BOUNDS = (
-    pcs_variance = (1.0, 10.0),
-    vg_variance = (1.0, 8.0),
-    form_variance = (0.5, 5.0),
-    trajectory_variance = (1.0, 8.0),
-    hist_base_variance = (1.0, 6.0),
-    hist_decay_rate = (0.3, 3.5),
-    vg_hist_base_variance = (1.0, 6.0),
+    market_precision_scale = (0.3, 3.0),
+    history_precision_scale = (0.3, 3.0),
+    ability_precision_scale = (0.3, 3.0),
+    hist_decay_rate = (0.3, 5.0),
     vg_hist_decay_rate = (0.3, 3.0),
-    signal_correlation = (0.0, 0.7),
-    vg_season_penalty = (0.0, 10.0),
-    odds_variance = (0.1, 2.0),
-    floor_variance_multiplier = (1.0, 5.0),
 )
 
 """Sample a random BayesianConfig within PARAM_BOUNDS."""
 function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
     _rand(bounds) = rand(rng) * (bounds[2] - bounds[1]) + bounds[1]
     BayesianConfig(
-        pcs_variance = _rand(PARAM_BOUNDS.pcs_variance),
-        vg_variance = _rand(PARAM_BOUNDS.vg_variance),
-        form_variance = _rand(PARAM_BOUNDS.form_variance),
-        trajectory_variance = _rand(PARAM_BOUNDS.trajectory_variance),
-        hist_base_variance = _rand(PARAM_BOUNDS.hist_base_variance),
+        market_precision_scale = _rand(PARAM_BOUNDS.market_precision_scale),
+        history_precision_scale = _rand(PARAM_BOUNDS.history_precision_scale),
+        ability_precision_scale = _rand(PARAM_BOUNDS.ability_precision_scale),
         hist_decay_rate = _rand(PARAM_BOUNDS.hist_decay_rate),
-        vg_hist_base_variance = _rand(PARAM_BOUNDS.vg_hist_base_variance),
         vg_hist_decay_rate = _rand(PARAM_BOUNDS.vg_hist_decay_rate),
-        odds_variance = _rand(PARAM_BOUNDS.odds_variance),
-        signal_correlation = _rand(PARAM_BOUNDS.signal_correlation),
-        vg_season_penalty = _rand(PARAM_BOUNDS.vg_season_penalty),
-        floor_variance_multiplier = _rand(PARAM_BOUNDS.floor_variance_multiplier),
     )
 end
 
 """Extract tunable parameter values from a BayesianConfig."""
 function _config_to_dict(config::BayesianConfig)
     Dict(
-        :pcs_variance => config.pcs_variance,
-        :vg_variance => config.vg_variance,
-        :form_variance => config.form_variance,
-        :trajectory_variance => config.trajectory_variance,
-        :hist_base_variance => config.hist_base_variance,
+        :market_precision_scale => config.market_precision_scale,
+        :history_precision_scale => config.history_precision_scale,
+        :ability_precision_scale => config.ability_precision_scale,
         :hist_decay_rate => config.hist_decay_rate,
-        :vg_hist_base_variance => config.vg_hist_base_variance,
         :vg_hist_decay_rate => config.vg_hist_decay_rate,
-        :signal_correlation => config.signal_correlation,
-        :vg_season_penalty => config.vg_season_penalty,
-        :odds_variance => config.odds_variance,
-        :floor_variance_multiplier => config.floor_variance_multiplier,
     )
 end
 

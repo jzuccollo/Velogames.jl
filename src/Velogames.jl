@@ -73,6 +73,11 @@ export ScoringTable,
 # Solvers and optimisation
 export solve_oneday,
     solve_stage,
+    archive_race_results,
+    ProspectiveResult,
+    evaluate_prospective,
+    prospective_season_summary,
+    signal_value_analysis,
     build_model_oneday,
     build_model_stage,
     minimise_cost_stage,
@@ -81,6 +86,15 @@ export solve_oneday,
 # Simulation and prediction (public API)
 export BayesianConfig,
     DEFAULT_BAYESIAN_CONFIG,
+    pcs_variance,
+    vg_variance,
+    form_variance,
+    trajectory_variance,
+    hist_base_variance,
+    vg_hist_base_variance,
+    odds_variance,
+    oracle_variance,
+    qualitative_base_variance,
     estimate_strengths,
     predict_expected_points,
     BayesianPosterior,
@@ -93,6 +107,16 @@ export BayesianConfig,
     simulate_vg_points,
     compute_stage_race_pcs_score,
     breakaway_sectors_from_km
+
+# Prior predictive checks and calibration
+export StylisedFacts,
+    DEFAULT_STYLISED_FACTS,
+    PriorCheckResult,
+    SBCResult,
+    prior_predictive_check,
+    check_stylised_facts,
+    sensitivity_sweep,
+    simulation_based_calibration
 
 # Backtesting
 export BacktestRace,
@@ -127,8 +151,10 @@ include("pcs_extended.jl")
 include("data_assembly.jl")
 include("qualitative.jl")
 include("simulation.jl")
+include("prior_checks.jl")
 include("backtest.jl")
 include("race_solver.jl")
+include("prospective_eval.jl")
 include("report_helpers.jl")
 
 end

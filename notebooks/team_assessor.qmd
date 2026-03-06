@@ -359,6 +359,18 @@ Could not auto-detect VG race number. Set `vg_race_number` manually.
             @warn "Failed to fetch VG race results: $e"
         end
 
+        # Archive results for prospective evaluation
+        if !isempty(config.pcs_slug)
+            try
+                suppress_output() do
+                    archive_race_results(config.pcs_slug, config.year;
+                        vg_race_number=actual_race_number, cache_config=race_cache)
+                end
+            catch e
+                @warn "Failed to archive race results: $e"
+            end
+        end
+
         if actual_results === nothing || nrow(actual_results) == 0
             print("""
 ::: {.callout-note}
@@ -509,6 +521,27 @@ Riders where actual VG points differed most from expected, highlighting model bl
                     print("\n")
                 else
                     print("No significant overestimates.\n")
+                end
+            end
+
+            # --- Prospective model evaluation ---
+            if !isempty(config.pcs_slug)
+                prosp = evaluate_prospective(config.pcs_slug, config.year)
+                if prosp !== nothing
+                    print("""
+## Model evaluation
+
+Comparing archived pre-race predictions against actual PCS results.
+
+| Metric | Value |
+|--------|-------|
+| Matched riders | $(prosp.n_matched) |
+| Spearman rho | $(round(prosp.spearman_rho, digits=3)) |
+| Top-5 overlap | $(prosp.top5_overlap) / 5 |
+| Top-10 overlap | $(prosp.top10_overlap) / 10 |
+| Mean abs rank error | $(round(prosp.mean_abs_rank_error, digits=1)) |
+
+""")
                 end
             end
         end

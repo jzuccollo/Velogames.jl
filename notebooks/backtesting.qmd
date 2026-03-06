@@ -4,12 +4,24 @@ subtitle: "Evaluating prediction quality, signal value, and hyperparameter tunin
 format: html
 ---
 
+# Overview
+
+This notebook is the primary interface for model calibration and evaluation. It validates the Bayesian strength estimation model at three levels, each providing a different kind of evidence:
+
+1. **Prior predictive checks** (no data needed) — simulate from the model's generative process and check whether implied outcomes match domain knowledge. This is the fastest feedback loop: adjust the three precision scale factors and re-run until the stylised facts pass.
+
+2. **Historical backtest** (PCS results 2023–2025) — evaluate predictions against ~100 actual race results. Useful for confirming that always-available signals (PCS, race history, VG history) add value, but limited by small sample size and missing production signals (odds, oracle, qualitative).
+
+3. **Prospective evaluation** (archived predictions vs results) — the most trustworthy evaluation, comparing pre-race predictions that used the full signal set against actual outcomes. Requires running `solve_oneday`/`solve_stage` before each race and `archive_race_results` after.
+
+The model has three tuneable precision scale factors (`market_precision_scale`, `history_precision_scale`, `ability_precision_scale`) plus two decay rates. All other parameters encode domain knowledge as fixed ratios. See `BayesianConfig` in `src/simulation.jl` for full documentation.
+
 # Configuration
 
 ```{julia}
 #| echo: true
 #| output: false
-using Velogames, DataFrames, Statistics, MarkdownTables
+using Velogames, DataFrames, Statistics, MarkdownTables, Dates
 
 # Which years to backtest (VG historical pages available for 2023–2025)
 backtest_years = [2023, 2024, 2025]
@@ -28,6 +40,74 @@ bt_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 168)
 md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))
 
 cat_label = Dict(1 => "Cat 1 (monuments)", 2 => "Cat 2 (WT classics)", 3 => "Cat 3 (semi-classics)")
+```
+
+# Prior predictive checks
+
+These checks validate the model's behaviour without historical data, by simulating from the generative process and checking whether implied outcomes match cycling domain knowledge. The stylised facts define acceptable ranges for key diagnostics. If all checks pass, the default configuration is broadly sensible; if not, adjust the scale factors below and re-run.
+
+```{julia}
+#| output: asis
+using Random
+
+facts_df = suppress_output() do
+    check_stylised_facts(DEFAULT_BAYESIAN_CONFIG;
+        n_races=200, n_riders=150, rng=Random.MersenneTwister(42))
+end
+
+all_pass = all(facts_df.pass)
+status = all_pass ? "All checks pass." : "Some checks **failed** — review the scale factors."
+
+print("""
+## Stylised facts check
+
+$status
+
+""")
+md_table(facts_df)
+print("\n")
+```
+
+## Sensitivity sweeps
+
+How sensitive are the model's predictions to each scale factor? Each row shows diagnostics at a different value of the parameter, with all others held at their defaults.
+
+```{julia}
+#| output: asis
+for param in [:market_precision_scale, :history_precision_scale, :ability_precision_scale]
+    sweep_df = suppress_output() do
+        sensitivity_sweep(param, [0.5, 0.75, 1.0, 1.5, 2.0, 3.0];
+            rng=Random.MersenneTwister(42))
+    end
+
+    print("""
+### `$param`
+
+""")
+    md_table(sweep_df)
+    print("\n")
+end
+```
+
+## Simulation-based calibration
+
+SBC checks whether the Bayesian inference pipeline correctly recovers true parameters from synthetic data. If the rank histogram is approximately uniform and the mean rank is near 0.5, the posterior is well-calibrated.
+
+```{julia}
+#| output: asis
+sbc = suppress_output() do
+    simulation_based_calibration(DEFAULT_BAYESIAN_CONFIG;
+        n_sims=500, rng=Random.MersenneTwister(42))
+end
+
+print("""
+| Diagnostic | Value | Expected |
+|------------|-------|----------|
+| Mean CDF rank | $(round(sbc.mean_rank, digits=3)) | 0.5 |
+| Chi-squared p-value | $(round(sbc.chi_squared_p, digits=3)) | > 0.05 |
+| Uniform? | $(sbc.chi_squared_p > 0.05 ? "Yes" : "No") | Yes |
+
+""")
 ```
 
 # Race catalogue
@@ -608,33 +688,21 @@ if run_tuning
 """)
 
     default_params = Dict(
-        :pcs_variance => DEFAULT_BAYESIAN_CONFIG.pcs_variance,
-        :vg_variance => DEFAULT_BAYESIAN_CONFIG.vg_variance,
-        :form_variance => DEFAULT_BAYESIAN_CONFIG.form_variance,
-        :trajectory_variance => DEFAULT_BAYESIAN_CONFIG.trajectory_variance,
-        :hist_base_variance => DEFAULT_BAYESIAN_CONFIG.hist_base_variance,
+        :market_precision_scale => DEFAULT_BAYESIAN_CONFIG.market_precision_scale,
+        :history_precision_scale => DEFAULT_BAYESIAN_CONFIG.history_precision_scale,
+        :ability_precision_scale => DEFAULT_BAYESIAN_CONFIG.ability_precision_scale,
         :hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.hist_decay_rate,
-        :vg_hist_base_variance => DEFAULT_BAYESIAN_CONFIG.vg_hist_base_variance,
         :vg_hist_decay_rate => DEFAULT_BAYESIAN_CONFIG.vg_hist_decay_rate,
-        :signal_correlation => DEFAULT_BAYESIAN_CONFIG.signal_correlation,
-        :vg_season_penalty => DEFAULT_BAYESIAN_CONFIG.vg_season_penalty,
-        :odds_variance => DEFAULT_BAYESIAN_CONFIG.odds_variance,
     )
 
     print("""
 | Parameter | Default | Tuned | Change |
 |-----------|---------|-------|--------|
-| `pcs_variance` | $(default_params[:pcs_variance]) | $(round(best_config.pcs_variance, digits=2)) | $(round(best_config.pcs_variance - default_params[:pcs_variance], digits=2)) |
-| `vg_variance` | $(default_params[:vg_variance]) | $(round(best_config.vg_variance, digits=2)) | $(round(best_config.vg_variance - default_params[:vg_variance], digits=2)) |
-| `form_variance` | $(default_params[:form_variance]) | $(round(best_config.form_variance, digits=2)) | $(round(best_config.form_variance - default_params[:form_variance], digits=2)) |
-| `trajectory_variance` | $(default_params[:trajectory_variance]) | $(round(best_config.trajectory_variance, digits=2)) | $(round(best_config.trajectory_variance - default_params[:trajectory_variance], digits=2)) |
-| `hist_base_variance` | $(default_params[:hist_base_variance]) | $(round(best_config.hist_base_variance, digits=2)) | $(round(best_config.hist_base_variance - default_params[:hist_base_variance], digits=2)) |
+| `market_precision_scale` | $(default_params[:market_precision_scale]) | $(round(best_config.market_precision_scale, digits=2)) | $(round(best_config.market_precision_scale - default_params[:market_precision_scale], digits=2)) |
+| `history_precision_scale` | $(default_params[:history_precision_scale]) | $(round(best_config.history_precision_scale, digits=2)) | $(round(best_config.history_precision_scale - default_params[:history_precision_scale], digits=2)) |
+| `ability_precision_scale` | $(default_params[:ability_precision_scale]) | $(round(best_config.ability_precision_scale, digits=2)) | $(round(best_config.ability_precision_scale - default_params[:ability_precision_scale], digits=2)) |
 | `hist_decay_rate` | $(default_params[:hist_decay_rate]) | $(round(best_config.hist_decay_rate, digits=2)) | $(round(best_config.hist_decay_rate - default_params[:hist_decay_rate], digits=2)) |
-| `vg_hist_base_variance` | $(default_params[:vg_hist_base_variance]) | $(round(best_config.vg_hist_base_variance, digits=2)) | $(round(best_config.vg_hist_base_variance - default_params[:vg_hist_base_variance], digits=2)) |
 | `vg_hist_decay_rate` | $(default_params[:vg_hist_decay_rate]) | $(round(best_config.vg_hist_decay_rate, digits=2)) | $(round(best_config.vg_hist_decay_rate - default_params[:vg_hist_decay_rate], digits=2)) |
-| `signal_correlation` | $(default_params[:signal_correlation]) | $(round(best_config.signal_correlation, digits=2)) | $(round(best_config.signal_correlation - default_params[:signal_correlation], digits=2)) |
-| `vg_season_penalty` | $(default_params[:vg_season_penalty]) | $(round(best_config.vg_season_penalty, digits=2)) | $(round(best_config.vg_season_penalty - default_params[:vg_season_penalty], digits=2)) |
-| `odds_variance` | $(default_params[:odds_variance]) | $(round(best_config.odds_variance, digits=2)) | $(round(best_config.odds_variance - default_params[:odds_variance], digits=2)) |
 
 """)
 else
@@ -655,7 +723,7 @@ Top 10 candidates by calibrated score (Spearman \$\\rho\$ with calibration penal
 
 """)
     top10 = first(sort(tuning_log, :mean_score, rev=true), min(10, nrow(tuning_log)))
-    display_cols = [:candidate, :mean_score, :n_races, :pcs_variance, :vg_variance, :form_variance, :trajectory_variance, :hist_base_variance, :hist_decay_rate, :signal_correlation]
+    display_cols = [:candidate, :mean_score, :n_races, :market_precision_scale, :history_precision_scale, :ability_precision_scale, :hist_decay_rate, :vg_hist_decay_rate]
     avail_cols = intersect(display_cols, Symbol.(names(tuning_log)))
     round_numeric_columns!(top10; digits=3)
     md_table(top10[:, avail_cols])
@@ -715,5 +783,48 @@ else
 Domestique discount tuning is disabled (`run_tuning = false`). Set `run_tuning = true` in the configuration cell to enable it.
 
 """)
+end
+```
+
+# Prospective evaluation
+
+These metrics compare archived pre-race predictions against actual results for races where predictions were archived by the production pipeline (`solve_oneday`/`solve_stage`). Unlike the historical backtest above, these use the full signal set including odds, oracle, and qualitative intelligence.
+
+```{julia}
+#| output: asis
+current_year = year(today())
+prospective_df = prospective_season_summary(current_year)
+
+if nrow(prospective_df) > 0
+    print("""
+## $current_year season
+
+$(nrow(prospective_df)) races with archived predictions and results.
+
+""")
+    md_table(prospective_df)
+    print("\n")
+else
+    print("""
+No prospective evaluation data available for $current_year yet. Run `solve_oneday` or `solve_stage` for upcoming races and `archive_race_results` after the race to build this dataset.
+
+""")
+end
+```
+
+## Signal value analysis
+
+Which signals moved predictions most across archived races, and how large were those shifts?
+
+```{julia}
+#| output: asis
+current_year = year(today())
+sig_df = signal_value_analysis(current_year)
+
+if nrow(sig_df) > 0
+    md_table(sig_df)
+    print("\n")
+else
+    print("No signal data available yet.\n\n")
 end
 ```

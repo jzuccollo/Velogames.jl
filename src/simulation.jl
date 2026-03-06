@@ -1,11 +1,36 @@
 """
-Monte Carlo race simulation and Bayesian strength estimation.
+Bayesian strength estimation and Monte Carlo race simulation.
 
-This module converts rider data from multiple sources into expected Velogames
-points through:
-1. Bayesian strength estimation (combining PCS, race history, VG, odds)
-2. Monte Carlo simulation of finishing positions
-3. Expected VG points computation from simulated positions
+Converts rider data from multiple sources into strength estimates and expected
+Velogames points. The pipeline has two stages:
+
+1. **Bayesian strength estimation** — an uninformative prior (mean=0, SD=10) is
+   updated sequentially with observations from up to 9 signal sources (PCS
+   specialty, VG season points, form, trajectory, race history, VG race history,
+   oracle, qualitative intelligence, betting odds). Each observation has a
+   variance controlling its precision; lower variance = more influence. The
+   posterior mean is a precision-weighted average of all observations.
+
+2. **Monte Carlo simulation** — draws noisy strengths from each rider's
+   posterior, ranks them to simulate finishing positions, and maps positions to
+   expected VG points via the scoring tables.
+
+## Parameter structure
+
+Signal variances are controlled by three precision scale factors that group
+signals by type, plus fixed within-group ratios derived from domain knowledge:
+
+- `market_precision_scale` — odds and oracle (the most precise signals)
+- `history_precision_scale` — form, race history, VG history, trajectory
+- `ability_precision_scale` — PCS specialty, VG season points (broadest signals)
+
+Effective variance = base_variance × ratio / scale_factor. Setting a scale
+factor to 2.0 halves the variance (doubles the precision) of every signal in
+that group. The ratios encode the hierarchy within each group (e.g. odds is
+more precise than oracle) and should only change if domain knowledge changes.
+
+See `BayesianConfig` for full parameter documentation and `prior_checks.jl`
+for tools to validate and tune the configuration.
 """
 
 # ---------------------------------------------------------------------------
@@ -51,26 +76,91 @@ end
 Hyperparameters for Bayesian rider strength estimation.
 
 An uninformative prior (mean=0, `prior_variance`) is updated sequentially
-by PCS specialty and other signals. Lower variance means the signal is
-treated as more precise.
+by up to 9 signal sources. Lower variance means the signal is treated as
+more precise. The posterior mean is a precision-weighted average, where
+precision = 1/variance, so the actual influence of any signal depends on
+the ratio of its precision to the sum of all precisions.
 
-The posterior mean is a precision-weighted average, where precision = 1/variance. So:
+## Parameter groups
 
-    - Doubling the variance halves the precision, which halves that signal's weight in the weighted average — so yes, it contributes roughly half as much to the posterior mean.
-    - But "half as much" is relative to the other signals' precisions. The actual influence of any one signal depends on the ratio of its precision to the sum of all precisions (prior + all observations so far).
+Parameters are organised into four groups with different roles:
+
+### 1. Tuneable scale factors (adjust these)
+
+Three scale factors control signal group precision. Higher = more precise
+(lower variance). Default 1.0 reproduces the original hardcoded variances.
+
+- `market_precision_scale` — odds + oracle (most precise signals)
+- `history_precision_scale` — form + race history + VG history + trajectory
+- `ability_precision_scale` — PCS specialty + VG season points (broadest)
+
+Effective variance = base_variance × ratio / scale_factor. Use
+`check_stylised_facts()` and `sensitivity_sweep()` in `prior_checks.jl`
+to validate settings against domain knowledge.
+
+### 2. Base variances and ratios (change only if domain knowledge changes)
+
+These encode the signal hierarchy *within* each group. For example, in the
+history group, form (variance 0.9) is more precise than race history
+(variance 3.0, ratio 10/3). Adjusting a scale factor moves all signals in
+that group together, preserving these ratios.
+
+### 3. Temporal decay rates (set once)
+
+`hist_decay_rate` and `vg_hist_decay_rate` control how quickly historical
+results lose relevance: variance = base + decay_rate × years_ago. These are
+independent of the scale factors because they control *how fast* signal
+degrades rather than *how much* to trust the signal source.
+
+### 4. Other parameters
+
+- `odds_normalisation` — scales log-odds to z-score range
+- `signal_correlation` — equicorrelation discount preventing overconfidence
+  when many correlated signals agree
+- `vg_season_penalty` — inflates VG variance early in the season
+- `prior_variance` — uninformative prior (SD=10, no reason to change)
+- Floor parameters — handle absent riders when a signal covers the field
 """
 @kwdef struct BayesianConfig
-    pcs_variance::Float64 = 7.9
-    vg_variance::Float64 = 1.4
-    form_variance::Float64 = 0.9
-    trajectory_variance::Float64 = 3.5
-    hist_base_variance::Float64 = 3.0
+    # --- Three tuneable scale factors ---
+    # These control signal group precision. Higher = more precise (lower variance).
+    # Default 1.0 reproduces the original hardcoded variances exactly.
+
+    # Market signals: odds, oracle
+    market_precision_scale::Float64 = 3.0
+
+    # Historical signals: form, race history, VG history, trajectory
+    history_precision_scale::Float64 = 1.0
+
+    # Broad ability signals: PCS specialty, VG season points
+    ability_precision_scale::Float64 = 2.0
+
+    # --- Base variances and fixed ratios (domain knowledge, not tuned) ---
+
+    # Market
+    _base_odds_variance::Float64 = 0.3
+    _odds_to_oracle_ratio::Float64 = 1.5
+
+    # Historical
+    _base_form_variance::Float64 = 0.9
+    _form_to_hist_ratio::Float64 = 3.0
+    _form_to_vg_hist_ratio::Float64 = 5.0
+    _form_to_trajectory_ratio::Float64 = 5.0
+
+    # Ability
+    _base_pcs_variance::Float64 = 8.0
+    _pcs_to_vg_ratio::Float64 = 1.0
+
+    # Qualitative: separate since it's rare and manually controlled
+    _base_qualitative_variance::Float64 = 2.0
+
+    # --- Temporal decay (independent, not grouped) ---
+
     hist_decay_rate::Float64 = 3.2
-    vg_hist_base_variance::Float64 = 4.8
     vg_hist_decay_rate::Float64 = 1.3
-    odds_variance::Float64 = 0.3
-    oracle_variance::Float64 = 0.5
-    qualitative_base_variance::Float64 = 2.0
+
+    # --- Other parameters ---
+
     # Heuristic divisor to scale log-odds to z-score range.
     # With ~150 starters, a 10% favourite produces log(0.1 / 0.0067) ≈ 2.7,
     # which / 2.0 gives ~1.35 — a reasonable "1.35 SD above average" strength signal.
@@ -100,6 +190,20 @@ The posterior mean is a precision-weighted average, where precision = 1/variance
     floor_variance_multiplier::Float64 = 2.0
     absence_floor_strength::Float64 = -0.5
 end
+
+# --- Accessor functions: compute effective variances from scale factors ---
+# Each function returns base_variance × ratio / scale_factor for the
+# appropriate signal group. All code should use these rather than accessing
+# the underscore-prefixed fields directly.
+pcs_variance(c::BayesianConfig) = c._base_pcs_variance / c.ability_precision_scale
+vg_variance(c::BayesianConfig) = c._base_pcs_variance * c._pcs_to_vg_ratio / c.ability_precision_scale
+form_variance(c::BayesianConfig) = c._base_form_variance / c.history_precision_scale
+trajectory_variance(c::BayesianConfig) = c._base_form_variance * c._form_to_trajectory_ratio / c.history_precision_scale
+hist_base_variance(c::BayesianConfig) = c._base_form_variance * c._form_to_hist_ratio / c.history_precision_scale
+vg_hist_base_variance(c::BayesianConfig) = c._base_form_variance * c._form_to_vg_hist_ratio / c.history_precision_scale
+odds_variance(c::BayesianConfig) = c._base_odds_variance / c.market_precision_scale
+oracle_variance(c::BayesianConfig) = c._base_odds_variance * c._odds_to_oracle_ratio / c.market_precision_scale
+qualitative_base_variance(c::BayesianConfig) = c._base_qualitative_variance
 
 """Default Bayesian hyperparameters."""
 const DEFAULT_BAYESIAN_CONFIG = BayesianConfig()
@@ -184,6 +288,7 @@ function estimate_rider_strength(;
     qualitative_confidences::Vector{Float64}=Float64[],
     n_starters::Int=150,
     config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
+    effective_vg_variance::Float64=0.0,  # 0 = use vg_variance(config)
 )
     # --- Uninformative prior ---
     # Start from a diffuse prior (mean=0, large variance). All signals,
@@ -197,7 +302,7 @@ function estimate_rider_strength(;
     # Only applied when the rider has real PCS data (not coalesced-from-missing).
     mean_before = posterior.mean
     if has_pcs
-        posterior = bayesian_update(posterior, pcs_score, config.pcs_variance)
+        posterior = bayesian_update(posterior, pcs_score, pcs_variance(config))
         n_signals += 1
     end
     shift_pcs = posterior.mean - mean_before
@@ -206,7 +311,8 @@ function estimate_rider_strength(;
     # VG points reflect current season form. Moderate precision.
     mean_before = posterior.mean
     if vg_points != 0.0
-        posterior = bayesian_update(posterior, vg_points, config.vg_variance)
+        eff_vg_var = effective_vg_variance > 0.0 ? effective_vg_variance : vg_variance(config)
+        posterior = bayesian_update(posterior, vg_points, eff_vg_var)
         n_signals += 1
     end
     shift_vg = posterior.mean - mean_before
@@ -217,10 +323,10 @@ function estimate_rider_strength(;
     # season points and race-specific history.
     mean_before = posterior.mean
     if form_score != 0.0
-        posterior = bayesian_update(posterior, form_score, config.form_variance)
+        posterior = bayesian_update(posterior, form_score, form_variance(config))
         n_signals += 1
     elseif form_floor_strength != 0.0
-        floor_var = config.form_variance * config.floor_variance_multiplier
+        floor_var = form_variance(config) * config.floor_variance_multiplier
         posterior = bayesian_update(posterior, form_floor_strength, floor_var)
         n_signals += 1
     end
@@ -232,7 +338,7 @@ function estimate_rider_strength(;
     # the caller has computed a trajectory score (riders with race history).
     mean_before = posterior.mean
     if trajectory_score != 0.0
-        posterior = bayesian_update(posterior, trajectory_score, config.trajectory_variance)
+        posterior = bayesian_update(posterior, trajectory_score, trajectory_variance(config))
         n_signals += 1
     end
     shift_trajectory = posterior.mean - mean_before
@@ -253,7 +359,7 @@ function estimate_rider_strength(;
     for (i, (hist_strength, years_ago)) in
         enumerate(zip(race_history, race_history_years_ago))
         penalty = i <= length(penalties) ? penalties[i] : 0.0
-        hist_var = config.hist_base_variance + config.hist_decay_rate * years_ago + penalty
+        hist_var = hist_base_variance(config) + config.hist_decay_rate * years_ago + penalty
         posterior = bayesian_update(posterior, hist_strength, hist_var)
         n_signals += 1
     end
@@ -267,7 +373,7 @@ function estimate_rider_strength(;
         @warn "vg_race_history ($(length(vg_race_history))) and vg_race_history_years_ago ($(length(vg_race_history_years_ago))) have different lengths"
     end
     for (vg_strength, years_ago) in zip(vg_race_history, vg_race_history_years_ago)
-        vg_var = config.vg_hist_base_variance + config.vg_hist_decay_rate * years_ago
+        vg_var = vg_hist_base_variance(config) + config.vg_hist_decay_rate * years_ago
         posterior = bayesian_update(posterior, vg_strength, vg_var)
         n_signals += 1
     end
@@ -280,10 +386,10 @@ function estimate_rider_strength(;
         baseline_prob = 1.0 / n_starters
         oracle_strength =
             log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
-        posterior = bayesian_update(posterior, oracle_strength, config.oracle_variance)
+        posterior = bayesian_update(posterior, oracle_strength, oracle_variance(config))
         n_signals += 1
     elseif oracle_floor_strength != 0.0
-        floor_var = config.oracle_variance * config.floor_variance_multiplier
+        floor_var = oracle_variance(config) * config.floor_variance_multiplier
         posterior = bayesian_update(posterior, oracle_floor_strength, floor_var)
         n_signals += 1
     end
@@ -298,13 +404,13 @@ function estimate_rider_strength(;
     if !isempty(qualitative_adjustments)
         for (adj, conf) in zip(qualitative_adjustments, qualitative_confidences)
             if conf > 0.0
-                eff_var = config.qualitative_base_variance / conf
+                eff_var = qualitative_base_variance(config) / conf
                 posterior = bayesian_update(posterior, adj, eff_var)
                 n_signals += 1
             end
         end
     elseif qualitative_floor_strength != 0.0
-        floor_var = config.qualitative_base_variance * config.floor_variance_multiplier
+        floor_var = qualitative_base_variance(config) * config.floor_variance_multiplier
         posterior = bayesian_update(posterior, qualitative_floor_strength, floor_var)
         n_signals += 1
     end
@@ -316,10 +422,10 @@ function estimate_rider_strength(;
     if odds_implied_prob > 0.0
         baseline_prob = 1.0 / n_starters
         odds_strength = log(odds_implied_prob / baseline_prob) / config.odds_normalisation
-        posterior = bayesian_update(posterior, odds_strength, config.odds_variance)
+        posterior = bayesian_update(posterior, odds_strength, odds_variance(config))
         n_signals += 1
     elseif odds_floor_strength != 0.0
-        floor_var = config.odds_variance * config.floor_variance_multiplier
+        floor_var = odds_variance(config) * config.floor_variance_multiplier
         posterior = bayesian_update(posterior, odds_floor_strength, floor_var)
         n_signals += 1
     end
@@ -741,27 +847,7 @@ function estimate_strengths(
     # Scale vg_variance up when few riders have scored.
     frac_nonzero = count(vg_pts .> 0) / max(length(vg_pts), 1)
     season_scale = 1.0 + bayesian_config.vg_season_penalty * (1.0 - frac_nonzero)
-    effective_vg_variance = bayesian_config.vg_variance * season_scale
-    effective_config = BayesianConfig(
-        pcs_variance=bayesian_config.pcs_variance,
-        vg_variance=effective_vg_variance,
-        form_variance=bayesian_config.form_variance,
-        trajectory_variance=bayesian_config.trajectory_variance,
-        hist_base_variance=bayesian_config.hist_base_variance,
-        hist_decay_rate=bayesian_config.hist_decay_rate,
-        vg_hist_base_variance=bayesian_config.vg_hist_base_variance,
-        vg_hist_decay_rate=bayesian_config.vg_hist_decay_rate,
-        odds_variance=bayesian_config.odds_variance,
-        oracle_variance=bayesian_config.oracle_variance,
-        qualitative_base_variance=bayesian_config.qualitative_base_variance,
-        odds_normalisation=bayesian_config.odds_normalisation,
-        signal_correlation=bayesian_config.signal_correlation,
-        vg_season_penalty=bayesian_config.vg_season_penalty,
-        prior_variance=bayesian_config.prior_variance,
-        floor_variance_multiplier=bayesian_config.floor_variance_multiplier,
-        floor_signals=bayesian_config.floor_signals,
-        absence_floor_strength=bayesian_config.absence_floor_strength,
-    )
+    effective_vg_variance = vg_variance(bayesian_config) * season_scale
     @info "Season-adaptive VG variance: $(round(effective_vg_variance, digits=2)) " *
           "($(round(100 * frac_nonzero, digits=0))% with points, scale=$(round(season_scale, digits=2)))"
 
@@ -818,7 +904,7 @@ function estimate_strengths(
     # Odds/oracle: absent riders share the residual probability mass.
     rider_keys = Set(df.riderkey)
     odds_floor_strength_val = 0.0
-    if :odds in effective_config.floor_signals && !isempty(odds_lookup)
+    if :odds in bayesian_config.floor_signals && !isempty(odds_lookup)
         listed_prob = sum(values(odds_lookup))
         n_listed = length(intersect(keys(odds_lookup), rider_keys))
         n_absent = n_riders - n_listed
@@ -833,13 +919,13 @@ function estimate_strengths(
                 minimum(values(odds_lookup)) * 0.5
             end
             baseline_prob = 1.0 / n_starters
-            odds_floor_strength_val = log(floor_prob / baseline_prob) / effective_config.odds_normalisation
+            odds_floor_strength_val = log(floor_prob / baseline_prob) / bayesian_config.odds_normalisation
         end
         @info "Odds floor: $n_listed priced, $n_absent with floor (strength=$(round(odds_floor_strength_val, digits=2)))"
     end
 
     oracle_floor_strength_val = 0.0
-    if :oracle in effective_config.floor_signals && !isempty(oracle_lookup)
+    if :oracle in bayesian_config.floor_signals && !isempty(oracle_lookup)
         listed_prob = sum(values(oracle_lookup))
         n_listed = length(intersect(keys(oracle_lookup), rider_keys))
         n_absent = n_riders - n_listed
@@ -851,7 +937,7 @@ function estimate_strengths(
                 minimum(values(oracle_lookup)) * 0.5
             end
             baseline_prob = 1.0 / n_starters
-            oracle_floor_strength_val = log(floor_prob / baseline_prob) / effective_config.odds_normalisation
+            oracle_floor_strength_val = log(floor_prob / baseline_prob) / bayesian_config.odds_normalisation
         end
         @info "Oracle floor: $n_listed listed, $n_absent with floor (strength=$(round(oracle_floor_strength_val, digits=2)))"
     end
@@ -892,15 +978,15 @@ function estimate_strengths(
 
     # --- Compute floor strengths for non-market signals ---
     form_floor_strength_val = 0.0
-    if :form in effective_config.floor_signals && !isempty(form_lookup)
-        form_floor_strength_val = effective_config.absence_floor_strength
+    if :form in bayesian_config.floor_signals && !isempty(form_lookup)
+        form_floor_strength_val = bayesian_config.absence_floor_strength
         n_with_form = length(intersect(keys(form_lookup), rider_keys))
         @info "Form floor: $n_with_form with form, $(n_riders - n_with_form) with floor (strength=$(round(form_floor_strength_val, digits=2)))"
     end
 
     qualitative_floor_strength_val = 0.0
-    if :qualitative in effective_config.floor_signals && !isempty(qualitative_lookup)
-        qualitative_floor_strength_val = effective_config.absence_floor_strength
+    if :qualitative in bayesian_config.floor_signals && !isempty(qualitative_lookup)
+        qualitative_floor_strength_val = bayesian_config.absence_floor_strength
         n_with_qual = length(intersect(keys(qualitative_lookup), rider_keys))
         @info "Qualitative floor: $n_with_qual with intel, $(n_riders - n_with_qual) with floor (strength=$(round(qualitative_floor_strength_val, digits=2)))"
     end
@@ -1111,7 +1197,8 @@ function estimate_strengths(
             qualitative_adjustments=qual_adjs,
             qualitative_confidences=qual_confs,
             n_starters=n_starters,
-            config=effective_config,
+            config=bayesian_config,
+            effective_vg_variance=effective_vg_variance,
         )
 
         strengths[i] = est.mean

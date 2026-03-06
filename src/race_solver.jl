@@ -20,6 +20,66 @@ function _extract_chosen_team(predicted::DataFrame, top_teams::Vector{DataFrame}
     return predicted, chosenteam
 end
 
+"""Archive the predicted DataFrame for prospective evaluation."""
+function _archive_predictions(predicted::DataFrame, config::RaceConfig)
+    isempty(config.pcs_slug) && return
+    # Select the key columns for archival
+    cols = intersect(
+        propertynames(predicted),
+        [:riderkey, :rider, :strength, :uncertainty,
+         :shift_pcs, :shift_vg, :shift_form, :shift_trajectory,
+         :shift_history, :shift_vg_history, :shift_oracle,
+         :shift_qualitative, :shift_odds],
+    )
+    try
+        save_race_snapshot(predicted[:, cols], "predictions", config.pcs_slug, config.year)
+    catch e
+        @warn "Failed to archive predictions: $e"
+    end
+end
+
+"""
+    archive_race_results(race_name, year; cache_config, force_refresh)
+
+Fetch and archive actual PCS results and VG results for a completed race.
+Idempotent: safe to re-run. Intended to be called from team_assessor.qmd
+after each race to build the prospective validation dataset.
+"""
+function archive_race_results(
+    pcs_slug::String,
+    year::Int;
+    vg_race_number::Int = 0,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    # Archive PCS race results
+    try
+        pcs_results = getpcsraceresults(
+            pcs_slug, year;
+            cache_config=cache_config,
+            force_refresh=force_refresh,
+        )
+        if nrow(pcs_results) > 0
+            save_race_snapshot(pcs_results, "pcs_results", pcs_slug, year)
+        end
+    catch e
+        @warn "Failed to archive PCS results for $pcs_slug $year: $e"
+    end
+
+    # Archive VG race results if race number provided
+    if vg_race_number > 0
+        try
+            vg_results = getvgraceresults(year, vg_race_number;
+                cache_config=cache_config, force_refresh=force_refresh)
+            if nrow(vg_results) > 0
+                save_race_snapshot(vg_results, "vg_results", pcs_slug, year)
+            end
+        catch e
+            @warn "Failed to archive VG results for $pcs_slug $year: $e"
+        end
+    end
+end
+
 # ---------------------------------------------------------------------------
 # Shared data preparation
 # ---------------------------------------------------------------------------
@@ -328,6 +388,15 @@ function _prepare_rider_data(
         0
     end
 
+    # Archive qualitative data for prospective evaluation
+    if qualitative_df !== nothing && nrow(qualitative_df) > 0 && !isempty(config.pcs_slug)
+        try
+            save_race_snapshot(qualitative_df, "qualitative", config.pcs_slug, config.year)
+        catch e
+            @warn "Failed to archive qualitative data: $e"
+        end
+    end
+
     @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" qualitative = "$n_qualitative/$n_total" form = "$n_form/$n_total" seasons = "$n_seasons/$n_total"
     if n_pcs == 0
         @warn "No riders have PCS specialty data — strength estimates will rely on VG season points only"
@@ -420,6 +489,9 @@ function solve_oneday(
         domestique_discount = domestique_discount,
     )
 
+    # Archive predictions for prospective evaluation
+    _archive_predictions(predicted, config)
+
     # --- 6. Resampled optimisation ---
     @info "Running resampled optimisation ($n_resamples resamples)..."
     predicted, top_teams = resample_optimise(
@@ -494,6 +566,8 @@ function solve_stage(
         race_year = config.year,
         domestique_discount = domestique_discount,
     )
+
+    _archive_predictions(predicted, config)
 
     @info "Running resampled optimisation ($n_resamples resamples, class constraints)..."
     predicted, top_teams = resample_optimise(

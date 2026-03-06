@@ -452,17 +452,11 @@ end
     @test default_result.mean > 0.0
 
     custom_config = BayesianConfig(
-        pcs_variance = 0.5,
-        vg_variance = 0.5,
-        form_variance = 2.0,
-        trajectory_variance = 3.0,
-        hist_base_variance = 1.0,
+        market_precision_scale = 2.0,
+        history_precision_scale = 2.0,
+        ability_precision_scale = 2.0,
         hist_decay_rate = 0.5,
-        vg_hist_base_variance = 1.5,
         vg_hist_decay_rate = 0.5,
-        odds_variance = 0.5,
-        oracle_variance = 1.5,
-        qualitative_base_variance = 2.5,
         odds_normalisation = 2.0,
         signal_correlation = 0.0,
         vg_season_penalty = 5.0,
@@ -472,23 +466,22 @@ end
     @test custom_result.mean != default_result.mean
 
     @test DEFAULT_BAYESIAN_CONFIG isa BayesianConfig
-    @test DEFAULT_BAYESIAN_CONFIG.pcs_variance == 7.9
+    @test DEFAULT_BAYESIAN_CONFIG._base_pcs_variance == 7.9
+    @test pcs_variance(DEFAULT_BAYESIAN_CONFIG) == 7.9
     @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.1
     @test DEFAULT_BAYESIAN_CONFIG.prior_variance == 100.0
 
     # Equicorrelation discount: more signals → wider posterior with ρ > 0
     no_corr = BayesianConfig(
-        pcs_variance = 5.0,
+        ability_precision_scale = 7.9 / 5.0,  # effective pcs_variance ≈ 5.0
         hist_decay_rate = 1.5,
-        vg_hist_base_variance = 3.0,
         vg_hist_decay_rate = 0.65,
         signal_correlation = 0.0,
         vg_season_penalty = 5.0,
     )
     with_corr = BayesianConfig(
-        pcs_variance = 5.0,
+        ability_precision_scale = 7.9 / 5.0,
         hist_decay_rate = 1.5,
-        vg_hist_base_variance = 3.0,
         vg_hist_decay_rate = 0.65,
         signal_correlation = 0.4,
         vg_season_penalty = 5.0,
@@ -1310,17 +1303,17 @@ end
     @testset "_random_bayesian_config produces valid configs" begin
         rng = Random.MersenneTwister(42)
         config = Velogames._random_bayesian_config(rng)
-        @test config.pcs_variance >= Velogames.PARAM_BOUNDS.pcs_variance[1]
-        @test config.pcs_variance <= Velogames.PARAM_BOUNDS.pcs_variance[2]
-        @test config.vg_variance >= Velogames.PARAM_BOUNDS.vg_variance[1]
-        @test config.vg_variance <= Velogames.PARAM_BOUNDS.vg_variance[2]
-        @test config.form_variance >= Velogames.PARAM_BOUNDS.form_variance[1]
-        @test config.form_variance <= Velogames.PARAM_BOUNDS.form_variance[2]
-        @test config.hist_base_variance >= Velogames.PARAM_BOUNDS.hist_base_variance[1]
-        @test config.hist_base_variance <= Velogames.PARAM_BOUNDS.hist_base_variance[2]
-        @test config.odds_variance >= Velogames.PARAM_BOUNDS.odds_variance[1]
-        @test config.odds_variance <= Velogames.PARAM_BOUNDS.odds_variance[2]
-        @test config.oracle_variance == DEFAULT_BAYESIAN_CONFIG.oracle_variance
+        @test config.market_precision_scale >= Velogames.PARAM_BOUNDS.market_precision_scale[1]
+        @test config.market_precision_scale <= Velogames.PARAM_BOUNDS.market_precision_scale[2]
+        @test config.history_precision_scale >= Velogames.PARAM_BOUNDS.history_precision_scale[1]
+        @test config.history_precision_scale <= Velogames.PARAM_BOUNDS.history_precision_scale[2]
+        @test config.ability_precision_scale >= Velogames.PARAM_BOUNDS.ability_precision_scale[1]
+        @test config.ability_precision_scale <= Velogames.PARAM_BOUNDS.ability_precision_scale[2]
+        @test config.hist_decay_rate >= Velogames.PARAM_BOUNDS.hist_decay_rate[1]
+        @test config.hist_decay_rate <= Velogames.PARAM_BOUNDS.hist_decay_rate[2]
+        @test config.vg_hist_decay_rate >= Velogames.PARAM_BOUNDS.vg_hist_decay_rate[1]
+        @test config.vg_hist_decay_rate <= Velogames.PARAM_BOUNDS.vg_hist_decay_rate[2]
+        # Non-tuned parameters should retain defaults
         @test config.odds_normalisation == DEFAULT_BAYESIAN_CONFIG.odds_normalisation
         @test config.prior_variance == DEFAULT_BAYESIAN_CONFIG.prior_variance
     end

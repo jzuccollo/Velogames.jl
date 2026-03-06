@@ -18,20 +18,22 @@ The package implements expected Velogames points prediction using:
 
 ### Signal inventory
 
-The strength model combines multiple signals, each with a variance hyperparameter controlling how much it shifts the posterior. All variance parameters are exposed as keyword arguments in `estimate_rider_strength()` for calibration and sensitivity analysis:
+The strength model combines multiple signals grouped into three precision families. Effective variances are computed from base values, fixed within-group ratios, and tuneable scale factors. Accessor functions (e.g. `pcs_variance(config)`) compute the effective variance from the config.
 
-| Signal                | Source                    | Variance  | Notes                                                                                        |
-| --------------------- | ------------------------- | --------- | -------------------------------------------------------------------------------------------- |
-| PCS specialty prior   | `getpcsriderpts_batch()`  | 5.5       | Z-scored across field. For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS`    |
-| VG season points      | `getvgriders()`           | 1.2×scale | Season-adaptive: `effective = 1.2 * (1 + 5.0 * (1 - frac_nonzero))`. Early season ~6.6     |
-| PCS form score        | `getpcsraceform()`        | 2.0       | Z-scored across field. Top ~40-60 riders by recent cross-race results from PCS form page     |
-| Trajectory            | Derived (PCS vs history)  | 3.0       | `pcs_z - mean(history_z)`, z-scored. Captures improving/declining riders                     |
-| PCS race history      | `getpcsracehistory()`     | 4.0+1.2/yr| Recency-weighted: recent years get lower variance (higher precision)                         |
-| Similar-race history  | `getpcsracehistory()`     | +1.0      | Same as race history but +1.0 variance penalty. Races from `SIMILAR_RACES` terrain mapping   |
-| VG race history       | `getvgracepoints()`       | 3.0+0.65/yr| Z-scored per year. Actual VG points from past editions (finish + assist + breakaway)         |
-| Cycling Oracle        | `get_cycling_oracle()`    | 1.5       | Independent signal from cyclingoracle.com predictions. Broader race coverage than Betfair    |
-| Betting odds          | `getodds()`               | 0.5       | Strongest single signal when available. Uses Betfair Exchange API (market ID required)       |
-| Odds/Oracle floor     | Derived (absence signal)  | var × 2.0 | When market data exists but rider absent, floor observation from residual probability mass    |
+**Signal groups and default effective variances (at scale = 1.0):**
+
+| Signal                | Source                    | Group     | Base variance | Notes                                                                                        |
+| --------------------- | ------------------------- | --------- | ------------- | -------------------------------------------------------------------------------------------- |
+| PCS specialty prior   | `getpcsriderpts_batch()`  | Ability   | 7.9           | Z-scored across field. For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS`    |
+| VG season points      | `getvgriders()`           | Ability   | 1.4×scale     | Season-adaptive: `effective = vg_var * (1 + penalty * (1 - frac_nonzero))`                   |
+| PCS form score        | `getpcsraceform()`        | History   | 0.9           | Z-scored across field. Top ~40-60 riders by recent cross-race results from PCS form page     |
+| Trajectory            | Derived (PCS vs history)  | History   | 3.5           | `pcs_z - mean(history_z)`, z-scored. Captures improving/declining riders                     |
+| PCS race history      | `getpcsracehistory()`     | History   | 3.0+decay/yr  | Recency-weighted: recent years get lower variance (higher precision)                         |
+| Similar-race history  | `getpcsracehistory()`     | History   | +penalty      | Same as race history but with variance penalty. Races from `SIMILAR_RACES` terrain mapping   |
+| VG race history       | `getvgracepoints()`       | History   | 4.8+decay/yr  | Z-scored per year. Actual VG points from past editions (finish + assist + breakaway)         |
+| Cycling Oracle        | `get_cycling_oracle()`    | Market    | 0.5           | Independent signal from cyclingoracle.com predictions. Broader race coverage than Betfair    |
+| Betting odds          | `getodds()`               | Market    | 0.3           | Strongest single signal when available. Uses Betfair Exchange API (market ID required)       |
+| Odds/Oracle floor     | Derived (absence signal)  | Market    | var × 2.0     | When market data exists but rider absent, floor observation from residual probability mass    |
 
 Odds are converted to strength via log-odds relative to a uniform baseline, then divided by a normalisation constant (default 2.0, heuristic) to match the z-score scale of other signals. This divisor is also an exposed parameter (`odds_normalisation`).
 
@@ -145,31 +147,18 @@ Betting odds are the strongest single predictive signal because they aggregate p
 
 **Evidence:** Betting markets consistently outperform public statistical models across sports prediction research. In cycling specifically, odds were not tested by Kholkine et al. (2021) but are widely regarded in the DFS community as the strongest single signal because they aggregate private information (team tactics, form, injury knowledge) unavailable in public data. The current variance of 0.5 (vs 3.0-4.0 for other signals) is directionally correct.
 
-### Phase 2: Historical backtesting (high indirect impact) (done)
+### Phase 2: Model calibration framework (done)
 
-Every other improvement is flying blind without systematic evaluation. We cannot currently measure whether the MC predictions are well-calibrated, whether variance hyperparameters are optimal, or whether model changes actually improve selection quality. The cycling prediction literature (Kholkine et al., 2021) and FPL research (Baronchelli et al., 2025) both emphasise that ablation studies are essential for confident iteration.
+The calibration approach combines principled defaults from domain knowledge with three validation layers:
 
-**Pipeline:**
+1. **Prior predictive checks** (`src/prior_checks.jl`): Simulate from the generative process and check implied outcomes against cycling domain knowledge (favourite win rates, top-N overlap, rank correlations, posterior SDs). No historical data needed.
+2. **Simulation-based calibration (SBC)**: Verify the Bayesian inference pipeline correctly recovers true parameters from synthetic data. Rank histogram should be uniform.
+3. **Historical backtesting** (`src/backtest.jl`): Season-level evaluation, ablation study, and directional hyperparameter search as a sanity check. Not the primary tuning mechanism due to data poverty (missing odds/oracle/qualitative in history, small sample size).
+4. **Prospective evaluation** (`src/prospective_eval.jl`): Compare archived pre-race predictions (with full signal set) against actual results. Built incrementally as `archive_race_results` is called from `team_assessor.qmd` after each race.
 
-For each past Superclasico race:
+**Reparameterised BayesianConfig:** 12 independent variance parameters replaced with 3 precision scale factors (market, history, ability) plus fixed within-group ratios from domain knowledge. Only 5 tuneable parameters total (3 scales + 2 decay rates), giving ~20 observations per parameter in backtesting.
 
-1. Reconstruct pre-race available data
-2. Run prediction pipeline
-3. Compare predicted team vs actual optimal team (from `build_model_oneday` / `build_model_stage`)
-4. Metrics: points captured, rank vs optimal, prediction correlation
-
-**Calibration:**
-
-- Tune variance hyperparameters exposed in `estimate_rider_strength()` (PCS, VG, history, odds variances and odds normalisation divisor)
-- Ablation study: which features improve predictions?
-- Requires: systematically scraping VG historical results for all Superclasico races (2+ seasons)
-
-**Additional metrics to consider:**
-
-- Spearman rank correlation between predicted and actual VG points
-- Fraction of optimal team points captured by predicted team
-- Calibration plots: predicted win probability vs observed win frequency
-- Expected points of predicted team as a percentile of the actual leaderboard
+**`backtesting.qmd`** serves as the primary calibration frontend: prior checks, SBC, sensitivity sweeps, historical ablation, backtest sanity check, and prospective evaluation in one notebook.
 
 ### Phase 3: Course profile matching (high impact) (part done)
 
