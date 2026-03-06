@@ -61,6 +61,20 @@ Render `notebooks/backtesting.qmd` for the full calibration picture. The noteboo
 6. **Prospective evaluation** — `prospective_season_summary()` compares archived pre-race predictions against actual results for races where all signals were available. This is the most trustworthy evaluation, but requires a season's worth of archived data.
 7. **Signal value analysis** — `signal_value_analysis()` shows which signals moved predictions most across the season.
 
+### Race reports website
+
+A separate static website in `site/` provides post-race retrospectives for the minileague. Each race gets an interactive report with the hindsight-optimal team, cheapest winning team, scatter plots (points vs cost, value vs cost), and performance tables.
+
+The workflow after each race:
+
+1. **Archive results** (already part of `team_assessor.qmd`): `archive_race_results("pcs-slug", 2026; vg_race_number=N)`
+2. **Record league winner** (optional): add an entry to `LEAGUE_WINNERS` in `scripts/render_reports.jl`
+3. **Generate reports**: `julia --project scripts/render_reports.jl --years=2026`
+4. **Render the site**: `cd site && quarto render`
+5. **Preview locally**: `cd site && quarto preview`
+
+The render script scans `~/.velogames_archive/vg_results/` for completed races and generates a `.qmd` per race in `site/reports/`. The index page at `site/index.qmd` lists all races grouped by year. Reports are rendered to `site/docs/` for deployment via GitHub Pages.
+
 ## Testing
 
 `julia --project -e "using Pkg; Pkg.test()"` should run the tests.
