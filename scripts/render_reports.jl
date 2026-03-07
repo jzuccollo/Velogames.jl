@@ -19,6 +19,7 @@ const LEAGUE_WINNERS =
         ("kuurne-brussel-kuurne", 2026) => (name="6 month write off", score=488),
         ("trofeo-laigueglia", 2026) =>
             (name="Supper Lino & Sausage Superstars!", score=1126),
+        ("strade-bianche", 2026) => (name="Rounded-up Riders", score=1778),
     )
 
 function report_qmd(;
