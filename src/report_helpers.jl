@@ -187,6 +187,48 @@ function round_numeric_columns!(df::DataFrame; digits::Int = 1)
     return df
 end
 
+"""
+    precision_budget(config; n_history_years=3) -> DataFrame
+
+Compute per-signal precision contributions for the Bayesian model at the given
+config. Returns a DataFrame with columns: signal, variance, precision, share.
+"""
+function precision_budget(
+    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG;
+    n_history_years::Int = 3,
+)
+    signals = [
+        ("Odds", odds_variance(config)),
+        ("Oracle", oracle_variance(config)),
+        ("Form", form_variance(config)),
+        ("PCS race history ($(n_history_years)y)", hist_base_variance(config)),
+        ("VG race history ($(n_history_years)y)", vg_hist_base_variance(config)),
+        ("PCS specialty", pcs_variance(config)),
+        ("VG season points", vg_variance(config)),
+        ("Trajectory", trajectory_variance(config)),
+        ("Prior", config.prior_variance),
+    ]
+
+    precisions = [
+        (
+            name,
+            var,
+            name in (
+                "PCS race history ($(n_history_years)y)",
+                "VG race history ($(n_history_years)y)",
+            ) ? n_history_years / var : 1.0 / var,
+        ) for (name, var) in signals
+    ]
+    total = sum(p for (_, _, p) in precisions)
+
+    DataFrame(
+        signal = [name for (name, _, _) in precisions],
+        variance = [round(var, digits = 3) for (_, var, _) in precisions],
+        precision = [round(p, digits = 3) for (_, _, p) in precisions],
+        share = [string(round(Int, 100 * p / total), "%") for (_, _, p) in precisions],
+    )
+end
+
 const _SIGNAL_NAMES =
     ["PCS", "VG", "Form", "Traj", "Hist", "VG hist", "Oracle", "Qual", "Odds"]
 const _SHIFT_COLS = [

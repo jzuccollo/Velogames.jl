@@ -143,7 +143,11 @@ export createkey,
 
 # Race report helpers
 export list_completed_races,
-    load_report_data, compute_optimal_team, compute_cheapest_winning_team, plotly_html
+    load_report_data,
+    compute_optimal_team,
+    compute_cheapest_winning_team,
+    plotly_html,
+    precision_budget
 
 # Include all modules (order matters for dependencies)
 include("cache_utils.jl")
