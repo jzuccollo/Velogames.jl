@@ -226,7 +226,7 @@ function load_race_snapshot(
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     if isfile(path)
         try
-            return Feather.read(path)
+            return DataFrame(Feather.read(path))
         catch e
             @warn "Failed to load archive $path: $e"
             return nothing
