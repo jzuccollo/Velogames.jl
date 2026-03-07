@@ -15,10 +15,10 @@ using Velogames, DataFrames, Dates
 # Format: (pcs_slug, year) => (name = "Name", score = 1234)
 const LEAGUE_WINNERS =
     Dict{Tuple{String,Int},NamedTuple{(:name, :score),Tuple{String,Int}}}(
-        ("omloop-het-nieuwsblad", 2026) => (name = "Cobbles & Wobbles", score = 1027),
-        ("kuurne-brussel-kuurne", 2026) => (name = "6 month write off", score = 488),
+        ("omloop-het-nieuwsblad", 2026) => (name="Cobbles & Wobbles", score=1027),
+        ("kuurne-brussel-kuurne", 2026) => (name="6 month write off", score=488),
         ("trofeo-laigueglia", 2026) =>
-            (name = "Supper Lino & Sausage Superstars!", score = 1126),
+            (name="Supper Lino & Sausage Superstars!", score=1126),
     )
 
 function report_qmd(;
@@ -26,8 +26,8 @@ function report_qmd(;
     year,
     race_name,
     race_date,
-    winner_name = "",
-    winner_score = 0,
+    winner_name="",
+    winner_score=0,
 )
     return """
 ---
@@ -90,7 +90,7 @@ if !isempty(winner_name) && winner_score > 0
 end
 ```
 
-## Race roundup
+## How the race played out
 
 ```{julia}
 #| echo: false
@@ -101,7 +101,7 @@ if nrow(scorers) > 0
     println("- **Top scorer**: \$(first(scorers).rider) with \$(first(scorers).score) points")
     best_val = first(sort(scorers, :value, rev=true))
     println("- **Best value**: \$(best_val.rider) at \$(best_val.value) pts/credit")
-    println("- **Average value** (all starters): \$(round(mean(allriders.value), digits=1)) points per credit")
+    println("- **Average value** (all starters): \$(round(sum(allriders.score) / sum(allriders.cost), digits=1)) points per credit")
 end
 if optimal_team !== nothing
     println("- **Perfect team score**: \$(optimal_score) points for \$(optimal_cost) credits")
@@ -137,7 +137,7 @@ end
 if optimal_team !== nothing
     display_df = sort(optimal_team[:, [:rider, :team, :cost, :score, :value]], :score, rev = true)
     rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost,
-        :score => :Points, :value => :Value)
+        :score => :Points, :value => Symbol("Pts/credit"))
     markdown_table(display_df)
 end
 ```
@@ -165,16 +165,16 @@ end
 if cheapest_team !== nothing && winner_score > 0
     display_df = sort(cheapest_team[:, [:rider, :team, :cost, :score, :value]], :score, rev = true)
     rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost,
-        :score => :Points, :value => :Value)
+        :score => :Points, :value => Symbol("Pts/credit"))
     markdown_table(display_df)
 end
 ```
 
-## Performance analysis
+## Was it worth paying more?
 
-### Points vs cost
+### Points scored by price
 
-How many points did each rider score relative to their cost? Hover over any point to see the rider details.
+Each dot is a rider. Hover to see who they are. The dashed line shows the general trend — if it slopes upward, pricier riders tended to score more; if it's flat or slopes down, the cheaper picks were just as good.
 
 ```{julia}
 #| echo: false
@@ -213,16 +213,25 @@ if nrow(allriders) > 0
         ))
     end
 
-    # Through-origin OLS fit line: β = Σ(cost * score) / Σ(cost²)
+    # Standard OLS fit line: score ~ intercept + β * cost
     costs_f = Float64.(allriders.cost)
     scores_f = Float64.(allriders.score)
-    β = sum(costs_f .* scores_f) / sum(costs_f .^ 2)
+    mean_c, mean_s = mean(costs_f), mean(scores_f)
+    β_pts = sum((costs_f .- mean_c) .* (scores_f .- mean_s)) / sum((costs_f .- mean_c) .^ 2)
+    α_pts = mean_s - β_pts * mean_c
     x_min, x_max = minimum(allriders.cost), maximum(allriders.cost)
+    trend_label = if abs(β_pts) < 0.5
+        "Trend (no clear pattern)"
+    elseif β_pts > 0
+        "Trend (pricier riders scored more)"
+    else
+        "Trend (cheaper riders were better value)"
+    end
     push!(traces, PlotlyBase.scatter(
         x = [x_min, x_max],
-        y = [β * x_min, β * x_max],
+        y = [α_pts + β_pts * x_min, α_pts + β_pts * x_max],
         mode = "lines",
-        name = "Average (\$(round(β, digits=1)) pts/credit)",
+        name = trend_label,
         line = attr(color = "#666666", dash = "dash", width = 1.5),
         hoverinfo = "skip",
     ))
@@ -234,7 +243,7 @@ if nrow(allriders) > 0
 end
 ```
 
-### Top scorers
+### Top scorers this race
 
 ```{julia}
 #| echo: false
@@ -246,9 +255,9 @@ rename!(top, :rider => :Rider, :team => :Team, :cost => :Cost,
 markdown_table(top)
 ```
 
-### Value vs cost
+### Points per credit by price
 
-Points per credit shows which riders delivered the best bang for their budget.
+This shows how efficiently each rider converted their price tag into points — higher is better. The dashed line shows whether paying more tended to buy better efficiency.
 
 ```{julia}
 #| echo: false
@@ -287,14 +296,25 @@ if nrow(allriders) > 0
         ))
     end
 
-    # Horizontal reference line: mean value across all starters (including zeros)
-    avg_val = mean(allriders.value)
+    # Standard OLS fit line: value ~ intercept + β * cost
+    costs_f2 = Float64.(allriders.cost)
+    values_f2 = Float64.(allriders.value)
+    mean_c2, mean_v2 = mean(costs_f2), mean(values_f2)
+    β_val = sum((costs_f2 .- mean_c2) .* (values_f2 .- mean_v2)) / sum((costs_f2 .- mean_c2) .^ 2)
+    α_val = mean_v2 - β_val * mean_c2
     x_min2, x_max2 = minimum(allriders.cost), maximum(allriders.cost)
+    trend_label2 = if abs(β_val) < 0.05
+        "Trend (no clear pattern)"
+    elseif β_val > 0
+        "Trend (pricier riders were more efficient)"
+    else
+        "Trend (cheaper riders were more efficient)"
+    end
     push!(traces2, PlotlyBase.scatter(
         x = [x_min2, x_max2],
-        y = [avg_val, avg_val],
+        y = [α_val + β_val * x_min2, α_val + β_val * x_max2],
         mode = "lines",
-        name = "Avg value (\$(round(avg_val, digits=1)) pts/credit)",
+        name = trend_label2,
         line = attr(color = "#666666", dash = "dash", width = 1.5),
         hoverinfo = "skip",
     ))
@@ -306,9 +326,9 @@ if nrow(allriders) > 0
 end
 ```
 
-### Best value riders
+### Best value picks
 
-The top 10 riders by points per credit of cost.
+The ten riders who scored the most points per credit spent.
 
 ```{julia}
 #| echo: false
@@ -320,11 +340,11 @@ rename!(top_val, :rider => :Rider, :team => :Team, :cost => :Cost,
 markdown_table(top_val)
 ```
 
-## Expensive disappointments
+## The ones to avoid
 
-### Most expensive zeroes
+### Priciest blanks
 
-The priciest riders who failed to score a single point.
+The most expensive riders who failed to score a single point.
 
 ```{julia}
 #| echo: false
@@ -339,9 +359,9 @@ if nrow(zeroes) > 0
 end
 ```
 
-### Worst value premium riders
+### Biggest premium disappointments
 
-The five lowest value riders who cost at least 8 credits.
+The five most expensive riders (8+ credits) who scored the least for their price.
 
 ```{julia}
 #| echo: false
@@ -351,14 +371,14 @@ if nrow(premium) > 0
     sort!(premium, :value)
     display_df = premium[1:min(5, nrow(premium)), [:rider, :team, :cost, :score, :value]]
     rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost,
-        :score => :Points, :value => :Value)
+        :score => :Points, :value => Symbol("Pts/credit"))
     markdown_table(display_df)
 end
 ```
 
-## Team analysis
+## How did the teams fare?
 
-Which teams provided the best value overall?
+Which squads delivered the most points across all their riders?
 
 ```{julia}
 #| echo: false
@@ -374,7 +394,7 @@ team_stats[!, :avg_value] = round.(team_stats.total_points ./ max.(team_stats.to
 sort!(team_stats, :total_points, rev = true)
 top_teams = team_stats[1:min(10, nrow(team_stats)), :]
 rename!(top_teams, :team => :Team, :total_points => :Points, :total_cost => :Cost,
-    :scorers => :Scorers, :riders => :Starters, :avg_value => :Value)
+    :scorers => :Scorers, :riders => :Starters, :avg_value => Symbol("Pts/credit"))
 markdown_table(top_teams)
 ```
 """
@@ -413,12 +433,12 @@ function main()
         write(
             filepath,
             report_qmd(;
-                pcs_slug = row.pcs_slug,
-                year = row.year,
-                race_name = row.name,
-                race_date = race_date,
-                winner_name = winner !== nothing ? winner.name : "",
-                winner_score = winner !== nothing ? winner.score : 0,
+                pcs_slug=row.pcs_slug,
+                year=row.year,
+                race_name=row.name,
+                race_date=race_date,
+                winner_name=winner !== nothing ? winner.name : "",
+                winner_score=winner !== nothing ? winner.score : 0,
             ),
         )
         println("  Generated reports/$filename")
