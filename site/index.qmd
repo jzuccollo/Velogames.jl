@@ -1,6 +1,8 @@
 ---
 title: "Velogames: race reports"
 subtitle: "Fantasy cycling retrospectives for the Dulwich league"
+execute:
+  freeze: false
 ---
 
 A look back at each race in the season: who delivered, who disappointed, and what the perfect team would have been.
