@@ -19,7 +19,7 @@ end
 # Default cache configuration
 const DEFAULT_CACHE = CacheConfig(
     joinpath(homedir(), ".velogames_cache"),
-    24,  # 24 hours default cache lifetime
+    168,  # 7 days default cache lifetime
 )
 
 # Session-scoped in-memory cache (avoids redundant disk reads within a session)
@@ -175,7 +175,7 @@ end
 """
 Default directory for permanent race data archives.
 """
-const DEFAULT_ARCHIVE_DIR = joinpath(homedir(), ".velogames_archive")
+const DEFAULT_ARCHIVE_DIR = joinpath(homedir(), "Dropbox", "code", "velogames", "archive")
 
 """
     archive_path(data_type, pcs_slug, year; archive_dir) -> String

@@ -125,7 +125,7 @@ end
 
 @testset "Caching System" begin
     @testset "CacheConfig" begin
-        @test DEFAULT_CACHE.max_age_hours == 24
+        @test DEFAULT_CACHE.max_age_hours == 168
         @test endswith(DEFAULT_CACHE.cache_dir, ".velogames_cache")
 
         custom_cache = CacheConfig("/tmp/test_cache", 12)

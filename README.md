@@ -43,7 +43,7 @@ Render the appropriate predictor notebook to generate team selections:
 - `notebooks/oneday_predictor.qmd` for Sixes Classics one-day races
 - `notebooks/stagerace_predictor.qmd` for grand tours and stage races
 
-These notebooks run the full pipeline (data fetch, strength estimation, resampled optimisation) and automatically archive predictions, odds, oracle, and qualitative data to `~/.velogames_archive/` for later evaluation.
+These notebooks run the full pipeline (data fetch, strength estimation, resampled optimisation) and automatically archive predictions, odds, oracle, and qualitative data to `DEFAULT_ARCHIVE_DIR` for later evaluation.
 
 ### After each race
 
@@ -73,7 +73,14 @@ The workflow after each race:
 4. **Render the site**: `cd site && quarto render`
 5. **Preview locally**: `cd site && quarto preview`
 
-The render script scans `~/.velogames_archive/vg_results/` for completed races and generates a `.qmd` per race in `site/reports/`. The index page at `site/index.qmd` lists all races grouped by year. Reports are rendered to `site/docs/` for deployment via GitHub Pages.
+The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates a `.qmd` per race in `site/reports/`. The index page at `site/index.qmd` lists all races grouped by year. Reports are rendered to `site/docs/` for deployment via GitHub Pages.
+
+## Data storage
+
+The package uses two storage layers:
+
+- **Permanent archive** (`DEFAULT_ARCHIVE_DIR`): race-day snapshots (odds, oracle predictions, PCS specialty scores, pre-race predictions, post-race results) stored as Feather files at `{archive_dir}/{data_type}/{pcs_slug}/{year}.feather`. By default this points to `~/Dropbox/code/velogames/archive/`, so Dropbox provides backup and cross-machine sync automatically. You can point it anywhere by overriding the constant before loading the package.
+- **Disk cache** (`~/.velogames_cache/`): short-lived cache of scraped web data (PCS rankings, VG rider lists, race catalogues) with a 7-day TTL. This is purely a performance optimisation — it is expendable and regenerates automatically from the web if deleted.
 
 ## Testing
 
