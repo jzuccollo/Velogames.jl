@@ -137,15 +137,15 @@ The phases below are ordered by expected return on selection quality and win pro
 
 ### Phase 1: Fix odds integration (high impact, low effort) — done
 
-Betting odds are the strongest single predictive signal because they aggregate private information from many informed participants. The Bayesian infrastructure treats odds as the highest-precision observation (variance 0.5).
+Betting odds are the strongest single predictive signal because they aggregate private information from many informed participants. The Bayesian infrastructure treats odds as the highest-precision observation (effective variance 0.33 at `market_precision_scale=3.0`).
 
 **Implemented:** `getodds()` now calls the Betfair Exchange API via `betfair_get_market_odds()`. Authentication uses environment variables (`BETFAIR_USERNAME`, `BETFAIR_PASSWORD`, `BETFAIR_APP_KEY`). Users pass a Betfair market ID to the solver; the pipeline falls back gracefully when no market ID is provided or the API is unavailable. Overround removal and log-odds conversion to the Bayesian strength model were already in place.
 
-**Cycling Oracle:** `get_cycling_oracle()` scrapes win probability predictions from cyclingoracle.com blog pages and feeds them as an independent Bayesian signal (variance 1.5). This provides broader race coverage than Betfair, covering most European professional races. Both signals can be active simultaneously; when both are available, the model benefits from two independent observations.
+**Cycling Oracle:** `get_cycling_oracle()` scrapes win probability predictions from cyclingoracle.com blog pages and feeds them as a Bayesian signal (effective variance 0.5 at `market_precision_scale=3.0`, `_odds_to_oracle_ratio=1.5`). This provides broader race coverage than Betfair, covering most European professional races. Both signals can be active simultaneously; when both are available, the model benefits from two independent observations.
 
 **Limitations:** Betfair cycling coverage is limited to grand tours, monuments, and some major classics. Most Superclasico races will not have a Betfair market. Cycling Oracle has broader coverage but only provides predictions for the top ~16 riders per race. Future work could add additional odds sources for even broader coverage.
 
-**Evidence:** Betting markets consistently outperform public statistical models across sports prediction research. In cycling specifically, odds were not tested by Kholkine et al. (2021) but are widely regarded in the DFS community as the strongest single signal because they aggregate private information (team tactics, form, injury knowledge) unavailable in public data. The current variance of 0.5 (vs 3.0-4.0 for other signals) is directionally correct.
+**Evidence:** Betting markets consistently outperform public statistical models across sports prediction research (see "Signal precision rationale" section below for full evidence review). In cycling specifically, odds were not tested by Kholkine et al. (2021) but are widely regarded in the DFS community as the strongest single signal because they aggregate private information (team tactics, form, injury knowledge) unavailable in public data.
 
 ### Phase 2: Model calibration framework (done)
 
@@ -337,9 +337,92 @@ The current normal-normal conjugate model could be extended in several direction
 
 ---
 
+## Signal precision rationale (March 2026)
+
+The Bayesian model combines signals from three precision groups. This section documents the evidence and reasoning behind the current parameter settings, so that future calibration work can build on it rather than re-deriving from scratch.
+
+### Evidence on relative signal quality
+
+**Betting odds are the strongest available predictor of sports outcomes.** This is one of the most robust findings in sports forecasting research. A systematic review of ML in sports betting (arxiv:2410.21484) found that prediction accuracy from ML models "reaches not more than about 70% and is at the same level as model-free bookmaker odds alone." In direct comparisons, the best gradient boosting model achieved RPS of 0.2156 vs bookmaker 0.2012 — models cannot reliably outperform the market. Franck et al. (2010) found betting exchanges are more accurate than bookmakers, and both outperform statistical models. Betting odds aggregate private information (team tactics, form, injury knowledge, insider assessments) that no public data source can replicate.
+
+**The favourite-longshot bias** means odds overestimate longshot chances and slightly underestimate favourites. This implies odds are most accurate for the top ~20-30 riders who matter most for fantasy team selection.
+
+**For cycling specifically**, Kholkine et al. (2021) tested 15 feature categories using learn-to-rank (LambdaMART) on six spring classics. Feature importance findings:
+
+- Overall PCS performance (career and season-long points) was consistently important across all races
+- Race-specific history was the single most important feature for Tour of Flanders and Paris-Roubaix
+- Results from terrain-similar races were strongly predictive (LBL relied on Flèche Wallonne results)
+- **6-week pre-race form received minimal weight** — "the model does not seem to learn a lot from" short-term form features
+- Career trajectory had minor influence; the model "gives priority to consistency"
+- The model only marginally beat fan predictions (NDCG 0.55 vs 0.52)
+
+**Key implication for signal design**: odds already incorporate form, history, and ability. For riders with odds, the non-market signals are largely redundant because odds-makers watch all the same data. The marginal value of additional signals comes from (a) riders without odds coverage (~80% of the field), and (b) very recent information not yet reflected in pre-race odds.
+
+### Current parameter settings and justification
+
+**Scale factors** (higher = more trust in the signal group):
+
+| Factor | Value | Rationale |
+|--------|-------|-----------|
+| `market_precision_scale` | 3.0 | Odds are the best single predictor. At 3.0, odds variance = 0.33, giving precision 3.0 per observation. Calibration at this value produced z std ≈ 0.978 and correct 1σ/2σ coverage. Higher values risk overconfidence for favourites (negative mean z in calibration). |
+| `history_precision_scale` | 2.0 | Controls form, race history, VG history, and trajectory. At 2.0, form gets precision 2.0 (slightly below odds) and race history ~0.67 per year (~2.0 over 3 years). Calibration was good. The main tension: form is almost as precise as odds (2.0 vs 3.0), but the ML evidence says form is weak. However, lowering this scale would also weaken race history, which IS one of the best predictors. |
+| `ability_precision_scale` | 1.0 | PCS specialty and VG season points are broad career/season aggregates. At precision 1.0 they're one-third of odds. Research supports career consistency mattering for identifying contenders, but the signal is too crude to deserve high precision. |
+
+**Within-group ratios** (fixed domain knowledge, not tuned):
+
+| Ratio | Value | Rationale |
+|-------|-------|-----------|
+| `_odds_to_oracle_ratio` | 1.5 | Oracle is a single algorithm; odds aggregate many models and private information. Research says models don't beat odds, suggesting Oracle should be less precise. 1.5x is at the generous end — 2.0 would also be defensible, but the practical difference is small since both are in the high-precision market group. |
+| `_form_to_hist_ratio` | 3.0 | Per observation, form (current 6-week fitness) is more precise than a single year of race history (stale, different conditions, different pelotons). But 3 years of history collectively match form's precision, which the research supports — race-specific results are among the best predictors. |
+| `_form_to_vg_hist_ratio` | 5.0 | VG history adds noise through the nonlinear VG scoring transformation (top-10 finishes heavily rewarded, scoring floor at position 31+). 1.67x noisier than PCS race history per observation. |
+| `_form_to_trajectory_ratio` | 5.0 | Career trajectory (improving vs declining) is a very blunt signal for predicting a single race. ML research found minor importance. Same ratio as VG history. |
+| `_pcs_to_vg_ratio` | 1.0 | Both are broad ability measures — PCS is lifetime by race type, VG is season cumulative. Roughly comparable in informativeness. The `vg_season_penalty` handles early-season noise by inflating VG variance when few riders have points. |
+
+**Other key parameters**:
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| `signal_correlation` | 0.25 | The critical parameter for preventing double-counting. Odds already incorporate form, history, and ability, so the signals are not conditionally independent. With n signals at pairwise correlation ρ, effective precision = Στ / (1 + ρ(n-1)). At ρ=0.25 with 8 signals, the denominator is 2.75, roughly halving the naive combined precision. This was calibrated to produce correct favourite-tier z-scores (1σ coverage = 0.683 at ρ=0.25 vs too narrow at ρ=0.1). |
+| `hist_decay_rate` | 3.2 | Race history variance increases by 3.2 per year ago. A result from 3 years ago has variance 1.5 + 9.6 = 11.1 vs 1.5 for the current year — it's essentially noise. Aggressive decay is appropriate: rider form changes substantially year to year. |
+| `vg_hist_decay_rate` | 1.3 | VG history decays more slowly than PCS history. VG scoring is more stable across years (same scoring system, same field composition) than raw PCS finishing positions. |
+
+### What the evidence does NOT support changing
+
+With only 3 prospective races (Omloop, Kuurne, Laigueglia 2026) and calibration that already looks good, there is no evidence-based case for parameter changes. The prospective Spearman correlations (0.257–0.473) are consistent with the prior predictive checks and historical backtest results. Specific findings:
+
+- **Form precision is arguably too high** relative to its ML-measured importance, but it's bundled with race history (which IS important) under the same scale factor. Separating them would add a fourth scale factor with no data to calibrate it.
+- **Oracle ratio could be 2.0 instead of 1.5**, but the practical impact is small (both are high-precision market signals, and signal_correlation already dampens their combined effect).
+- **The deeper structural issue** is that the Bayesian framework treats signals as conditionally independent given true strength, when in reality odds already incorporate the information from other signals. The `signal_correlation` parameter is a rough correction. A theoretically better approach would model odds as the primary signal and only add marginal information from other sources, but that's a substantially more complex model with no calibration data.
+
+### Market discount (March 2026)
+
+The `signal_correlation` parameter partially addresses the double-counting problem, but analysis of early 2026 predictions revealed that non-market signals were still systematically pulling strength estimates away from odds — particularly PCS specialty (high career points for established riders) and race history (5 years × precision 0.67 = total precision 3.33, exceeding odds at 3.0). The model was overvaluing riders like Van Aert relative to their odds, because lifetime PCS points were overwhelming current market information.
+
+The `market_discount` parameter (default 3.0) provides a direct fix: when a rider has odds coverage, all non-market signal variances are multiplied by this factor, reducing their precision to ~1/3 of their usual value. This reflects the reasoning that the market already incorporates career record, form, race history, and trajectory, so these signals carry little marginal information beyond what odds convey.
+
+With `market_discount=3.0` and odds available, the effective precision budget shifts substantially towards market signals:
+
+- Odds: 3.0 (unchanged) — now ~45% of total precision
+- Oracle: 1.5 (unchanged) — ~23%
+- PCS specialty: 0.33 (was 1.0) — ~5%
+- Race history (5y): 1.11 (was 3.33) — ~17%
+- Form, VG, trajectory: minimal
+
+For riders **without** odds (~60-80% of the field), all signal precisions remain at their original values, so the non-market signals still drive predictions for the bulk of the startlist. This two-tier approach matches the evidence: odds are the best predictor where available, and other signals fill the gap where they're not.
+
+This is an interim solution. A more principled approach would model the conditional information content of each signal given odds (i.e. what does PCS specialty tell you that odds don't?), but that requires substantially more prospective data to calibrate.
+
+**Decision**: maintain current parameters; revisit after 15–20 prospective races with full signal coverage provide enough data to detect systematic patterns.
+
+---
+
 ## Evidence appendix
 
 ### Key academic references
+
+**Sports forecasting and market efficiency** (see also "Signal precision rationale" section above)
+
+A systematic review of ML in sports betting (Hubáček et al., 2024, arxiv:2410.21484) found that ML prediction accuracy "reaches not more than about 70% and is at the same level as model-free bookmaker odds alone." Franck et al. (2010, *International Journal of Forecasting*) showed betting exchanges provide more accurate predictions than bookmakers, using 5,478 football matches. Constantinou & Fenton (2013, *Journal of Forecasting*) developed the Betting Odds Rating System showing bookmaker odds are the best source of probabilistic forecasts for sports matches, outperforming ELO-based models on highly significant levels. Forrest & Simmons (2000) found no statistically significant evidence to reject market efficiency for English football betting.
 
 **Kholkine et al. (2021) - "A machine learning approach to predict the outcome of professional cycling races"**
 *Frontiers in Sports and Active Living* (also PMC8527032)
