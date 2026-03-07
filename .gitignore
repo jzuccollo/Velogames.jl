@@ -47,3 +47,5 @@ site/.quarto/
 
 # manual odds
 *.txt
+
+/.quarto/

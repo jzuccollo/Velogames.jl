@@ -57,7 +57,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 - `estimate_strengths(rider_df; ...)` / `estimate_strengths(data::RaceData; ...)` - Bayesian strength estimation pipeline. Returns DataFrame with `strength`, `uncertainty`, signal flags, signal shifts, and domestique penalty. Used by production solvers.
 - `predict_expected_points(df, scoring; ...)` - Backward-compatible wrapper: calls `estimate_strengths` then runs MC simulation to compute `expected_vg_points`. Used by backtesting.
-- `estimate_rider_strength(...)` - Bayesian posterior from uninformative prior (mean=0, variance=100), updated with PCS specialty (gated on `has_pcs`), VG, PCS form, trajectory, PCS race history with variance penalties, VG race history, odds, oracle, qualitative intelligence. Variances accessed via functions: `pcs_variance(config)`, `odds_variance(config)`, etc.
+- `estimate_rider_strength(...)` - Bayesian posterior from uninformative prior (mean=0, variance=100), updated with PCS specialty (gated on `has_pcs`), VG, PCS form, trajectory, PCS race history with variance penalties, VG race history, odds, oracle, qualitative intelligence. Variances accessed via functions: `pcs_variance(config)`, `odds_variance(config)`, etc. When odds are present, non-market signal variances are inflated by `market_discount` (default 3.0) to prevent double-counting information already reflected in odds.
 - `simulate_race(strengths, uncertainties; n_sims)` - Monte Carlo position simulation (used by backtesting)
 - `compute_stage_race_pcs_score(row, class)` - Class-aware PCS blending for stage races
 
