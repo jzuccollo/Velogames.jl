@@ -74,6 +74,10 @@ end
 scorers = filter(row -> row.score > 0, allriders)
 sort!(scorers, :score, rev = true)
 optimal_keys = optimal_team !== nothing ? Set(optimal_team.riderkey) : Set{String}()
+
+# Precompute chart data on allriders (includes zero-scorers)
+allriders[!, :in_optimal] = [k in optimal_keys for k in allriders.riderkey]
+jitter = (rand(nrow(allriders)) .- 0.5) .* 0.3
 ```
 
 ```{julia}
@@ -97,7 +101,7 @@ if nrow(scorers) > 0
     println("- **Top scorer**: \$(first(scorers).rider) with \$(first(scorers).score) points")
     best_val = first(sort(scorers, :value, rev=true))
     println("- **Best value**: \$(best_val.rider) at \$(best_val.value) pts/credit")
-    println("- **Average value** (scoring riders): \$(round(mean(scorers.value), digits=1)) points per credit")
+    println("- **Average value** (all starters): \$(round(mean(allriders.value), digits=1)) points per credit")
 end
 if optimal_team !== nothing
     println("- **Perfect team score**: \$(optimal_score) points for \$(optimal_cost) credits")
@@ -176,14 +180,27 @@ How many points did each rider score relative to their cost? Hover over any poin
 #| echo: false
 #| output: asis
 
-if nrow(scorers) > 0
-    scorers[!, :in_optimal] = [k in optimal_keys for k in scorers.riderkey]
-    jitter = (rand(nrow(scorers)) .- 0.5) .* 0.3
-
+if nrow(allriders) > 0
     traces = GenericTrace[]
+
+    # Zero-scorers as a distinct muted group
+    zeroes_mask = allriders.score .== 0
+    zeroes = allriders[zeroes_mask, :]
+    if nrow(zeroes) > 0
+        push!(traces, PlotlyBase.scatter(
+            x = zeroes.cost .+ jitter[zeroes_mask],
+            y = zeroes.score,
+            mode = "markers",
+            name = "Did not score",
+            marker = attr(size = 5, opacity = 0.35, color = "#aaaaaa", symbol = "x"),
+            text = ["\$(r.rider) (\$(r.team))<br>Cost: \$(r.cost), Points: 0" for r in eachrow(zeroes)],
+            hoverinfo = "text",
+        ))
+    end
+
     for (label, is_opt) in [("Other riders", false), ("Optimal team", true)]
-        mask = scorers.in_optimal .== is_opt
-        sub = scorers[mask, :]
+        mask = (allriders.score .> 0) .& (allriders.in_optimal .== is_opt)
+        sub = allriders[mask, :]
         nrow(sub) == 0 && continue
         push!(traces, PlotlyBase.scatter(
             x = sub.cost .+ jitter[mask],
@@ -195,6 +212,21 @@ if nrow(scorers) > 0
             hoverinfo = "text",
         ))
     end
+
+    # Through-origin OLS fit line: β = Σ(cost * score) / Σ(cost²)
+    costs_f = Float64.(allriders.cost)
+    scores_f = Float64.(allriders.score)
+    β = sum(costs_f .* scores_f) / sum(costs_f .^ 2)
+    x_min, x_max = minimum(allriders.cost), maximum(allriders.cost)
+    push!(traces, PlotlyBase.scatter(
+        x = [x_min, x_max],
+        y = [β * x_min, β * x_max],
+        mode = "lines",
+        name = "Average (\$(round(β, digits=1)) pts/credit)",
+        line = attr(color = "#666666", dash = "dash", width = 1.5),
+        hoverinfo = "skip",
+    ))
+
     print(plotly_html(traces, Layout(
         xaxis_title = "Cost (credits)", yaxis_title = "Points scored",
         hovermode = "closest", template = "plotly_white",
@@ -222,11 +254,27 @@ Points per credit shows which riders delivered the best bang for their budget.
 #| echo: false
 #| output: asis
 
-if nrow(scorers) > 0
+if nrow(allriders) > 0
     traces2 = GenericTrace[]
+
+    # Zero-scorers
+    zeroes_mask = allriders.score .== 0
+    zeroes = allriders[zeroes_mask, :]
+    if nrow(zeroes) > 0
+        push!(traces2, PlotlyBase.scatter(
+            x = zeroes.cost .+ jitter[zeroes_mask],
+            y = zeroes.value,
+            mode = "markers",
+            name = "Did not score",
+            marker = attr(size = 5, opacity = 0.35, color = "#aaaaaa", symbol = "x"),
+            text = ["\$(r.rider) (\$(r.team))<br>Cost: \$(r.cost), Points: 0, Value: 0" for r in eachrow(zeroes)],
+            hoverinfo = "text",
+        ))
+    end
+
     for (label, is_opt) in [("Other riders", false), ("Optimal team", true)]
-        mask = scorers.in_optimal .== is_opt
-        sub = scorers[mask, :]
+        mask = (allriders.score .> 0) .& (allriders.in_optimal .== is_opt)
+        sub = allriders[mask, :]
         nrow(sub) == 0 && continue
         push!(traces2, PlotlyBase.scatter(
             x = sub.cost .+ jitter[mask],
@@ -238,6 +286,19 @@ if nrow(scorers) > 0
             hoverinfo = "text",
         ))
     end
+
+    # Horizontal reference line: mean value across all starters (including zeros)
+    avg_val = mean(allriders.value)
+    x_min2, x_max2 = minimum(allriders.cost), maximum(allriders.cost)
+    push!(traces2, PlotlyBase.scatter(
+        x = [x_min2, x_max2],
+        y = [avg_val, avg_val],
+        mode = "lines",
+        name = "Avg value (\$(round(avg_val, digits=1)) pts/credit)",
+        line = attr(color = "#666666", dash = "dash", width = 1.5),
+        hoverinfo = "skip",
+    ))
+
     print(plotly_html(traces2, Layout(
         xaxis_title = "Cost (credits)", yaxis_title = "Value (points per credit)",
         hovermode = "closest", template = "plotly_white",
