@@ -181,7 +181,7 @@ const DEFAULT_ARCHIVE_DIR = joinpath(homedir(), "Dropbox", "code", "velogames", 
     archive_path(data_type, pcs_slug, year; archive_dir) -> String
 
 Compute the archive file path for a given data type, race, and year.
-Returns a path like `~/.velogames_archive/odds/paris-roubaix/2025.feather`.
+Returns a path like `<archive_dir>/odds/paris-roubaix/2025.feather`.
 """
 function archive_path(
     data_type::String,

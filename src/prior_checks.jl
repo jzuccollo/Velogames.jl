@@ -68,61 +68,42 @@ function _generate_synthetic_signals(
     n_history::Int = 3,
     n_starters::Int = 150,
 )
-    kwargs = Dict{Symbol,Any}()
-    kwargs[:n_starters] = n_starters
-    kwargs[:config] = config
-
     # PCS specialty
-    if :pcs in available_signals
-        kwargs[:pcs_score] = true_strength + randn(rng) * sqrt(pcs_variance(config))
-        kwargs[:has_pcs] = true
+    pcs_score, has_pcs = if :pcs in available_signals
+        true_strength + randn(rng) * sqrt(pcs_variance(config)), true
     else
-        kwargs[:pcs_score] = 0.0
-        kwargs[:has_pcs] = false
+        0.0, false
     end
 
     # VG season points
-    if :vg in available_signals
-        kwargs[:vg_points] = true_strength + randn(rng) * sqrt(vg_variance(config))
-    else
-        kwargs[:vg_points] = 0.0
-    end
+    vg_points = :vg in available_signals ?
+        true_strength + randn(rng) * sqrt(vg_variance(config)) : 0.0
 
     # Form
-    if :form in available_signals
-        kwargs[:form_score] = true_strength + randn(rng) * sqrt(form_variance(config))
-    else
-        kwargs[:form_score] = 0.0
-    end
+    form_score = :form in available_signals ?
+        true_strength + randn(rng) * sqrt(form_variance(config)) : 0.0
 
     # Trajectory
-    if :trajectory in available_signals
-        kwargs[:trajectory_score] =
-            true_strength * 0.3 + randn(rng) * sqrt(trajectory_variance(config))
-    else
-        kwargs[:trajectory_score] = 0.0
-    end
+    trajectory_score = :trajectory in available_signals ?
+        true_strength * 0.3 + randn(rng) * sqrt(trajectory_variance(config)) : 0.0
 
     # Race history
-    if :history in available_signals
-        hist = Float64[]
-        years = Int[]
-        for y = 0:(n_history-1)
-            var = hist_base_variance(config) + config.hist_decay_rate * y
-            push!(hist, true_strength + randn(rng) * sqrt(var))
-            push!(years, y)
+    race_history, race_history_years_ago, race_history_variance_penalties =
+        if :history in available_signals
+            hist = Float64[]
+            years = Int[]
+            for y = 0:(n_history-1)
+                var = hist_base_variance(config) + config.hist_decay_rate * y
+                push!(hist, true_strength + randn(rng) * sqrt(var))
+                push!(years, y)
+            end
+            hist, years, zeros(n_history)
+        else
+            Float64[], Int[], Float64[]
         end
-        kwargs[:race_history] = hist
-        kwargs[:race_history_years_ago] = years
-        kwargs[:race_history_variance_penalties] = zeros(n_history)
-    else
-        kwargs[:race_history] = Float64[]
-        kwargs[:race_history_years_ago] = Int[]
-        kwargs[:race_history_variance_penalties] = Float64[]
-    end
 
     # VG race history
-    if :vg_history in available_signals
+    vg_race_history, vg_race_history_years_ago = if :vg_history in available_signals
         vg_hist = Float64[]
         vg_years = Int[]
         for y = 0:(n_history-1)
@@ -130,42 +111,33 @@ function _generate_synthetic_signals(
             push!(vg_hist, true_strength + randn(rng) * sqrt(var))
             push!(vg_years, y)
         end
-        kwargs[:vg_race_history] = vg_hist
-        kwargs[:vg_race_history_years_ago] = vg_years
+        vg_hist, vg_years
     else
-        kwargs[:vg_race_history] = Float64[]
-        kwargs[:vg_race_history_years_ago] = Int[]
+        Float64[], Int[]
     end
 
     # Odds
-    if :odds in available_signals
+    odds_implied_prob = if :odds in available_signals
         odds_strength = true_strength + randn(rng) * sqrt(odds_variance(config))
-        baseline = 1.0 / n_starters
-        kwargs[:odds_implied_prob] =
-            clamp(baseline * exp(odds_strength * config.odds_normalisation), 0.001, 0.99)
+        clamp((1.0 / n_starters) * exp(odds_strength * config.odds_normalisation), 0.001, 0.99)
     else
-        kwargs[:odds_implied_prob] = 0.0
+        0.0
     end
 
     # Oracle
-    if :oracle in available_signals
+    oracle_implied_prob = if :oracle in available_signals
         oracle_strength = true_strength + randn(rng) * sqrt(oracle_variance(config))
-        baseline = 1.0 / n_starters
-        kwargs[:oracle_implied_prob] =
-            clamp(baseline * exp(oracle_strength * config.odds_normalisation), 0.001, 0.99)
+        clamp((1.0 / n_starters) * exp(oracle_strength * config.odds_normalisation), 0.001, 0.99)
     else
-        kwargs[:oracle_implied_prob] = 0.0
+        0.0
     end
 
-    # Floor strengths (not used in synthetic generation)
-    kwargs[:odds_floor_strength] = 0.0
-    kwargs[:oracle_floor_strength] = 0.0
-    kwargs[:form_floor_strength] = 0.0
-    kwargs[:qualitative_floor_strength] = 0.0
-    kwargs[:qualitative_adjustments] = Float64[]
-    kwargs[:qualitative_confidences] = Float64[]
-
-    return kwargs
+    return RiderSignalData(;
+        pcs_score, has_pcs, vg_points, form_score, trajectory_score,
+        race_history, race_history_years_ago, race_history_variance_penalties,
+        vg_race_history, vg_race_history_years_ago,
+        odds_implied_prob, oracle_implied_prob,
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -232,14 +204,14 @@ function prior_predictive_check(
 
         for i = 1:n_riders
             signals = i <= n_covered ? available_signals : sparse_signals
-            kwargs = _generate_synthetic_signals(
+            signals = _generate_synthetic_signals(
                 rng,
                 true_strengths[i],
                 config;
                 available_signals = signals,
                 n_starters = n_riders,
             )
-            est = estimate_rider_strength(; kwargs...)
+            est = estimate_rider_strength(signals; n_starters = n_riders, config = config)
             posterior_means[i] = est.mean
             posterior_vars[i] = est.variance
             sd = sqrt(est.variance)
@@ -410,13 +382,13 @@ function simulation_based_calibration(
 
     for _ = 1:n_sims
         true_strength = randn(rng)
-        kwargs = _generate_synthetic_signals(
+        signals = _generate_synthetic_signals(
             rng,
             true_strength,
             config;
             available_signals = available_signals,
         )
-        est = estimate_rider_strength(; kwargs...)
+        est = estimate_rider_strength(signals; config = config)
 
         # CDF rank: P(X <= true_strength) under Normal(est.mean, est.variance)
         z = (true_strength - est.mean) / sqrt(est.variance)

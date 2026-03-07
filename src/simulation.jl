@@ -188,7 +188,7 @@ degrades rather than *how much* to trust the signal source.
     # trajectory) have their variances multiplied by this factor. The market
     # already incorporates career record, form, and race history, so these
     # signals are largely redundant for riders with odds coverage. A value
-    # of 3.0 means non-market signals carry ~1/10 of their usual precision
+    # of 10.0 means non-market signals carry ~1/100 of their usual precision
     # when odds are present.
     market_discount::Float64 = 10.0
 end
@@ -235,6 +235,37 @@ function bayesian_update(
 end
 
 """
+    RiderSignalData
+
+Per-rider signal observations fed to `estimate_rider_strength`. Bundles the
+15 signal fields so the boundary between signal assembly and Bayesian estimation
+is explicit and type-checked.
+
+`n_starters`, `config`, and `effective_vg_variance` are race-level context and
+remain as separate arguments to `estimate_rider_strength`.
+"""
+@kwdef struct RiderSignalData
+    pcs_score::Float64 = 0.0
+    has_pcs::Bool = true
+    race_history::Vector{Float64} = Float64[]
+    race_history_years_ago::Vector{Int} = Int[]
+    race_history_variance_penalties::Vector{Float64} = Float64[]
+    vg_points::Float64 = 0.0
+    form_score::Float64 = 0.0
+    vg_race_history::Vector{Float64} = Float64[]
+    vg_race_history_years_ago::Vector{Int} = Int[]
+    odds_implied_prob::Float64 = 0.0
+    oracle_implied_prob::Float64 = 0.0
+    odds_floor_strength::Float64 = 0.0
+    oracle_floor_strength::Float64 = 0.0
+    form_floor_strength::Float64 = 0.0
+    qualitative_floor_strength::Float64 = 0.0
+    trajectory_score::Float64 = 0.0
+    qualitative_adjustments::Vector{Float64} = Float64[]
+    qualitative_confidences::Vector{Float64} = Float64[]
+end
+
+"""
     estimate_rider_strength(;
         pcs_score, race_history, race_history_years_ago,
         race_history_variance_penalties, vg_points,
@@ -270,29 +301,18 @@ Returns a `BayesianPosterior` with mean (strength) and variance (uncertainty).
 - `n_starters`: expected number of starters (used to scale odds to strength)
 - `config`: `BayesianConfig` controlling variance hyperparameters (default: `DEFAULT_BAYESIAN_CONFIG`)
 """
-function estimate_rider_strength(;
-    pcs_score::Float64=0.0,
-    has_pcs::Bool=true,
-    race_history::Vector{Float64}=Float64[],
-    race_history_years_ago::Vector{Int}=Int[],
-    race_history_variance_penalties::Vector{Float64}=Float64[],
-    vg_points::Float64=0.0,
-    form_score::Float64=0.0,
-    vg_race_history::Vector{Float64}=Float64[],
-    vg_race_history_years_ago::Vector{Int}=Int[],
-    odds_implied_prob::Float64=0.0,
-    oracle_implied_prob::Float64=0.0,
-    odds_floor_strength::Float64=0.0,
-    oracle_floor_strength::Float64=0.0,
-    form_floor_strength::Float64=0.0,
-    qualitative_floor_strength::Float64=0.0,
-    trajectory_score::Float64=0.0,
-    qualitative_adjustments::Vector{Float64}=Float64[],
-    qualitative_confidences::Vector{Float64}=Float64[],
+function estimate_rider_strength(
+    signals::RiderSignalData;
     n_starters::Int=150,
     config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
     effective_vg_variance::Float64=0.0,  # 0 = use vg_variance(config)
 )
+    (; pcs_score, has_pcs, race_history, race_history_years_ago,
+       race_history_variance_penalties, vg_points, form_score,
+       vg_race_history, vg_race_history_years_ago, odds_implied_prob,
+       oracle_implied_prob, odds_floor_strength, oracle_floor_strength,
+       form_floor_strength, qualitative_floor_strength, trajectory_score,
+       qualitative_adjustments, qualitative_confidences) = signals
     # --- Uninformative prior ---
     # Start from a diffuse prior (mean=0, large variance). All signals,
     # including PCS specialty, update this as observations.
@@ -1194,24 +1214,26 @@ function estimate_strengths(
         qual_confs = Float64[q[2] for q in qual_entries]
 
         est = estimate_rider_strength(
-            pcs_score=pcs_z[i],
-            has_pcs=has_pcs[i],
-            race_history=hist_strengths,
-            race_history_years_ago=hist_years,
-            race_history_variance_penalties=hist_penalties,
-            vg_points=vg_z[i],
-            form_score=form_val,
-            trajectory_score=trajectory_raw[i],
-            vg_race_history=vg_hist_strengths,
-            vg_race_history_years_ago=vg_hist_years,
-            odds_implied_prob=odds_prob,
-            oracle_implied_prob=oracle_prob,
-            odds_floor_strength=odds_floor,
-            oracle_floor_strength=oracle_floor,
-            form_floor_strength=form_floor,
-            qualitative_floor_strength=qual_floor,
-            qualitative_adjustments=qual_adjs,
-            qualitative_confidences=qual_confs,
+            RiderSignalData(
+                pcs_score=pcs_z[i],
+                has_pcs=has_pcs[i],
+                race_history=hist_strengths,
+                race_history_years_ago=hist_years,
+                race_history_variance_penalties=hist_penalties,
+                vg_points=vg_z[i],
+                form_score=form_val,
+                trajectory_score=trajectory_raw[i],
+                vg_race_history=vg_hist_strengths,
+                vg_race_history_years_ago=vg_hist_years,
+                odds_implied_prob=odds_prob,
+                oracle_implied_prob=oracle_prob,
+                odds_floor_strength=odds_floor,
+                oracle_floor_strength=oracle_floor,
+                form_floor_strength=form_floor,
+                qualitative_floor_strength=qual_floor,
+                qualitative_adjustments=qual_adjs,
+                qualitative_confidences=qual_confs,
+            );
             n_starters=n_starters,
             config=bayesian_config,
             effective_vg_variance=effective_vg_variance,
@@ -1319,6 +1341,21 @@ function estimate_strengths(
     )
 end
 
+
+# Keyword convenience wrapper — forwards all RiderSignalData fields plus race-level context.
+function estimate_rider_strength(;
+    n_starters::Int=150,
+    config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
+    effective_vg_variance::Float64=0.0,
+    kwargs...
+)
+    estimate_rider_strength(
+        RiderSignalData(; kwargs...);
+        n_starters=n_starters,
+        config=config,
+        effective_vg_variance=effective_vg_variance,
+    )
+end
 
 """
     predict_expected_points(rider_df, scoring; kwargs...) -> DataFrame

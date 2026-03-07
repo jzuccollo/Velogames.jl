@@ -752,7 +752,7 @@ function getpcsriderpts_batch(
                 cache_config = cache_config,
             )
             push!(dfs, rider_pts)
-        catch e
+        catch _e
             push!(failed_riders, rider)
             # Add row with missing values
             push!(
