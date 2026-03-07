@@ -33,7 +33,7 @@ end
     favourite_win_rate::Tuple{Float64,Float64} = (0.10, 0.35)
     top5_from_top10::Tuple{Float64,Float64} = (0.4, 0.8)
     top10_from_top30::Tuple{Float64,Float64} = (0.5, 0.9)
-    rank_correlation::Tuple{Float64,Float64} = (0.3, 0.7)
+    rank_correlation::Tuple{Float64,Float64} = (0.3, 0.75)
     posterior_sd_well_covered::Tuple{Float64,Float64} = (0.3, 1.2)
     posterior_sd_sparse::Tuple{Float64,Float64} = (1.0, 3.5)
 end

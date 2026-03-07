@@ -466,25 +466,16 @@ end
     @test custom_result.mean != default_result.mean
 
     @test DEFAULT_BAYESIAN_CONFIG isa BayesianConfig
-    @test DEFAULT_BAYESIAN_CONFIG._base_pcs_variance == 7.9
-    @test pcs_variance(DEFAULT_BAYESIAN_CONFIG) == 7.9
-    @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.1
+    @test pcs_variance(DEFAULT_BAYESIAN_CONFIG) == 1.0 / DEFAULT_BAYESIAN_CONFIG.ability_precision_scale
+    @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.25
     @test DEFAULT_BAYESIAN_CONFIG.prior_variance == 100.0
 
     # Equicorrelation discount: more signals → wider posterior with ρ > 0
     no_corr = BayesianConfig(
-        ability_precision_scale = 7.9 / 5.0,  # effective pcs_variance ≈ 5.0
-        hist_decay_rate = 1.5,
-        vg_hist_decay_rate = 0.65,
         signal_correlation = 0.0,
-        vg_season_penalty = 5.0,
     )
     with_corr = BayesianConfig(
-        ability_precision_scale = 7.9 / 5.0,
-        hist_decay_rate = 1.5,
-        vg_hist_decay_rate = 0.65,
         signal_correlation = 0.4,
-        vg_season_penalty = 5.0,
     )
     r_nocorr = estimate_rider_strength(
         pcs_score = 1.0,
@@ -517,16 +508,20 @@ end
     @test no_floor.shift_odds == 0.0
 
     # Floor uses higher variance than direct odds (wider posterior)
+    # Use market_discount=1.0 to isolate floor vs direct odds behaviour
+    no_discount = BayesianConfig(market_discount = 1.0)
     direct_odds = estimate_rider_strength(
         pcs_score = 0.5,
         vg_points = 0.3,
         odds_implied_prob = 0.002,
         n_starters = 150,
+        config = no_discount,
     )
     with_floor_same = estimate_rider_strength(
         pcs_score = 0.5,
         vg_points = 0.3,
         odds_floor_strength = -0.8,
+        config = no_discount,
     )
     # Floor observation should leave more uncertainty than a direct price
     @test with_floor_same.variance > direct_odds.variance
@@ -874,7 +869,8 @@ end
     without_vg = estimate_rider_strength(pcs_score = 0.0)
 
     @test with_vg.mean > without_vg.mean
-    @test with_vg.variance < without_vg.variance
+    # Note: with signal_correlation > 0, adding correlated signals can widen
+    # the posterior (correlation discount), so we don't test variance ordering
 
     recent = estimate_rider_strength(
         pcs_score = 0.0,
