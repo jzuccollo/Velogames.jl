@@ -3,13 +3,19 @@
 # ---------------------------------------------------------------------------
 
 """
-    plotly_html(traces, layout; id) -> String
+    plotly_html(traces, layout; id, width, height) -> String
 
 Serialise PlotlyBase traces and layout to a raw HTML block that Quarto
 can embed directly via `output: asis`. Loads Plotly.js from CDN in the
 page header (see `include-in-header` in the report template).
 """
-function plotly_html(traces, layout; id::String = "plot-" * string(rand(UInt32), base = 16))
+function plotly_html(
+    traces,
+    layout;
+    id::String = "plot-" * string(rand(UInt32), base = 16),
+    width::String = "100%",
+    height::String = "500px",
+)
     spec = Dict(
         "data" => [JSON3.read(JSON3.write(t)) for t in traces],
         "layout" => JSON3.read(JSON3.write(layout)),
@@ -17,7 +23,7 @@ function plotly_html(traces, layout; id::String = "plot-" * string(rand(UInt32),
     json_str = JSON3.write(spec)
     return """
     ```{=html}
-    <div id="$id" style="width:100%; height:500px;"></div>
+    <div id="$id" style="width:$(width); height:$(height);"></div>
     <script>Plotly.newPlot('$id', $json_str.data, $json_str.layout, {responsive: true})</script>
     ```
     """
@@ -404,6 +410,7 @@ function pit_histogram_chart(
     pit_values::DataFrame;
     title::String = "PIT calibration histogram",
     scored_only::Bool = true,
+    compact::Bool = false,
 )
     subset = scored_only ? filter(:scored => identity, pit_values) : pit_values
     nrow(subset) == 0 && return ""
@@ -429,15 +436,21 @@ function pit_histogram_chart(
     ))
 
     subtitle = scored_only ? " ($(nrow(subset)) scoring riders)" : " ($(nrow(subset)) riders)"
-    layout = PlotlyBase.Layout(;
-        title = PlotlyBase.attr(text = title * subtitle),
-        xaxis = PlotlyBase.attr(title = "PIT value", range = [0, 1]),
-        yaxis = PlotlyBase.attr(title = "Count"),
-        showlegend = true,
-        bargap = 0.05,
+    margin = compact ? PlotlyBase.attr(l = 30, r = 10, t = 30, b = 30) : nothing
+    layout_kwargs = Dict{Symbol,Any}(
+        :title => PlotlyBase.attr(text = title * subtitle, font = compact ? PlotlyBase.attr(size = 12) : nothing),
+        :xaxis => PlotlyBase.attr(title = compact ? nothing : "PIT value", range = [0, 1]),
+        :yaxis => PlotlyBase.attr(title = compact ? nothing : "Count"),
+        :showlegend => !compact,
+        :bargap => 0.05,
     )
+    if margin !== nothing
+        layout_kwargs[:margin] = margin
+    end
+    layout = PlotlyBase.Layout(; layout_kwargs...)
 
-    return plotly_html(traces, layout)
+    plot_kwargs = compact ? (; width = "100%", height = "200px") : (;)
+    return plotly_html(traces, layout; plot_kwargs...)
 end
 
 """
@@ -501,17 +514,23 @@ function team_total_distribution_chart(
 end
 
 """
-    simulate_vg_draws(predicted, scoring; n_draws, rng) -> Matrix{Float64}
+    simulate_vg_draws(predicted, scoring; n_draws, rng, simulation_df) -> Matrix{Float64}
 
 Lightweight simulation of VG points draws from archived strength estimates.
 Draws noisy strengths, converts to positions, scores VG points (finish + assist).
 Returns a Matrix{Float64} (n_riders × n_draws). No optimisation is performed.
+
+Uses Student's t-distribution with `simulation_df` degrees of freedom for
+heavy-tailed noise (set `simulation_df=nothing` for Gaussian).
 """
 function simulate_vg_draws(
     predicted::DataFrame,
     scoring::ScoringTable;
     n_draws::Int = 500,
     rng::AbstractRNG = Random.MersenneTwister(42),
+    breakaway_rates::Vector{Float64} = Float64[],
+    breakaway_mean_sectors::Vector{Float64} = Float64[],
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     n_riders = nrow(predicted)
     strengths = Float64.(predicted.strength)
@@ -523,7 +542,8 @@ function simulate_vg_draws(
 
     for r = 1:n_draws
         for i = 1:n_riders
-            noisy_strengths[i] = strengths[i] + uncertainties[i] * randn(rng)
+            noise = simulation_df === nothing ? randn(rng) : _rand_t(rng, simulation_df)
+            noisy_strengths[i] = strengths[i] + uncertainties[i] * noise
         end
 
         order = sortperm(noisy_strengths, rev = true)
@@ -543,6 +563,15 @@ function simulate_vg_draws(
                     if j != i && teams[j] == top_team
                         sim_pts[j] += scoring.assist_points[positions[i]]
                     end
+                end
+            end
+        end
+
+        # Breakaway sector points (Bernoulli draw per rider)
+        if !isempty(breakaway_rates)
+            for i = 1:n_riders
+                if breakaway_rates[i] > 0.0 && rand(rng) < breakaway_rates[i]
+                    sim_pts[i] += breakaway_mean_sectors[i] * scoring.breakaway_points
                 end
             end
         end

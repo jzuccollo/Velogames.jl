@@ -496,3 +496,112 @@ function getpcsracehistory(
 
     return all_results
 end
+
+"""
+    load_pcs_breakaway_stats(dir::String) -> DataFrame
+
+Parse manually downloaded PCS "most attack kms" MHTML files to extract
+per-rider breakaway km by season.
+
+Expects `.mhtml` files saved from
+`https://www.procyclingstats.com/statistics/start/most-attack-kms`
+(one per season). The year is extracted from the page title.
+
+Returns a DataFrame with columns: `rider`, `riderkey`, `year`, `breakaway_km`.
+"""
+function load_pcs_breakaway_stats(dir::String)::DataFrame
+    mhtml_files = filter(f -> endswith(lowercase(f), ".mhtml"), readdir(dir))
+    isempty(mhtml_files) && error("No .mhtml files found in $dir")
+
+    all_data = DataFrame[]
+    for filename in mhtml_files
+        filepath = joinpath(dir, filename)
+        raw = read(filepath, String)
+
+        # Decode quoted-printable: =XX hex escapes and soft line breaks (=\n)
+        html = replace(raw, "=\r\n" => "", "=\n" => "")
+        html = replace(html, r"=([0-9A-Fa-f]{2})" => s -> string(Char(parse(UInt8, s[2:3], base=16))))
+
+        # Extract year from title
+        year_match = match(r"season\s+(\d{4})", html)
+        year_match === nothing && error("Cannot determine year from $filename")
+        year = parse(Int, year_match.captures[1])
+
+        # Parse HTML and find the first table ("By rider")
+        page = Gumbo.parsehtml(html)
+        tables = collect(eachmatch(sel"table", page.root))
+        isempty(tables) && error("No tables found in $filename")
+        rider_table = tables[1]
+
+        rows = collect(eachmatch(sel"tr", rider_table))
+        riders = String[]
+        km_values = Float64[]
+
+        for row in rows
+            cells = collect(eachmatch(sel"td", row))
+            length(cells) < 3 && continue
+
+            # Rider name from <a href="rider/..."> link
+            rider_links = filter(
+                l -> occursin("rider/", getattr(l, "href", "")),
+                collect(eachmatch(sel"a", row)),
+            )
+            isempty(rider_links) && continue
+            pcs_name = strip(nodeText(rider_links[1]))
+
+            # Flip "LASTNAME Firstname" → "Firstname Lastname"
+            rider_name = _flip_pcs_name(pcs_name)
+
+            # Breakaway km from the last cell
+            km_text = strip(nodeText(cells[end]))
+            km = tryparse(Float64, km_text)
+            km === nothing && continue
+
+            push!(riders, rider_name)
+            push!(km_values, km)
+        end
+
+        isempty(riders) && @warn "No rider data extracted from $filename"
+        isempty(riders) && continue
+
+        df = DataFrame(
+            rider = riders,
+            riderkey = createkey.(riders),
+            year = fill(year, length(riders)),
+            breakaway_km = km_values,
+        )
+        push!(all_data, df)
+    end
+
+    isempty(all_data) && error("No breakaway data extracted from any file in $dir")
+    return vcat(all_data...)
+end
+
+"""
+    _flip_pcs_name(pcs_name) -> String
+
+Convert PCS "LASTNAME Firstname" format to "Firstname Lastname".
+Handles multi-word surnames (all-caps prefix) and multi-word first names.
+"""
+function _flip_pcs_name(pcs_name::AbstractString)::String
+    parts = split(strip(pcs_name))
+    isempty(parts) && return pcs_name
+    # Find where the uppercase surname ends
+    surname_end = 0
+    for (i, part) in enumerate(parts)
+        if all(c -> isuppercase(c) || !isletter(c), part)
+            surname_end = i
+        else
+            break
+        end
+    end
+    surname_end == 0 && return pcs_name
+    surname_end >= length(parts) && return pcs_name
+
+    surname_parts = parts[1:surname_end]
+    firstname_parts = parts[surname_end+1:end]
+    # Titlecase the surname parts
+    surname = join(titlecase.(lowercase.(surname_parts)), " ")
+    firstname = join(firstname_parts, " ")
+    return "$firstname $surname"
+end

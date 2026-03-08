@@ -51,6 +51,22 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     end
 end
 
+"""Load breakaway rates from PCS data, or return empty vectors if unavailable."""
+function _load_breakaway_rates(breakaway_dir::String, riderkeys::AbstractVector)
+    isempty(breakaway_dir) && return Float64[], Float64[]
+    !isdir(breakaway_dir) && return Float64[], Float64[]
+    try
+        breakaway_df = load_pcs_breakaway_stats(breakaway_dir)
+        rates, sectors = compute_breakaway_rates(breakaway_df, String.(riderkeys))
+        n_matched = count(>(0.0), rates)
+        @info "Breakaway data: $n_matched/$(length(riderkeys)) riders matched"
+        return rates, sectors
+    catch e
+        @warn "Failed to load breakaway data: $e"
+        return Float64[], Float64[]
+    end
+end
+
 """
     archive_race_results(race_name, year; cache_config, force_refresh)
 
@@ -486,6 +502,8 @@ function solve_oneday(
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
     risk_aversion::Float64 = 0.5,
+    breakaway_dir::String = "",
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     data = _prepare_rider_data(
         config,
@@ -519,7 +537,10 @@ function solve_oneday(
     # Archive predictions for prospective evaluation
     _archive_predictions(predicted, config)
 
-    # --- 6. Resampled optimisation ---
+    # --- 6. Breakaway rates ---
+    b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
+
+    # --- 7. Resampled optimisation ---
     @info "Running resampled optimisation ($n_resamples resamples)..."
     predicted, top_teams, sim_vg_points = resample_optimise(
         predicted,
@@ -529,6 +550,9 @@ function solve_oneday(
         n_resamples = n_resamples,
         max_per_team = max_per_team,
         risk_aversion = risk_aversion,
+        breakaway_rates = b_rates,
+        breakaway_mean_sectors = b_sectors,
+        simulation_df = simulation_df,
     )
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
@@ -564,6 +588,8 @@ function solve_stage(
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
     risk_aversion::Float64 = 0.5,
+    breakaway_dir::String = "",
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     data = _prepare_rider_data(
         config,
@@ -596,6 +622,8 @@ function solve_stage(
 
     _archive_predictions(predicted, config)
 
+    b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
+
     @info "Running resampled optimisation ($n_resamples resamples, class constraints)..."
     predicted, top_teams, sim_vg_points = resample_optimise(
         predicted,
@@ -605,6 +633,9 @@ function solve_stage(
         n_resamples = n_resamples,
         max_per_team = max_per_team,
         risk_aversion = risk_aversion,
+        breakaway_rates = b_rates,
+        breakaway_mean_sectors = b_sectors,
+        simulation_df = simulation_df,
     )
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)

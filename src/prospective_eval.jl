@@ -156,6 +156,8 @@ function prospective_pit_values(
     year::Int;
     archive_dir::String = DEFAULT_ARCHIVE_DIR,
     n_draws::Int = 500,
+    breakaway_dir::String = "",
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     pred_dir = joinpath(archive_dir, "predictions")
     if !isdir(pred_dir)
@@ -181,7 +183,8 @@ function prospective_pit_values(
         !hasproperty(predictions, :uncertainty) && continue
 
         # Need team column for assist computation in simulate_vg_draws.
-        # Prefer predictions.team if archived; otherwise join from VG results.
+        # Prefer predictions.team if archived; otherwise join from VG results
+        # (only covers scoring riders — re-run oneday_predictor to fix).
         if !hasproperty(predictions, :team)
             if hasproperty(vg_results, :team)
                 predictions = leftjoin(
@@ -190,8 +193,14 @@ function prospective_pit_values(
                     on = :riderkey,
                 )
                 predictions[!, :team] = coalesce.(predictions.team, "Unknown")
+                n_unknown = count(==("Unknown"), predictions.team)
+                if n_unknown > 0
+                    @warn "Team data missing for $n_unknown/$(nrow(predictions)) riders in $pcs_slug $year — " *
+                          "assist simulation will be inaccurate. Re-run oneday_predictor to re-archive with team data."
+                end
             else
                 predictions[!, :team] .= "Unknown"
+                @warn "No team data available for $pcs_slug $year — assist simulation disabled"
             end
         end
 
@@ -200,8 +209,26 @@ function prospective_pit_values(
         cat = ri !== nothing ? ri.category : 2
         scoring = get_scoring(cat > 0 ? cat : 2)
 
+        # Compute breakaway rates for this race's riders
+        b_rates, b_sectors = if !isempty(breakaway_dir) && isdir(breakaway_dir)
+            try
+                bdf = load_pcs_breakaway_stats(breakaway_dir)
+                compute_breakaway_rates(bdf, String.(predictions.riderkey))
+            catch
+                Float64[], Float64[]
+            end
+        else
+            Float64[], Float64[]
+        end
+
         # Regenerate draws
-        sim_vg_points = simulate_vg_draws(predictions, scoring; n_draws = n_draws)
+        sim_vg_points = simulate_vg_draws(
+            predictions, scoring;
+            n_draws = n_draws,
+            breakaway_rates = b_rates,
+            breakaway_mean_sectors = b_sectors,
+            simulation_df = simulation_df,
+        )
 
         # Build actual results DataFrame with riderkey and actual VG points
         actual_df = leftjoin(

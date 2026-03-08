@@ -255,3 +255,52 @@ function finish_points_for_position(position::Int, scoring::ScoringTable)
         return 0
     end
 end
+
+# ---------------------------------------------------------------------------
+# Breakaway rate estimation
+# ---------------------------------------------------------------------------
+
+"""
+    compute_breakaway_rates(breakaway_df, startlist_keys; history_years=3, max_rate=0.35, mean_sectors=2.0)
+        -> (rates::Vector{Float64}, sectors::Vector{Float64})
+
+Convert PCS season-total breakaway km into per-rider, per-race breakaway
+probability and expected sector count for use in VG simulations.
+
+Returns two vectors aligned to `startlist_keys`:
+- `rates[i]`: probability that rider i is in a breakaway in any given race
+- `sectors[i]`: expected number of sectors if they are in a breakaway
+
+Riders not found in the breakaway data get rate 0.0.
+
+The `max_rate` parameter caps the top breakaway rider's per-race probability.
+Other riders' rates are proportional to their average annual breakaway km.
+"""
+function compute_breakaway_rates(
+    breakaway_df::DataFrame,
+    startlist_keys::AbstractVector{<:AbstractString};
+    history_years::Int = 3,
+    max_rate::Float64 = 0.35,
+    mean_sectors::Float64 = 2.0,
+)
+    # Filter to recent years and compute average annual km per rider
+    max_year = maximum(breakaway_df.year)
+    recent = filter(row -> row.year > max_year - history_years, breakaway_df)
+
+    rider_avg_km = combine(groupby(recent, :riderkey), :breakaway_km => mean => :avg_km)
+
+    # Normalise: top rider gets max_rate, others proportional
+    max_km = nrow(rider_avg_km) > 0 ? maximum(rider_avg_km.avg_km) : 1.0
+    km_lookup = Dict(row.riderkey => row.avg_km for row in eachrow(rider_avg_km))
+
+    rates = Float64[]
+    sectors = Float64[]
+    for key in startlist_keys
+        km = get(km_lookup, key, 0.0)
+        rate = km > 0.0 ? max_rate * km / max_km : 0.0
+        push!(rates, rate)
+        push!(sectors, km > 0.0 ? mean_sectors : 0.0)
+    end
+
+    return rates, sectors
+end

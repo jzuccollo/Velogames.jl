@@ -135,6 +135,9 @@ optimise per draw to compute selection frequencies and expected points that
 account for Jensen's inequality (scoring floor at position 31+). A final
 deterministic optimisation on the resampled expected points selects the team.
 
+Uses Student's t-distribution with `simulation_df` degrees of freedom for
+heavy-tailed noise (set `simulation_df=nothing` for Gaussian).
+
 Returns `(df, top_teams, sim_vg_points)` where:
 - `df` gains columns `:selection_frequency` and `:expected_vg_points`
 - `top_teams` is a `Vector{DataFrame}` containing the optimal team
@@ -149,6 +152,9 @@ function resample_optimise(
     rng::AbstractRNG = Random.default_rng(),
     max_per_team::Int = 0,
     risk_aversion::Float64 = 0.5,
+    breakaway_rates::Vector{Float64} = Float64[],
+    breakaway_mean_sectors::Vector{Float64} = Float64[],
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     n_riders = nrow(df)
     strengths = Float64.(df.strength)
@@ -171,7 +177,8 @@ function resample_optimise(
     for r = 1:n_resamples
         # 1. Draw noisy strengths from posterior
         for i = 1:n_riders
-            noisy_strengths[i] = strengths[i] + uncertainties[i] * randn(rng)
+            noise = simulation_df === nothing ? randn(rng) : _rand_t(rng, simulation_df)
+            noisy_strengths[i] = strengths[i] + uncertainties[i] * noise
         end
 
         # 2. Convert to finishing positions via sortperm
@@ -194,6 +201,15 @@ function resample_optimise(
                     if j != i && teams[j] == top_team
                         sim_pts[j] += scoring.assist_points[positions[i]]
                     end
+                end
+            end
+        end
+
+        # Breakaway sector points (Bernoulli draw per rider)
+        if !isempty(breakaway_rates)
+            for i = 1:n_riders
+                if breakaway_rates[i] > 0.0 && rand(rng) < breakaway_rates[i]
+                    sim_pts[i] += breakaway_mean_sectors[i] * scoring.breakaway_points
                 end
             end
         end

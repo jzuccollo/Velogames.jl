@@ -20,7 +20,8 @@ export getvgriders,
     getpcsraceform,
     getpcsracehistory,
     getpcsriderseasons,
-    getpcsriderseasons_batch
+    getpcsriderseasons_batch,
+    load_pcs_breakaway_stats
 
 # Betfair API
 export betfair_login, betfair_get_market_odds
@@ -68,7 +69,8 @@ export ScoringTable,
     SCORING_STAGE,
     get_scoring,
     expected_finish_points,
-    finish_points_for_position
+    finish_points_for_position,
+    compute_breakaway_rates
 
 # Solvers and optimisation
 export solve_oneday,
