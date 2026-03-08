@@ -28,6 +28,12 @@ risk_aversion = 0.5
 max_per_team = 0
 excluded_riders = String[]
 
+# Simulation noise (nothing = Gaussian, integer = Student's t degrees of freedom)
+simulation_df = 5
+
+# Breakaway data
+breakaway_dir = joinpath(@__DIR__, "..", "data", "pcs_breakaways")
+
 # Cache
 race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6)
 
@@ -65,12 +71,21 @@ scoring = get_scoring(config.category > 0 ? config.category : 2)
 
 # Try loading archived prediction from the oneday predictor (no temporal leakage)
 archived_prediction = !isempty(config.pcs_slug) ?
-                      load_race_snapshot("prediction", config.pcs_slug, config.year) : nothing
+                      load_race_snapshot("predictions", config.pcs_slug, config.year) : nothing
 used_archive = false
 
 if archived_prediction !== nothing && nrow(archived_prediction) > 0
     predicted = archived_prediction
     used_archive = true
+
+    # Ensure team data is present (legacy archives may lack it)
+    if !hasproperty(predicted, :team)
+        vg_riders = suppress_output() do
+            getvgriders(config.current_url; cache_config=race_cache)
+        end
+        predicted = leftjoin(predicted, vg_riders[:, [:riderkey, :team]], on=:riderkey)
+        predicted.team = coalesce.(predicted.team, "Unknown")
+    end
 
     # Reconstruct model's optimal team from archived chosen column
     optimal_team = if :chosen in propertynames(predicted)
@@ -115,15 +130,31 @@ else
             qualitative_df=qualitative_df,
             domestique_discount=domestique_discount,
             risk_aversion=risk_aversion,
-            max_per_team=max_per_team)
+            max_per_team=max_per_team,
+            breakaway_dir=breakaway_dir,
+            simulation_df=simulation_df)
     end
 end
 
 prediction_ok = nrow(predicted) > 0
 
+# Compute breakaway rates from PCS data
+b_rates, b_sectors = if isdir(breakaway_dir)
+    try
+        bdf = load_pcs_breakaway_stats(breakaway_dir)
+        compute_breakaway_rates(bdf, String.(predicted.riderkey))
+    catch
+        Float64[], Float64[]
+    end
+else
+    Float64[], Float64[]
+end
+
 # Regenerate simulation draws from strength estimates (fast, <1s)
 sim_vg_points = if prediction_ok && :strength in propertynames(predicted) && :uncertainty in propertynames(predicted)
-    simulate_vg_draws(predicted, scoring; n_draws=n_resamples)
+    simulate_vg_draws(predicted, scoring; n_draws=n_resamples,
+        breakaway_rates=b_rates, breakaway_mean_sectors=b_sectors,
+        simulation_df=simulation_df)
 else
     nothing
 end

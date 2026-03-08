@@ -27,6 +27,9 @@ domestique_discount = 0.3  # Penalise non-leaders proportionally to strength gap
 risk_aversion = 0.5   # Penalise volatile riders via downside CV (0 = off)
 max_per_team = 0      # Max riders from any single team (0 = no limit)
 
+# Simulation noise (nothing = Gaussian, integer = Student's t degrees of freedom)
+simulation_df = 5
+
 # Exclusions
 excluded_riders = String[]
 
@@ -56,7 +59,8 @@ predicted, chosenteam, top_teams, sim_vg_points = suppress_output() do
         excluded_riders=excluded_riders,
         domestique_discount=domestique_discount,
         risk_aversion=risk_aversion,
-        max_per_team=max_per_team)
+        max_per_team=max_per_team,
+        simulation_df=simulation_df)
 end
 
 # --- Race summary ---

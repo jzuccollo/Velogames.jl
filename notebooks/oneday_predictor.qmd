@@ -40,6 +40,12 @@ max_per_team = 0      # Max riders from any single team (0 = no limit)
 # Exclusions
 excluded_riders = String[]
 
+# Simulation noise (nothing = Gaussian, integer = Student's t degrees of freedom)
+simulation_df = 5
+
+# Breakaway data
+breakaway_dir = joinpath(@__DIR__, "..", "data", "pcs_breakaways")
+
 # Cache
 race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6)
 
@@ -152,13 +158,15 @@ predicted, chosenteam, top_teams, sim_vg_points = suppress_output() do
         odds_df=odds_df,
         domestique_discount=domestique_discount,
         risk_aversion=risk_aversion,
-        max_per_team=max_per_team
+        max_per_team=max_per_team,
+        breakaway_dir=breakaway_dir,
+        simulation_df=simulation_df
     )
 end
 
 # Archive prediction snapshot for retrospective analysis in team_assessor
 if nrow(predicted) > 0 && !isempty(config.pcs_slug)
-    save_race_snapshot(predicted, "prediction", config.pcs_slug, config.year)
+    save_race_snapshot(predicted, "predictions", config.pcs_slug, config.year)
 end
 
 if nrow(predicted) == 0
