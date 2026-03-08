@@ -131,7 +131,6 @@ export BacktestRace,
     ablation_study,
     tune_hyperparameters,
     tune_domestique_discount,
-    tune_risk_aversion,
     build_race_catalogue,
     prefetch_race_data,
     prefetch_all_races
@@ -161,7 +160,6 @@ export list_completed_races,
 include("cache_utils.jl")
 include("utilities.jl")
 include("betfair.jl")
-include("classification_utils.jl")
 include("scoring.jl")
 include("race_helpers.jl")
 include("build_model.jl")
