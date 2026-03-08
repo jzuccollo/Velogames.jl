@@ -44,7 +44,7 @@ excluded_riders = String[]
 simulation_df = 5
 
 # Breakaway data
-breakaway_dir = joinpath(@__DIR__, "..", "data", "pcs_breakaways")
+breakaway_dir = joinpath(DEFAULT_ARCHIVE_DIR, "pcs_breakaways")
 
 # Cache
 race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6)
