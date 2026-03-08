@@ -27,6 +27,8 @@ format:
     code-summary: "Show the code"
     toc: true
     toc_float: true
+    include-in-header:
+      text: '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>'
 
 fig-cap-location: top
 tbl-cap-location: top

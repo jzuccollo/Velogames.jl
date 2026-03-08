@@ -22,7 +22,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/race_helpers.jl` - `RaceInfo` struct (canonical race metadata), `RaceConfig` struct, `setup_race()`, URL alias lookup, `CLASSICS_RACES_2026` schedule, `SIMILAR_RACES` (derived from `RaceInfo`), year-aware VG slug/URL/game ID functions
 - `src/utilities.jl` - Name normalisation (`normalisename`), key creation (`createkey`), sentinel constants (`DNF_POSITION`, `UNRANKED_POSITION`)
 - `src/backtest.jl` - Backtesting framework: race catalogue, season-level evaluation, ablation study, hyperparameter tuning, calibration diagnostics, VG race history integration, cumulative VG season points, PCS specialty archiving
-- `src/report_helpers.jl` - Display formatting: `round_numeric_columns!`, `clean_team_names!`
+- `src/report_helpers.jl` - Display formatting, Plotly chart helpers, VG simulation draws, PIT calibration, team-total distributions
 - `notebooks/` - Quarto notebooks: one-day predictor, stage race predictor, historical analysis, backtesting and calibration
 
 ## Key functions
@@ -72,6 +72,8 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 - `evaluate_prospective(pcs_slug, year)` - Compare archived predictions vs PCS results for one race
 - `prospective_season_summary(year)` - Aggregate prospective metrics across all archived races for a year
+- `prospective_pit_values(year)` - Compute PIT values for all riders across archived races (requires predictions + VG results)
+- `prospective_pit_summary(pit_df)` - Summary statistics for aggregate PIT: mean, variance, KS statistic
 - `signal_value_analysis(year)` - Per-signal shift magnitudes across archived predictions
 
 ### Qualitative intelligence (src/qualitative.jl)

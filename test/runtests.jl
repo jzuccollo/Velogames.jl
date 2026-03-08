@@ -1126,7 +1126,7 @@ end
 
     strengths_df = estimate_strengths(rider_df)
 
-    result_df, top_teams = resample_optimise(
+    result_df, top_teams, sim_vg_pts = resample_optimise(
         strengths_df,
         SCORING_CAT2,
         build_model_oneday;
@@ -1146,6 +1146,9 @@ end
     @test all(result_df.downside_semi_dev .>= 0.0)
     # _final_pts working column should be cleaned up
     @test :_final_pts ∉ propertynames(result_df)
+    # sim_vg_points matrix has correct dimensions
+    @test size(sim_vg_pts) == (nrow(result_df), 100)
+    @test all(sim_vg_pts .>= 0.0)
 end
 
 # =========================================================================

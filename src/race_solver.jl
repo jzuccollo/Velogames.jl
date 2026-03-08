@@ -29,6 +29,8 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
         [
             :riderkey,
             :rider,
+            :team,
+            :cost,
             :strength,
             :uncertainty,
             :shift_pcs,
@@ -268,6 +270,14 @@ function _prepare_rider_data(
     end
 
     # --- 3d. Fetch cross-season PCS points for trajectory (automatic) ---
+    # Build slug map from rider names if the startlist didn't provide one
+    if isempty(pcs_slug_map)
+        for row in eachrow(riderdf)
+            slug = normalisename(row.rider)
+            slug = get(PCS_SLUG_OVERRIDES, slug, slug)
+            pcs_slug_map[row.riderkey] = slug
+        end
+    end
     seasons_df = nothing
     if !isempty(pcs_slug_map)
         try
@@ -454,10 +464,11 @@ optimisation of expected Velogames points.
 6. Resampled optimisation: draw strengths, score, optimise, repeat
 
 ## Returns
-A tuple `(predicted, chosenteam, top_teams)` where `predicted` is a DataFrame
-of all riders with expected VG points and selection frequency, `chosenteam` is
-the most frequently selected team, and `top_teams` is a vector of the top
-alternative teams.
+A tuple `(predicted, chosenteam, top_teams, sim_vg_points)` where `predicted` is
+a DataFrame of all riders with expected VG points and selection frequency,
+`chosenteam` is the most frequently selected team, `top_teams` is a vector of
+the top alternative teams, and `sim_vg_points` is a Matrix{Float64}
+(n_riders × n_resamples) of per-draw VG points (row order matches `predicted`).
 """
 function solve_oneday(
     config::RaceConfig;
@@ -492,7 +503,7 @@ function solve_oneday(
         odds_df = odds_df,
     )
     if data === nothing
-        return DataFrame(), DataFrame(), DataFrame[]
+        return DataFrame(), DataFrame(), DataFrame[], Matrix{Float64}(undef, 0, 0)
     end
 
     # --- 5. Estimate rider strengths ---
@@ -510,7 +521,7 @@ function solve_oneday(
 
     # --- 6. Resampled optimisation ---
     @info "Running resampled optimisation ($n_resamples resamples)..."
-    predicted, top_teams = resample_optimise(
+    predicted, top_teams, sim_vg_points = resample_optimise(
         predicted,
         scoring,
         build_model_oneday;
@@ -522,7 +533,7 @@ function solve_oneday(
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
 
-    return predicted, chosenteam, top_teams
+    return predicted, chosenteam, top_teams, sim_vg_points
 end
 
 
@@ -535,7 +546,7 @@ Uses class-aware strength estimation and enforces VG classification constraints
 (all-rounders, climbers, sprinters, unclassed) during optimisation.
 
 ## Returns
-A tuple `(predicted, chosenteam, top_teams)`.
+A tuple `(predicted, chosenteam, top_teams, sim_vg_points)`.
 """
 function solve_stage(
     config::RaceConfig;
@@ -570,7 +581,7 @@ function solve_stage(
         odds_df = odds_df,
     )
     if data === nothing
-        return DataFrame(), DataFrame(), DataFrame[]
+        return DataFrame(), DataFrame(), DataFrame[], Matrix{Float64}(undef, 0, 0)
     end
 
     scoring = get_scoring(:stage)
@@ -586,7 +597,7 @@ function solve_stage(
     _archive_predictions(predicted, config)
 
     @info "Running resampled optimisation ($n_resamples resamples, class constraints)..."
-    predicted, top_teams = resample_optimise(
+    predicted, top_teams, sim_vg_points = resample_optimise(
         predicted,
         scoring,
         build_model_stage;
@@ -598,5 +609,5 @@ function solve_stage(
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
 
-    return predicted, chosenteam, top_teams
+    return predicted, chosenteam, top_teams, sim_vg_points
 end

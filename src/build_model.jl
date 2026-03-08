@@ -99,9 +99,10 @@ optimise per draw to compute selection frequencies and expected points that
 account for Jensen's inequality (scoring floor at position 31+). A final
 deterministic optimisation on the resampled expected points selects the team.
 
-Returns `(df, top_teams)` where:
+Returns `(df, top_teams, sim_vg_points)` where:
 - `df` gains columns `:selection_frequency` and `:expected_vg_points`
 - `top_teams` is a `Vector{DataFrame}` containing the optimal team
+- `sim_vg_points` is a `Matrix{Float64}` (n_riders × n_resamples) of per-draw VG points
 """
 function resample_optimise(
     df::DataFrame,
@@ -121,6 +122,7 @@ function resample_optimise(
     # Track how often each rider is selected and accumulate VG points per resample
     selection_counts = zeros(Int, n_riders)
     vg_points_sum = zeros(Float64, n_riders)
+    sim_vg_points = Matrix{Float64}(undef, n_riders, n_resamples)
     n_successful = 0
 
     # Welford accumulators for downside semi-deviation (risk-adjusted scoring)
@@ -162,6 +164,7 @@ function resample_optimise(
 
         # Accumulate for expected VG points calculation and Welford variance tracking
         for i = 1:n_riders
+            sim_vg_points[i, r] = sim_pts[i]
             vg_points_sum[i] += sim_pts[i]
             delta = sim_pts[i] - welford_mean[i]
             welford_mean[i] += delta / r
@@ -230,7 +233,7 @@ function resample_optimise(
     end
 
     select!(df, Not(:_final_pts))
-    return df, top_teams
+    return df, top_teams, sim_vg_points
 end
 
 

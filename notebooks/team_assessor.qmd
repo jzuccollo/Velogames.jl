@@ -43,12 +43,12 @@ List the riders in your custom team. Names must match VG rider names exactly.
 #| echo: true
 #| output: false
 my_team = [
-    "Tadej Pogacar",
+    "Tadej Pogačar",
     "Thomas Pidcock",
-    "Paul Seixas",
-    "Gianmarco Garofoli",
-    "Aaron Dockx",
-    "Pietro Mattio"
+    "Romain Grégoire",
+    "Louis Vervaeke",
+    "Gianni Moscon",
+    "Domen Novak"
 ]
 my_keys = createkey.(my_team)
 ```
@@ -120,6 +120,13 @@ else
 end
 
 prediction_ok = nrow(predicted) > 0
+
+# Regenerate simulation draws from strength estimates (fast, <1s)
+sim_vg_points = if prediction_ok && :strength in propertynames(predicted) && :uncertainty in propertynames(predicted)
+    simulate_vg_draws(predicted, scoring; n_draws=n_resamples)
+else
+    nothing
+end
 
 if prediction_ok
     source = used_archive ? "archived prediction (pre-race)" : "fresh prediction"
@@ -481,6 +488,102 @@ No results available yet for race $(actual_race_number). Re-render after the rac
                 clean_team_names!(hs_display, [:team])
                 md_table(hs_display)
                 print("\n\n")
+            end
+
+            # --- Distribution charts (only if sim draws available) ---
+            if sim_vg_points !== nothing && size(sim_vg_points, 1) > 0
+                print("""
+## Simulated points distributions
+
+Box plots show the distribution of VG points across $(size(sim_vg_points, 2)) resampled race simulations. Red diamonds mark actual results.
+
+""")
+                for (team_label, team_retro) in [
+                    ("Your team", my_retro),
+                    ("Model's team", model_retro),
+                    ("Hindsight-optimal team", hindsight_team),
+                ]
+                    nrow(team_retro) == 0 && continue
+                    # Ensure expected_vg_points exists for sorting (coalesce missings)
+                    plot_df = copy(team_retro)
+                    if :expected_vg_points ∉ propertynames(plot_df)
+                        plot_df[!, :expected_vg_points] .= 0.0
+                    else
+                        plot_df[!, :expected_vg_points] = coalesce.(plot_df.expected_vg_points, 0.0)
+                    end
+                    print(sim_distribution_chart(
+                        plot_df, predicted, sim_vg_points;
+                        actual_results=team_retro,
+                        title=team_label
+                    ))
+                    print("\n\n")
+                end
+            end
+
+            # --- PIT calibration histogram (only if sim draws available) ---
+            if sim_vg_points !== nothing && size(sim_vg_points, 1) > 0
+                pit_values = compute_pit_values(predicted, sim_vg_points, retro)
+                if nrow(pit_values) > 0
+                    scored_pit = filter(:scored => identity, pit_values)
+                    zero_pit = filter(:scored => !, pit_values)
+                    n_scored = nrow(scored_pit)
+                    n_zero = nrow(zero_pit)
+
+                    # Predicted vs actual zero-score proportion
+                    n_total = nrow(pit_values)
+                    actual_zero_pct = round(100 * n_zero / n_total, digits=1)
+                    # Average predicted probability of scoring zero
+                    pred_zero_pct = if n_total > 0
+                        key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
+                        pred_zeros = Float64[]
+                        for row in eachrow(pit_values)
+                            idx = get(key_to_idx, row.riderkey, nothing)
+                            idx === nothing && continue
+                            draws = @view sim_vg_points[idx, :]
+                            push!(pred_zeros, count(==(0.0), draws) / length(draws))
+                        end
+                        round(100 * mean(pred_zeros), digits=1)
+                    else
+                        0.0
+                    end
+
+                    print("""
+## VG points calibration
+
+The PIT (probability integral transform) histogram checks whether the model's VG points distributions are well-calibrated. If calibrated, the histogram should be approximately uniform. Skewed right means the model underestimates; skewed left means it overestimates.
+
+**Zero-score calibration:** $(actual_zero_pct)% of riders actually scored zero vs $(pred_zero_pct)% predicted to score zero (average across riders).
+
+""")
+                    if n_scored > 0
+                        print(pit_histogram_chart(pit_values;
+                            title="PIT calibration — $(config.name) $(config.year)"))
+                        print("\n\n")
+                    end
+                end
+
+                # --- Team total distribution charts ---
+                print("""
+## Team total distributions
+
+Histograms of simulated total VG points for each team, with the actual total marked. The percentile indicates where the actual outcome falls within the simulated distribution.
+
+""")
+                for (team_label, team_retro) in [
+                    ("Your team", my_retro),
+                    ("Model's team", model_retro),
+                    ("Hindsight-optimal team", hindsight_team),
+                ]
+                    nrow(team_retro) == 0 && continue
+                    team_keys = String.(team_retro.riderkey)
+                    actual_total = Float64(sum(team_retro.actual_vg_points))
+                    print(team_total_distribution_chart(
+                        team_keys, predicted, sim_vg_points;
+                        actual_total=actual_total,
+                        title=team_label
+                    ))
+                    print("\n\n")
+                end
             end
 
             # --- Prediction misses (only if predictions available) ---

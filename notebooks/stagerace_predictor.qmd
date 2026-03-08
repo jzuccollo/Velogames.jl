@@ -46,7 +46,7 @@ config = suppress_output() do
     setup_race(race_name, race_year; cache_config=race_cache)
 end
 
-predicted, chosenteam, top_teams = suppress_output() do
+predicted, chosenteam, top_teams, sim_vg_points = suppress_output() do
     solve_stage(config;
         racehash=racehash,
         history_years=history_years,

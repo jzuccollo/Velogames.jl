@@ -417,6 +417,47 @@ No prospective evaluation data available for $current_year yet. Run `solve_oneda
 end
 ```
 
+## VG points calibration (PIT)
+
+The PIT histogram aggregates calibration checks across all prospective races. For each race, simulation draws are regenerated from archived strength estimates and the PIT value of each rider's actual VG points is computed. A uniform histogram indicates well-calibrated VG points distributions; systematic skew reveals whether the model tends to overestimate or underestimate.
+
+```{julia}
+#| output: asis
+current_year = year(today())
+pit_df = prospective_pit_values(current_year)
+
+if nrow(pit_df) > 0
+    scored_pit = filter(:scored => identity, pit_df)
+    n_races = length(unique(pit_df.race))
+    n_scored = nrow(scored_pit)
+
+    summary = prospective_pit_summary(pit_df)
+
+    print("""
+**$(n_scored) scoring riders across $(n_races) races.** Mean PIT = $(summary.mean_pit) (target: 0.5), variance = $(summary.var_pit) (target: 0.083), KS statistic = $(summary.ks_statistic).
+
+""")
+    print(pit_histogram_chart(pit_df;
+        title="Aggregate PIT calibration — $current_year",
+        scored_only=true))
+    print("\n\n")
+
+    # Zero-score calibration
+    n_total = nrow(pit_df)
+    n_zero = nrow(filter(:scored => !, pit_df))
+    actual_zero_pct = round(100 * n_zero / n_total, digits=1)
+    print("""
+**Zero-score calibration:** $(actual_zero_pct)% of riders scored zero across all prospective races.
+
+""")
+else
+    print("""
+No VG points calibration data available for $current_year yet. Requires both archived predictions and VG results.
+
+""")
+end
+```
+
 ## Signal value analysis
 
 Which signals moved predictions most across archived races, and how large were those shifts?

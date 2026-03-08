@@ -127,7 +127,7 @@ degrades rather than *how much* to trust the signal source.
     # Default 1.0 reproduces the original hardcoded variances exactly.
 
     # Market signals: odds, oracle
-    market_precision_scale::Float64 = 3.0
+    market_precision_scale::Float64 = 4.0
 
     # Historical signals: form, race history, VG history, trajectory
     history_precision_scale::Float64 = 2.0
@@ -143,7 +143,7 @@ degrades rather than *how much* to trust the signal source.
     # Historical: race history and VG history are noisier than recent form
     _form_to_hist_ratio::Float64 = 3.0
     _form_to_vg_hist_ratio::Float64 = 5.0
-    _form_to_trajectory_ratio::Float64 = 5.0
+    _form_to_trajectory_ratio::Float64 = 3.0
 
     # Ability: VG season points match PCS specialty in precision
     _pcs_to_vg_ratio::Float64 = 1.0
@@ -883,6 +883,16 @@ function estimate_strengths(
     @info "Season-adaptive VG variance: $(round(effective_vg_variance, digits=2)) " *
           "($(round(100 * frac_nonzero, digits=0))% with points, scale=$(round(season_scale, digits=2)))"
 
+    # --- Current year and month (needed by PCS recency scaling, trajectory, and race history) ---
+    current_year = if race_date !== nothing
+        Dates.year(race_date)
+    elseif race_year !== nothing
+        race_year
+    else
+        Dates.year(Dates.today())
+    end
+    current_month = Dates.month(race_date !== nothing ? race_date : Dates.today())
+
     # --- Compute PCS z-scores (race-type-dependent) ---
     pcs_z = zeros(n_riders)
     if race_type == :stage
@@ -906,6 +916,41 @@ function estimate_strengths(
             pcs_mean = mean(pcs_raw)
             pcs_std = std(pcs_raw)
             pcs_z = pcs_std > 0 ? (pcs_raw .- pcs_mean) ./ pcs_std : zeros(n_riders)
+        end
+    end
+
+    # --- Build seasons lookup and apply PCS recency scaling ---
+    # PCS specialty scores accumulate over a rider's entire career and do not
+    # decay. A rider who peaked 3-5 years ago retains a high specialty score
+    # despite declining current form. We scale the z-scored PCS specialty down
+    # by a recency ratio: mean of the last two complete seasons' overall PCS
+    # points divided by the rider's career-peak season. Clamped to [0.3, 1.0]
+    # so past champions still receive partial credit.
+    # The seasons_lookup is also used by the trajectory block below.
+    seasons_lookup_pre = Dict{String,DataFrame}()
+    if seasons_df !== nothing &&
+       :riderkey in propertynames(seasons_df) &&
+       :pcs_points in propertynames(seasons_df) &&
+       :year in propertynames(seasons_df)
+        for g in groupby(seasons_df, :riderkey)
+            seasons_lookup_pre[first(g.riderkey)] = DataFrame(g)
+        end
+        for i = 1:n_riders
+            key = df.riderkey[i]
+            rider_seas = get(seasons_lookup_pre, key, nothing)
+            rider_seas === nothing && continue
+
+            sorted_seas = sort(rider_seas, :year, rev=true)
+            complete = current_month < 4 ?
+                filter(r -> r.year < current_year, sorted_seas) : sorted_seas
+            nrow(complete) < 1 && continue
+
+            recent_mean = mean(first(complete, min(2, nrow(complete))).pcs_points)
+            career_max  = maximum(rider_seas.pcs_points)
+            career_max == 0.0 && continue
+
+            recency_ratio = clamp(recent_mean / career_max, 0.3, 1.0)
+            pcs_z[i] *= recency_ratio
         end
     end
 
@@ -1029,15 +1074,6 @@ function estimate_strengths(
 
     # --- Build race history lookup ---
     # Each entry is (strength, years_ago, variance_penalty)
-    # Use race_date/race_year when provided (backtesting) to avoid
-    # miscalculating years_ago relative to today's date
-    current_year = if race_date !== nothing
-        Dates.year(race_date)
-    elseif race_year !== nothing
-        race_year
-    else
-        Dates.year(Dates.today())
-    end
     history_lookup = Dict{String,Vector{Tuple{Float64,Int,Float64}}}()
     if race_history_df !== nothing &&
        :riderkey in propertynames(race_history_df) &&
@@ -1112,36 +1148,34 @@ function estimate_strengths(
     end
 
     # --- Compute trajectory scores ---
-    # Career trajectory from cross-season PCS ranking points: are they on the
-    # up or down? Compare recent seasons (last 1-2 years) to older seasons
-    # (3+ years ago). Riders without multi-season data get 0 (no update).
+    # Year-on-year change in PCS ranking points between the two most recent
+    # complete seasons. The current year is excluded early in the season
+    # (before April) because March points are artificially low and would
+    # distort the signal. Normalised by the larger of the two season totals
+    # so a 100->200 rise is as notable as a 1000->2000 rise.
+    # Riders without at least two qualifying seasons get 0 (no update).
+    # seasons_lookup_pre is already built from seasons_df in the PCS scaling block above.
     trajectory_raw = zeros(n_riders)
-    seasons_lookup = Dict{String,DataFrame}()
-    if seasons_df !== nothing &&
-       :riderkey in propertynames(seasons_df) &&
-       :pcs_points in propertynames(seasons_df) &&
-       :year in propertynames(seasons_df)
-        for g in groupby(seasons_df, :riderkey)
-            seasons_lookup[first(g.riderkey)] = DataFrame(g)
-        end
-    end
 
     has_trajectory = falses(n_riders)
     for i = 1:n_riders
         key = df.riderkey[i]
-        rider_seasons = get(seasons_lookup, key, nothing)
+        rider_seasons = get(seasons_lookup_pre, key, nothing)
         rider_seasons === nothing && continue
-        nrow(rider_seasons) < 2 && continue
 
         sorted = sort(rider_seasons, :year, rev=true)
-        # Recent: last 1-2 seasons; older: 3+ years ago
-        recent = filter(r -> r.year >= current_year - 1, sorted)
-        older = filter(r -> r.year <= current_year - 3, sorted)
+        # Exclude the current year if early season — points are too sparse to trust
+        comparison = current_month < 4 ?
+            filter(r -> r.year < current_year, sorted) : sorted
 
-        nrow(recent) == 0 && continue
-        nrow(older) == 0 && continue
+        nrow(comparison) < 2 && continue
 
-        trajectory_raw[i] = mean(recent.pcs_points) - mean(older.pcs_points)
+        most_recent = comparison[1, :pcs_points]
+        prev        = comparison[2, :pcs_points]
+        baseline    = max(most_recent, prev)
+        baseline == 0.0 && continue
+
+        trajectory_raw[i] = (most_recent - prev) / baseline
         has_trajectory[i] = true
     end
 
@@ -1278,7 +1312,7 @@ function estimate_strengths(
     has_oracle = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_qualitative = [haskey(qualitative_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_form = [haskey(form_lookup, df.riderkey[i]) for i = 1:n_riders]
-    has_seasons = [haskey(seasons_lookup, df.riderkey[i]) for i = 1:n_riders]
+    has_seasons = [haskey(seasons_lookup_pre, df.riderkey[i]) for i = 1:n_riders]
 
     # --- Add results to DataFrame ---
     df[!, :strength] = round.(strengths, digits=3)

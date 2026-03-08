@@ -77,6 +77,8 @@ export solve_oneday,
     ProspectiveResult,
     evaluate_prospective,
     prospective_season_summary,
+    prospective_pit_values,
+    prospective_pit_summary,
     signal_value_analysis,
     build_model_oneday,
     build_model_stage,
@@ -148,7 +150,12 @@ export list_completed_races,
     compute_optimal_team,
     compute_cheapest_winning_team,
     plotly_html,
-    precision_budget
+    precision_budget,
+    sim_distribution_chart,
+    simulate_vg_draws,
+    compute_pit_values,
+    pit_histogram_chart,
+    team_total_distribution_chart
 
 # Include all modules (order matters for dependencies)
 include("cache_utils.jl")

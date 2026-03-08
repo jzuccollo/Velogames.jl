@@ -143,6 +143,115 @@ function prospective_season_summary(year::Int; archive_dir::String = DEFAULT_ARC
 end
 
 """
+    prospective_pit_values(year; archive_dir, n_draws) -> DataFrame
+
+Compute PIT values for all riders across all archived races in a year.
+For each race with archived predictions and VG results, regenerates simulation
+draws and computes the PIT value of each rider's actual VG points.
+
+Returns a DataFrame with columns: race, riderkey, rider, actual_vg_points,
+pit_value, scored. Empty DataFrame if no data available.
+"""
+function prospective_pit_values(
+    year::Int;
+    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    n_draws::Int = 500,
+)
+    pred_dir = joinpath(archive_dir, "predictions")
+    if !isdir(pred_dir)
+        return DataFrame()
+    end
+
+    all_pit = DataFrame[]
+
+    for race_dir in readdir(pred_dir; join = true)
+        isdir(race_dir) || continue
+        pcs_slug = basename(race_dir)
+        feather_path = joinpath(race_dir, "$year.feather")
+        isfile(feather_path) || continue
+
+        predictions =
+            load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
+        vg_results =
+            load_race_snapshot("vg_results", pcs_slug, year; archive_dir = archive_dir)
+
+        predictions === nothing && continue
+        vg_results === nothing && continue
+        !hasproperty(predictions, :strength) && continue
+        !hasproperty(predictions, :uncertainty) && continue
+
+        # Need team column for assist computation in simulate_vg_draws.
+        # Prefer predictions.team if archived; otherwise join from VG results.
+        if !hasproperty(predictions, :team)
+            if hasproperty(vg_results, :team)
+                predictions = leftjoin(
+                    predictions,
+                    unique(vg_results[:, [:riderkey, :team]]);
+                    on = :riderkey,
+                )
+                predictions[!, :team] = coalesce.(predictions.team, "Unknown")
+            else
+                predictions[!, :team] .= "Unknown"
+            end
+        end
+
+        # Determine scoring category from race metadata
+        ri = _find_race_by_slug(pcs_slug)
+        cat = ri !== nothing ? ri.category : 2
+        scoring = get_scoring(cat > 0 ? cat : 2)
+
+        # Regenerate draws
+        sim_vg_points = simulate_vg_draws(predictions, scoring; n_draws = n_draws)
+
+        # Build actual results DataFrame with riderkey and actual VG points
+        actual_df = leftjoin(
+            predictions[:, [:riderkey, :rider]],
+            vg_results[:, [:riderkey, :score]];
+            on = :riderkey,
+        )
+        actual_df[!, :actual_vg_points] = Float64.(coalesce.(actual_df.score, 0))
+
+        pit = compute_pit_values(predictions, sim_vg_points, actual_df)
+        nrow(pit) == 0 && continue
+
+        pit[!, :race] .= pcs_slug
+        push!(all_pit, pit)
+    end
+
+    isempty(all_pit) && return DataFrame()
+    vcat(all_pit...)
+end
+
+"""
+    prospective_pit_summary(pit_values; scored_only) -> NamedTuple
+
+Summarise aggregate PIT values: mean, variance, KS statistic against uniform.
+Well-calibrated predictions have mean ≈ 0.5 and variance ≈ 1/12 ≈ 0.0833.
+"""
+function prospective_pit_summary(pit_values::DataFrame; scored_only::Bool = true)
+    subset = scored_only ? filter(:scored => identity, pit_values) : pit_values
+    n = nrow(subset)
+    n == 0 && return (; n = 0, mean_pit = NaN, var_pit = NaN, ks_statistic = NaN)
+
+    pits = subset.pit_value
+    m = mean(pits)
+    v = var(pits)
+
+    # Kolmogorov-Smirnov statistic against uniform(0,1)
+    sorted = sort(pits)
+    ks = maximum(
+        max(abs(sorted[i] - (i - 1) / n), abs(sorted[i] - i / n)) for i in 1:n
+    )
+
+    (;
+        n = n,
+        mean_pit = round(m, digits = 3),
+        var_pit = round(v, digits = 4),
+        ks_statistic = round(ks, digits = 3),
+    )
+end
+
+"""
     signal_value_analysis(year; archive_dir) -> DataFrame
 
 For each signal, compute:

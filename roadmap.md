@@ -471,6 +471,23 @@ Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCycli
 - Young riders on upward trajectories are systematically underpriced by VG's backward-looking cost algorithm
 - Classification constraints create within-category pricing inefficiencies
 
+### Conditional VG-points calibration (Tier 3)
+
+The per-race PIT histogram and aggregate PIT across prospective races (now implemented) answer whether the model is calibrated on average. Conditional calibration asks whether it is calibrated *for specific strata of riders*, which matters because miscalibration may be concentrated in ways that affect team selection.
+
+**Natural strata to check:**
+
+- **By predicted strength**: are the top-10 predicted riders' distributions well-calibrated? The Strade Bianche 2026 data suggests favourites may be under-dispersed (actuals exceeding the simulated range).
+- **By cost**: cheap riders (cost 4–6) are where VG points calibration most affects team selection, since the optimiser frequently swaps between similarly-priced alternatives.
+- **By signal coverage**: riders with odds vs without. The `market_discount` parameter changes the model's behaviour substantially when odds are present, and the VG-points calibration could differ systematically between these groups.
+
+This does not need its own infrastructure — it is filtering PIT values before plotting. The implementation would add faceted PIT histograms or a calibration table by stratum to the prospective evaluation section of `backtesting.qmd`. It should only be pursued once the aggregate PIT histogram reveals problems, since the stratum sample sizes will be small (10–15 riders per stratum per race) and require at least 15–20 prospective races to be statistically meaningful.
+
+**Potential model changes motivated by conditional calibration:**
+
+- **Uncertainty scaling for top riders**: if favourites are consistently under-dispersed, the posterior uncertainty for high-strength riders may need inflating (strength-dependent uncertainty floor, or Student-t noise in `simulate_vg_draws`).
+- **Scoring-aware variance adjustment**: the scoring non-linearity means a 1-position error near the top (80 VG points in Cat 1) matters far more than at position 25 vs 26 (12 points). If VG-points calibration is worse for top positions, it might motivate position-dependent uncertainty scaling.
+
 ### Impact estimates summary
 
 | Priority | Improvement | Expected impact | Evidence strength | Status |
@@ -486,3 +503,4 @@ Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCycli
 | 9 | ~~Season-adaptive VG variance + trajectory~~ | Moderate | Post-Kuurne analysis | Done |
 | 10 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Not done |
 | 11 | ML models | Unknown | Weak (+3% over baseline) | Not done |
+| 12 | Conditional VG-points calibration | Medium (diagnostic) | Depends on aggregate PIT findings | Not done — requires 15+ prospective races |

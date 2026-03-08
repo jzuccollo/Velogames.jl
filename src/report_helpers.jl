@@ -342,3 +342,300 @@ function format_signal_waterfall(df::DataFrame; max_riders::Int = 10)
     push!(lines, "</tbody></table>")
     return join(lines, "\n")
 end
+
+"""
+    compute_pit_values(predicted, sim_vg_points, actual_results) -> DataFrame
+
+Compute probability integral transform (PIT) values for calibration checking.
+For each rider with actual results, compute the empirical CDF value of their
+actual VG points within the simulated distribution.
+
+Returns a DataFrame with columns: riderkey, rider, actual_vg_points, pit_value, scored.
+"""
+function compute_pit_values(
+    predicted::DataFrame,
+    sim_vg_points::Matrix{Float64},
+    actual_results::DataFrame,
+)
+    key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
+
+    rows = NamedTuple{
+        (:riderkey, :rider, :actual_vg_points, :pit_value, :scored),
+        Tuple{String,String,Float64,Float64,Bool},
+    }[]
+
+    actual_col = :actual_vg_points in propertynames(actual_results) ? :actual_vg_points :
+                 :score in propertynames(actual_results) ? :score : nothing
+    actual_col === nothing && return DataFrame(rows)
+
+    for row in eachrow(actual_results)
+        idx = get(key_to_idx, row.riderkey, nothing)
+        idx === nothing && continue
+        actual_pts = Float64(coalesce(row[actual_col], 0))
+        draws = @view sim_vg_points[idx, :]
+        n_draws = length(draws)
+        # Empirical CDF: fraction of draws <= actual
+        pit = count(<=(actual_pts), draws) / n_draws
+        rider_name = :rider in propertynames(actual_results) ? string(row.rider) :
+                     idx <= nrow(predicted) ? string(predicted.rider[idx]) : ""
+        push!(rows, (
+            riderkey = string(row.riderkey),
+            rider = rider_name,
+            actual_vg_points = actual_pts,
+            pit_value = pit,
+            scored = actual_pts > 0.0,
+        ))
+    end
+
+    DataFrame(rows)
+end
+
+"""
+    pit_histogram_chart(pit_values; title, scored_only) -> String
+
+Generate a Plotly HTML histogram of PIT values for calibration checking.
+Well-calibrated predictions produce a uniform histogram. Skewed right (many
+values near 1) means the model underestimates; skewed left means it overestimates.
+
+By default shows only riders who scored (positions 1-30). Set `scored_only=false`
+to include all riders.
+"""
+function pit_histogram_chart(
+    pit_values::DataFrame;
+    title::String = "PIT calibration histogram",
+    scored_only::Bool = true,
+)
+    subset = scored_only ? filter(:scored => identity, pit_values) : pit_values
+    nrow(subset) == 0 && return ""
+
+    traces = PlotlyBase.AbstractTrace[]
+
+    push!(traces, PlotlyBase.histogram(;
+        x = collect(subset.pit_value),
+        nbinsx = 10,
+        marker = PlotlyBase.attr(color = "steelblue", line = PlotlyBase.attr(color = "white", width = 1)),
+        name = "PIT values",
+    ))
+
+    # Uniform reference line
+    n = nrow(subset)
+    expected_per_bin = n / 10
+    push!(traces, PlotlyBase.scatter(;
+        x = collect(0.05:0.1:0.95),
+        y = fill(expected_per_bin, 10),
+        mode = "lines",
+        name = "Uniform",
+        line = PlotlyBase.attr(color = "red", dash = "dash", width = 2),
+    ))
+
+    subtitle = scored_only ? " ($(nrow(subset)) scoring riders)" : " ($(nrow(subset)) riders)"
+    layout = PlotlyBase.Layout(;
+        title = PlotlyBase.attr(text = title * subtitle),
+        xaxis = PlotlyBase.attr(title = "PIT value", range = [0, 1]),
+        yaxis = PlotlyBase.attr(title = "Count"),
+        showlegend = true,
+        bargap = 0.05,
+    )
+
+    return plotly_html(traces, layout)
+end
+
+"""
+    team_total_distribution_chart(team_keys, predicted, sim_vg_points; actual_total, title) -> String
+
+Generate a Plotly histogram of simulated team total VG points, with the actual
+total marked as a vertical line when provided. Shows how the team's actual
+performance compares to the distribution of simulated outcomes.
+"""
+function team_total_distribution_chart(
+    team_keys::Vector{String},
+    predicted::DataFrame,
+    sim_vg_points::Matrix{Float64};
+    actual_total::Union{Float64,Nothing} = nothing,
+    title::String = "Simulated team total VG points",
+)
+    key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
+    idxs = [key_to_idx[k] for k in team_keys if haskey(key_to_idx, k)]
+    isempty(idxs) && return ""
+
+    n_draws = size(sim_vg_points, 2)
+    team_totals = [sum(sim_vg_points[i, r] for i in idxs) for r in 1:n_draws]
+
+    traces = PlotlyBase.AbstractTrace[]
+
+    push!(traces, PlotlyBase.histogram(;
+        x = team_totals,
+        nbinsx = 30,
+        marker = PlotlyBase.attr(color = "steelblue", line = PlotlyBase.attr(color = "white", width = 1)),
+        name = "Simulated totals",
+    ))
+
+    shapes = PlotlyBase.PlotlyAttribute[]
+    annotations = PlotlyBase.PlotlyAttribute[]
+    if actual_total !== nothing
+        percentile = round(100 * count(<=(actual_total), team_totals) / n_draws, digits = 0)
+        push!(shapes, PlotlyBase.attr(
+            type = "line", x0 = actual_total, x1 = actual_total,
+            y0 = 0, y1 = 1, yref = "paper",
+            line = PlotlyBase.attr(color = "red", width = 3, dash = "dash"),
+        ))
+        push!(annotations, PlotlyBase.attr(
+            x = actual_total, y = 1.0, yref = "paper",
+            text = "Actual ($(Int(round(actual_total)))pts, $(Int(percentile))th pctl)",
+            showarrow = true, arrowhead = 2, ax = 40, ay = -30,
+            font = PlotlyBase.attr(color = "red", size = 12),
+        ))
+    end
+
+    layout = PlotlyBase.Layout(;
+        title = PlotlyBase.attr(text = title),
+        xaxis = PlotlyBase.attr(title = "Total VG points"),
+        yaxis = PlotlyBase.attr(title = "Count"),
+        showlegend = false,
+        shapes = shapes,
+        annotations = annotations,
+        bargap = 0.05,
+    )
+
+    return plotly_html(traces, layout)
+end
+
+"""
+    simulate_vg_draws(predicted, scoring; n_draws, rng) -> Matrix{Float64}
+
+Lightweight simulation of VG points draws from archived strength estimates.
+Draws noisy strengths, converts to positions, scores VG points (finish + assist).
+Returns a Matrix{Float64} (n_riders × n_draws). No optimisation is performed.
+"""
+function simulate_vg_draws(
+    predicted::DataFrame,
+    scoring::ScoringTable;
+    n_draws::Int = 500,
+    rng::AbstractRNG = Random.MersenneTwister(42),
+)
+    n_riders = nrow(predicted)
+    strengths = Float64.(predicted.strength)
+    uncertainties = Float64.(predicted.uncertainty)
+    teams = String.(predicted.team)
+
+    sim_vg_points = Matrix{Float64}(undef, n_riders, n_draws)
+    noisy_strengths = Vector{Float64}(undef, n_riders)
+
+    for r = 1:n_draws
+        for i = 1:n_riders
+            noisy_strengths[i] = strengths[i] + uncertainties[i] * randn(rng)
+        end
+
+        order = sortperm(noisy_strengths, rev = true)
+        positions = Vector{Int}(undef, n_riders)
+        for (pos, rider_idx) in enumerate(order)
+            positions[rider_idx] = pos
+        end
+
+        sim_pts = zeros(Float64, n_riders)
+        for i = 1:n_riders
+            sim_pts[i] = Float64(finish_points_for_position(positions[i], scoring))
+        end
+        for i = 1:n_riders
+            if positions[i] <= 3
+                top_team = teams[i]
+                for j = 1:n_riders
+                    if j != i && teams[j] == top_team
+                        sim_pts[j] += scoring.assist_points[positions[i]]
+                    end
+                end
+            end
+        end
+
+        for i = 1:n_riders
+            sim_vg_points[i, r] = sim_pts[i]
+        end
+    end
+
+    return sim_vg_points
+end
+
+"""
+    sim_distribution_chart(team_df, predicted, sim_vg_points; actual_results, title) -> String
+
+Generate a Plotly HTML box plot showing the simulated VG points distribution
+for each rider in `team_df`. Overlays actual results as markers when provided.
+
+- `team_df`: DataFrame of riders to plot (must have :rider, :riderkey)
+- `predicted`: full predicted DataFrame (row order matches sim_vg_points rows)
+- `sim_vg_points`: Matrix{Float64} (n_riders × n_resamples) from resample_optimise
+- `actual_results`: optional DataFrame with :riderkey and :actual_vg_points columns
+- `title`: chart title
+"""
+function sim_distribution_chart(
+    team_df::DataFrame,
+    predicted::DataFrame,
+    sim_vg_points::Matrix{Float64};
+    actual_results::Union{DataFrame,Nothing} = nothing,
+    title::String = "Simulated VG points distribution",
+)
+    # Build a riderkey → row index lookup for predicted
+    key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
+
+    # Sort team by expected points descending for consistent display
+    sort_col = :expected_vg_points in propertynames(team_df) ? :expected_vg_points : :rider
+    team_sorted = sort(team_df, sort_col, rev = sort_col == :expected_vg_points)
+
+    traces = PlotlyBase.AbstractTrace[]
+
+    for row in eachrow(team_sorted)
+        idx = get(key_to_idx, row.riderkey, nothing)
+        idx === nothing && continue
+        draws = sim_vg_points[idx, :]
+        push!(
+            traces,
+            PlotlyBase.box(;
+                y = collect(draws),
+                name = string(row.rider),
+                boxpoints = false,
+                marker = PlotlyBase.attr(color = "steelblue"),
+                line = PlotlyBase.attr(color = "steelblue"),
+            ),
+        )
+    end
+
+    # Overlay actual results as markers
+    if actual_results !== nothing
+        actual_x = String[]
+        actual_y = Float64[]
+        for row in eachrow(team_sorted)
+            match_rows = filter(r -> r.riderkey == row.riderkey, actual_results)
+            if nrow(match_rows) > 0 && :actual_vg_points in propertynames(match_rows)
+                push!(actual_x, string(row.rider))
+                push!(actual_y, Float64(match_rows[1, :actual_vg_points]))
+            end
+        end
+        if !isempty(actual_y)
+            push!(
+                traces,
+                PlotlyBase.scatter(;
+                    x = actual_x,
+                    y = actual_y,
+                    mode = "markers",
+                    name = "Actual",
+                    marker = PlotlyBase.attr(
+                        color = "red",
+                        size = 12,
+                        symbol = "diamond",
+                        line = PlotlyBase.attr(color = "darkred", width = 1),
+                    ),
+                ),
+            )
+        end
+    end
+
+    layout = PlotlyBase.Layout(;
+        title = PlotlyBase.attr(text = title),
+        yaxis = PlotlyBase.attr(title = "VG points"),
+        xaxis = PlotlyBase.attr(title = ""),
+        showlegend = actual_results !== nothing,
+        margin = PlotlyBase.attr(b = 100),
+    )
+
+    return plotly_html(traces, layout)
+end
