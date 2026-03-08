@@ -450,6 +450,51 @@ if nrow(pit_df) > 0
 **Zero-score calibration:** $(actual_zero_pct)% of riders scored zero across all prospective races.
 
 """)
+
+    # Per-race PIT histograms in a grid
+    race_slugs = sort(unique(pit_df.race))
+    if length(race_slugs) > 1
+        print("""
+::: {.callout-note collapse="true"}
+### Per-race PIT histograms
+
+""")
+        print("""
+```{=html}
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+```
+
+""")
+        for slug in race_slugs
+            race_pit = filter(:race => ==(slug), pit_df)
+            display_name = titlecase(replace(slug, "-" => " "))
+            print("""
+```{=html}
+<div>
+```
+
+""")
+            print(pit_histogram_chart(race_pit;
+                title=display_name,
+                scored_only=true,
+                compact=true))
+            print("""
+
+```{=html}
+</div>
+```
+
+""")
+        end
+        print("""
+```{=html}
+</div>
+```
+
+:::
+
+""")
+    end
 else
     print("""
 No VG points calibration data available for $current_year yet. Requires both archived predictions and VG results.
