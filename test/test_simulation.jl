@@ -56,7 +56,8 @@ end
         hist_decay_rate = 0.5,
         vg_hist_decay_rate = 0.5,
         odds_normalisation = 2.0,
-        signal_correlation = 0.0,
+        within_cluster_correlation = 0.0,
+        between_cluster_correlation = 0.0,
         vg_season_penalty = 5.0,
     )
     custom_result =
@@ -65,15 +66,18 @@ end
 
     @test DEFAULT_BAYESIAN_CONFIG isa BayesianConfig
     @test pcs_variance(DEFAULT_BAYESIAN_CONFIG) == 1.0 / DEFAULT_BAYESIAN_CONFIG.ability_precision_scale
-    @test DEFAULT_BAYESIAN_CONFIG.signal_correlation == 0.25
+    @test DEFAULT_BAYESIAN_CONFIG.within_cluster_correlation == 0.5
+    @test DEFAULT_BAYESIAN_CONFIG.between_cluster_correlation == 0.15
     @test DEFAULT_BAYESIAN_CONFIG.prior_variance == 100.0
 
-    # Equicorrelation discount: more signals → wider posterior with ρ > 0
+    # Block-correlation discount: more signals → wider posterior with ρ > 0
     no_corr = BayesianConfig(
-        signal_correlation = 0.0,
+        within_cluster_correlation = 0.0,
+        between_cluster_correlation = 0.0,
     )
     with_corr = BayesianConfig(
-        signal_correlation = 0.4,
+        within_cluster_correlation = 0.6,
+        between_cluster_correlation = 0.2,
     )
     r_nocorr = estimate_rider_strength(
         pcs_score = 1.0,

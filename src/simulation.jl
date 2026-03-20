@@ -115,8 +115,8 @@ degrades rather than *how much* to trust the signal source.
 ### 4. Other parameters
 
 - `odds_normalisation` — scales log-odds to z-score range
-- `signal_correlation` — equicorrelation discount preventing overconfidence
-  when many correlated signals agree
+- `within_cluster_correlation` / `between_cluster_correlation` — block-correlation
+  discount preventing overconfidence when many correlated signals agree
 - `vg_season_penalty` — inflates VG variance early in the season
 - `prior_variance` — uninformative prior (SD=10, no reason to change)
 - Floor parameters — handle absent riders when a signal covers the field
@@ -155,15 +155,18 @@ degrades rather than *how much* to trust the signal source.
 
     # --- Other parameters ---
 
-    # Heuristic divisor to scale log-odds to z-score range.
-    # With ~150 starters, a 10% favourite produces log(0.1 / 0.0067) ≈ 2.7,
-    # which / 2.0 gives ~1.35 — a reasonable "1.35 SD above average" strength signal.
-    odds_normalisation::Float64 = 2.0
-    # Equicorrelation discount for correlated signals.
-    # With n signals at pairwise correlation ρ, effective precision is
-    # Στ_i / (1 + ρ(n-1)) instead of Στ_i. Prevents over-concentration of
-    # posterior for favourites who have many correlated signal sources.
-    signal_correlation::Float64 = 0.25
+    # Divisor to scale log-odds to z-score range, matching the scale of
+    # PCS z-scores (~±5) and position_to_strength (~±5). With ~160 starters,
+    # a 40% favourite produces log(0.4 / 0.006) / 1.0 ≈ 4.2, comparable to
+    # the PCS z-score for top riders.
+    odds_normalisation::Float64 = 1.0
+    # Block-correlation discount for correlated signals.
+    # Signals are grouped into three clusters (market, history, ability).
+    # Within each cluster, signals share within_cluster_correlation;
+    # between clusters, effective signals share between_cluster_correlation.
+    # Prevents over-concentration for favourites with many history observations.
+    within_cluster_correlation::Float64 = 0.5
+    between_cluster_correlation::Float64 = 0.15
     # Scales vg_variance early in the season when few riders have points.
     # Effective variance = vg_variance * (1 + penalty * (1 - frac_nonzero)).
     # At opening weekend (~10% with points): ~6.6. Late season (~80%): ~2.4.
@@ -184,13 +187,12 @@ degrades rather than *how much* to trust the signal source.
     floor_variance_multiplier::Float64 = 2.0
     absence_floor_strength::Float64 = -0.5
     # --- Market discount ---
-    # When a rider has odds, non-market signals (PCS, VG, form, history,
-    # trajectory) have their variances multiplied by this factor. The market
-    # already incorporates career record, form, and race history, so these
-    # signals are largely redundant for riders with odds coverage. A value
-    # of 3.0 means non-market signals carry ~1/9 of their usual precision
-    # when odds are present.
-    market_discount::Float64 = 3.0
+    # When odds exist for a race, non-market signal variances are multiplied
+    # by this factor for ALL riders (race-level, not per-rider). The market
+    # incorporates career record, form, and race history, so these signals
+    # are largely redundant. A value of 8.0 means non-market signals carry
+    # ~1/64 of their usual precision when odds are present.
+    market_discount::Float64 = 8.0
 end
 
 # --- Accessor functions: compute effective variances from scale factors ---
@@ -320,6 +322,9 @@ function estimate_rider_strength(
     prior = BayesianPosterior(0.0, config.prior_variance)
     posterior = prior
     n_signals = 0
+    n_ability = 0
+    n_history = 0
+    n_market = 0
 
     # --- Market discount ---
     # When odds exist for this race, non-market signals are partially redundant
@@ -335,6 +340,7 @@ function estimate_rider_strength(
     if has_pcs
         posterior = bayesian_update(posterior, pcs_score, pcs_variance(config) * md)
         n_signals += 1
+        n_ability += 1
     end
     shift_pcs = posterior.mean - mean_before
 
@@ -346,8 +352,12 @@ function estimate_rider_strength(
             effective_vg_variance > 0.0 ? effective_vg_variance : vg_variance(config)
         posterior = bayesian_update(posterior, vg_points, eff_vg_var * md)
         n_signals += 1
+        n_ability += 1
     end
     shift_vg = posterior.mean - mean_before
+
+    # --- Precision boundary: ability cluster complete ---
+    prec_after_ability = 1.0 / posterior.variance
 
     # --- Update with PCS form score ---
     # Recent cross-race form from PCS startlist/form page. Captures performance
@@ -357,10 +367,12 @@ function estimate_rider_strength(
     if form_score != 0.0
         posterior = bayesian_update(posterior, form_score, form_variance(config) * md)
         n_signals += 1
+        n_history += 1
     elseif form_floor_strength != 0.0
         floor_var = form_variance(config) * config.floor_variance_multiplier * md
         posterior = bayesian_update(posterior, form_floor_strength, floor_var)
         n_signals += 1
+        n_history += 1
     end
     shift_form = posterior.mean - mean_before
 
@@ -373,6 +385,7 @@ function estimate_rider_strength(
         posterior =
             bayesian_update(posterior, trajectory_score, trajectory_variance(config) * md)
         n_signals += 1
+        n_history += 1
     end
     shift_trajectory = posterior.mean - mean_before
 
@@ -395,6 +408,7 @@ function estimate_rider_strength(
         hist_var = (hist_base_variance(config) + config.hist_decay_rate * years_ago + penalty) * md
         posterior = bayesian_update(posterior, hist_strength, hist_var)
         n_signals += 1
+        n_history += 1
     end
     shift_history = posterior.mean - mean_before
 
@@ -409,8 +423,12 @@ function estimate_rider_strength(
         vg_var = (vg_hist_base_variance(config) + config.vg_hist_decay_rate * years_ago) * md
         posterior = bayesian_update(posterior, vg_strength, vg_var)
         n_signals += 1
+        n_history += 1
     end
     shift_vg_history = posterior.mean - mean_before
+
+    # --- Precision boundary: history cluster complete ---
+    prec_after_history = 1.0 / posterior.variance
 
     # --- Update with Cycling Oracle predictions ---
     # Algorithmic win probabilities. Less precise than market odds but covers more races.
@@ -421,10 +439,12 @@ function estimate_rider_strength(
             log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, oracle_strength, oracle_variance(config))
         n_signals += 1
+        n_market += 1
     elseif oracle_floor_strength != 0.0
         floor_var = oracle_variance(config) * config.floor_variance_multiplier
         posterior = bayesian_update(posterior, oracle_floor_strength, floor_var)
         n_signals += 1
+        n_market += 1
     end
     shift_oracle = posterior.mean - mean_before
 
@@ -440,12 +460,14 @@ function estimate_rider_strength(
                 eff_var = qualitative_base_variance(config) / conf
                 posterior = bayesian_update(posterior, adj, eff_var)
                 n_signals += 1
+                n_market += 1
             end
         end
     elseif qualitative_floor_strength != 0.0
         floor_var = qualitative_base_variance(config) * config.floor_variance_multiplier
         posterior = bayesian_update(posterior, qualitative_floor_strength, floor_var)
         n_signals += 1
+        n_market += 1
     end
     shift_qualitative = posterior.mean - mean_before
 
@@ -457,26 +479,53 @@ function estimate_rider_strength(
         odds_strength = log(odds_implied_prob / baseline_prob) / config.odds_normalisation
         posterior = bayesian_update(posterior, odds_strength, odds_variance(config))
         n_signals += 1
+        n_market += 1
     elseif odds_floor_strength != 0.0
         floor_var = odds_variance(config) * config.floor_variance_multiplier
         posterior = bayesian_update(posterior, odds_floor_strength, floor_var)
         n_signals += 1
+        n_market += 1
     end
     shift_odds = posterior.mean - mean_before
 
-    # --- Equicorrelation precision discount ---
-    # Signals are correlated (all measure "rider quality"), so summing precisions
-    # overstates certainty. Under exchangeable correlation ρ, the effective
-    # precision of n observations is Στ_i / (1 + ρ(n-1)).
-    ρ = config.signal_correlation
-    if n_signals > 1 && ρ > 0
+    # --- Block-correlation precision discount ---
+    # Signals within each cluster (market, history, ability) are highly correlated;
+    # signals across clusters are less so. Apply within-cluster discount first,
+    # then between-cluster discount on the effective cluster precisions.
+    ρ_w = config.within_cluster_correlation
+    ρ_b = config.between_cluster_correlation
+    n_total = n_ability + n_history + n_market
+
+    if n_total > 1 && (ρ_w > 0 || ρ_b > 0)
         prior_prec = 1.0 / prior.variance
         post_prec = 1.0 / posterior.variance
-        obs_prec = post_prec - prior_prec
-        discount = 1.0 + ρ * (n_signals - 1)
-        eff_obs_prec = obs_prec / discount
-        # Recover precision-weighted observation mean from the naive posterior
-        obs_mean = (posterior.mean * post_prec - prior.mean * prior_prec) / obs_prec
+        total_obs_prec = post_prec - prior_prec
+
+        # Per-cluster observation precision
+        ability_obs_prec = prec_after_ability - prior_prec
+        history_obs_prec = prec_after_history - prec_after_ability
+        market_obs_prec = post_prec - prec_after_history
+
+        # Within-cluster discount, then collect active clusters
+        cluster_precs = Float64[]
+        for (n_k, obs_prec_k) in [(n_ability, ability_obs_prec),
+                                   (n_history, history_obs_prec),
+                                   (n_market,  market_obs_prec)]
+            n_k == 0 && continue
+            discount_k = n_k > 1 ? 1.0 + ρ_w * (n_k - 1) : 1.0
+            push!(cluster_precs, obs_prec_k / discount_k)
+        end
+
+        # Between-cluster discount
+        n_clusters = length(cluster_precs)
+        eff_obs_prec = if n_clusters > 1
+            sum(cluster_precs) / (1.0 + ρ_b * (n_clusters - 1))
+        else
+            cluster_precs[1]
+        end
+
+        # Reconstruct posterior with discounted precision
+        obs_mean = (posterior.mean * post_prec - prior.mean * prior_prec) / total_obs_prec
         eff_prec = prior_prec + eff_obs_prec
         posterior = BayesianPosterior(
             (prior_prec * prior.mean + eff_obs_prec * obs_mean) / eff_prec,
@@ -510,9 +559,11 @@ This gives ~2.5 for position 1 in a 150-rider race, ~-2.5 for last.
 function position_to_strength(position::Int, n_starters::Int)
     # Fractional rank: 0 (best) to 1 (worst)
     frac = position / (n_starters + 1)
-    # Clamp to (0.001, 0.999) to prevent log domain errors when
-    # historical positions exceed the current field size
-    frac = clamp(frac, 0.001, 0.999)
+    # Clamp symmetrically: positions beyond the field get the same magnitude
+    # as first place, ensuring the logit scale is balanced. The lower bound
+    # (1/(n+1)) corresponds to 1st place; the upper bound (n/(n+1)) to last.
+    bound = 1.0 / (n_starters + 1)
+    frac = clamp(frac, bound, 1.0 - bound)
     return -log(frac / (1.0 - frac))  # logit transform
 end
 
@@ -1043,17 +1094,20 @@ function estimate_strengths(
     end
 
     # --- Build PCS form lookup ---
-    # Z-score form scores across the field so they're on the same scale as other signals
+    # Z-score form scores across the FULL field (not just riders with form data).
+    # Riders absent from form_df are treated as 0 form points, so z=0 means
+    # "average across all starters" rather than "average among riders with form data".
     form_lookup = Dict{String,Float64}()
     if form_df !== nothing &&
        :riderkey in propertynames(form_df) &&
        :form_score in propertynames(form_df)
-        form_raw = Float64.(form_df.form_score)
-        form_mean = mean(form_raw)
-        form_std = std(form_raw)
+        form_by_key = Dict(r.riderkey => Float64(r.form_score) for r in eachrow(form_df))
+        form_all = Float64[get(form_by_key, k, 0.0) for k in df.riderkey]
+        form_mean = mean(form_all)
+        form_std = std(form_all)
         if form_std > 0
-            for (i, row) in enumerate(eachrow(form_df))
-                form_lookup[row.riderkey] = (form_raw[i] - form_mean) / form_std
+            for (key, score) in form_by_key
+                form_lookup[key] = (score - form_mean) / form_std
             end
         end
     end
@@ -1096,48 +1150,32 @@ function estimate_strengths(
                 push!(history_lookup[key], (strength, years_ago, penalty))
             end
         end
-        # Z-score strengths per years_ago group so race history is on same scale as other signals
-        all_years_ago = Set{Int}()
-        for entries in values(history_lookup)
-            for (_, ya, _) in entries
-                push!(all_years_ago, ya)
-            end
-        end
-        for ya in all_years_ago
-            yr_strengths = Float64[
-                h[1] for entries in values(history_lookup) for h in entries if h[2] == ya
-            ]
-            yr_mean = mean(yr_strengths)
-            yr_std = std(yr_strengths)
-            if yr_std > 0
-                for key in keys(history_lookup)
-                    history_lookup[key] = [
-                        (h[2] == ya ? ((h[1] - yr_mean) / yr_std, h[2], h[3]) : h) for
-                        h in history_lookup[key]
-                    ]
-                end
-            end
-        end
+        # position_to_strength already produces z-score-like values via logit
+        # transform (~-2.5 to +2.5). No further z-scoring needed — re-normalising
+        # across only the subset with history data would bias z=0 away from the
+        # true field average.
     end
 
     # --- Build VG race history lookup ---
-    # Z-score VG points per year, then store (z_score, years_ago) per rider
+    # Z-score VG points per year across the FULL current field (padding absent
+    # riders with 0), then store (z_score, years_ago) per rider.
     vg_history_lookup = Dict{String,Vector{Tuple{Float64,Int}}}()
     if vg_history_df !== nothing &&
        :riderkey in propertynames(vg_history_df) &&
        :score in propertynames(vg_history_df) &&
        :year in propertynames(vg_history_df)
-        # Z-score per year independently
         for yr in unique(vg_history_df.year)
             year_rows = filter(:year => ==(yr), vg_history_df)
-            scores = Float64.(coalesce.(year_rows.score, 0.0))
-            yr_mean = mean(scores)
-            yr_std = std(scores)
+            score_by_key = Dict(r.riderkey => Float64(coalesce(r.score, 0.0))
+                                for r in eachrow(year_rows))
+            # Pad with 0 for all current starters to z-score across full field
+            all_scores = Float64[get(score_by_key, k, 0.0) for k in df.riderkey]
+            yr_mean = mean(all_scores)
+            yr_std = std(all_scores)
             if yr_std > 0
-                for (i, row) in enumerate(eachrow(year_rows))
-                    key = row.riderkey
-                    z = (scores[i] - yr_mean) / yr_std
-                    years_ago = current_year - yr
+                years_ago = current_year - yr
+                for (key, score) in score_by_key
+                    z = (score - yr_mean) / yr_std
                     if !haskey(vg_history_lookup, key)
                         vg_history_lookup[key] = Tuple{Float64,Int}[]
                     end

@@ -57,7 +57,7 @@ When odds or oracle data is available for a race, riders absent from the market 
 
 Early in the season, VG season points carry less information because most riders have zero. The effective variance inflates: $\sigma^2_{\text{VG}} = 1.4 \times (1 + 1.3 \times (1 - f_{\text{nonzero}}))$, where $f_{\text{nonzero}}$ is the fraction of riders with non-zero points — ranging from about 8.3 at the opening weekend to 1.4 by late season.
 
-Because all signals measure the same underlying quality, treating them as independent overstates certainty. After all updates, an equicorrelation discount is applied: if $n$ signals have been observed with assumed pairwise correlation $\rho = 0.1$, the effective total observation precision is divided by $1 + \rho(n-1)$.
+Because all signals measure the same underlying quality, treating them as independent overstates certainty. After all updates, a block-correlation discount is applied. Signals are grouped into three clusters (market, history, ability) matching the precision scale factor groups. Within each cluster, signals share a within-cluster correlation ($\rho_w = 0.5$); between clusters, effective signals share a lower between-cluster correlation ($\rho_b = 0.15$). This discounts redundant history observations heavily whilst preserving the independent information from market signals.
 
 # Simulation and expected points
 
