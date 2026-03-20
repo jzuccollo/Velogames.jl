@@ -18,7 +18,7 @@ racehash = "#MilanoSanremo"  # VG startlist hash filter (leave empty for all rid
 
 # Optional data sources (leave empty to skip)
 betfair_market_id = ""  # Betfair Exchange market ID from the URL
-oracle_url = ""
+oracle_url = "https://www.cyclingoracle.com/en/blog/milano-sanremo-2026-prediction"
 
 # Optional: paste Oddschecker winner market text into oddschecker_paste.txt (project root), then uncomment:
 odds_df = parse_oddschecker_odds(read(joinpath(@__DIR__, "..", "oddschecker_paste.txt"), String))
