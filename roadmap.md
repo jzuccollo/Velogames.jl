@@ -35,7 +35,7 @@ The strength model combines multiple signals grouped into three precision famili
 | Betting odds          | `getodds()`               | Market    | 0.3           | Strongest single signal when available. Uses Betfair Exchange API (market ID required)       |
 | Odds/Oracle floor     | Derived (absence signal)  | Market    | var × 2.0     | When market data exists but rider absent, floor observation from residual probability mass    |
 
-Odds are converted to strength via log-odds relative to a uniform baseline, then divided by a normalisation constant (default 2.0, heuristic) to match the z-score scale of other signals. This divisor is also an exposed parameter (`odds_normalisation`).
+Odds are converted to strength via log-odds relative to a uniform baseline (`odds_normalisation`, default 1.0). This puts odds on a comparable scale to PCS z-scores and the logit-based position_to_strength (~±5 for a 150-rider field).
 
 When odds or oracle data is available for a race, riders absent from the market receive a floor observation. The floor probability is computed as the residual probability mass (1 − sum of listed probabilities) divided by the number of absent riders. If the overround pushes residual probability below 0.001, the floor defaults to half the minimum listed probability. Floor observations use `floor_variance_multiplier` (default 2.0) times the base odds/oracle variance, reflecting lower precision than direct pricing.
 
@@ -983,7 +983,7 @@ The Bayesian model combines signals from three precision groups. This section do
 
 | Factor | Value | Rationale |
 |--------|-------|-----------|
-| `market_precision_scale` | 3.0 | Odds are the best single predictor. At 3.0, odds variance = 0.33, giving precision 3.0 per observation. Calibration at this value produced z std ≈ 0.978 and correct 1σ/2σ coverage. Higher values risk overconfidence for favourites (negative mean z in calibration). |
+| `market_precision_scale` | 4.0 | Odds are the best single predictor. At 4.0, odds variance = 0.25, giving precision 4.0 per observation. Higher values risk overconfidence for favourites. |
 | `history_precision_scale` | 2.0 | Controls form, race history, VG history, and trajectory. At 2.0, form gets precision 2.0 (slightly below odds) and race history ~0.67 per year (~2.0 over 3 years). Calibration was good. The main tension: form is almost as precise as odds (2.0 vs 3.0), but the ML evidence says form is weak. However, lowering this scale would also weaken race history, which IS one of the best predictors. |
 | `ability_precision_scale` | 1.0 | PCS specialty and VG season points are broad career/season aggregates. At precision 1.0 they're one-third of odds. Research supports career consistency mattering for identifying contenders, but the signal is too crude to deserve high precision. |
 
@@ -991,10 +991,10 @@ The Bayesian model combines signals from three precision groups. This section do
 
 | Ratio | Value | Rationale |
 |-------|-------|-----------|
-| `_odds_to_oracle_ratio` | 1.5 | Oracle is a single algorithm; odds aggregate many models and private information. Research says models don't beat odds, suggesting Oracle should be less precise. 1.5x is at the generous end — 2.0 would also be defensible, but the practical difference is small since both are in the high-precision market group. |
+| `_odds_to_oracle_ratio` | 2.0 | Oracle is a single algorithm; odds aggregate many models and private information. Research says models don't beat odds, suggesting Oracle should be less precise. The practical difference between 1.5 and 2.0 is small since both are in the high-precision market group. |
 | `_form_to_hist_ratio` | 3.0 | Per observation, form (current 6-week fitness) is more precise than a single year of race history (stale, different conditions, different pelotons). But 3 years of history collectively match form's precision, which the research supports — race-specific results are among the best predictors. |
 | `_form_to_vg_hist_ratio` | 5.0 | VG history adds noise through the nonlinear VG scoring transformation (top-10 finishes heavily rewarded, scoring floor at position 31+). 1.67x noisier than PCS race history per observation. |
-| `_form_to_trajectory_ratio` | 5.0 | Career trajectory (improving vs declining) is a very blunt signal for predicting a single race. ML research found minor importance. Same ratio as VG history. |
+| `_form_to_trajectory_ratio` | 3.0 | Career trajectory (improving vs declining) is a blunt signal for predicting a single race. ML research found minor importance. |
 | `_pcs_to_vg_ratio` | 1.0 | Both are broad ability measures — PCS is lifetime by race type, VG is season cumulative. Roughly comparable in informativeness. The `vg_season_penalty` handles early-season noise by inflating VG variance when few riders have points. |
 
 **Other key parameters**:
@@ -1016,21 +1016,11 @@ With only 3 prospective races (Omloop, Kuurne, Laigueglia 2026) and calibration 
 
 ### Market discount (March 2026)
 
-The block-correlation discount partially addresses the double-counting problem, but analysis of early 2026 predictions revealed that non-market signals were still systematically pulling strength estimates away from odds — particularly PCS specialty (high career points for established riders) and race history (5 years × precision 0.67 = total precision 3.33, exceeding odds at 3.0). The model was overvaluing riders like Van Aert relative to their odds, because lifetime PCS points were overwhelming current market information.
+The block-correlation discount partially addresses the double-counting problem, but analysis of early 2026 predictions revealed that non-market signals were still systematically pulling strength estimates away from odds — particularly PCS specialty (high career points for established riders) and race history. The model was overvaluing riders like Van Aert relative to their odds, because lifetime PCS points were overwhelming current market information.
 
-The `market_discount` parameter (default 3.0) provides a direct fix: when a rider has odds coverage, all non-market signal variances are multiplied by this factor, reducing their precision to ~1/3 of their usual value. This reflects the reasoning that the market already incorporates career record, form, race history, and trajectory, so these signals carry little marginal information beyond what odds convey.
+The `market_discount` parameter (default 8.0) provides a direct fix: when odds exist for a race, all non-market signal variances are multiplied by this factor at the **race level** (not per-rider). This reflects the reasoning that the market already incorporates career record, form, race history, and trajectory, so these signals carry little marginal information beyond what odds convey. A value of 8.0 means non-market signals carry ~1/64 of their usual precision when odds are present.
 
-With `market_discount=3.0` and odds available, the effective precision budget shifts substantially towards market signals:
-
-- Odds: 3.0 (unchanged) — now ~45% of total precision
-- Oracle: 1.5 (unchanged) — ~23%
-- PCS specialty: 0.33 (was 1.0) — ~5%
-- Race history (5y): 1.11 (was 3.33) — ~17%
-- Form, VG, trajectory: minimal
-
-For riders **without** odds (~60-80% of the field), all signal precisions remain at their original values, so the non-market signals still drive predictions for the bulk of the startlist. This two-tier approach matches the evidence: odds are the best predictor where available, and other signals fill the gap where they're not.
-
-This is an interim solution. A more principled approach would model the conditional information content of each signal given odds (i.e. what does PCS specialty tell you that odds don't?), but that requires substantially more prospective data to calibrate.
+For races **without** odds data, all signal precisions remain at their original values, so the non-market signals drive predictions for the full startlist.
 
 **Decision**: maintain current parameters; revisit after 15–20 prospective races with full signal coverage provide enough data to detect systematic patterns.
 

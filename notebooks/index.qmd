@@ -47,11 +47,11 @@ Default variances are shown below. These are computed from base variances and fi
 | Trajectory | Current PCS z-score minus mean history z-score | 3.5 |
 | PCS race history | Per-result: $3.0 + 3.2 \times \text{years ago}$ (+ 1.0 for similar races) | 3.0+ |
 | VG race history | Per-result: $4.8 + 1.3 \times \text{years ago}$ | 4.8+ |
-| Cycling Oracle | Log-odds of predicted win probability, divided by 2.0 | 0.5 |
+| Cycling Oracle | Log-odds of predicted win probability | 0.5 |
 | Qualitative intelligence | Podcast/article adjustments weighted by confidence | 2.5–8.3 |
-| Betfair odds | Log-odds of market-implied win probability, divided by 2.0 | 0.3 |
+| Betfair odds | Log-odds of market-implied win probability | 0.3 |
 
-Race history observations are converted from finishing positions via a logit transform of fractional rank: $\text{strength} = -\log\!\left(\tfrac{k}{n+1} \big/ \left(1 - \tfrac{k}{n+1}\right)\right)$, which maps position 1 in a 150-rider field to roughly $+2.5$ and last to $-2.5$. Odds and Oracle predictions are converted via $\log(p / p_{\text{baseline}}) / 2.0$ where $p_{\text{baseline}} = 1/n_{\text{starters}}$ is the uniform probability.
+Race history observations are converted from finishing positions via a logit transform of fractional rank: $\text{strength} = -\log\!\left(\tfrac{k}{n+1} \big/ \left(1 - \tfrac{k}{n+1}\right)\right)$, which maps position 1 in a 150-rider field to roughly $+5$ and last to $-5$ (symmetrically clamped). Odds and Oracle predictions are converted via $\log(p / p_{\text{baseline}})$ where $p_{\text{baseline}} = 1/n_{\text{starters}}$ is the uniform probability.
 
 When odds or oracle data is available for a race, riders absent from the market receive a floor observation derived from the residual probability mass. This treats absence as a signal: the market evaluated all starters and implicitly priced absent riders below threshold. Floor observations use higher variance than directly priced riders (base variance $\times$ 2.0), reflecting the lower precision of a pooled estimate versus individual pricing.
 
