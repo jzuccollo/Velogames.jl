@@ -83,7 +83,7 @@ const CLASSICS_RACES_2026 = [
         "2026-03-21",
         1,
         "milano-sanremo",
-        ["strade-bianche"],
+        ["san-sebastian", "gp-quebec", "bretagne-classic"],
         294.0,
     ),
     RaceInfo(
