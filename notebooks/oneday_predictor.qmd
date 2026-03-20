@@ -12,13 +12,13 @@ format: html
 using Velogames, DataFrames, Statistics, MarkdownTables, Dates
 
 # Race — use get_url_pattern("name") to check available names
-race_name = "strade"
+race_name = "milano-sanremo"
 race_year = 2026
-racehash = "#StradeBianche"  # VG startlist hash filter (leave empty for all riders)
+racehash = "#MilanoSanremo"  # VG startlist hash filter (leave empty for all riders)
 
 # Optional data sources (leave empty to skip)
 betfair_market_id = ""  # Betfair Exchange market ID from the URL
-oracle_url = "https://www.cyclingoracle.com/en/blog/strade-bianche-2026-prediction"
+oracle_url = ""
 
 # Optional: paste Oddschecker winner market text into oddschecker_paste.txt (project root), then uncomment:
 odds_df = parse_oddschecker_odds(read(joinpath(@__DIR__, "..", "oddschecker_paste.txt"), String))
@@ -26,8 +26,8 @@ odds_df = parse_oddschecker_odds(read(joinpath(@__DIR__, "..", "oddschecker_past
 # odds_df = nothing
 
 # Qualitative intelligence (leave all empty to skip)
-qualitative_youtube_url = ""    # YouTube URL for auto-extraction via yt-dlp + Claude API
-qualitative_article_url = "https://www.domestiquecycling.com/en/features/2026-strade-bianche-preview-can-pogacar-be-stopped-at-his-season-debut/"    # Web article URL for auto-extraction via Claude API
+qualitative_youtube_url = "https://www.youtube.com/watch?v=uTDVuOGquYM"    # YouTube URL for auto-extraction via yt-dlp + Claude API
+qualitative_article_url = "https://www.domestiquecycling.com/en/news/2026-milan-san-remo-preview-another-epic-pogacar-vs-van-der-poel-showdown-for-the-ages/"    # Web article URL for auto-extraction via Claude API
 qualitative_json_file = ""      # Path to manually saved JSON response file
 
 # Optimisation
@@ -35,7 +35,7 @@ n_resamples = 500     # Resampled optimisation iterations (more = smoother, slow
 history_years = 3     # Years of PCS race history to fetch
 domestique_discount = 1.0  # Penalise non-leaders proportionally to strength gap (0 = off)
 risk_aversion = 0.5   # Penalise volatile riders via downside CV (0 = off)
-max_per_team = 0      # Max riders from any single team (0 = no limit)
+max_per_team = 2      # Max riders from any single team (0 = no limit)
 
 # Exclusions
 excluded_riders = String[]
@@ -104,45 +104,65 @@ end
 scoring = get_scoring(config.category > 0 ? config.category : 2)
 
 # --- Load qualitative intelligence (optional) ---
+# Try archive first; otherwise fetch from YouTube and/or article, merge, fall back to JSON file
 qualitative_df = load_race_snapshot("qualitative", config.pcs_slug, race_year)
 if qualitative_df !== nothing
     @info "Qualitative intelligence: loaded $(nrow(qualitative_df)) rider assessments from archive"
-elseif !isempty(qualitative_youtube_url)
-    try
-        riders_tmp = suppress_output() do
-            getvgriders(config.current_url; cache_config=race_cache)
+else
+    qual_sources = DataFrame[]
+
+    # Lazy-fetch riders list (shared across sources)
+    _qual_riders = Ref{Vector{String}}()
+    function _get_qual_riders()
+        if !isassigned(_qual_riders)
+            _qual_riders[] = String.(suppress_output() do
+                getvgriders(config.current_url; cache_config=race_cache)
+            end.rider)
         end
-        qualitative_df = get_qualitative_auto(
-            qualitative_youtube_url,
-            String.(riders_tmp.rider),
-            race_name,
-            string(Dates.today()),
-        )
-        @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments extracted"
-    catch e
-        @warn "Failed to extract qualitative intelligence: $e"
+        return _qual_riders[]
     end
-elseif !isempty(qualitative_article_url)
-    try
-        riders_tmp = suppress_output() do
-            getvgriders(config.current_url; cache_config=race_cache)
+
+    if !isempty(qualitative_youtube_url)
+        try
+            df = get_qualitative_auto(
+                qualitative_youtube_url, _get_qual_riders(),
+                race_name, string(Dates.today()),
+            )
+            @info "YouTube qualitative: $(nrow(df)) rider assessments"
+            push!(qual_sources, df)
+        catch e
+            @warn "Failed to extract qualitative intelligence from YouTube: $e"
         end
-        qualitative_df = get_qualitative_article(
-            qualitative_article_url,
-            String.(riders_tmp.rider),
-            race_name,
-            string(Dates.today()),
-        )
-        @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments extracted"
-    catch e
-        @warn "Failed to extract qualitative intelligence from article: $e"
     end
-elseif !isempty(qualitative_json_file)
-    try
-        qualitative_df = load_qualitative_file(qualitative_json_file)
-        @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments loaded"
-    catch e
-        @warn "Failed to load qualitative file: $e"
+
+    if !isempty(qualitative_article_url)
+        try
+            df = get_qualitative_article(
+                qualitative_article_url, _get_qual_riders(),
+                race_name, string(Dates.today()),
+            )
+            @info "Article qualitative: $(nrow(df)) rider assessments"
+            push!(qual_sources, df)
+        catch e
+            @warn "Failed to extract qualitative intelligence from article: $e"
+        end
+    end
+
+    if !isempty(qual_sources)
+        # Merge: average adjustments for riders appearing in multiple sources
+        qualitative_df = reduce(vcat, qual_sources)
+        qualitative_df = combine(groupby(qualitative_df, :riderkey),
+            :adjustment => mean => :adjustment,
+            :confidence => mean => :confidence,
+            :reasoning => first => :reasoning,
+        )
+    elseif !isempty(qualitative_json_file)
+        try
+            qualitative_df = load_qualitative_file(qualitative_json_file)
+            @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments loaded from file"
+        catch e
+            @warn "Failed to load qualitative file: $e"
+        end
     end
 end
 
@@ -160,7 +180,8 @@ predicted, chosenteam, top_teams, sim_vg_points = suppress_output() do
         risk_aversion=risk_aversion,
         max_per_team=max_per_team,
         breakaway_dir=breakaway_dir,
-        simulation_df=simulation_df
+        simulation_df=simulation_df,
+        cache_config=race_cache,
     )
 end
 

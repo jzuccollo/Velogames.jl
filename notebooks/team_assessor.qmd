@@ -12,7 +12,7 @@ format: html
 using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Race — must match the oneday predictor config
-race_name = "strade"
+race_name = "nokere"
 race_year = 2026
 
 # Fallback config — only used if no archived prediction exists
@@ -49,12 +49,6 @@ List the riders in your custom team. Names must match VG rider names exactly.
 #| echo: true
 #| output: false
 my_team = [
-    "Tadej Pogačar",
-    "Thomas Pidcock",
-    "Romain Grégoire",
-    "Louis Vervaeke",
-    "Gianni Moscon",
-    "Domen Novak"
 ]
 my_keys = createkey.(my_team)
 ```
