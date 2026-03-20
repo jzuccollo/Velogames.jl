@@ -188,9 +188,9 @@ degrades rather than *how much* to trust the signal source.
     # trajectory) have their variances multiplied by this factor. The market
     # already incorporates career record, form, and race history, so these
     # signals are largely redundant for riders with odds coverage. A value
-    # of 10.0 means non-market signals carry ~1/100 of their usual precision
+    # of 3.0 means non-market signals carry ~1/9 of their usual precision
     # when odds are present.
-    market_discount::Float64 = 10.0
+    market_discount::Float64 = 3.0
 end
 
 # --- Accessor functions: compute effective variances from scale factors ---
@@ -306,6 +306,7 @@ function estimate_rider_strength(
     n_starters::Int=150,
     config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
     effective_vg_variance::Float64=0.0,  # 0 = use vg_variance(config)
+    race_has_market::Bool=false,
 )
     (; pcs_score, has_pcs, race_history, race_history_years_ago,
        race_history_variance_penalties, vg_points, form_score,
@@ -321,11 +322,11 @@ function estimate_rider_strength(
     n_signals = 0
 
     # --- Market discount ---
-    # When odds are available, non-market signals are largely redundant
-    # (the market already prices in career record, form, history). Inflate
-    # their variances to reduce double-counting.
-    has_market = odds_implied_prob > 0.0
-    md = has_market ? config.market_discount : 1.0
+    # When odds exist for this race, non-market signals are partially redundant
+    # for ALL riders — priced riders have their ability reflected in odds directly,
+    # and unpriced riders were implicitly assessed by the market's decision not to
+    # price them. Apply the discount at the race level, not per-rider.
+    md = race_has_market ? config.market_discount : 1.0
 
     # --- Update with PCS specialty ---
     # PCS specialty z-score is the broadest signal: general rider ability.
@@ -1208,6 +1209,10 @@ function estimate_strengths(
         [any(df[i, col] != 0 for col in specialty_cols) for i = 1:n_riders]
     end
 
+    # --- Race-level market flag ---
+    # When odds exist for this race, discount non-market signals for ALL riders
+    race_has_market = !isempty(odds_lookup)
+
     # --- Estimate strength for each rider ---
     strengths = Vector{Float64}(undef, n_riders)
     uncertainties = Vector{Float64}(undef, n_riders)
@@ -1271,6 +1276,7 @@ function estimate_strengths(
             n_starters=n_starters,
             config=bayesian_config,
             effective_vg_variance=effective_vg_variance,
+            race_has_market=race_has_market,
         )
 
         strengths[i] = est.mean
@@ -1381,6 +1387,7 @@ function estimate_rider_strength(;
     n_starters::Int=150,
     config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
     effective_vg_variance::Float64=0.0,
+    race_has_market::Bool=false,
     kwargs...
 )
     estimate_rider_strength(
@@ -1388,6 +1395,7 @@ function estimate_rider_strength(;
         n_starters=n_starters,
         config=config,
         effective_vg_variance=effective_vg_variance,
+        race_has_market=race_has_market,
     )
 end
 
