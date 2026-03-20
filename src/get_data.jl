@@ -433,10 +433,13 @@ function parse_oddschecker_odds(text::String)
         if !isempty(name_line) && any(isletter, name_line) && is_odds_line(odds_line)
             tokens = split(odds_line, '\t')
             parsed = [to_decimal(t) for t in tokens]
-            decimals = Float64[d for d in parsed if d !== nothing && d > 1.0]
+            # Exclude implausible winner-market odds: 1/100 etc. parse to ~1.01
+            decimals = Float64[d for d in parsed if d !== nothing && d > 1.1]
             if !isempty(decimals)
                 push!(riders, name_line)
-                push!(best_odds, minimum(decimals))
+                # Use median across bookmakers — minimum is fragile to single
+                # erroneous prices (e.g. 20/21 on a 100/1 shot)
+                push!(best_odds, median(decimals))
                 i += 2
                 continue
             end
