@@ -417,11 +417,6 @@ function main()
     reports_dir = joinpath(site_dir, "reports")
     mkpath(reports_dir)
 
-    # Clean old generated files
-    for f in readdir(reports_dir)
-        endswith(f, ".qmd") && rm(joinpath(reports_dir, f))
-    end
-
     for row in eachrow(races)
         filename = "$(row.pcs_slug)-$(row.year).qmd"
         filepath = joinpath(reports_dir, filename)
