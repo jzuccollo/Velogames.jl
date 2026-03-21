@@ -20,6 +20,7 @@ const LEAGUE_WINNERS =
         ("trofeo-laigueglia", 2026) =>
             (name="Supper Lino & Sausage Superstars!", score=1126),
         ("strade-bianche", 2026) => (name="Rounded-up Riders", score=1778),
+        ("milano-sanremo", 2026) => (name="Rounded-up Riders", score=1515),
     )
 
 function report_qmd(;
