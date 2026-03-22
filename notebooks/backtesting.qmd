@@ -454,52 +454,111 @@ if nrow(pit_df) > 0
     # Per-race PIT histograms in a grid
     race_slugs = sort(unique(pit_df.race))
     if length(race_slugs) > 1
-        print("""
-::: {.callout-note collapse="true"}
-### Per-race PIT histograms
-
-""")
-        print("""
-```{=html}
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-```
-
-""")
+        print("<details><summary>Per-race PIT histograms</summary>\n\n")
+        print("<div style=\"display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;\">\n")
         for slug in race_slugs
             race_pit = filter(:race => ==(slug), pit_df)
             display_name = titlecase(replace(slug, "-" => " "))
-            print("""
-```{=html}
-<div>
-```
-
-""")
+            print("<div>\n")
             print(pit_histogram_chart(race_pit;
                 title=display_name,
                 scored_only=true,
                 compact=true))
-            print("""
-
-```{=html}
-</div>
-```
-
-""")
+            print("\n</div>\n")
         end
-        print("""
-```{=html}
-</div>
-```
-
-:::
-
-""")
+        print("</div>\n\n</details>\n\n")
     end
 else
     print("""
 No VG points calibration data available for $current_year yet. Requires both archived predictions and VG results.
 
 """)
+end
+```
+
+## PIT by strength tier
+
+Does the model overestimate favourites, mid-pack riders, or outsiders? Splitting PIT values by predicted strength quartile reveals where calibration problems concentrate.
+
+```{julia}
+#| output: asis
+if nrow(pit_df) > 0
+    # Load archived predictions to get strength values for each rider-race
+    pred_data = DataFrame()
+    for slug in unique(pit_df.race)
+        pred = load_race_snapshot("predictions", slug, current_year)
+        pred === nothing && continue
+        cols = Symbol[:riderkey, :strength, :uncertainty]
+        for c in propertynames(pred)
+            startswith(string(c), "shift_") && push!(cols, c)
+        end
+        cols = intersect(cols, propertynames(pred))
+        sub = pred[:, unique(cols)]
+        sub[!, :race] .= slug
+        pred_data = vcat(pred_data, sub; cols=:union)
+    end
+    augmented_pit = leftjoin(pit_df, pred_data, on=[:race, :riderkey])
+
+    scored_aug = filter(row -> row.scored && !ismissing(row.strength), augmented_pit)
+
+    if nrow(scored_aug) > 10
+        q25_s = quantile(scored_aug.strength, 0.25)
+        q75_s = quantile(scored_aug.strength, 0.75)
+
+        tiers = [
+            ("Bottom 25% (outsiders)", scored_aug.strength .<= q25_s),
+            ("Middle 50%", (scored_aug.strength .> q25_s) .& (scored_aug.strength .< q75_s)),
+            ("Top 25% (favourites)", scored_aug.strength .>= q75_s),
+        ]
+
+        print("""
+| Tier | n | Mean PIT | % PIT > 0.9 |
+|------|---|----------|-------------|
+""")
+        for (label, mask) in tiers
+            tier = scored_aug[mask, :]
+            nrow(tier) < 3 && continue
+            mp = round(mean(tier.pit_value), digits=3)
+            high = round(100 * count(>(0.9), tier.pit_value) / nrow(tier), digits=1)
+            print("| $label | $(nrow(tier)) | $mp | $(high)% |\n")
+        end
+        print("\n")
+    else
+        print("Insufficient data for strength-tier analysis.\n\n")
+    end
+else
+    print("No PIT data available.\n\n")
+end
+```
+
+## Uncertainty vs calibration
+
+Per-race comparison of posterior uncertainty width against PIT calibration. If narrower uncertainty correlates with higher mean PIT, the model is overconfident when it has many signals.
+
+```{julia}
+#| output: asis
+if nrow(pit_df) > 0 && @isdefined(augmented_pit) && :uncertainty in propertynames(augmented_pit)
+    race_slugs = sort(unique(augmented_pit.race))
+    if length(race_slugs) > 1
+        print("""
+| Race | Mean uncertainty | Range | Mean PIT (scored) | % PIT > 0.9 |
+|------|-----------------|-------|-------------------|-------------|
+""")
+        for slug in race_slugs
+            rp = filter(row -> row.race == slug, augmented_pit)
+            sc = filter(row -> row.scored, rp)
+            nrow(sc) < 3 && continue
+            unc_vals = filter(!ismissing, rp.uncertainty)
+            isempty(unc_vals) && continue
+            mu = round(mean(unc_vals), digits=3)
+            lo, hi = round.(extrema(unc_vals), digits=2)
+            mp = round(mean(sc.pit_value), digits=3)
+            high = round(100 * count(>(0.9), sc.pit_value) / nrow(sc), digits=1)
+            display_name = titlecase(replace(slug, "-" => " "))
+            print("| $display_name | $mu | $(lo)–$(hi) | $mp | $(high)% |\n")
+        end
+        print("\n")
+    end
 end
 ```
 
@@ -517,5 +576,83 @@ if nrow(sig_df) > 0
     print("\n")
 else
     print("No signal data available yet.\n\n")
+end
+```
+
+## Signal load vs calibration
+
+Do races where signals shift predictions more aggressively show worse calibration? Each row shows per-race signal activity alongside PIT metrics.
+
+```{julia}
+#| output: asis
+if @isdefined(augmented_pit) && nrow(augmented_pit) > 0
+    shift_cols = [c for c in propertynames(augmented_pit) if startswith(string(c), "shift_")]
+
+    if !isempty(shift_cols)
+        race_slugs = sort(unique(augmented_pit.race))
+        print("""
+| Race | Signals active | Mean |shift| | Mean uncertainty | Mean PIT (scored) |
+|------|---------------|--------------|-----------------|-------------------|
+""")
+        for slug in race_slugs
+            rp = filter(row -> row.race == slug, augmented_pit)
+            sc = filter(row -> row.scored, rp)
+            nrow(sc) < 3 && continue
+
+            # Count distinct active signals and mean absolute shift
+            all_shifts = Float64[]
+            active_signals = Set{Symbol}()
+            for col in shift_cols
+                col ∉ propertynames(rp) && continue
+                vals = filter(!ismissing, rp[!, col])
+                nonzero = filter(!=(0.0), vals)
+                if !isempty(nonzero)
+                    push!(active_signals, col)
+                    append!(all_shifts, abs.(nonzero))
+                end
+            end
+            n_active = length(active_signals)
+            mean_shift = isempty(all_shifts) ? 0.0 : round(mean(all_shifts), digits=3)
+            unc_vals = filter(!ismissing, rp.uncertainty)
+            mu = isempty(unc_vals) ? "—" : round(mean(unc_vals), digits=3)
+            mp = round(mean(sc.pit_value), digits=3)
+            display_name = titlecase(replace(slug, "-" => " "))
+            print("| $display_name | $n_active | $mean_shift | $mu | $mp |\n")
+        end
+        print("\n")
+    end
+end
+```
+
+## Big-miss rate
+
+Per-race count of high-strength riders who scored zero VG points. A high rate suggests the model is overconfident about which strong riders will finish in scoring positions.
+
+```{julia}
+#| output: asis
+if @isdefined(augmented_pit) && :strength in propertynames(augmented_pit)
+    race_slugs = sort(unique(augmented_pit.race))
+    has_data = false
+
+    for slug in race_slugs
+        rp = filter(row -> row.race == slug && !ismissing(row.strength), augmented_pit)
+        nrow(rp) < 20 && continue
+        if !has_data
+            print("""
+| Race | Top-10 zeros | Top-20 zeros | Top-10 scoring rate |
+|------|-------------|-------------|---------------------|
+""")
+            has_data = true
+        end
+        sorted = sort(rp, :strength, rev=true)
+        top10 = first(sorted, min(10, nrow(sorted)))
+        top20 = first(sorted, min(20, nrow(sorted)))
+        z10 = count(row -> row.actual_vg_points == 0, eachrow(top10))
+        z20 = count(row -> row.actual_vg_points == 0, eachrow(top20))
+        rate10 = round(100 * (1 - z10 / nrow(top10)), digits=0)
+        display_name = titlecase(replace(slug, "-" => " "))
+        print("| $display_name | $z10 / $(nrow(top10)) | $z20 / $(nrow(top20)) | $(rate10)% |\n")
+    end
+    has_data && print("\n")
 end
 ```
