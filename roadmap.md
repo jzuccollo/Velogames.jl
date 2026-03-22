@@ -1,6 +1,6 @@
 # Velogames.jl improvement roadmap
 
-## Current state (Feb 2026)
+## Current state (March 2026)
 
 The package implements expected Velogames points prediction using:
 
@@ -9,9 +9,9 @@ The package implements expected Velogames points prediction using:
 - VG historical race points from past editions as a Bayesian signal
 - PCS startlist filtering to remove DNS riders
 - Bayesian strength estimation combining PCS, VG season points, PCS form scores, PCS race history (with variance penalties for similar races), VG race history, optional Cycling Oracle predictions, and optional Betfair odds
-- Monte Carlo race simulation converting strength to position probabilities to expected VG points
-- JuMP optimisation over expected VG points (replacing arbitrary composite scores)
-- Risk-adjusted optimisation via ratio-based penalty: `E / (1 + γ * CV_down)` where `CV_down` is the downside coefficient of variation, giving scale-invariant penalisation of outcome variance
+- Monte Carlo race simulation with Student's t noise (df=5 in notebooks) converting strength to position probabilities to expected VG points
+- JuMP optimisation over expected VG points
+- Risk-adjusted optimisation via ratio-based penalty: `E / (1 + γ * CV_down)` where `CV_down` is the downside coefficient of variation
 - Class-aware PCS blending for stage races (aggregate approach)
 
 ## Prediction engine data flows
@@ -49,7 +49,7 @@ Missing data leaves the prior unchanged. Output: posterior mean (strength) and v
 
 ### Monte Carlo simulation
 
-`simulate_race()` adds Gaussian noise scaled by posterior uncertainty to each rider's strength, then ranks to get finishing positions. With 10,000+ simulations this produces smooth probability distributions over positions 1-30.
+`simulate_race()` adds Student's t noise (df=5) scaled by posterior uncertainty to each rider's strength, then ranks to get finishing positions. With 10,000+ simulations this produces smooth probability distributions over positions 1-30. Gaussian noise is also supported via `simulation_df=nothing`.
 
 ### Expected VG points decomposition
 
@@ -78,16 +78,34 @@ $$E[\text{VG points}] = E[\text{finish}] + E[\text{assists}] + E[\text{breakaway
 - **Betfair Exchange** (betfair.com) - betting odds for win markets via Exchange API (optional, requires credentials)
 - **Cycling Oracle** (cyclingoracle.com) - race predictions with win probabilities, scraped from blog prediction pages (optional, broader coverage than Betfair)
 
-### Recommended future sources
+### Potential future sources
 
 - **PCS deeper data** - race climb profiles (length, gradient, elevation), profile difficulty icons (p0-p5)
 - **OpenWeatherMap** (free tier, 1000 calls/day) - race-day weather for cobbled classics
 
 ## Known issues
 
+### VG points distributions underestimate scoring riders (March 2026)
+
+The most significant calibration problem identified from the first six prospective races of 2026 (Omloop, Kuurne, Strade, Trofeo, Nokere, MSR). The model's simulated VG points distributions systematically underestimate how many points riders actually earn when they do score. Aggregate mean PIT for scoring riders is 0.86 (target: 0.5), and the bias is consistent across all six races.
+
+The underestimation is worst for outsiders and mid-tier riders: when a cheap rider scores at all, they almost always score far more than the model predicted (bottom-25% mean PIT = 0.94, 92% with PIT > 0.9). Favourites are underestimated too but less severely (top-25% mean PIT = 0.75).
+
+The consequence for team selection is severe. The optimiser sees expected value concentrated in expensive favourites and builds top-heavy teams (e.g. MSR: 88/100 credits on three riders). When one favourite blanks — as Ganna did, finishing 33rd, three positions outside the scoring cutoff — the team collapses. Meanwhile, cheap riders the model ignored delivered massive value (Vendrame cost 12, scored 330; Zambanini cost 12, scored 255; Tarozzi cost 4, scored 120).
+
+The strength model's rank ordering is reasonable (Spearman rho 0.25–0.50 across races). The failure is specifically in converting strength to VG points — the simulation underestimates the right tail for weak and mid-tier riders. Simply widening uncertainty doesn't fix this: Trofeo Laigueglia has the widest posterior uncertainty (mean 1.29) but still shows mean PIT 0.87. The shape of the scoring distribution is wrong, not just its width.
+
+The big-miss rate (strong riders scoring zero) varies enormously by race type: 0% for Strade Bianche, 20% for MSR/Omloop, up to 60% for Kuurne. The model applies the same uncertainty framework to all races and cannot adapt to this heterogeneity.
+
+### Oracle signal dominance
+
+The oracle signal shifts the posterior by 1.03 on average — nearly double PCS (0.55) and triple odds (0.36). MSR had the highest mean signal shift of any race (0.586), driven by 9 active signals all pulling strongly. The oracle's disproportionate influence may amplify the overconcentration problem by pushing the model's attention toward the same favourites the oracle rates highly. Its variance (0.5) may need increasing.
+
 ### Breakaway heuristic limitations
 
-Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see `_breakaway_sectors()` in `src/simulation.jl`). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this. The heuristic is a small fraction of total expected points for most riders, so the impact is limited.
+Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see `_breakaway_sectors()` in `src/simulation.jl`). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this.
+
+The impact is larger than previously thought. In MSR 2026, 8 riders scored exactly 120 VG points each purely from breakaway sectors (Tarozzi, Maestri, Marcellusi, Faure Prost, Belletta, Milesi, Moro, Tronchon). The model predicted these riders at 0.5–65 expected VG points. PCS breakaway data for the race was entirely missing (zero riders flagged), so the model fell back on the position-based heuristic alone. For Cat 1 races where breakaway points are 60 per sector (max 240 per rider), the heuristic is inadequate.
 
 ### Notebooks excluded from the Quarto build
 
@@ -95,28 +113,58 @@ Breakaway points are estimated heuristically from simulated finishing positions,
 
 ---
 
-## Improvement phases (ordered by expected impact)
+## Improvement plan
 
-### Completed phases
+### Summary assessment (March 2026, revised after early-season review)
+
+The system correctly identifies the key problem — signal fusion under uncertainty, with a non-linear scoring function — and solves it with appropriate tools. The resampled optimisation handles Jensen's inequality bias correctly, the archival system is excellent, and the prospective evaluation framework accumulates real signal incrementally. The strength model's rank ordering is reasonable (Spearman rho 0.25–0.50 across six prospective races).
+
+The single largest problem is that the **VG points simulation systematically underestimates scoring riders**, especially cheap and mid-tier ones. This causes the optimiser to overconcentrate budget in expensive favourites, building fragile teams that collapse when one star blanks. The PIT-by-tier analysis from six 2026 races shows outsiders are underestimated most severely (mean PIT 0.94), with the problem diminishing but still present for favourites (mean PIT 0.75). This is not a strength estimation problem — rank ordering is decent — but a scoring distribution problem. The simulation's VG points draws for cheap riders are too pessimistic, lacking sufficient right-tail probability mass for breakaway contributions, surprise finishes, and tactical results.
+
+Three other gaps remain significant: (1) the tournament dimension is absent — ownership adjustment would diversify teams away from consensus picks, partially mitigating the overconcentration even without fixing the underlying distributions; (2) the per-stage grand tour simulation is unbuilt; (3) the model applies identical uncertainty to all race types despite big-miss rates ranging from 0% (Strade) to 60% (Kuurne).
+
+Several structural concerns are noted but do not require immediate action: the block-correlation discount and `market_discount` compound in mathematically inconsistent ways; the trajectory signal contributes very little precision; the oracle signal is disproportionately influential (mean |shift| 1.03, nearly 2× PCS and 3× odds).
+
+### Prioritised improvements
+
+| Priority | Improvement | Expected impact | Status |
+| -------- | ----------- | --------------- | ------ |
+| 1 | **Fix VG points calibration for mid-tier riders** | High — the single largest source of team selection error. See note below | Not done |
+| 2 | **Ownership-adjusted team selection** | High — diversifies teams away from overconcentration even with current calibration. Free data in `selected` column | Not done |
+| 3 | **Phase 4: Per-stage grand tour simulation** | High — current aggregate model ignores course composition entirely | Planned — see detailed design below |
+| 4 | **Race-type-specific uncertainty** | Moderate — big-miss rate ranges 0–60% across race types; one-size-fits-all framework cannot adapt | Not done |
+| 5 | **Reduce oracle signal precision** | Low-moderate — oracle's mean abs shift of 1.03 is disproportionate; may amplify overconcentration in favourites | Not done — confirm via signal-vs-calibration analysis |
+| 6 | **Remove trajectory signal** | Simplification at negligible predictive cost — mean abs shift only 0.20 | Option — confirm via signal analysis first |
+| 7 | **Validate similar-race history** | Could remove a noise source for races with ≥3 exact-history years | Option — confirm via ablation |
+| 8 | **Simplify market/history interaction** | Code clarity; functionally equivalent when odds are present | Option — see note below |
+| 9 | **Correlated position simulation** | Low-moderate; more useful for stage races and team-heavy strategies | Not done |
+| 10 | **ML augmentation** | ~3% above tuned baseline per Kholkine; requires 90+ race training set | Not done — prerequisites missing |
+
+**Note on fixing VG points calibration (priority 1):** The problem is that the simulation's VG points distributions for cheap riders are too concentrated near zero. Several potential approaches: (a) heavier tails in the simulation noise (current df=5 may still be too light for the VG scoring cliff at position 31); (b) explicitly modelling a higher breakaway contribution floor for riders with any breakaway history; (c) recalibrating the position-to-strength mapping so that weak riders have wider, more right-skewed strength distributions; (d) a post-hoc calibration step that adjusts simulated VG points distributions using prospective PIT data. Approach (b) is the most targeted since breakaway points are a major source of cheap-rider value, but the PIT data suggests the issue is broader than breakaways alone.
+
+**Note on simplifying the market/history interaction (priority 8):** `market_discount` inflates non-market signal variances 8× when odds are present; the block-correlation discount then re-discounts the already-discounted precision. The clean fix is to skip non-market signals entirely when `race_has_market = true` — functionally equivalent, removes the interaction, and eliminates dead computation. This is a bigger refactor but would substantially clarify `estimate_rider_strength`. Deprioritised because the signal-vs-calibration analysis shows no clear relationship between signal load and calibration quality — the scoring distribution problem is more fundamental.
+
+### Completed improvements
 
 | Phase | Description | Key details |
 |-------|-------------|-------------|
 | 1. Odds integration | Betfair Exchange API + Cycling Oracle scraping as Bayesian signals | Strongest single predictor. Betfair coverage limited to major races; Oracle covers most European professional races. Both can be active simultaneously. |
 | 2. Calibration framework | Prior predictive checks, SBC, backtesting, prospective evaluation | `BayesianConfig` reparameterised to 3 scale factors + 2 decay rates. `backtesting.qmd` serves as unified calibration frontend. |
 | 3. Course profile matching | Terrain-similar race history via `SIMILAR_RACES` | Manual curation of terrain groupings; automatic PCS profile scraping deferred as low priority. |
-| 6. Leader/domestique roles | Domestique strength discount + max-per-team constraint | Heuristic leader detection by estimated strength within the field. |
-| 7. Recent form signal | PCS form page scraping, z-scored as Bayesian update | Covers top ~40-60 riders; race-agnostic (no terrain filtering). |
-| 8. Season-adaptive VG + trajectory | VG variance scales with season progress; trajectory captures improvement/decline | `vg_season_penalty` inflates early-season VG variance; trajectory compares current PCS to historical mean. |
+| 4. Leader/domestique roles | Domestique strength discount + max-per-team constraint | Heuristic leader detection by estimated strength within the field. |
+| 5. Recent form signal | PCS form page scraping, z-scored as Bayesian update | Covers top ~40-60 riders; race-agnostic (no terrain filtering). |
+| 6. Season-adaptive VG + trajectory | VG variance scales with season progress; trajectory captures improvement/decline | `vg_season_penalty` inflates early-season VG variance; trajectory compares current PCS to historical mean. |
+| 7. Student's t noise | Heavy-tailed simulation noise via `simulation_df` parameter | `_rand_t(rng, df)` in `simulation.jl`. Default `simulation_df=nothing` (Gaussian); notebooks use df=5. |
 
-### Open phases
+---
 
-### Phase 4: Stage race prediction (high impact for grand tours)
+## Phase 4: Per-stage grand tour simulation
 
 This is the single largest extension to the package. The current aggregate approach (simulating overall GC position and mapping to total VG points via `SCORING_STAGE`) ignores stage composition entirely. Top VG players emphasise that the parcours determines which rider types accumulate the most points: a Tour with 8 mountain stages and 2 ITTs favours climbers differently from one with 5 flat stages and a long ITT. The aggregate model cannot capture this.
 
-The plan below extends the one-day infrastructure rather than replacing it. Each stage is treated as a mini one-day race with its own scoring table, strength weighting, and simulation. Teams are locked at race start (VG's main leaderboard does not allow mid-race changes), so the optimiser selects the team that maximises total expected VG points summed across all stages.
+The plan extends the one-day infrastructure rather than replacing it. Each stage is treated as a mini one-day race with its own scoring table, strength weighting, and simulation. Teams are locked at race start (VG's main leaderboard does not allow mid-race changes), so the optimiser selects the team that maximises total expected VG points summed across all stages.
 
-#### Research findings: VG stage race mechanics
+### Research findings: VG stage race mechanics
 
 Research completed March 2026 by fetching VG scoring/rules pages for TDF 2024, TDF 2025, and Vuelta 2025. The scoring rules are identical across all three grand tours (TDF, Vuelta, Giro).
 
@@ -199,8 +247,6 @@ Note: `p4` is heterogeneous (includes both hilly road stages and mountain ITTs).
 
 **PCS slugs**: `tour-de-france`, `giro-d-italia`, `vuelta-a-espana`
 
-**Implication for Step 2**: stage metadata can be scraped automatically from PCS as the primary approach, with manual encoding as the fallback. See Step 2.
-
 **Key scoring observations for modelling:**
 
 - A stage winner earns 220 points (finish) + up to 30 (GC) + potential climb/sprint/assist bonuses = ~280–320 per stage
@@ -210,7 +256,7 @@ Note: `p4` is heterogeneous (includes both hilly road stages and mountain ITTs).
 - Breakaway points (20 per stage if in the break) can accumulate meaningfully for breakaway specialists across 21 stages
 - The final GC bonus (600 for winner) is ~16% of a race winner's total — large enough to matter but not dominant
 
-#### Step 1: Per-stage VG scoring tables (`src/scoring.jl`)
+### Step 1: Per-stage VG scoring tables (`src/scoring.jl`)
 
 VG uses a single scoring table for all stages (no variation by stage type), which simplifies this step considerably. The scoring shape differs from one-day classics: stage races have separate categories for stage finish, daily classifications, in-stage bonuses, assists, and final classification bonuses.
 
@@ -263,7 +309,7 @@ end
 
 **Incremental:** This step is fully self-contained. No other files need modification.
 
-#### Step 2: Stage metadata and race helpers (`src/race_helpers.jl`, `src/pcs_extended.jl`, `src/get_data.jl`)
+### Step 2: Stage metadata and race helpers (`src/race_helpers.jl`, `src/pcs_extended.jl`, `src/get_data.jl`)
 
 PCS stage pages are accessible via the package's HTTP.jl infrastructure (confirmed working March 2026). Stage metadata can be scraped automatically as the primary approach.
 
@@ -447,7 +493,7 @@ All stored under the existing archive path pattern: `{archive_dir}/{data_type}/{
 
 **Incremental:** Step 2 can proceed in parallel with Step 1. The PCS scrapers and VG result scrapers are independent of the scoring tables.
 
-#### Step 3: Stage-type strength modifiers (`src/simulation.jl`)
+### Step 3: Stage-type strength modifiers (`src/simulation.jl`)
 
 The current `estimate_strengths` produces a single strength and uncertainty per rider. For per-stage simulation, we need stage-type-specific strengths. Rather than running independent Bayesian estimation per stage type (which would need stage-type-specific signals we don't have), we apply additive modifiers to the base strength.
 
@@ -477,7 +523,7 @@ Takes the rider DataFrame (which has PCS specialty columns `oneday`, `gc`, `tt`,
 
 1. `stage_strength[i] = base_strength[i] + modifier_scale * modifier_blend[i]`
 
-`modifier_scale` (default 0.5) controls how much stage-type differentiation matters relative to overall ability. Too high and specialist riders dominate their stage types unrealistically; too low and there's no differentiation. Calibrate against historical stage results in Step 8.
+`modifier_scale` (default 0.5) controls how much stage-type differentiation matters relative to overall ability. Too high and specialist riders dominate their stage types unrealistically; too low and there's no differentiation. Calibrate against historical stage results in Step 7.
 
 **For `:ttt` stages:** TTT scoring goes to teams, not individual riders. Since we can't model team time trial performance from individual rider data, TTT stages are handled by awarding the team classification assist points to all riders on well-ranked teams. The modifier for TTT is the same as ITT (TT specialists are likely on strong TTT teams).
 
@@ -505,7 +551,7 @@ This makes the weights explicit data, easy to inspect and tune. Store adjacent t
 
 **Incremental:** Depends on Step 2 (needs stage type definitions) but not on Step 1 (scoring tables).
 
-#### Step 4: Per-stage simulation (`src/simulation.jl`)
+### Step 4: Per-stage simulation (`src/simulation.jl`)
 
 This is the core new logic. Replaces the aggregate GC-position→total-points simulation with per-stage-level simulation.
 
@@ -565,8 +611,6 @@ These approximations are crude but capture the first-order effect: sprinters acc
 
 **Integration with `resample_optimise`:**
 
-The existing `resample_optimise` draws noisy strengths, scores per draw, and optimises. For stage races, we replace the inner scoring loop with `simulate_stage_race`. However, the architecture differs: `resample_optimise` draws strengths once per resample and scores a single "race"; for stage races, each resample draw involves 21 stages with correlated noise.
-
 Add `resample_optimise_stage`:
 
 ```julia
@@ -598,7 +642,7 @@ Internally calls `simulate_stage_race` for all `n_resamples` draws at once, then
 
 **Incremental:** Depends on Steps 1 (scoring tables), 2 (stage profiles), and 3 (stage-type modifiers).
 
-#### Step 5: Solver integration (`src/race_solver.jl`)
+### Step 5: Solver integration (`src/race_solver.jl`)
 
 Modify `solve_stage` to use per-stage simulation when stage profiles are provided.
 
@@ -667,7 +711,7 @@ end
 
 **Incremental:** Depends on Step 4. The data fetching, strength estimation, and optimisation infrastructure are all reused.
 
-#### Step 6: Notebooks (`notebooks/stagerace_predictor.qmd`, `notebooks/team_assessor.qmd`)
+### Step 6: Notebooks (`notebooks/stagerace_predictor.qmd`, `notebooks/team_assessor.qmd`)
 
 **Stage race predictor notebook (`stagerace_predictor.qmd`):**
 
@@ -731,11 +775,7 @@ race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6)
 
 **Team assessor (`team_assessor.qmd`):**
 
-The team assessor needs to handle both one-day and stage races. Decision: **extend the existing notebook rather than creating a separate stage race version.** Rationale:
-
-- The retrospective analysis structure (your team vs model's team vs hindsight-optimal) applies to both race types
-- Code duplication between two notebooks would be worse than a few `if config.type == :stage` branches
-- The stage-race-specific features (per-stage performance breakdown) are additive — they don't conflict with the one-day flow
+Extend the existing notebook rather than creating a separate stage race version.
 
 **Changes to `team_assessor.qmd`:**
 
@@ -748,16 +788,9 @@ The team assessor needs to handle both one-day and stage races. Decision: **exte
    - Aggregate metrics (actual total, hindsight optimal, points captured ratio) work the same as one-day
 4. Archive results: call `archive_race_results` with the new stage race data types
 
-**Decision: team_assessor vs separate notebook:** Extend the existing notebook. The per-stage retrospective analysis is an additive feature that slots into the existing structure. A separate `stagerace_assessor.qmd` would duplicate ~70% of the code.
+### Step 7: Backtesting and prospective evaluation (`src/backtest.jl`, `src/prospective_eval.jl`)
 
-#### Step 7: Backtesting and prospective evaluation (`src/backtest.jl`, `src/prospective_eval.jl`)
-
-**Decision: backtesting.qmd — extend, don't duplicate.** Rationale:
-
-- Backtesting metrics are conceptually identical for one-day and stage races (Spearman rho, top-N overlap, points captured ratio on total VG points)
-- The data pipeline differs (need stage profiles and per-stage VG results), but the evaluation logic is shared
-- The notebook already has a clear section structure that can accommodate a "Stage race backtest" section
-- Combining avoids duplicating the prospective evaluation, calibration, and signal analysis sections
+Extend `backtesting.qmd` rather than creating a separate notebook.
 
 **New functions in `src/backtest.jl`:**
 
@@ -804,9 +837,9 @@ Also run the existing aggregate model (`predict_expected_points` with `SCORING_S
 
 **Prospective evaluation (`src/prospective_eval.jl`):**
 
-No code changes needed. The existing `evaluate_prospective` and `prospective_season_summary` functions work on archived predictions and PCS results, both of which use the same schema for stage races as for one-day races. The `predictions` archive contains `strength` and `uncertainty` columns regardless of race type, and the PCS results archive contains `position` columns.
+No code changes needed for v1. The existing `evaluate_prospective` and `prospective_season_summary` functions work on archived predictions and PCS results, both of which use the same schema for stage races as for one-day races.
 
-The PIT calibration (`prospective_pit_values`) requires simulation draws, which uses `simulate_vg_draws`. For stage races, we would need a `simulate_vg_draws_stage` variant that uses per-stage simulation. This is a follow-up enhancement — for v1, the prospective PIT calibration applies only to one-day races.
+The PIT calibration (`prospective_pit_values`) requires simulation draws via `simulate_vg_draws`. For stage races, a `simulate_vg_draws_stage` variant using per-stage simulation would be needed — this is a follow-up enhancement, not required for v1.
 
 **Changes to `backtesting.qmd`:**
 
@@ -817,7 +850,7 @@ Add a "Stage race backtest" section after the one-day backtest:
 3. Show the same metric tables as the one-day backtest
 4. Show aggregate-vs-per-stage comparison table
 
-#### Implementation order and dependencies
+### Implementation order and dependencies
 
 ```
 Step 1: Scoring tables (scoring.jl)          ← self-contained
@@ -847,7 +880,7 @@ Steps 1 and 2 can proceed in parallel. Steps 3–5 are sequential. Steps 6 and 7
 - Giro and Vuelta stage profiles for backtesting (extend the 3-race TDF-only catalogue)
 - Automatic stage profile fetching from PCS when their 403 block is relaxed
 
-#### Design decisions (resolved)
+### Design decisions (resolved)
 
 1. **Single strength vs per-stage strength:** Base strength + stage-type modifiers (decided). Avoids needing stage-type-specific signals. Modifier weights are the main calibration target.
 
@@ -861,168 +894,39 @@ Steps 1 and 2 can proceed in parallel. Steps 3–5 are sequential. Steps 6 and 7
 
 6. **Notebook strategy:** Extend existing team_assessor.qmd and backtesting.qmd rather than creating separate stage race versions. Rewrite stagerace_predictor.qmd from scratch.
 
-7. **PCS stage data:** Manual stage profile encoding as the primary approach, with optional PCS scraping as a fallback (PCS currently blocks automated requests). Stage profiles are published months before the race, so manual encoding is feasible.
+7. **PCS stage data:** PCS scraping as the primary approach (confirmed working); manual encoding as fallback. Stage profiles are published months before the race, so manual encoding is feasible if PCS blocks automated requests.
 
-8. **v1 scope:** Skip in-stage bonuses (climb/sprint point simulation), breakaway modelling, and abandonment. Focus on: per-stage finish simulation, daily GC tracking, final classification bonuses, and stage-type strength differentiation. These skipped features are additive and can be layered on once the basic pipeline works.
-
-### Phase 5: Ownership-adjusted optimisation (high impact, contest-dependent)
-
-The impact of ownership adjustment depends entirely on the contest type. Haugh & Singal (2021, *Management Science*) demonstrated a 7x return differential (350% vs 50%) from ownership-adjusted play in large-field GPP tournaments. However, for the small private leagues typical of VG, the effect is substantially smaller.
-
-VG's `selected` column gives ownership percentages. Simple leverage scoring (`E[VG_points] * (1 - ownership)`) captures most of the benefit. More sophisticated approaches (probability-of-winning optimisation, opponent modelling via Dirichlet-multinomial) are warranted only for large-field contests.
-
-### Phase 9: Correlated position simulation (low-moderate impact)
-
-The current approach of independent position simulation with per-simulation assist computation already captures the most important correlation effect (teammate assists). Adding explicit rider-rider correlation via Cholesky decomposition would produce more realistic variance profiles but the incremental gain is modest.
-
-The Sharpstack paper and DFS community research shows that ignoring correlation can approximately double the standard deviation of simulation outputs in team sports (NFL, NBA). However, cycling correlation structure differs from team sports: the main correlation is through team tactics and race dynamics rather than through mechanical scoring links (like quarterback-receiver in NFL). For one-day classics, independent position simulation is a reasonable approximation.
-
-**Where correlation matters more:**
-
-- Stage races: crash/illness correlations persist across stages
-- Team-heavy strategies: when stacking 3+ riders from one team, correlated simulation better estimates the variance profile
-- Weather-dependent races: cobbled classics where rain creates correlated outcomes for specialists
-
-**Implementation if pursued:**
-
-- Estimate pairwise correlation from historical results (same-team bonus, race-type clustering)
-- Use Cholesky decomposition to generate correlated noise vectors in `simulate_race()`
-- The assist computation already runs per-simulation, so it would automatically benefit from correlated positions
-
-### Phase 10: Machine learning (unknown impact, requires prerequisites)
-
-Replacing the Bayesian strength model with a trained ML model requires a backtesting dataset of 90-135+ races (2-3 full Superclasico seasons), which does not yet exist. Academic results in cycling prediction show marginal gains from ML over well-tuned baselines: Kholkine et al. (2021) achieved 0.82 NDCG@10 with learn-to-rank, but this was only ~3% above a tuned logistic regression baseline. The FPL literature confirms that Bayesian approaches provide "strong and stable baselines" and that ML augmentation yields "modest but consistent improvements."
-
-**Prerequisites:**
-
-- Backtesting dataset of 90-135+ races (2-3 full Superclasico seasons)
-- Feature engineering pipeline from Phases 1-7
-
-**Approach:**
-
-- Train XGBoost or Random Forest: features -> actual VG points
-- Julia's MLJ.jl ecosystem
-- Cross-validate by race to avoid overfitting
-- Features: PCS specialty, race history, recent form, course profile similarity, VG cost/points, odds, ownership %
-- Could augment rather than replace Bayesian model (ML predictions as an additional signal)
-
-**Alternative: ensemble approach:**
-
-Rather than replacing the Bayesian model entirely, use ML predictions as an additional signal in the Bayesian framework. This preserves the principled uncertainty quantification whilst allowing ML to capture nonlinear feature interactions. The FPL literature found this hybrid approach consistently outperformed either pure Bayesian or pure ML.
+8. **v1 scope:** Skip in-stage bonuses (climb/sprint point simulation), breakaway modelling, and abandonment. Focus on: per-stage finish simulation, daily GC tracking, final classification bonuses, and stage-type strength differentiation.
 
 ---
 
-## Additional ideas from the literature
+## Signal precision rationale
 
-### VG cost model exploitation
-
-Top VG community players (The Pelotonian, Sicycle, ProCyclingUK) consistently emphasise that value identification is more important than picking the race winner. VG costs are set by an algorithm based on historical performance, creating systematic mispricings:
-
-- **Young riders on upward trajectories** are underpriced because the cost model is backward-looking
-- **Classification category mispricings**: the mandatory class constraints (2 AR, 2 CL, 1 SP, 3+ UN) create within-category pricing inefficiencies that the optimiser already exploits, but identifying which categories are systematically cheaper in a given race could inform pre-optimisation analysis
-- **Rider returning from injury**: riders whose cost reflects a period of absence but who are now fully fit
-
-An explicit "value model" that predicts VG cost based on current ability (and compares to actual cost) would highlight where the pricing algorithm is most wrong.
-
-### Startlist-adjusted strength
-
-The current model does not account for who else is in the race when estimating strength. A Cat 1 monument with a full WorldTour field is substantially harder than a Cat 3 semi-classic. PCS startlist quality data (already available via `getpcsracestartlist()`) could adjust the prior: a rider's expected position in a weak field should be higher than in a strong field, even with the same underlying strength.
-
-**Implementation:** Compute field strength as the mean or median PCS points of the startlist, then adjust the position-to-strength mapping accordingly. Alternatively, use field strength as a scaling factor on the simulation noise (stronger fields compress the position distribution).
-
-### Weather-dependent race modelling
-
-Cobbled classics (Flanders, Roubaix) have dramatically different dynamics in wet vs dry conditions. Rain on cobbles amplifies the advantage of specialists and increases attrition. The roadmap already lists OpenWeatherMap as a potential source. The impact is narrow (only a handful of races per season) but the signal is strong for those races.
-
-### Multi-objective optimisation
-
-The current optimiser maximises a single objective (expected points or leverage-weighted points). An alternative is to present the Pareto frontier between expected points and variance (or between expected points and ownership differentiation), allowing the user to choose their preferred risk profile. JuMP supports multi-objective optimisation, and the MC framework already produces the variance estimates needed.
-
-### Transfer learning from team sports DFS
-
-The NFL/NBA DFS literature is substantially more developed than cycling-specific research. Key transferable concepts not yet in the roadmap:
-
-- **Late swap / news integration**: incorporating last-minute information (DNS, weather changes, tactical announcements) just before the lock. The current pipeline could be re-run with updated data but there is no structured workflow for this.
-- **Opponent modelling**: estimating the distribution of opponent teams from ownership data, then optimising against that distribution rather than in isolation. This is the sophisticated version of ownership-adjusted optimisation.
-- **Bankroll management**: Kelly criterion or fractional Kelly for sizing bets across multiple contests. Not directly relevant to VG (no monetary stakes) but the underlying principle of diversifying across races (entering multiple leagues with different strategies) applies.
-
-### Bayesian model extensions
-
-The current normal-normal conjugate model could be extended in several directions without moving to full ML:
-
-- **Heavy-tailed distributions**: Replace Gaussian noise in `simulate_race()` with Student-t distributions to better model the long tails of cycling results (crashes, breakaways, exceptional performances). This would naturally produce higher-variance predictions for less predictable riders.
-- **Hierarchical priors**: Share information across riders of the same team, nationality, or specialty class. A strong Ineos GC result could partially inform expectations for other Ineos GC riders.
-- **Time-varying strength**: Allow rider strength to drift over the season rather than treating it as static. This partially addresses the recent form question without requiring a separate form signal.
-
----
-
-## Signal precision rationale (March 2026)
-
-The Bayesian model combines signals from three precision groups. This section documents the evidence and reasoning behind the current parameter settings, so that future calibration work can build on it rather than re-deriving from scratch.
-
-### Evidence on relative signal quality
-
-**Betting odds are the strongest available predictor of sports outcomes.** This is one of the most robust findings in sports forecasting research. A systematic review of ML in sports betting (arxiv:2410.21484) found that prediction accuracy from ML models "reaches not more than about 70% and is at the same level as model-free bookmaker odds alone." In direct comparisons, the best gradient boosting model achieved RPS of 0.2156 vs bookmaker 0.2012 — models cannot reliably outperform the market. Franck et al. (2010) found betting exchanges are more accurate than bookmakers, and both outperform statistical models. Betting odds aggregate private information (team tactics, form, injury knowledge, insider assessments) that no public data source can replicate.
-
-**The favourite-longshot bias** means odds overestimate longshot chances and slightly underestimate favourites. This implies odds are most accurate for the top ~20-30 riders who matter most for fantasy team selection.
-
-**For cycling specifically**, Kholkine et al. (2021) tested 15 feature categories using learn-to-rank (LambdaMART) on six spring classics. Feature importance findings:
-
-- Overall PCS performance (career and season-long points) was consistently important across all races
-- Race-specific history was the single most important feature for Tour of Flanders and Paris-Roubaix
-- Results from terrain-similar races were strongly predictive (LBL relied on Flèche Wallonne results)
-- **6-week pre-race form received minimal weight** — "the model does not seem to learn a lot from" short-term form features
-- Career trajectory had minor influence; the model "gives priority to consistency"
-- The model only marginally beat fan predictions (NDCG 0.55 vs 0.52)
-
-**Key implication for signal design**: odds already incorporate form, history, and ability. For riders with odds, the non-market signals are largely redundant because odds-makers watch all the same data. The marginal value of additional signals comes from (a) riders without odds coverage (~80% of the field), and (b) very recent information not yet reflected in pre-race odds.
-
-### Current parameter settings and justification
-
-**Scale factors** (higher = more trust in the signal group):
-
-| Factor | Value | Rationale |
-|--------|-------|-----------|
-| `market_precision_scale` | 4.0 | Odds are the best single predictor. At 4.0, odds variance = 0.25, giving precision 4.0 per observation. Higher values risk overconfidence for favourites. |
-| `history_precision_scale` | 2.0 | Controls form, race history, VG history, and trajectory. At 2.0, form gets precision 2.0 (slightly below odds) and race history ~0.67 per year (~2.0 over 3 years). Calibration was good. The main tension: form is almost as precise as odds (2.0 vs 3.0), but the ML evidence says form is weak. However, lowering this scale would also weaken race history, which IS one of the best predictors. |
-| `ability_precision_scale` | 1.0 | PCS specialty and VG season points are broad career/season aggregates. At precision 1.0 they're one-third of odds. Research supports career consistency mattering for identifying contenders, but the signal is too crude to deserve high precision. |
-
-**Within-group ratios** (fixed domain knowledge, not tuned):
-
-| Ratio | Value | Rationale |
-|-------|-------|-----------|
-| `_odds_to_oracle_ratio` | 2.0 | Oracle is a single algorithm; odds aggregate many models and private information. Research says models don't beat odds, suggesting Oracle should be less precise. The practical difference between 1.5 and 2.0 is small since both are in the high-precision market group. |
-| `_form_to_hist_ratio` | 3.0 | Per observation, form (current 6-week fitness) is more precise than a single year of race history (stale, different conditions, different pelotons). But 3 years of history collectively match form's precision, which the research supports — race-specific results are among the best predictors. |
-| `_form_to_vg_hist_ratio` | 5.0 | VG history adds noise through the nonlinear VG scoring transformation (top-10 finishes heavily rewarded, scoring floor at position 31+). 1.67x noisier than PCS race history per observation. |
-| `_form_to_trajectory_ratio` | 3.0 | Career trajectory (improving vs declining) is a blunt signal for predicting a single race. ML research found minor importance. |
-| `_pcs_to_vg_ratio` | 1.0 | Both are broad ability measures — PCS is lifetime by race type, VG is season cumulative. Roughly comparable in informativeness. The `vg_season_penalty` handles early-season noise by inflating VG variance when few riders have points. |
-
-**Other key parameters**:
+### Parameter settings
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
-| `within_cluster_correlation` | 0.5 | Signals within each cluster (market, history, ability) are highly redundant. With ρ_w=0.5 and e.g. 5 history observations, the within-cluster discount is 1 + 0.5×4 = 3.0, reducing effective history precision to 1/3. This prevents adding more years of race history from producing false certainty. |
-| `between_cluster_correlation` | 0.15 | Clusters carry partially independent information (odds reflect different knowledge than PCS specialty). With 3 active clusters, the between-cluster discount is 1 + 0.15×2 = 1.3 — a modest additional correction. |
-| `hist_decay_rate` | 3.2 | Race history variance increases by 3.2 per year ago. A result from 3 years ago has variance 1.5 + 9.6 = 11.1 vs 1.5 for the current year — it's essentially noise. Aggressive decay is appropriate: rider form changes substantially year to year. |
-| `vg_hist_decay_rate` | 1.3 | VG history decays more slowly than PCS history. VG scoring is more stable across years (same scoring system, same field composition) than raw PCS finishing positions. |
+| `market_precision_scale` | 4.0 | Odds are the best single predictor. At 4.0, odds variance = 0.25. |
+| `history_precision_scale` | 2.0 | Controls form, race history, VG history, and trajectory. Form precision is arguably too high relative to ML evidence, but it's bundled with race history (which IS important) under the same scale factor — separating them would add a fourth tuneable parameter. |
+| `ability_precision_scale` | 1.0 | PCS specialty and VG season points are broad career/season aggregates. At precision 1.0 they're one-third of odds. |
+| `_odds_to_oracle_ratio` | 2.0 | Oracle is a single algorithm; odds aggregate many models and private information. |
+| `_form_to_hist_ratio` | 3.0 | Per observation, form is more precise than a single year of race history. But 3 years of history collectively match form's precision — consistent with research showing race-specific results are among the best predictors. |
+| `_form_to_vg_hist_ratio` | 5.0 | VG history adds noise through the nonlinear VG scoring transformation. 1.67× noisier than PCS race history per observation. |
+| `_form_to_trajectory_ratio` | 3.0 | Career trajectory is a blunt signal. ML research found minor importance. |
+| `_pcs_to_vg_ratio` | 1.0 | Both are broad ability measures. The `vg_season_penalty` handles early-season noise. |
+| `within_cluster_correlation` | 0.5 | With ρ_w=0.5 and 5 history observations, the within-cluster discount is 3.0, preventing false certainty from adding more years of race history. |
+| `between_cluster_correlation` | 0.15 | With 3 active clusters, the between-cluster discount is 1.3 — a modest correction. |
+| `hist_decay_rate` | 3.2 | A result from 3 years ago has variance 11.1 vs 1.5 for the current year. Aggressive decay is appropriate: rider form changes substantially year to year. |
+| `vg_hist_decay_rate` | 1.3 | VG history decays more slowly than PCS history — VG scoring is more stable across years than raw finishing positions. |
+| `market_discount` | 8.0 | When odds exist, non-market signal variances are inflated 8×. Non-market signals carry ~1/64 of their usual precision. For races without odds, all signal precisions are unchanged. |
 
-### What the evidence does NOT support changing
+### What the evidence does not support changing
 
-With only 3 prospective races (Omloop, Kuurne, Laigueglia 2026) and calibration that already looks good, there is no evidence-based case for parameter changes. The prospective Spearman correlations (0.257–0.473) are consistent with the prior predictive checks and historical backtest results. Specific findings:
+With only ~5 prospective races accumulated as of March 2026, there is no evidence-based case for parameter changes. The prospective Spearman correlations (0.257–0.473) are consistent with the prior predictive checks and historical backtest results. Revisit after 15–20 prospective races with full signal coverage.
 
-- **Form precision is arguably too high** relative to its ML-measured importance, but it's bundled with race history (which IS important) under the same scale factor. Separating them would add a fourth scale factor with no data to calibrate it.
-- **Oracle ratio could be 2.0 instead of 1.5**, but the practical impact is small (both are high-precision market signals, and the block-correlation discount already dampens their combined effect).
-- **The deeper structural issue** is that the Bayesian framework treats signals as conditionally independent given true strength, when in reality odds already incorporate the information from other signals. The block-correlation discount and `market_discount` are complementary corrections: the former handles within- and between-cluster redundancy, the latter directly reduces non-market signal precision when odds are available.
+### Market discount and block-correlation interaction
 
-### Market discount (March 2026)
-
-The block-correlation discount partially addresses the double-counting problem, but analysis of early 2026 predictions revealed that non-market signals were still systematically pulling strength estimates away from odds — particularly PCS specialty (high career points for established riders) and race history. The model was overvaluing riders like Van Aert relative to their odds, because lifetime PCS points were overwhelming current market information.
-
-The `market_discount` parameter (default 8.0) provides a direct fix: when odds exist for a race, all non-market signal variances are multiplied by this factor at the **race level** (not per-rider). This reflects the reasoning that the market already incorporates career record, form, race history, and trajectory, so these signals carry little marginal information beyond what odds convey. A value of 8.0 means non-market signals carry ~1/64 of their usual precision when odds are present.
-
-For races **without** odds data, all signal precisions remain at their original values, so the non-market signals drive predictions for the full startlist.
-
-**Decision**: maintain current parameters; revisit after 15–20 prospective races with full signal coverage provide enough data to detect systematic patterns.
+`market_discount` and the block-correlation discount partially overlap: the discount decomposes observation precision by differencing sequential posteriors, but `market_discount` is already applied during those updates. The history cluster precision therefore gets discounted twice when odds are present. The practical effect is small — history precision is so low after `market_discount` that the block-correlation discount changes it little further — but the math is fragile. The clean long-term fix is to skip non-market signals entirely when `race_has_market = true` (see priority 6 in the improvement plan).
 
 ---
 
@@ -1030,7 +934,7 @@ For races **without** odds data, all signal precisions remain at their original 
 
 ### Key academic references
 
-**Sports forecasting and market efficiency** (see also "Signal precision rationale" section above)
+#### Sports forecasting and market efficiency
 
 A systematic review of ML in sports betting (Hubáček et al., 2024, arxiv:2410.21484) found that ML prediction accuracy "reaches not more than about 70% and is at the same level as model-free bookmaker odds alone." Franck et al. (2010, *International Journal of Forecasting*) showed betting exchanges provide more accurate predictions than bookmakers, using 5,478 football matches. Constantinou & Fenton (2013, *Journal of Forecasting*) developed the Betting Odds Rating System showing bookmaker odds are the best source of probabilistic forecasts for sports matches, outperforming ELO-based models on highly significant levels. Forrest & Simmons (2000) found no statistically significant evidence to reject market efficiency for English football betting.
 
@@ -1081,22 +985,17 @@ Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCycli
 - Young riders on upward trajectories are systematically underpriced by VG's backward-looking cost algorithm
 - Classification constraints create within-category pricing inefficiencies
 
-### Conditional VG-points calibration (Tier 3)
+### Conditional VG-points calibration
 
 The per-race PIT histogram and aggregate PIT across prospective races (now implemented) answer whether the model is calibrated on average. Conditional calibration asks whether it is calibrated *for specific strata of riders*, which matters because miscalibration may be concentrated in ways that affect team selection.
 
-**Natural strata to check:**
+Natural strata to check once sufficient data is available (15+ prospective races):
 
 - **By predicted strength**: are the top-10 predicted riders' distributions well-calibrated? The Strade Bianche 2026 data suggests favourites may be under-dispersed (actuals exceeding the simulated range).
 - **By cost**: cheap riders (cost 4–6) are where VG points calibration most affects team selection, since the optimiser frequently swaps between similarly-priced alternatives.
 - **By signal coverage**: riders with odds vs without. The `market_discount` parameter changes the model's behaviour substantially when odds are present, and the VG-points calibration could differ systematically between these groups.
 
-This does not need its own infrastructure — it is filtering PIT values before plotting. The implementation would add faceted PIT histograms or a calibration table by stratum to the prospective evaluation section of `backtesting.qmd`. It should only be pursued once the aggregate PIT histogram reveals problems, since the stratum sample sizes will be small (10–15 riders per stratum per race) and require at least 15–20 prospective races to be statistically meaningful.
-
-**Potential model changes motivated by conditional calibration:**
-
-- **Uncertainty scaling for top riders**: if favourites are consistently under-dispersed, the posterior uncertainty for high-strength riders may need inflating (strength-dependent uncertainty floor, or Student-t noise in `simulate_vg_draws`).
-- **Scoring-aware variance adjustment**: the scoring non-linearity means a 1-position error near the top (80 VG points in Cat 1) matters far more than at position 25 vs 26 (12 points). If VG-points calibration is worse for top positions, it might motivate position-dependent uncertainty scaling.
+The implementation would add faceted PIT histograms or a calibration table by stratum to the prospective evaluation section of `backtesting.qmd`.
 
 ### Impact estimates summary
 
@@ -1105,11 +1004,12 @@ This does not need its own infrastructure — it is filtering PIT values before 
 | 1 | Odds integration | Very high | Strong (market efficiency literature) | Done |
 | 2 | Calibration framework | High (indirect) | Strong (enables calibration) | Done |
 | 3 | Course profile matching | High | Strong (Kholkine, VeloRost) | Done (manual similar-races); PCS profile scraping deferred |
-| 4 | Stage race prediction | High (grand tours) | Moderate (community consensus) | Planned — see detailed Phase 4 plan |
+| 4 | Stage race prediction | High (grand tours) | Moderate (community consensus) | Planned — see Phase 4 plan |
 | 5 | Ownership-adjusted optimisation | Very high for GPPs, low for small leagues | Strong (Haugh & Singal) | Not done |
 | 6 | Leader/domestique roles | Moderate | Moderate (VeloRost) | Done |
 | 7 | Recent form signal | Moderate-low | Weak (Kholkine: minimal weight) | Done |
 | 8 | Season-adaptive VG + trajectory | Moderate | Post-Kuurne analysis | Done |
-| 9 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Not done |
-| 10 | ML models | Unknown | Weak (+3% over baseline) | Not done |
-| 11 | Conditional VG-points calibration | Medium (diagnostic) | Depends on aggregate PIT findings | Not done — requires 15+ prospective races |
+| 9 | Student's t noise | Low-moderate | Moderate (fat-tailed cycling outcomes) | Done |
+| 10 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Not done |
+| 11 | ML models | Unknown | Weak (+3% over baseline) | Not done — prerequisites missing |
+| 12 | Conditional VG-points calibration | Medium (diagnostic) | Depends on aggregate PIT findings | Not done — requires 15+ prospective races |
