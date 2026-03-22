@@ -12,7 +12,7 @@ format: html
 using Velogames, DataFrames, Statistics, MarkdownTables
 
 # Race — must match the oneday predictor config
-race_name = "nokere"
+race_name = "milano-sanremo"
 race_year = 2026
 
 # Fallback config — only used if no archived prediction exists
@@ -49,6 +49,12 @@ List the riders in your custom team. Names must match VG rider names exactly.
 #| echo: true
 #| output: false
 my_team = [
+    "Tadej Pogacar",
+    "Mathieu Van Der Poel",
+    "Filippo Ganna",
+    "Tim Marsman",
+    "Manuele Tarozzi",
+    "Gabriele Raccagni"
 ]
 my_keys = createkey.(my_team)
 ```
@@ -151,6 +157,11 @@ sim_vg_points = if prediction_ok && :strength in propertynames(predicted) && :un
         simulation_df=simulation_df)
 else
     nothing
+end
+
+# Compute expected VG points from sim draws if not already present (legacy archives)
+if sim_vg_points !== nothing && !hasproperty(predicted, :expected_vg_points)
+    predicted[!, :expected_vg_points] = [mean(@view sim_vg_points[i, :]) for i in 1:nrow(predicted)]
 end
 
 if prediction_ok
@@ -435,6 +446,13 @@ No results available yet for race $(actual_race_number). Re-render after the rac
                 retro[!, :strength] .= missing
             end
 
+            # --- PIT values (computed early for use in summary and later sections) ---
+            pit_values = if sim_vg_points !== nothing && size(sim_vg_points, 1) > 0
+                compute_pit_values(predicted, sim_vg_points, retro)
+            else
+                DataFrame()
+            end
+
             # --- Your team's actual performance ---
             my_retro = filter(row -> row.riderkey in my_keys, retro)
             model_retro = if prediction_ok && nrow(optimal_team) > 0
@@ -474,6 +492,20 @@ No results available yet for race $(actual_race_number). Re-render after the rac
 | Total cost | $(nrow(my_retro) > 0 ? sum(my_retro.cost) : "—") | $(nrow(model_retro) > 0 ? sum(model_retro.cost) : "—") | $(nrow(hindsight_team) > 0 ? sum(hindsight_team.cost) : "—") |
 
 """)
+
+            # --- Model calibration summary ---
+            if nrow(pit_values) > 0
+                scored_pv = filter(:scored => identity, pit_values)
+                if nrow(scored_pv) > 0
+                    mean_pit = round(mean(scored_pv.pit_value), digits=2)
+                    unc_lo, unc_hi = round.(extrema(predicted.uncertainty), digits=2)
+                    label = mean_pit > 0.6 ? "underestimates scoring riders" : mean_pit < 0.4 ? "overestimates scoring riders" : "well-calibrated"
+                    print("""
+**Model calibration:** uncertainty range $(unc_lo)–$(unc_hi) | mean PIT (scoring riders) = $(mean_pit) | $(label)
+
+""")
+                end
+            end
 
             # --- Per-rider detail for each team ---
             retro_cols = [:rider, :team, :cost, :actual_vg_points]
@@ -546,33 +578,31 @@ Box plots show the distribution of VG points across $(size(sim_vg_points, 2)) re
             end
 
             # --- PIT calibration histogram (only if sim draws available) ---
-            if sim_vg_points !== nothing && size(sim_vg_points, 1) > 0
-                pit_values = compute_pit_values(predicted, sim_vg_points, retro)
-                if nrow(pit_values) > 0
-                    scored_pit = filter(:scored => identity, pit_values)
-                    zero_pit = filter(:scored => !, pit_values)
-                    n_scored = nrow(scored_pit)
-                    n_zero = nrow(zero_pit)
+            if nrow(pit_values) > 0
+                scored_pit = filter(:scored => identity, pit_values)
+                zero_pit = filter(:scored => !, pit_values)
+                n_scored = nrow(scored_pit)
+                n_zero = nrow(zero_pit)
 
-                    # Predicted vs actual zero-score proportion
-                    n_total = nrow(pit_values)
-                    actual_zero_pct = round(100 * n_zero / n_total, digits=1)
-                    # Average predicted probability of scoring zero
-                    pred_zero_pct = if n_total > 0
-                        key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
-                        pred_zeros = Float64[]
-                        for row in eachrow(pit_values)
-                            idx = get(key_to_idx, row.riderkey, nothing)
-                            idx === nothing && continue
-                            draws = @view sim_vg_points[idx, :]
-                            push!(pred_zeros, count(==(0.0), draws) / length(draws))
-                        end
-                        round(100 * mean(pred_zeros), digits=1)
-                    else
-                        0.0
+                # Predicted vs actual zero-score proportion
+                n_total = nrow(pit_values)
+                actual_zero_pct = round(100 * n_zero / n_total, digits=1)
+                # Average predicted probability of scoring zero
+                pred_zero_pct = if n_total > 0
+                    key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
+                    pred_zeros = Float64[]
+                    for row in eachrow(pit_values)
+                        idx = get(key_to_idx, row.riderkey, nothing)
+                        idx === nothing && continue
+                        draws = @view sim_vg_points[idx, :]
+                        push!(pred_zeros, count(==(0.0), draws) / length(draws))
                     end
+                    round(100 * mean(pred_zeros), digits=1)
+                else
+                    0.0
+                end
 
-                    print("""
+                print("""
 ## VG points calibration
 
 The PIT (probability integral transform) histogram checks whether the model's VG points distributions are well-calibrated. If calibrated, the histogram should be approximately uniform. Skewed right means the model underestimates; skewed left means it overestimates.
@@ -580,11 +610,10 @@ The PIT (probability integral transform) histogram checks whether the model's VG
 **Zero-score calibration:** $(actual_zero_pct)% of riders actually scored zero vs $(pred_zero_pct)% predicted to score zero (average across riders).
 
 """)
-                    if n_scored > 0
-                        print(pit_histogram_chart(pit_values;
-                            title="PIT calibration — $(config.name) $(config.year)"))
-                        print("\n\n")
-                    end
+                if n_scored > 0
+                    print(pit_histogram_chart(pit_values;
+                        title="PIT calibration — $(config.name) $(config.year)"))
+                    print("\n\n")
                 end
 
                 # --- Team total distribution charts ---
@@ -650,6 +679,72 @@ Riders where actual VG points differed most from expected, highlighting model bl
                 else
                     print("No significant overestimates.\n")
                 end
+            end
+
+            # --- Selection misses (team-selection-framed) ---
+            if :expected_vg_points in propertynames(retro) && any(!ismissing, retro.expected_vg_points)
+                retro_evp = filter(row -> !ismissing(row.expected_vg_points), retro)
+
+                # Costly misses: high-EVP riders who scored zero
+                evp_threshold = sort(retro_evp, :expected_vg_points, rev=true)
+                top_predicted = if :selection_frequency in propertynames(predicted)
+                    sel_keys = Set(filter(row -> row.selection_frequency > 0.1, predicted).riderkey)
+                    evp_keys = Set(first(evp_threshold, min(15, nrow(evp_threshold))).riderkey)
+                    filter(row -> row.riderkey in union(sel_keys, evp_keys), retro_evp)
+                else
+                    first(evp_threshold, min(15, nrow(evp_threshold)))
+                end
+                costly = filter(row -> row.actual_vg_points == 0, top_predicted)
+
+                # Cheap value missed: cost ≤ 12 riders who scored above field median
+                scoring_riders = filter(row -> row.actual_vg_points > 0, retro)
+                median_score = nrow(scoring_riders) > 0 ? median(scoring_riders.actual_vg_points) : 0.0
+                cheap_value = filter(row -> row.cost <= 12 && row.actual_vg_points > median_score, retro_evp)
+
+                if nrow(costly) > 0 || nrow(cheap_value) > 0
+                    print("""
+## Selection misses
+
+""")
+                end
+
+                if nrow(costly) > 0
+                    print("### Costly misses\n\nHighly rated riders who scored zero — these are the picks that destroy team performance.\n\n")
+                    costly_display = sort(costly[:, [:rider, :team, :cost, :expected_vg_points, :actual_vg_points]], :expected_vg_points, rev=true)
+                    round_numeric_columns!(costly_display)
+                    clean_team_names!(costly_display, [:team])
+                    md_table(costly_display)
+                    print("\n\n")
+                end
+
+                if nrow(cheap_value) > 0
+                    print("### Cheap value missed\n\nRiders costing ≤ 12 credits who scored above the field median ($(round(median_score, digits=0)) pts) — bargains the model failed to identify.\n\n")
+                    cheap_display = sort(cheap_value[:, [:rider, :team, :cost, :expected_vg_points, :actual_vg_points]], :actual_vg_points, rev=true)
+                    round_numeric_columns!(cheap_display)
+                    clean_team_names!(cheap_display, [:team])
+                    md_table(cheap_display)
+                    print("\n\n")
+                end
+            end
+
+            # --- Breakaway contribution audit ---
+            if !isempty(b_rates)
+                predicted_break_pts = sum(b_rates .* b_sectors) * scoring.breakaway_points
+                n_break_riders = count(>(0.0), b_rates)
+                max_per_rider = 4 * scoring.breakaway_points
+                print("""
+## Breakaway audit
+
+The model assigned breakaway rates to **$(n_break_riders)** riders (of $(nrow(predicted))). Predicted total breakaway contribution per simulation: **$(round(predicted_break_pts, digits=0))** points across the field. Maximum possible per rider in the break: $(max_per_rider) points (4 sectors × $(scoring.breakaway_points) pts/sector).
+
+""")
+            else
+                print("""
+## Breakaway audit
+
+No PCS breakaway data was available for this race. The simulation used only the position-based heuristic for breakaway points, which may underestimate contributions in races with long breakaways.
+
+""")
             end
 
             # --- Prospective model evaluation ---
