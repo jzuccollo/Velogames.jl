@@ -421,9 +421,9 @@ Find a race in the classics schedule by partial name match (case-insensitive).
 Returns the first matching RaceInfo or nothing.
 """
 function find_race(name::String)
-    name_lower = lowercase(name)
+    name_norm = replace(lowercase(name), r"[-\s]" => "")
     for race in CLASSICS_RACES_2026
-        if occursin(name_lower, lowercase(race.name))
+        if occursin(name_norm, replace(lowercase(race.name), r"[-\s]" => ""))
             return race
         end
     end
@@ -651,7 +651,7 @@ template uses {year} placeholder. Looks up classics aliases against the canonica
 race schedule; grand tours have their own URL patterns.
 """
 function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()))
-    race_lower = lowercase(strip(race_name))
+    race_lower = replace(lowercase(strip(race_name)), r"[-\s]" => "")
 
     # Grand tours have their own URL templates
     if haskey(_GRAND_TOUR_PATTERNS, race_lower)
