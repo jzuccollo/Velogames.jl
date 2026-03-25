@@ -21,6 +21,7 @@ const LEAGUE_WINNERS =
             (name="Supper Lino & Sausage Superstars!", score=1126),
         ("strade-bianche", 2026) => (name="Rounded-up Riders", score=1778),
         ("milano-sanremo", 2026) => (name="Rounded-up Riders", score=1515),
+        ("classic-brugge-de-panne", 2026) => (name="Mud Springs Eternal", score=1734),
     )
 
 function report_qmd(;

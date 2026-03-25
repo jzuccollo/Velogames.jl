@@ -614,6 +614,7 @@ const _CLASSICS_ALIASES = Dict{String,String}(
     "brugge" => "classic-brugge-de-panne",
     "rondevanbrugge" => "classic-brugge-de-panne",
     "e3" => "e3-harelbeke",
+    "e3harelbeke" => "e3-harelbeke",
     "gentwevelgem" => "gent-wevelgem",
     "inflanders" => "gent-wevelgem",
     "wevelgem" => "gent-wevelgem",
@@ -681,6 +682,18 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
                 total_distance_km = ri.total_distance_km,
             )
         end
+    end
+
+    # Try direct PCS slug match (handles users passing PCS slugs as race names)
+    ri = _find_race_by_slug(race_name)
+    if ri !== nothing
+        return (
+            slug = slug,
+            template = template,
+            category = ri.category,
+            pcs_slug = ri.pcs_slug,
+            total_distance_km = ri.total_distance_km,
+        )
     end
 
     # Fallback: try partial name match against the race schedule
