@@ -205,11 +205,11 @@ else
     for (name, key) in zip(my_team, my_keys)
         if key ∉ matched_keys
             print("""
-    ::: {.callout-warning}
-    **$(name)** not found in the rider list. Check the spelling matches VG exactly.
-    :::
+::: {.callout-warning}
+**$(name)** not found in the rider list. Check the spelling matches VG exactly.
+:::
 
-    """)
+""")
         end
     end
 
