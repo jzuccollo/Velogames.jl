@@ -187,13 +187,25 @@ if @isdefined(predicted) && nrow(predicted) > 0
     end
     ranking_cols = filter(c -> c in propertynames(predicted), ranking_cols)
 
-    ranking = sort(predicted[:, ranking_cols], :expected_vg_points, rev=true)
+    ranking = sort(predicted, :expected_vg_points, rev=true)
     top_n = min(30, nrow(ranking))
-    ranking_display = ranking[1:top_n, :]
+    ranking_display = ranking[1:top_n, ranking_cols]
     round_numeric_columns!(ranking_display)
     clean_team_names!(ranking_display, [:team])
     md_table(ranking_display)
-    print("\n")
+
+    # Signal breakdown for top ranked riders
+    print("""
+
+::: {.callout-note collapse="true"}
+## Signal breakdown
+
+How each signal shifted the strength estimate for the top-ranked riders. Flags highlight riders where few signals drove the estimate or a single signal dominates.
+
+$(format_signal_waterfall(ranking[1:top_n, :]; max_riders=top_n))
+:::
+
+""")
 end
 ```
 
