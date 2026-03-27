@@ -9,27 +9,31 @@ format: html
 ```{julia}
 #| echo: true
 #| output: false
-using Velogames, DataFrames, Statistics, MarkdownTables
+using Velogames, DataFrames, Statistics, MarkdownTables, TOML
 
-# Race — must match the oneday predictor config
-race_name = "milano-sanremo"
-race_year = 2026
+# Load shared race config (copy race_config.toml.example to race_config.toml)
+const _cfg = TOML.parsefile(joinpath(@__DIR__, "race_config.toml"))
+
+# Race (shared with oneday_predictor)
+race_name = _cfg["race"]["name"]
+race_year = _cfg["race"]["year"]
 
 # Fallback config — only used if no archived prediction exists
-racehash = ""  # VG startlist hash filter (leave empty for all riders)
-betfair_market_id = ""
-oracle_url = ""
-qualitative_youtube_url = ""
-qualitative_json_file = ""
-n_resamples = 500
-history_years = 5
-domestique_discount = 0.3
-risk_aversion = 0.5
-max_per_team = 0
-excluded_riders = String[]
+racehash = _cfg["race"]["racehash"]
+betfair_market_id = _cfg["data_sources"]["betfair_market_id"]
+oracle_url = _cfg["data_sources"]["oracle_url"]
+qualitative_youtube_url = _cfg["data_sources"]["qualitative_youtube_url"]
+qualitative_json_file = _cfg["data_sources"]["qualitative_json_file"]
+n_resamples = _cfg["optimisation"]["n_resamples"]
+history_years = _cfg["optimisation"]["history_years"]
+domestique_discount = _cfg["optimisation"]["domestique_discount"]
+risk_aversion = _cfg["optimisation"]["risk_aversion"]
+max_per_team = _cfg["optimisation"]["max_per_team"]
+excluded_riders = String[x for x in _cfg["optimisation"]["excluded_riders"]]
+simulation_df = let v = _cfg["optimisation"]["simulation_df"]; v isa Integer ? v : nothing; end
 
-# Simulation noise (nothing = Gaussian, integer = Student's t degrees of freedom)
-simulation_df = 5
+# Team assessor-specific
+vg_race_number = _cfg["team_assessor"]["vg_race_number"]
 
 # Breakaway data
 breakaway_dir = joinpath(DEFAULT_ARCHIVE_DIR, "pcs_breakaways")
@@ -48,14 +52,7 @@ List the riders in your custom team. Names must match VG rider names exactly.
 ```{julia}
 #| echo: true
 #| output: false
-my_team = [
-    "Tadej Pogacar",
-    "Mathieu Van Der Poel",
-    "Filippo Ganna",
-    "Tim Marsman",
-    "Manuele Tarozzi",
-    "Gabriele Raccagni"
-]
+my_team = String.(_cfg["team_assessor"]["my_team"])
 my_keys = createkey.(my_team)
 ```
 
@@ -341,13 +338,7 @@ end
 
 # Retrospective (after the race)
 
-Set `vg_race_number` to the VG race number (from races.php) once the race has been run. Leave at `0` to auto-detect from the race name, or `-1` to skip this section entirely.
-
-```{julia}
-#| echo: true
-#| output: false
-vg_race_number = 0  # 0 = auto-detect, -1 = skip, or set manually (e.g. 3)
-```
+Set `vg_race_number` in `race_config.toml` to the VG race number (from races.php) once the race has been run. Leave at `0` to auto-detect from the race name, or `-1` to skip this section entirely.
 
 ```{julia}
 #| output: asis

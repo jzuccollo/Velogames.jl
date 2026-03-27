@@ -9,39 +9,45 @@ format: html
 ```{julia}
 #| echo: true
 #| output: false
-using Velogames, DataFrames, Statistics, MarkdownTables, Dates
+using Velogames, DataFrames, Statistics, MarkdownTables, Dates, TOML
 
-# Race — use get_url_pattern("name") to check available names
-race_name = "milano-sanremo"
-race_year = 2026
-racehash = "#MilanoSanremo"  # VG startlist hash filter (leave empty for all riders)
+# Load shared race config (copy race_config.toml.example to race_config.toml)
+const _cfg = TOML.parsefile(joinpath(@__DIR__, "race_config.toml"))
 
-# Optional data sources (leave empty to skip)
-betfair_market_id = ""  # Betfair Exchange market ID from the URL
-oracle_url = "https://www.cyclingoracle.com/en/blog/milano-sanremo-2026-prediction"
+# Race
+race_name = _cfg["race"]["name"]
+race_year = _cfg["race"]["year"]
+racehash = _cfg["race"]["racehash"]
 
-# Optional: paste Oddschecker winner market text into oddschecker_paste.txt (project root), then uncomment:
-odds_df = parse_oddschecker_odds(read(joinpath(@__DIR__, "..", "oddschecker_paste.txt"), String))
-# Overrides Betfair if both are provided.
-# odds_df = nothing
+# Data sources
+betfair_market_id = _cfg["data_sources"]["betfair_market_id"]
+oracle_url = _cfg["data_sources"]["oracle_url"]
+qualitative_youtube_url = _cfg["data_sources"]["qualitative_youtube_url"]
+qualitative_article_url = _cfg["data_sources"]["qualitative_article_url"]
+qualitative_json_file = _cfg["data_sources"]["qualitative_json_file"]
 
-# Qualitative intelligence (leave all empty to skip)
-qualitative_youtube_url = "https://www.youtube.com/watch?v=uTDVuOGquYM"    # YouTube URL for auto-extraction via yt-dlp + Claude API
-qualitative_article_url = "https://www.domestiquecycling.com/en/news/2026-milan-san-remo-preview-another-epic-pogacar-vs-van-der-poel-showdown-for-the-ages/"    # Web article URL for auto-extraction via Claude API
-qualitative_json_file = ""      # Path to manually saved JSON response file
+# Oddschecker odds (paste into oddschecker_paste.txt in project root)
+odds_df = if get(_cfg["data_sources"], "use_oddschecker", false)
+    try
+        parse_oddschecker_odds(read(joinpath(@__DIR__, "..", "oddschecker_paste.txt"), String))
+    catch
+        @warn "use_oddschecker=true but oddschecker_paste.txt not found or unparseable"
+        nothing
+    end
+else
+    nothing
+end
 
 # Optimisation
-n_resamples = 500     # Resampled optimisation iterations (more = smoother, slower)
-history_years = 3     # Years of PCS race history to fetch
-domestique_discount = 1.0  # Penalise non-leaders proportionally to strength gap (0 = off)
-risk_aversion = 0.5   # Penalise volatile riders via downside CV (0 = off)
-max_per_team = 2      # Max riders from any single team (0 = no limit)
-
-# Exclusions
-excluded_riders = String[]
-
-# Simulation noise (nothing = Gaussian, integer = Student's t degrees of freedom)
-simulation_df = 5
+n_resamples = _cfg["optimisation"]["n_resamples"]
+history_years = _cfg["optimisation"]["history_years"]
+domestique_discount = _cfg["optimisation"]["domestique_discount"]
+risk_aversion = _cfg["optimisation"]["risk_aversion"]
+max_per_team = _cfg["optimisation"]["max_per_team"]
+excluded_riders = String[x for x in _cfg["optimisation"]["excluded_riders"]]
+simulation_df = let v = _cfg["optimisation"]["simulation_df"]
+    v isa Integer ? v : nothing
+end
 
 # Breakaway data
 breakaway_dir = joinpath(DEFAULT_ARCHIVE_DIR, "pcs_breakaways")
@@ -58,15 +64,15 @@ md_table(df) = print(sprint(show, MIME("text/markdown"), markdown_table(df)))
 
 Two ways to incorporate expert assessments from podcasts, articles, or pre-race previews.
 
-**Automatic from YouTube** (requires `ANTHROPIC_API_KEY` in `.envrc` and `yt-dlp` installed): set `qualitative_youtube_url` to a YouTube video URL. The pipeline fetches auto-captions via yt-dlp, sends them to the Claude API for structured extraction, and feeds the result into the Bayesian model.
+**Automatic from YouTube** (requires `ANTHROPIC_API_KEY` in `.envrc` and `yt-dlp` installed): set `qualitative_youtube_url` in `race_config.toml` to a YouTube video URL. The pipeline fetches auto-captions via yt-dlp, sends them to the Claude API for structured extraction, and feeds the result into the Bayesian model.
 
-**Automatic from article** (requires `ANTHROPIC_API_KEY` in `.envrc`): set `qualitative_article_url` to any web article URL (race previews, news pieces, etc.). The pipeline fetches and strips the article text, then sends it to the Claude API for extraction.
+**Automatic from article** (requires `ANTHROPIC_API_KEY` in `.envrc`): set `qualitative_article_url` in `race_config.toml` to any web article URL (race previews, news pieces, etc.). The pipeline fetches and strips the article text, then sends it to the Claude API for extraction.
 
 **Manual** (no API key needed):
 
 1. Run `build_qualitative_prompt(riders, race_name, date)` to generate a prompt containing the startlist — paste the output into any LLM chat (Claude, ChatGPT, etc.) along with your source material
 2. Save the JSON array response to a file
-3. Set `qualitative_json_file` to the file path
+3. Set `qualitative_json_file` in `race_config.toml` to the file path
 
 To get the rider list for the prompt before running the full prediction:
 
@@ -324,13 +330,25 @@ if @isdefined(predicted) && nrow(predicted) > 0
     end
     ranking_cols = filter(c -> c in propertynames(predicted), ranking_cols)
 
-    ranking = sort(predicted[:, ranking_cols], :expected_vg_points, rev=true)
+    ranking = sort(predicted, :expected_vg_points, rev=true)
     top_n = min(30, nrow(ranking))
-    ranking_display = ranking[1:top_n, :]
+    ranking_display = ranking[1:top_n, ranking_cols]
     round_numeric_columns!(ranking_display)
     clean_team_names!(ranking_display, [:team])
     md_table(ranking_display)
-    print("\n")
+
+    # Signal breakdown for top ranked riders
+    print("""
+
+::: {.callout-note collapse="true"}
+## Signal breakdown
+
+How each signal shifted the strength estimate for the top-ranked riders. Flags highlight riders where few signals drove the estimate or a single signal dominates.
+
+$(format_signal_waterfall(ranking[1:top_n, :]; max_riders=top_n))
+:::
+
+""")
 end
 ```
 

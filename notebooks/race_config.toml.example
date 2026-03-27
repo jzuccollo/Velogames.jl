@@ -1,0 +1,31 @@
+# Race configuration — shared between oneday_predictor and team_assessor
+# Copy to race_config.toml and edit for each race. race_config.toml is gitignored.
+
+[race]
+name = "e3-harelbeke"
+year = 2026
+racehash = "#E3SaxoClassic"  # VG startlist hash filter (leave empty for all riders)
+
+[data_sources]
+betfair_market_id = ""       # Betfair Exchange market ID from the URL
+oracle_url = ""              # Cycling Oracle prediction URL
+use_oddschecker = true       # Parse oddschecker_paste.txt from project root
+qualitative_youtube_url = "" # YouTube URL for auto-extraction via yt-dlp + Claude API
+qualitative_article_url = "" # Web article URL for auto-extraction via Claude API
+qualitative_json_file = ""   # Path to manually saved JSON response file
+
+[optimisation]
+n_resamples = 500            # Resampled optimisation iterations (more = smoother, slower)
+history_years = 3            # Years of PCS race history to fetch
+domestique_discount = 1.0    # Penalise non-leaders proportionally to strength gap (0 = off)
+risk_aversion = 0.5          # Penalise volatile riders via downside CV (0 = off)
+max_per_team = 2             # Max riders from any single team (0 = no limit)
+simulation_df = 5            # Student's t degrees of freedom (use "" for Gaussian)
+excluded_riders = []
+
+[team_assessor]
+vg_race_number = 0           # 0 = auto-detect, -1 = skip, or set manually (e.g. 3)
+my_team = [
+    "Mathieu Van Der Poel",
+    "Mads Pedersen"
+]

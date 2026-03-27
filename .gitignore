@@ -48,4 +48,7 @@ site/.quarto/
 # manual odds
 *.txt
 
+# Per-race notebook config (changes every race, not version controlled)
+notebooks/race_config.toml
+
 /.quarto/
