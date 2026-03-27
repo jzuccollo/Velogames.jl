@@ -36,9 +36,22 @@ No guarantee they'll re-render because they pull from the moving target of velog
 
 The prediction and calibration workflow revolves around three notebooks, each run at a different point in the race cycle.
 
+### Race configuration
+
+The predictor and team assessor notebooks share a single configuration file, `notebooks/race_config.toml`, so race settings stay in sync between the pre-race and post-race steps. This file is gitignored because it changes every race.
+
+To set up for a new race, copy the example and edit:
+
+```sh
+cp notebooks/race_config.toml.example notebooks/race_config.toml
+# Edit race_config.toml with race name, year, data source URLs, your team, etc.
+```
+
+The `[race]`, `[data_sources]`, and `[optimisation]` sections are shared by both notebooks. The `[team_assessor]` section holds your team roster and the VG race number for retrospective analysis.
+
 ### Before each race
 
-Render the appropriate predictor notebook to generate team selections:
+Edit `notebooks/race_config.toml` with the race name, year, startlist hash, and any data source URLs (odds, oracle, qualitative). Then render the appropriate predictor notebook:
 
 - `notebooks/oneday_predictor.qmd` for Sixes Classics one-day races
 - `notebooks/stagerace_predictor.qmd` for grand tours and stage races
@@ -47,7 +60,7 @@ These notebooks run the full pipeline (data fetch, strength estimation, resample
 
 ### After each race
 
-Render `notebooks/team_assessor.qmd` to review how the selected team performed. This notebook archives the actual PCS and VG results alongside the pre-race predictions, and shows a per-race comparison of predicted vs actual rider performance. Running it after every race builds up the prospective evaluation dataset over the season.
+Update `notebooks/race_config.toml` with your chosen team in `[team_assessor].my_team` and set `vg_race_number` (or leave at 0 for auto-detection). Then render `notebooks/team_assessor.qmd` to review how the selected team performed. This notebook archives the actual PCS and VG results alongside the pre-race predictions, and shows a per-race comparison of predicted vs actual rider performance. Running it after every race builds up the prospective evaluation dataset over the season.
 
 ### Periodically (model calibration)
 

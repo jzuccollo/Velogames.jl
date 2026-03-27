@@ -24,6 +24,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/backtest.jl` - Backtesting framework: race catalogue, season-level evaluation, ablation study, hyperparameter tuning, calibration diagnostics, VG race history integration, cumulative VG season points, PCS specialty archiving
 - `src/report_helpers.jl` - Display formatting, Plotly chart helpers, VG simulation draws, PIT calibration, team-total distributions
 - `notebooks/` - Quarto notebooks: one-day predictor, stage race predictor, historical analysis, backtesting and calibration
+- `notebooks/race_config.toml` - Shared per-race configuration (gitignored); `race_config.toml.example` is the committed template
 
 ## Key functions
 
@@ -103,6 +104,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ## Key patterns
 
+- Per-race notebook config in `notebooks/race_config.toml` (gitignored, shared by oneday_predictor and team_assessor); `race_config.toml.example` is the committed template
 - Betfair API credentials via environment variables (`BETFAIR_USERNAME`, `BETFAIR_PASSWORD`, `BETFAIR_APP_KEY`); Anthropic API key via `ANTHROPIC_API_KEY`; see `.envrc.example`
 - All data functions use `cached_fetch()` with `CacheConfig` and `force_refresh` parameter
 - Rider matching across sources uses `riderkey` (from `createkey()` name normalisation)
@@ -119,9 +121,10 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ## Commands
 
-- Run tests: `julia --project -e "using Pkg; Pkg.test()"`
+- Set up for a race: `cp notebooks/race_config.toml.example notebooks/race_config.toml` then edit
 - Run notebook: `quarto render notebooks/oneday_predictor.qmd`
 - Run backtesting: `quarto render notebooks/backtesting.qmd`
+- Run tests: `julia --project -e "using Pkg; Pkg.test()"`
 
 ## Conventions
 
