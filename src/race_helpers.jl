@@ -531,15 +531,9 @@ function setup_race(
         total_distance_km,
     )
 
-    println("Race Setup: $(titlecase(race_name)) $year")
-    println("Type: $(race_type == :stage ? "Stage Race" : "One-Day Race")")
-    println("Team size: $team_size riders")
-    println("Riders URL: $current_url")
-    if category > 0
-        println("Scoring: Category $category | PCS: $pcs_slug")
-    end
-    println("Cache: $(cache_config.cache_dir) ($(cache_config.max_age_hours)h TTL)")
-    println()
+    type_str = race_type == :stage ? "Stage Race" : "One-Day Race"
+    scoring_str = category > 0 ? "Cat $category" : "unclassed"
+    @info "Race setup" race=titlecase(race_name) year type=type_str team_size scoring=scoring_str pcs_slug url=current_url cache_ttl="$(cache_config.max_age_hours)h"
 
     return config
 end

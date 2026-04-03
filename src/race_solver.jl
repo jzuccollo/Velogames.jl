@@ -23,7 +23,14 @@ end
 """Archive the predicted DataFrame for prospective evaluation."""
 function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     isempty(config.pcs_slug) && return
-    # Select the key columns for archival
+    # Don't overwrite an existing prediction archive (protects pre-race snapshots
+    # from being clobbered by a post-race re-run). Set VELOGAMES_FORCE_ARCHIVE=1
+    # to override.
+    existing = load_race_snapshot("predictions", config.pcs_slug, config.year)
+    if existing !== nothing && get(ENV, "VELOGAMES_FORCE_ARCHIVE", "") != "1"
+        @warn "Prediction archive already exists for $(config.pcs_slug) $(config.year) — skipping. Set VELOGAMES_FORCE_ARCHIVE=1 to overwrite."
+        return
+    end
     cols = intersect(
         propertynames(predicted),
         [

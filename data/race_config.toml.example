@@ -14,6 +14,9 @@ qualitative_youtube_url = "" # YouTube URL for auto-extraction via yt-dlp + Clau
 qualitative_article_url = "" # Web article URL for auto-extraction via Claude API
 qualitative_json_file = ""   # Path to manually saved JSON response file
 
+[output]
+dir = "prediction_docs"              # Output directory for HTML reports (relative to project root)
+
 [optimisation]
 n_resamples = 500            # Resampled optimisation iterations (more = smoother, slower)
 history_years = 3            # Years of PCS race history to fetch

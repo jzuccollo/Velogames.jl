@@ -375,21 +375,23 @@ end
 """
     parse_oddschecker_odds(text::String) -> DataFrame
 
-Parse odds copied from an Oddschecker winner market page into the standard
-odds DataFrame schema.
+Parse odds copied from a bookmaker winner market page into the standard odds
+DataFrame schema. Handles two formats automatically:
+
+- **Oddschecker**: rider name line immediately followed by a tab-separated row
+  of fractional odds from multiple bookmakers.
+- **Single-bookmaker** (e.g. Sky Bet): rider name followed within a few lines
+  by a single fractional odds token (e.g. `"8/1"`).
 
 **How to use:**
-1. Open the Oddschecker winner market for the race (e.g.
-   `https://www.oddschecker.com/cycling/strade-bianche/winner`)
-2. Select all text on the page, copy, paste into a `.txt` file
-3. Call `parse_oddschecker_odds(read("odds.txt", String))`
+1. Open the winner market for the race on Oddschecker or any single bookmaker.
+2. Select all text on the page, copy, paste into `oddschecker_paste.txt`.
+3. Set `use_oddschecker = true` in `race_config.toml`.
 
-The format is alternating lines: rider name, then a tab-separated row of
-fractional odds from each bookmaker (empty cells where no price is offered).
 Fractional odds `"8/1"` → 9.0 decimal; integers like `"9"` mean 9/1 → 10.0.
 
-Returns `DataFrame(rider, odds, riderkey)` with the best (lowest decimal) odds
-per rider across all bookmakers. Identical schema to `betfair_get_market_odds()`.
+Returns `DataFrame(rider, odds, riderkey)`. Identical schema to
+`betfair_get_market_odds()`.
 """
 function parse_oddschecker_odds(text::String)
     # Convert a fractional odds token to decimal. Returns nothing on failure.
@@ -412,7 +414,7 @@ function parse_oddschecker_odds(text::String)
 
     # An odds line has ≥3 tab-separated tokens, all non-empty ones parseable as odds.
     # Requiring ≥3 rules out the each-way terms section (single values per line).
-    function is_odds_line(line::AbstractString)
+    function is_multi_odds_line(line::AbstractString)
         tokens = split(line, '\t')
         non_empty = [strip(t) for t in tokens if !isempty(strip(t))]
         length(non_empty) < 3 && return false
@@ -424,16 +426,15 @@ function parse_oddschecker_odds(text::String)
     riders = String[]
     best_odds = Float64[]
 
+    # --- Oddschecker format: name on line i, tab-separated odds on line i+1 ---
     i = 1
     while i <= length(lines) - 1
         name_line = strip(lines[i])
         odds_line = lines[i+1]
 
-        # Name must contain at least one letter (rules out "3" each-way rows)
-        if !isempty(name_line) && any(isletter, name_line) && is_odds_line(odds_line)
+        if !isempty(name_line) && any(isletter, name_line) && is_multi_odds_line(odds_line)
             tokens = split(odds_line, '\t')
             parsed = [to_decimal(t) for t in tokens]
-            # Exclude implausible winner-market odds: 1/100 etc. parse to ~1.01
             decimals = Float64[d for d in parsed if d !== nothing && d > 1.1]
             if !isempty(decimals)
                 push!(riders, name_line)
@@ -447,6 +448,34 @@ function parse_oddschecker_odds(text::String)
         i += 1
     end
 
+    # --- Single-bookmaker format (e.g. Sky Bet): name followed within a few
+    #     lines by a single fractional odds token ---
+    if isempty(riders)
+        i = 1
+        while i <= length(lines)
+            name_line = strip(lines[i])
+            if !isempty(name_line) && any(isletter, name_line)
+                # Look ahead up to 4 lines for a single odds token
+                found = false
+                for j in (i+1):min(i+4, length(lines))
+                    candidate = strip(lines[j])
+                    dec = to_decimal(candidate)
+                    # Must be a bare odds token (no spaces) and plausible
+                    if dec !== nothing && dec > 1.1 && !contains(candidate, " ")
+                        push!(riders, name_line)
+                        push!(best_odds, dec)
+                        i = j + 1
+                        found = true
+                        break
+                    end
+                end
+                found || (i += 1)
+            else
+                i += 1
+            end
+        end
+    end
+
     if isempty(riders)
         @warn "parse_oddschecker_odds: no rider/odds pairs found — check the pasted text"
         return DataFrame(rider = String[], odds = Float64[], riderkey = String[])
@@ -454,7 +483,7 @@ function parse_oddschecker_odds(text::String)
 
     df = DataFrame(rider = riders, odds = best_odds)
     df.riderkey = createkey.(df.rider)
-    @info "Parsed Oddschecker odds for $(nrow(df)) riders"
+    @info "Parsed bookmaker odds for $(nrow(df)) riders"
     return df
 end
 

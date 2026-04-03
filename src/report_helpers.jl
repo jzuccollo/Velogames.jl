@@ -1,13 +1,170 @@
 # ---------------------------------------------------------------------------
-# Plotly chart helpers (for Quarto HTML output without WebIO)
+# HTML page generation (replaces Quarto)
+# ---------------------------------------------------------------------------
+
+"""Slugify text for use as an HTML id attribute."""
+function _slugify(text::String)
+    s = lowercase(text)
+    s = replace(s, r"[^a-z0-9\s-]" => "")
+    s = replace(s, r"\s+" => "-")
+    return String(strip(s, '-'))
+end
+
+"""
+    html_heading(text, level; id) -> String
+
+Return an HTML heading tag with an auto-slugified id for ToC linking.
+"""
+function html_heading(text::String, level::Int = 2; id::String = _slugify(text))
+    return "<h$level id=\"$id\">$text</h$level>\n"
+end
+
+"""
+    html_table(df; caption, team_cols) -> String
+
+Convert a DataFrame to a Bootstrap-styled HTML table. Rounds numeric columns
+and cleans team name pipe characters automatically.
+"""
+function html_table(
+    df::DataFrame;
+    caption::String = "",
+    team_cols::Vector{Symbol} = [:team, :Team],
+)
+    display = copy(df)
+    round_numeric_columns!(display)
+    clean_team_names!(display, intersect(team_cols, propertynames(display)))
+
+    io = IOBuffer()
+    write(io, "<table class=\"table table-striped table-sm\">\n")
+    !isempty(caption) && write(io, "<caption>$caption</caption>\n")
+
+    # Header
+    write(io, "<thead><tr>")
+    for col in names(display)
+        write(io, "<th>$col</th>")
+    end
+    write(io, "</tr></thead>\n<tbody>\n")
+
+    # Rows
+    for row in eachrow(display)
+        write(io, "<tr>")
+        for col in names(display)
+            val = row[col]
+            cell = ismissing(val) ? "" : string(val)
+            write(io, "<td>$cell</td>")
+        end
+        write(io, "</tr>\n")
+    end
+    write(io, "</tbody></table>\n")
+    return String(take!(io))
+end
+
+"""
+    html_callout(content; type, title, collapsed) -> String
+
+Generate a Bootstrap-styled callout. Types: "note" (blue), "warning" (yellow),
+"tip" (green). When `collapsed=true`, uses a `<details>` element.
+"""
+function html_callout(
+    content::String;
+    type::String = "note",
+    title::String = "",
+    collapsed::Bool = false,
+)
+    colour = type == "warning" ? "#856404" : type == "tip" ? "#155724" : "#004085"
+    bg = type == "warning" ? "#fff3cd" : type == "tip" ? "#d4edda" : "#cce5ff"
+    border = type == "warning" ? "#ffc107" : type == "tip" ? "#28a745" : "#007bff"
+
+    if collapsed
+        summary = isempty(title) ? titlecase(type) : title
+        return """<details style="margin:1em 0; border-left:4px solid $border; padding:0.5em 1em; background:$bg;">
+<summary style="color:$colour; font-weight:bold; cursor:pointer;">$summary</summary>
+$content
+</details>\n"""
+    end
+
+    header = isempty(title) ? "" : "<strong style=\"color:$colour;\">$title</strong><br>"
+    return """<div style="margin:1em 0; border-left:4px solid $border; padding:0.75em 1em; background:$bg;">
+$header$content
+</div>\n"""
+end
+
+const _HTML_PAGE_CSS = """
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       max-width: 960px; margin: 2em auto; padding: 0 1em; color: #333; line-height: 1.6; }
+h1, h2, h3, h4 { margin-top: 1.5em; }
+h1 { border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+th, td { padding: 0.4em 0.8em; text-align: left; border-bottom: 1px solid #ddd; }
+th { background: #f8f9fa; font-weight: 600; }
+tr:hover { background: #f5f5f5; }
+.table-striped tbody tr:nth-child(odd) { background: #fafafa; }
+details { margin: 1em 0; }
+summary { cursor: pointer; font-weight: bold; }
+nav#toc { position: fixed; top: 2em; right: 2em; width: 220px; max-height: 80vh;
+          overflow-y: auto; font-size: 0.85em; border-left: 2px solid #ddd; padding-left: 1em; }
+nav#toc a { display: block; padding: 0.2em 0; color: #555; text-decoration: none; }
+nav#toc a:hover { color: #007bff; }
+nav#toc .toc-h3 { padding-left: 1em; font-size: 0.9em; }
+@media (max-width: 1200px) { nav#toc { display: none; } body { max-width: 800px; } }
+.subtitle { color: #666; font-size: 1.1em; margin-top: -0.8em; margin-bottom: 1.5em; }
+"""
+
+const _HTML_PAGE_TOC_JS = """
+document.addEventListener('DOMContentLoaded', function() {
+  var toc = document.getElementById('toc');
+  if (!toc) return;
+  var headings = document.querySelectorAll('h2[id], h3[id]');
+  headings.forEach(function(h) {
+    var a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    if (h.tagName === 'H3') a.className = 'toc-h3';
+    toc.appendChild(a);
+  });
+});
+"""
+
+"""
+    html_page(; title, subtitle, body, include_plotly) -> String
+
+Wrap body content in a complete, standalone HTML page with CSS and ToC.
+"""
+function html_page(;
+    title::String,
+    subtitle::String = "",
+    body::String,
+    include_plotly::Bool = false,
+)
+    plotly_script = include_plotly ? "\n<script src=\"https://cdn.plot.ly/plotly-2.35.2.min.js\"></script>" : ""
+    subtitle_html = isempty(subtitle) ? "" : "<p class=\"subtitle\">$subtitle</p>\n"
+
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title</title>
+<style>$(_HTML_PAGE_CSS)</style>$plotly_script
+</head>
+<body>
+<h1>$title</h1>
+$subtitle_html$body
+<nav id="toc"></nav>
+<script>$(_HTML_PAGE_TOC_JS)</script>
+</body>
+</html>
+"""
+end
+
+# ---------------------------------------------------------------------------
+# Plotly chart helpers
 # ---------------------------------------------------------------------------
 
 """
     plotly_html(traces, layout; id, width, height) -> String
 
-Serialise PlotlyBase traces and layout to a raw HTML block that Quarto
-can embed directly via `output: asis`. Loads Plotly.js from CDN in the
-page header (see `include-in-header` in the report template).
+Serialise PlotlyBase traces and layout to an HTML block with a div and script tag.
 """
 function plotly_html(
     traces,
@@ -21,12 +178,8 @@ function plotly_html(
         "layout" => JSON3.read(JSON3.write(layout)),
     )
     json_str = JSON3.write(spec)
-    return """
-    ```{=html}
-    <div id="$id" style="width:$(width); height:$(height);"></div>
-    <script>Plotly.newPlot('$id', $json_str.data, $json_str.layout, {responsive: true})</script>
-    ```
-    """
+    return """<div id="$id" style="width:$(width); height:$(height);"></div>
+<script>Plotly.newPlot('$id', $json_str.data, $json_str.layout, {responsive: true})</script>"""
 end
 
 # ---------------------------------------------------------------------------
@@ -397,9 +550,9 @@ function compute_pit_values(
 end
 
 """
-    pit_histogram_chart(pit_values; title, scored_only) -> String
+    pit_histogram_chart(pit_values; title, scored_only, compact) -> String
 
-Generate a Plotly HTML histogram of PIT values for calibration checking.
+Generate an inline SVG histogram of PIT values for calibration checking.
 Well-calibrated predictions produce a uniform histogram. Skewed right (many
 values near 1) means the model underestimates; skewed left means it overestimates.
 
@@ -415,50 +568,72 @@ function pit_histogram_chart(
     subset = scored_only ? filter(:scored => identity, pit_values) : pit_values
     nrow(subset) == 0 && return ""
 
-    traces = PlotlyBase.AbstractTrace[]
-
-    push!(traces, PlotlyBase.histogram(;
-        x = collect(subset.pit_value),
-        nbinsx = 10,
-        marker = PlotlyBase.attr(color = "steelblue", line = PlotlyBase.attr(color = "white", width = 1)),
-        name = "PIT values",
-    ))
-
-    # Uniform reference line
-    n = nrow(subset)
-    expected_per_bin = n / 10
-    push!(traces, PlotlyBase.scatter(;
-        x = collect(0.05:0.1:0.95),
-        y = fill(expected_per_bin, 10),
-        mode = "lines",
-        name = "Uniform",
-        line = PlotlyBase.attr(color = "red", dash = "dash", width = 2),
-    ))
-
-    subtitle = scored_only ? " ($(nrow(subset)) scoring riders)" : " ($(nrow(subset)) riders)"
-    margin = compact ? PlotlyBase.attr(l = 30, r = 10, t = 30, b = 30) : nothing
-    layout_kwargs = Dict{Symbol,Any}(
-        :title => PlotlyBase.attr(text = title * subtitle, font = compact ? PlotlyBase.attr(size = 12) : nothing),
-        :xaxis => PlotlyBase.attr(title = compact ? nothing : "PIT value", range = [0, 1]),
-        :yaxis => PlotlyBase.attr(title = compact ? nothing : "Count"),
-        :showlegend => !compact,
-        :bargap => 0.05,
-    )
-    if margin !== nothing
-        layout_kwargs[:margin] = margin
+    # Bin into 10 equal-width bins [0,0.1), [0.1,0.2), ... [0.9,1.0]
+    counts = zeros(Int, 10)
+    for v in subset.pit_value
+        bin = clamp(floor(Int, v * 10) + 1, 1, 10)
+        counts[bin] += 1
     end
-    layout = PlotlyBase.Layout(; layout_kwargs...)
 
-    plot_kwargs = compact ? (; width = "100%", height = "200px") : (;)
-    return plotly_html(traces, layout; plot_kwargs...)
+    n = nrow(subset)
+    expected = n / 10
+    max_count = max(maximum(counts), expected) * 1.1
+
+    # SVG dimensions
+    w = compact ? 240 : 400
+    h = compact ? 140 : 250
+    pad_l = compact ? 30 : 45
+    pad_r = 10
+    pad_t = compact ? 20 : 30
+    pad_b = compact ? 25 : 40
+    plot_w = w - pad_l - pad_r
+    plot_h = h - pad_t - pad_b
+    bar_gap = 2
+
+    subtitle = scored_only ? " ($(n) scoring)" : " ($(n) riders)"
+    font_size = compact ? 10 : 12
+    title_size = compact ? 11 : 13
+
+    io = IOBuffer()
+    write(io, "<svg width=\"$(w)\" height=\"$(h)\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family:sans-serif;\">")
+
+    # Title
+    write(io, "<text x=\"$(w÷2)\" y=\"$(pad_t - 6)\" text-anchor=\"middle\" font-size=\"$(title_size)\" fill=\"#333\">$(title)$(subtitle)</text>")
+
+    # Bars
+    bar_w = plot_w / 10 - bar_gap
+    for i in 1:10
+        bh = plot_h * counts[i] / max_count
+        x = pad_l + (i - 1) * (plot_w / 10) + bar_gap / 2
+        y = pad_t + plot_h - bh
+        write(io, "<rect x=\"$(round(x,digits=1))\" y=\"$(round(y,digits=1))\" width=\"$(round(bar_w,digits=1))\" height=\"$(round(bh,digits=1))\" fill=\"steelblue\" stroke=\"white\" stroke-width=\"1\"/>")
+    end
+
+    # Uniform reference line (dashed red)
+    ref_y = pad_t + plot_h - plot_h * expected / max_count
+    write(io, "<line x1=\"$(pad_l)\" y1=\"$(round(ref_y,digits=1))\" x2=\"$(w - pad_r)\" y2=\"$(round(ref_y,digits=1))\" stroke=\"red\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\"/>")
+
+    # X-axis labels
+    for i in 0:2:10
+        x = pad_l + i * (plot_w / 10)
+        write(io, "<text x=\"$(round(x,digits=1))\" y=\"$(pad_t + plot_h + font_size + 4)\" text-anchor=\"middle\" font-size=\"$(font_size - 1)\" fill=\"#666\">$(round(i/10, digits=1))</text>")
+    end
+
+    # Y-axis: just max and zero
+    if !compact
+        write(io, "<text x=\"$(pad_l - 5)\" y=\"$(pad_t + 4)\" text-anchor=\"end\" font-size=\"$(font_size - 1)\" fill=\"#666\">$(round(Int, max_count))</text>")
+        write(io, "<text x=\"$(pad_l - 5)\" y=\"$(pad_t + plot_h + 4)\" text-anchor=\"end\" font-size=\"$(font_size - 1)\" fill=\"#666\">0</text>")
+    end
+
+    write(io, "</svg>")
+    return String(take!(io))
 end
 
 """
     team_total_distribution_chart(team_keys, predicted, sim_vg_points; actual_total, title) -> String
 
-Generate a Plotly histogram of simulated team total VG points, with the actual
-total marked as a vertical line when provided. Shows how the team's actual
-performance compares to the distribution of simulated outcomes.
+Generate an inline SVG histogram of simulated team total VG points, with the actual
+total marked as a vertical line when provided.
 """
 function team_total_distribution_chart(
     team_keys::Vector{String},
@@ -474,43 +649,57 @@ function team_total_distribution_chart(
     n_draws = size(sim_vg_points, 2)
     team_totals = [sum(sim_vg_points[i, r] for i in idxs) for r in 1:n_draws]
 
-    traces = PlotlyBase.AbstractTrace[]
+    # Bin into 30 equal-width bins
+    lo, hi = extrema(team_totals)
+    hi == lo && (hi = lo + 1)
+    nbins = 30
+    bin_width = (hi - lo) / nbins
+    counts = zeros(Int, nbins)
+    for v in team_totals
+        bin = clamp(floor(Int, (v - lo) / bin_width) + 1, 1, nbins)
+        counts[bin] += 1
+    end
+    max_count = maximum(counts) * 1.1
 
-    push!(traces, PlotlyBase.histogram(;
-        x = team_totals,
-        nbinsx = 30,
-        marker = PlotlyBase.attr(color = "steelblue", line = PlotlyBase.attr(color = "white", width = 1)),
-        name = "Simulated totals",
-    ))
+    # SVG dimensions
+    w, h = 400, 250
+    pad_l, pad_r, pad_t, pad_b = 45, 15, 30, 40
+    plot_w = w - pad_l - pad_r
+    plot_h = h - pad_t - pad_b
+    bar_gap = 1
 
-    shapes = PlotlyBase.PlotlyAttribute[]
-    annotations = PlotlyBase.PlotlyAttribute[]
-    if actual_total !== nothing
-        percentile = round(100 * count(<=(actual_total), team_totals) / n_draws, digits = 0)
-        push!(shapes, PlotlyBase.attr(
-            type = "line", x0 = actual_total, x1 = actual_total,
-            y0 = 0, y1 = 1, yref = "paper",
-            line = PlotlyBase.attr(color = "red", width = 3, dash = "dash"),
-        ))
-        push!(annotations, PlotlyBase.attr(
-            x = actual_total, y = 1.0, yref = "paper",
-            text = "Actual ($(Int(round(actual_total)))pts, $(Int(percentile))th pctl)",
-            showarrow = true, arrowhead = 2, ax = 40, ay = -30,
-            font = PlotlyBase.attr(color = "red", size = 12),
-        ))
+    io = IOBuffer()
+    write(io, "<svg width=\"$(w)\" height=\"$(h)\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family:sans-serif;\">")
+    write(io, "<text x=\"$(w÷2)\" y=\"$(pad_t - 8)\" text-anchor=\"middle\" font-size=\"13\" fill=\"#333\">$(title)</text>")
+
+    # Bars
+    bw = plot_w / nbins - bar_gap
+    for i in 1:nbins
+        bh = plot_h * counts[i] / max_count
+        x = pad_l + (i - 1) * (plot_w / nbins) + bar_gap / 2
+        y = pad_t + plot_h - bh
+        write(io, "<rect x=\"$(round(x,digits=1))\" y=\"$(round(y,digits=1))\" width=\"$(round(bw,digits=1))\" height=\"$(round(bh,digits=1))\" fill=\"steelblue\" stroke=\"white\" stroke-width=\"0.5\"/>")
     end
 
-    layout = PlotlyBase.Layout(;
-        title = PlotlyBase.attr(text = title),
-        xaxis = PlotlyBase.attr(title = "Total VG points"),
-        yaxis = PlotlyBase.attr(title = "Count"),
-        showlegend = false,
-        shapes = shapes,
-        annotations = annotations,
-        bargap = 0.05,
-    )
+    # Actual total vertical line
+    if actual_total !== nothing
+        percentile = round(Int, 100 * count(<=(actual_total), team_totals) / n_draws)
+        frac = clamp((actual_total - lo) / (hi - lo), 0, 1)
+        lx = pad_l + frac * plot_w
+        write(io, "<line x1=\"$(round(lx,digits=1))\" y1=\"$(pad_t)\" x2=\"$(round(lx,digits=1))\" y2=\"$(pad_t + plot_h)\" stroke=\"red\" stroke-width=\"2\" stroke-dasharray=\"6,3\"/>")
+        write(io, "<text x=\"$(round(lx,digits=1))\" y=\"$(pad_t - 1)\" text-anchor=\"middle\" font-size=\"10\" fill=\"red\">$(Int(round(actual_total)))pts ($(percentile)th pctl)</text>")
+    end
 
-    return plotly_html(traces, layout)
+    # X-axis labels (5 ticks)
+    for i in 0:4
+        val = lo + i * (hi - lo) / 4
+        x = pad_l + i * plot_w / 4
+        write(io, "<text x=\"$(round(x,digits=1))\" y=\"$(pad_t + plot_h + 16)\" text-anchor=\"middle\" font-size=\"11\" fill=\"#666\">$(Int(round(val)))</text>")
+    end
+    write(io, "<text x=\"$(w÷2)\" y=\"$(h - 2)\" text-anchor=\"middle\" font-size=\"11\" fill=\"#666\">Total VG points</text>")
+
+    write(io, "</svg>")
+    return String(take!(io))
 end
 
 """
@@ -587,14 +776,8 @@ end
 """
     sim_distribution_chart(team_df, predicted, sim_vg_points; actual_results, title) -> String
 
-Generate a Plotly HTML box plot showing the simulated VG points distribution
-for each rider in `team_df`. Overlays actual results as markers when provided.
-
-- `team_df`: DataFrame of riders to plot (must have :rider, :riderkey)
-- `predicted`: full predicted DataFrame (row order matches sim_vg_points rows)
-- `sim_vg_points`: Matrix{Float64} (n_riders × n_resamples) from resample_optimise
-- `actual_results`: optional DataFrame with :riderkey and :actual_vg_points columns
-- `title`: chart title
+Generate an inline SVG box plot showing the simulated VG points distribution
+for each rider in `team_df`. Overlays actual results as diamond markers when provided.
 """
 function sim_distribution_chart(
     team_df::DataFrame,
@@ -603,68 +786,88 @@ function sim_distribution_chart(
     actual_results::Union{DataFrame,Nothing} = nothing,
     title::String = "Simulated VG points distribution",
 )
-    # Build a riderkey → row index lookup for predicted
     key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
 
-    # Sort team by expected points descending for consistent display
     sort_col = :expected_vg_points in propertynames(team_df) ? :expected_vg_points : :rider
     team_sorted = sort(team_df, sort_col, rev = sort_col == :expected_vg_points)
 
-    traces = PlotlyBase.AbstractTrace[]
-
+    # Collect box plot stats for each rider
+    riders = NamedTuple{(:name, :q0, :q25, :q50, :q75, :q100, :actual),
+                         Tuple{String,Float64,Float64,Float64,Float64,Float64,Union{Float64,Nothing}}}[]
     for row in eachrow(team_sorted)
         idx = get(key_to_idx, row.riderkey, nothing)
         idx === nothing && continue
         draws = sim_vg_points[idx, :]
-        push!(
-            traces,
-            PlotlyBase.box(;
-                y = collect(draws),
-                name = string(row.rider),
-                boxpoints = false,
-                marker = PlotlyBase.attr(color = "steelblue"),
-                line = PlotlyBase.attr(color = "steelblue"),
-            ),
-        )
-    end
-
-    # Overlay actual results as markers
-    if actual_results !== nothing
-        actual_x = String[]
-        actual_y = Float64[]
-        for row in eachrow(team_sorted)
+        actual_val = nothing
+        if actual_results !== nothing
             match_rows = filter(r -> r.riderkey == row.riderkey, actual_results)
             if nrow(match_rows) > 0 && :actual_vg_points in propertynames(match_rows)
-                push!(actual_x, string(row.rider))
-                push!(actual_y, Float64(match_rows[1, :actual_vg_points]))
+                actual_val = Float64(match_rows[1, :actual_vg_points])
             end
         end
-        if !isempty(actual_y)
-            push!(
-                traces,
-                PlotlyBase.scatter(;
-                    x = actual_x,
-                    y = actual_y,
-                    mode = "markers",
-                    name = "Actual",
-                    marker = PlotlyBase.attr(
-                        color = "red",
-                        size = 12,
-                        symbol = "diamond",
-                        line = PlotlyBase.attr(color = "darkred", width = 1),
-                    ),
-                ),
-            )
+        push!(riders, (name=string(row.rider),
+            q0=minimum(draws), q25=quantile(draws, 0.25), q50=quantile(draws, 0.5),
+            q75=quantile(draws, 0.75), q100=maximum(draws), actual=actual_val))
+    end
+    isempty(riders) && return ""
+
+    n = length(riders)
+    # SVG dimensions
+    name_space = 120
+    w = 500
+    h = max(200, n * 28 + 60)
+    pad_t, pad_b = 30, 20
+    plot_h = h - pad_t - pad_b
+    plot_w = w - name_space - 20
+    bar_h = min(18, plot_h / n - 4)
+
+    y_max = max(maximum(r.q100 for r in riders),
+                maximum(something(r.actual, 0.0) for r in riders)) * 1.05
+    y_max = max(y_max, 1.0)
+
+    val_to_x(v) = name_space + v / y_max * plot_w
+
+    io = IOBuffer()
+    write(io, "<svg width=\"$(w)\" height=\"$(h)\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family:sans-serif;\">")
+    write(io, "<text x=\"$(w÷2)\" y=\"$(pad_t - 10)\" text-anchor=\"middle\" font-size=\"13\" fill=\"#333\">$(title)</text>")
+
+    for (i, r) in enumerate(riders)
+        cy = pad_t + (i - 0.5) * (plot_h / n)
+        # Whisker line (min to max)
+        write(io, "<line x1=\"$(round(val_to_x(r.q0),digits=1))\" y1=\"$(round(cy,digits=1))\" x2=\"$(round(val_to_x(r.q100),digits=1))\" y2=\"$(round(cy,digits=1))\" stroke=\"steelblue\" stroke-width=\"1\"/>")
+        # IQR box
+        bx = val_to_x(r.q25)
+        bw = val_to_x(r.q75) - bx
+        write(io, "<rect x=\"$(round(bx,digits=1))\" y=\"$(round(cy - bar_h/2,digits=1))\" width=\"$(round(max(bw,0.5),digits=1))\" height=\"$(round(bar_h,digits=1))\" fill=\"steelblue\" fill-opacity=\"0.3\" stroke=\"steelblue\" stroke-width=\"1\"/>")
+        # Median line
+        mx = val_to_x(r.q50)
+        write(io, "<line x1=\"$(round(mx,digits=1))\" y1=\"$(round(cy - bar_h/2,digits=1))\" x2=\"$(round(mx,digits=1))\" y2=\"$(round(cy + bar_h/2,digits=1))\" stroke=\"steelblue\" stroke-width=\"2\"/>")
+        # Actual result diamond
+        if r.actual !== nothing
+            ax = val_to_x(r.actual)
+            d = 5
+            write(io, "<polygon points=\"$(round(ax,digits=1)),$(round(cy-d,digits=1)) $(round(ax+d,digits=1)),$(round(cy,digits=1)) $(round(ax,digits=1)),$(round(cy+d,digits=1)) $(round(ax-d,digits=1)),$(round(cy,digits=1))\" fill=\"red\" stroke=\"darkred\" stroke-width=\"1\"/>")
         end
+        # Rider name
+        write(io, "<text x=\"$(name_space - 5)\" y=\"$(round(cy + 4,digits=1))\" text-anchor=\"end\" font-size=\"10\" fill=\"#333\">$(r.name)</text>")
     end
 
-    layout = PlotlyBase.Layout(;
-        title = PlotlyBase.attr(text = title),
-        yaxis = PlotlyBase.attr(title = "VG points"),
-        xaxis = PlotlyBase.attr(title = ""),
-        showlegend = actual_results !== nothing,
-        margin = PlotlyBase.attr(b = 100),
-    )
+    # X-axis ticks
+    n_ticks = 5
+    for i in 0:n_ticks
+        val = y_max * i / n_ticks
+        x = val_to_x(val)
+        write(io, "<text x=\"$(round(x,digits=1))\" y=\"$(h - pad_b + 14)\" text-anchor=\"middle\" font-size=\"10\" fill=\"#666\">$(Int(round(val)))</text>")
+    end
 
-    return plotly_html(traces, layout)
+    # Legend if actual results shown
+    if actual_results !== nothing
+        lx = name_space + 10
+        ly = h - 4
+        write(io, "<polygon points=\"$(lx),$(ly-5) $(lx+5),$(ly) $(lx),$(ly+5) $(lx-5),$(ly)\" fill=\"red\" stroke=\"darkred\" stroke-width=\"1\"/>")
+        write(io, "<text x=\"$(lx + 10)\" y=\"$(ly + 4)\" font-size=\"10\" fill=\"#666\">Actual</text>")
+    end
+
+    write(io, "</svg>")
+    return String(take!(io))
 end

@@ -145,8 +145,12 @@ export createkey,
     suppress_output,
     format_signal_waterfall
 
-# Race report helpers
-export list_completed_races,
+# HTML generation and report helpers
+export html_page,
+    html_table,
+    html_callout,
+    html_heading,
+    list_completed_races,
     load_report_data,
     compute_optimal_team,
     compute_cheapest_winning_team,

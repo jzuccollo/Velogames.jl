@@ -12,15 +12,15 @@ For stage races, PCS specialty scores are blended according to each rider's VG c
 
 ## Usage
 
-Outputs calculated in the Quarto files in the `notebooks/` directory:
+Analysis reports are Julia scripts that generate standalone HTML. Output goes to `prediction_docs/` by default (configurable via `[output].dir` in `race_config.toml`):
 
-- `oneday_predictor.qmd` - Pre-race team selection for Sixes Classics one-day races
-- `stagerace_predictor.qmd` - Pre-race team selection for grand tours and stage races
-- `team_assessor.qmd` - Post-race review and result archival for prospective evaluation
-- `historical_analysis.qmd` - Retrospective analysis of completed races (both types)
-- `backtesting.qmd` - Model calibration: prior predictive checks, backtesting, prospective evaluation
+- `scripts/render_predictor.jl` — pre-race team selection for Sixes Classics one-day races
+- `scripts/render_stagerace.jl` — pre-race team selection for grand tours and stage races
+- `scripts/render_assessor.jl` — post-race review and result archival for prospective evaluation
+- `scripts/render_backtesting.jl` — model calibration: prior predictive checks, backtesting, prospective evaluation
+- `scripts/render_reports.jl` → `site/docs/` — public race reports website with per-race retrospectives
 
-No guarantee they'll re-render because they pull from the moving target of velogames.com rider pages, so URLs typically need to be updated for every render.
+All scripts accept `--fresh` to bypass the cache and fetch everything from the web. The predictor and stagerace scripts also accept `--force` to overwrite an existing prediction archive.
 
 ## Features
 
@@ -34,59 +34,71 @@ No guarantee they'll re-render because they pull from the moving target of velog
 
 ## Workflow
 
-The prediction and calibration workflow revolves around three notebooks, each run at a different point in the race cycle.
+The prediction and calibration workflow revolves around three scripts, each run at a different point in the race cycle.
 
 ### Race configuration
 
-The predictor and team assessor notebooks share a single configuration file, `notebooks/race_config.toml`, so race settings stay in sync between the pre-race and post-race steps. This file is gitignored because it changes every race.
+The predictor and team assessor share a single configuration file, `data/race_config.toml`, so race settings stay in sync between the pre-race and post-race steps. This file is gitignored because it changes every race.
 
 To set up for a new race, copy the example and edit:
 
 ```sh
-cp notebooks/race_config.toml.example notebooks/race_config.toml
+cp data/race_config.toml.example data/race_config.toml
 # Edit race_config.toml with race name, year, data source URLs, your team, etc.
 ```
 
-The `[race]`, `[data_sources]`, and `[optimisation]` sections are shared by both notebooks. The `[team_assessor]` section holds your team roster and the VG race number for retrospective analysis.
+The `[race]`, `[data_sources]`, `[output]`, and `[optimisation]` sections are shared by all scripts. The `[team_assessor]` section holds your team roster and the VG race number for retrospective analysis.
 
 ### Before each race
 
-Edit `notebooks/race_config.toml` with the race name, year, startlist hash, and any data source URLs (odds, oracle, qualitative). Then render the appropriate predictor notebook:
+Edit `data/race_config.toml` with the race name, year, startlist hash, and any data source URLs (odds, oracle, qualitative). Then run:
 
-- `notebooks/oneday_predictor.qmd` for Sixes Classics one-day races
-- `notebooks/stagerace_predictor.qmd` for grand tours and stage races
+```sh
+julia --project scripts/render_predictor.jl
+# or for stage races:
+julia --project scripts/render_stagerace.jl
+```
 
-These notebooks run the full pipeline (data fetch, strength estimation, resampled optimisation) and automatically archive predictions, odds, oracle, and qualitative data to `DEFAULT_ARCHIVE_DIR` for later evaluation.
+This runs the full pipeline (data fetch, strength estimation, resampled optimisation) and automatically archives predictions, odds, oracle, and qualitative data to `DEFAULT_ARCHIVE_DIR` for later evaluation. The prediction archive is write-once: re-running after the race won't overwrite the pre-race snapshot (pass `--force` to override).
 
 ### After each race
 
-Update `notebooks/race_config.toml` with your chosen team in `[team_assessor].my_team` and set `vg_race_number` (or leave at 0 for auto-detection). Then render `notebooks/team_assessor.qmd` to review how the selected team performed. This notebook archives the actual PCS and VG results alongside the pre-race predictions, and shows a per-race comparison of predicted vs actual rider performance. Running it after every race builds up the prospective evaluation dataset over the season.
+Update `data/race_config.toml` with your chosen team in `[team_assessor].my_team` and set `vg_race_number` (or leave at 0 for auto-detection). Then run:
+
+```sh
+julia --project scripts/render_assessor.jl
+```
+
+This archives the actual PCS and VG results alongside the pre-race predictions, and shows a per-race comparison of predicted vs actual rider performance. Running it after every race builds up the prospective evaluation dataset over the season.
 
 ### Periodically (model calibration)
 
-Render `notebooks/backtesting.qmd` for the full calibration picture. The notebook is structured in sections that can be run independently:
+```sh
+julia --project scripts/render_backtesting.jl
+```
+
+This generates the full calibration picture, covering:
 
 1. **Prior predictive checks** — `check_stylised_facts()` validates that the model's implied race outcomes match domain knowledge (e.g. favourite win rates, rank correlations). Adjust the three precision scale factors (`market_precision_scale`, `history_precision_scale`, `ability_precision_scale`) and re-run until all checks pass.
 2. **Sensitivity sweeps** — `sensitivity_sweep()` shows how each scale factor affects key diagnostics, helping to identify reasonable ranges.
 3. **SBC diagnostics** — `simulation_based_calibration()` checks that the Bayesian inference pipeline recovers true parameters from synthetic data (rank histogram should be uniform).
-4. **Historical ablation** — tests which always-available signals (PCS, race history, VG history) add predictive value.
-5. **Backtest sanity check** — runs `backtest_season()` against historical data as a directional validation. With only ~100 observations and 5 tuneable parameters, treat results as indicative rather than precise.
-6. **Prospective evaluation** — `prospective_season_summary()` compares archived pre-race predictions against actual results for races where all signals were available. This is the most trustworthy evaluation, but requires a season's worth of archived data.
-7. **Signal value analysis** — `signal_value_analysis()` shows which signals moved predictions most across the season.
+4. **Backtest sanity check** — runs `backtest_season()` against historical data as a directional validation. With only ~100 observations and 5 tuneable parameters, treat results as indicative rather than precise.
+5. **Prospective evaluation** — `prospective_season_summary()` compares archived pre-race predictions against actual results for races where all signals were available. This is the most trustworthy evaluation, but requires a season's worth of archived data.
+6. **Signal value analysis** — `signal_value_analysis()` shows which signals moved predictions most across the season.
 
 ### Race reports website
 
-A separate static website in `site/` provides post-race retrospectives for the minileague. Each race gets an interactive report with the hindsight-optimal team, cheapest winning team, scatter plots (points vs cost, value vs cost), and performance tables.
+A separate static website in `site/docs/` provides post-race retrospectives for the minileague. Each race gets an interactive report with the hindsight-optimal team, cheapest winning team, scatter plots (points vs cost, value vs cost), and performance tables.
 
-The workflow after each race:
+Publish a race report in one step (results are auto-archived if not already done):
 
-1. **Archive results** (already part of `team_assessor.qmd`): `archive_race_results("pcs-slug", 2026; vg_race_number=N)`
-2. **Record league winner** (optional): add an entry to `LEAGUE_WINNERS` in `scripts/render_reports.jl`
-3. **Generate reports**: `julia --project scripts/render_reports.jl --years=2026`
-4. **Render the site**: `cd site && quarto render`
-5. **Preview locally**: `cd site && quarto preview`
+```sh
+./scripts/publish_race.sh gent-wevelgem 2026 "Team Name" 1234
+```
 
-The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates a `.qmd` per race in `site/reports/`. The index page at `site/index.qmd` lists all races grouped by year. Reports are rendered to `site/docs/` for deployment via GitHub Pages.
+This appends the league winner to `data/league_winners.toml`, generates the HTML report, commits, and pushes. The GitHub Pages deploy action fires on push.
+
+The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winner data lives in `data/league_winners.toml`. The index page lists all races grouped by year.
 
 ## Data storage
 

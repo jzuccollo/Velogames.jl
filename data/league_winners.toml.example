@@ -1,0 +1,65 @@
+# League winners by race. Add entries after each race completes.
+# publish_race.sh appends new entries automatically.
+#
+# Copy this file to league_winners.toml and add results as they come in:
+#   cp data/league_winners.toml.example data/league_winners.toml
+#
+# 2026 Sixes Classics schedule (slug reference):
+#
+# Flemish cobbled
+#   omloop-het-nieuwsblad
+#   kuurne-brussel-kuurne
+#   trofeo-laigueglia
+#   strade-bianche
+#   nokere-koerse
+#   milano-sanremo
+#   classic-brugge-de-panne
+#   e3-harelbeke
+#   gent-wevelgem
+#   dwars-door-vlaanderen
+#   ronde-van-vlaanderen
+#   scheldeprijs
+#   paris-roubaix
+#
+# Ardennes
+#   brabantse-pijl
+#   amstel-gold-race
+#   la-fleche-wallonne
+#   liege-bastogne-liege
+#
+# Mid-season
+#   eschborn-frankfurt
+#   gp-de-plumelec
+#   tro-bro-leon
+#   quatre-jours-de-dunkerque
+#   brussels-cycling-classic
+#   circuit-franco-belge
+#   dwars-door-het-hageland
+#   copenhagen-sprint
+#
+# Late season
+#   san-sebastian
+#   cyclassics-hamburg
+#   bretagne-classic
+#   gp-industria-e-artigianato-di-larciano
+#   coppa-sabatini
+#   gp-quebec
+#   gp-montreal
+#   gp-de-wallonie
+#   super-8-classic
+#   world-championship
+#   giro-dell-emilia
+#   uec-road-european-championships-me
+#   coppa-bernocchi
+#   tre-valli-varesine
+#   gran-piemonte
+#   il-lombardia
+#   paris-tours
+#   giro-del-veneto
+#   veneto-classic
+
+[[winners]]
+pcs_slug = "omloop-het-nieuwsblad"
+year = 2026
+name = "Example Team"
+score = 1000
