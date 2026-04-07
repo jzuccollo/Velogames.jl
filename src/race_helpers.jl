@@ -141,7 +141,7 @@ const CLASSICS_RACES_2026 = [
         "2026-04-08",
         3,
         "scheldeprijs",
-        ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "eschborn-frankfurt"],
+        ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "eschborn-frankfurt", "cyclassics-hamburg"],
         198.0,
     ),
     RaceInfo(
@@ -497,11 +497,11 @@ One-day races: liege, roubaix, flanders, lombardia, sanremo, amstel, fleche
 function setup_race(
     race_name::String,
     year::Int,
-    race_type::Symbol = :auto;
-    cache_config::CacheConfig = DEFAULT_CACHE,
+    race_type::Symbol=:auto;
+    cache_config::CacheConfig=DEFAULT_CACHE,
 )
     # Get URL pattern for this race (includes schedule fallback)
-    pattern = get_url_pattern(race_name; year = year)
+    pattern = get_url_pattern(race_name; year=year)
 
     # Build the current URL
     current_url = replace(pattern.template, "{year}" => string(year))
@@ -533,7 +533,7 @@ function setup_race(
 
     type_str = race_type == :stage ? "Stage Race" : "One-Day Race"
     scoring_str = category > 0 ? "Cat $category" : "unclassed"
-    @info "Race setup" race=titlecase(race_name) year type=type_str team_size scoring=scoring_str pcs_slug url=current_url cache_ttl="$(cache_config.max_age_hours)h"
+    @info "Race setup" race = titlecase(race_name) year type = type_str team_size scoring = scoring_str pcs_slug url = current_url cache_ttl = "$(cache_config.max_age_hours)h"
 
     return config
 end
@@ -557,29 +557,29 @@ vg_classics_game_id(year::Int) = 13  # Update if 2026 uses a different game ID
 const _GRAND_TOUR_PATTERNS =
     Dict{String,NamedTuple{(:slug, :template),Tuple{String,String}}}(
         "tdf" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
+            slug="velogame",
+            template="https://www.velogames.com/velogame/{year}/riders.php",
         ),
         "tour" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
+            slug="velogame",
+            template="https://www.velogames.com/velogame/{year}/riders.php",
         ),
         "tourdefrance" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
+            slug="velogame",
+            template="https://www.velogames.com/velogame/{year}/riders.php",
         ),
         "vuelta" => (
-            slug = "spain",
-            template = "https://www.velogames.com/spain/{year}/riders.php",
+            slug="spain",
+            template="https://www.velogames.com/spain/{year}/riders.php",
         ),
         "spain" => (
-            slug = "spain",
-            template = "https://www.velogames.com/spain/{year}/riders.php",
+            slug="spain",
+            template="https://www.velogames.com/spain/{year}/riders.php",
         ),
         "giro" =>
-            (slug = "giro", template = "https://www.velogames.com/giro/{year}/riders.php"),
+            (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php"),
         "giroditalia" =>
-            (slug = "giro", template = "https://www.velogames.com/giro/{year}/riders.php"),
+            (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php"),
     )
 
 """Human-friendly aliases mapping to PCS slugs for one-day classics races."""
@@ -645,18 +645,18 @@ Returns a NamedTuple with (slug, template, category, pcs_slug, total_distance_km
 template uses {year} placeholder. Looks up classics aliases against the canonical
 race schedule; grand tours have their own URL patterns.
 """
-function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()))
+function get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
     race_lower = replace(lowercase(strip(race_name)), r"[-\s]" => "")
 
     # Grand tours have their own URL templates
     if haskey(_GRAND_TOUR_PATTERNS, race_lower)
         gt = _GRAND_TOUR_PATTERNS[race_lower]
         return (
-            slug = gt.slug,
-            template = gt.template,
-            category = 0,
-            pcs_slug = "",
-            total_distance_km = 0.0,
+            slug=gt.slug,
+            template=gt.template,
+            category=0,
+            pcs_slug="",
+            total_distance_km=0.0,
         )
     end
 
@@ -669,11 +669,11 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
         ri = _find_race_by_slug(pcs_slug)
         if ri !== nothing
             return (
-                slug = slug,
-                template = template,
-                category = ri.category,
-                pcs_slug = ri.pcs_slug,
-                total_distance_km = ri.total_distance_km,
+                slug=slug,
+                template=template,
+                category=ri.category,
+                pcs_slug=ri.pcs_slug,
+                total_distance_km=ri.total_distance_km,
             )
         end
     end
@@ -682,11 +682,11 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
     ri = _find_race_by_slug(race_name)
     if ri !== nothing
         return (
-            slug = slug,
-            template = template,
-            category = ri.category,
-            pcs_slug = ri.pcs_slug,
-            total_distance_km = ri.total_distance_km,
+            slug=slug,
+            template=template,
+            category=ri.category,
+            pcs_slug=ri.pcs_slug,
+            total_distance_km=ri.total_distance_km,
         )
     end
 
@@ -694,11 +694,11 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
     ri = find_race(race_name)
     if ri !== nothing
         return (
-            slug = slug,
-            template = template,
-            category = ri.category,
-            pcs_slug = ri.pcs_slug,
-            total_distance_km = ri.total_distance_km,
+            slug=slug,
+            template=template,
+            category=ri.category,
+            pcs_slug=ri.pcs_slug,
+            total_distance_km=ri.total_distance_km,
         )
     end
 
@@ -714,11 +714,11 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
 
     sanitized = replace(race_lower, r"[^a-z0-9]" => "-")
     return (
-        slug = sanitized,
-        template = "https://www.velogames.com/$sanitized/{year}/riders.php",
-        category = 0,
-        pcs_slug = "",
-        total_distance_km = 0.0,
+        slug=sanitized,
+        template="https://www.velogames.com/$sanitized/{year}/riders.php",
+        category=0,
+        pcs_slug="",
+        total_distance_km=0.0,
     )
 end
 
@@ -742,7 +742,7 @@ last_year_url = get_historical_url(race, 1)  # 2024 Vuelta
 two_years_url = get_historical_url(race, 2)  # 2023 Vuelta
 ```
 """
-function get_historical_url(config::RaceConfig, years_back::Int = 1)
+function get_historical_url(config::RaceConfig, years_back::Int=1)
     historical_year = config.year - years_back
     # For one-day classics, reconstruct with the correct slug for that year
     # (slug changed from sixes-superclasico to sixes-classics in 2026).
