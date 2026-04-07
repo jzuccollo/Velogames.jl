@@ -86,7 +86,7 @@ similar_str = isempty(similar_races) ? "None configured" : join(similar_races, "
 
 sources_df = DataFrame(
     Source = [
-        "PCS specialty ratings (class-blended)", "VG season points",
+        "PCS season points (class-blended)", "VG season points",
         "PCS race history ($(history_years) yrs)", "Similar races", "VG race history",
         "Cycling Oracle", "Betfair odds",
     ],
@@ -100,14 +100,14 @@ sources_df = DataFrame(
 )
 
 sources_html = html_table(sources_df)
-sources_html *= "<p>PCS specialty scores are blended by rider classification: all-rounders weight GC + TT + climbing, climbers weight climbing heavily, sprinters weight sprint + one-day.</p>\n"
+sources_html *= "<p>PCS season scores are blended by rider classification: all-rounders weight GC + TT + climbing, climbers weight climbing heavily, sprinters weight sprint + one-day.</p>\n"
 write(io, html_callout(sources_html; title="Data sources", collapsed=false))
 
 # --- Signal impact ---
 
 rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["PCS specialty", "VG season points", "PCS form", "Trajectory", "PCS race history", "VG race history", "Cycling Oracle", "Betfair odds"]
-shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_trajectory, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
+signal_names = ["PCS seasons", "VG season points", "PCS form", "PCS race history", "VG race history", "Cycling Oracle", "Betfair odds"]
+shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
 affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
 
