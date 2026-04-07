@@ -356,45 +356,53 @@ function precision_budget(
     config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG;
     n_history_years::Int = 3,
 )
+    # (name, base_variance, is_market_signal)
     signals = [
-        ("Odds", odds_variance(config)),
-        ("Oracle", oracle_variance(config)),
-        ("Form", form_variance(config)),
-        ("PCS race history ($(n_history_years)y)", hist_base_variance(config)),
-        ("VG race history ($(n_history_years)y)", vg_hist_base_variance(config)),
-        ("PCS specialty", pcs_variance(config)),
-        ("VG season points", vg_variance(config)),
-        ("Trajectory", trajectory_variance(config)),
-        ("Prior", config.prior_variance),
+        ("Odds", odds_variance(config), true),
+        ("Oracle", oracle_variance(config), true),
+        ("Form", form_variance(config), false),
+        ("PCS race history ($(n_history_years)y)", hist_base_variance(config), false),
+        ("VG race history ($(n_history_years)y)", vg_hist_base_variance(config), false),
+        ("PCS seasons", pcs_variance(config), false),
+        ("VG season points", vg_variance(config), false),
+        ("Prior", config.prior_variance, false),
     ]
+
+    md = config.market_discount
+    hist_names = Set([
+        "PCS race history ($(n_history_years)y)",
+        "VG race history ($(n_history_years)y)",
+    ])
 
     precisions = [
         (
-            name,
-            var,
-            name in (
-                "PCS race history ($(n_history_years)y)",
-                "VG race history ($(n_history_years)y)",
-            ) ? n_history_years / var : 1.0 / var,
-        ) for (name, var) in signals
+            name, var, is_market,
+            name in hist_names ? n_history_years / var : 1.0 / var,
+            # With market discount: market signals unchanged, others inflated
+            is_market ?
+                (name in hist_names ? n_history_years / var : 1.0 / var) :
+                (name in hist_names ? n_history_years / (var * md) : 1.0 / (var * md)),
+        ) for (name, var, is_market) in signals
     ]
-    total = sum(p for (_, _, p) in precisions)
+    total = sum(p for (_, _, _, p, _) in precisions)
+    total_md = sum(p for (_, _, _, _, p) in precisions)
 
     DataFrame(
-        signal = [name for (name, _, _) in precisions],
-        variance = [round(var, digits = 3) for (_, var, _) in precisions],
-        precision = [round(p, digits = 3) for (_, _, p) in precisions],
-        share = [string(round(Int, 100 * p / total), "%") for (_, _, p) in precisions],
+        signal = [name for (name, _, _, _, _) in precisions],
+        variance = [round(var, digits = 3) for (_, var, _, _, _) in precisions],
+        precision = [round(p, digits = 3) for (_, _, _, p, _) in precisions],
+        share = [string(round(Int, 100 * p / total), "%") for (_, _, _, p, _) in precisions],
+        precision_with_market = [round(p, digits = 3) for (_, _, _, _, p) in precisions],
+        share_with_market = [string(round(Int, 100 * p / total_md), "%") for (_, _, _, _, p) in precisions],
     )
 end
 
 const _SIGNAL_NAMES =
-    ["PCS", "VG", "Form", "Traj", "Hist", "VG hist", "Oracle", "Qual", "Odds"]
+    ["PCS", "VG", "Form", "Hist", "VG hist", "Oracle", "Qual", "Odds"]
 const _SHIFT_COLS = [
     :shift_pcs,
     :shift_vg,
     :shift_form,
-    :shift_trajectory,
     :shift_history,
     :shift_vg_history,
     :shift_oracle,
@@ -624,6 +632,199 @@ function pit_histogram_chart(
         write(io, "<text x=\"$(pad_l - 5)\" y=\"$(pad_t + 4)\" text-anchor=\"end\" font-size=\"$(font_size - 1)\" fill=\"#666\">$(round(Int, max_count))</text>")
         write(io, "<text x=\"$(pad_l - 5)\" y=\"$(pad_t + plot_h + 4)\" text-anchor=\"end\" font-size=\"$(font_size - 1)\" fill=\"#666\">0</text>")
     end
+
+    write(io, "</svg>")
+    return String(take!(io))
+end
+
+"""
+    scatter_chart(x, y; title, xlabel, ylabel, colours, reference_line) -> String
+
+Generate an inline SVG scatter plot. `colours` is an optional vector of hex colour
+strings (one per point). When `reference_line=true`, a 45-degree y=x line is drawn.
+"""
+function scatter_chart(
+    x::AbstractVector{<:Real},
+    y::AbstractVector{<:Real};
+    title::String = "",
+    xlabel::String = "x",
+    ylabel::String = "y",
+    colours::Union{Vector{String},Nothing} = nothing,
+    reference_line::Bool = false,
+)
+    length(x) == 0 && return ""
+    w, h = 420, 320
+    pad_l, pad_r, pad_t, pad_b = 55, 15, 30, 40
+    plot_w = w - pad_l - pad_r
+    plot_h = h - pad_t - pad_b
+
+    xmin, xmax = extrema(x)
+    ymin, ymax = extrema(y)
+    # Add 5% padding to ranges
+    xrange = max(xmax - xmin, 1e-6)
+    yrange = max(ymax - ymin, 1e-6)
+    xmin -= 0.05 * xrange; xmax += 0.05 * xrange
+    ymin -= 0.05 * yrange; ymax += 0.05 * yrange
+
+    sx(v) = pad_l + plot_w * (v - xmin) / (xmax - xmin)
+    sy(v) = pad_t + plot_h * (1.0 - (v - ymin) / (ymax - ymin))
+
+    io = IOBuffer()
+    write(io, "<svg width=\"$(w)\" height=\"$(h)\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family:sans-serif;\">")
+
+    # Title
+    !isempty(title) && write(io, "<text x=\"$(w÷2)\" y=\"16\" text-anchor=\"middle\" font-size=\"13\" fill=\"#333\">$(title)</text>")
+
+    # Axes
+    write(io, "<line x1=\"$(pad_l)\" y1=\"$(pad_t)\" x2=\"$(pad_l)\" y2=\"$(pad_t+plot_h)\" stroke=\"#ccc\" stroke-width=\"1\"/>")
+    write(io, "<line x1=\"$(pad_l)\" y1=\"$(pad_t+plot_h)\" x2=\"$(pad_l+plot_w)\" y2=\"$(pad_t+plot_h)\" stroke=\"#ccc\" stroke-width=\"1\"/>")
+
+    # Reference line (y=x)
+    if reference_line
+        lo = max(xmin, ymin)
+        hi = min(xmax, ymax)
+        if hi > lo
+            write(io, "<line x1=\"$(round(sx(lo),digits=1))\" y1=\"$(round(sy(lo),digits=1))\" x2=\"$(round(sx(hi),digits=1))\" y2=\"$(round(sy(hi),digits=1))\" stroke=\"red\" stroke-width=\"1\" stroke-dasharray=\"6,3\" opacity=\"0.6\"/>")
+        end
+    end
+
+    # Points
+    for i in eachindex(x)
+        cx = round(sx(x[i]), digits=1)
+        cy = round(sy(y[i]), digits=1)
+        col = colours !== nothing ? colours[i] : "steelblue"
+        write(io, "<circle cx=\"$(cx)\" cy=\"$(cy)\" r=\"3\" fill=\"$(col)\" opacity=\"0.6\"/>")
+    end
+
+    # Axis labels
+    write(io, "<text x=\"$(pad_l + plot_w÷2)\" y=\"$(h - 5)\" text-anchor=\"middle\" font-size=\"11\" fill=\"#666\">$(xlabel)</text>")
+    write(io, "<text x=\"14\" y=\"$(pad_t + plot_h÷2)\" text-anchor=\"middle\" font-size=\"11\" fill=\"#666\" transform=\"rotate(-90, 14, $(pad_t + plot_h÷2))\">$(ylabel)</text>")
+
+    # Tick labels (5 ticks each axis)
+    for i in 0:4
+        # X
+        v = xmin + i * (xmax - xmin) / 4
+        px = round(sx(v), digits=1)
+        write(io, "<text x=\"$(px)\" y=\"$(pad_t + plot_h + 14)\" text-anchor=\"middle\" font-size=\"9\" fill=\"#999\">$(round(v, digits=0))</text>")
+        # Y
+        v = ymin + i * (ymax - ymin) / 4
+        py = round(sy(v), digits=1)
+        write(io, "<text x=\"$(pad_l - 5)\" y=\"$(py + 3)\" text-anchor=\"end\" font-size=\"9\" fill=\"#999\">$(round(v, digits=0))</text>")
+    end
+
+    write(io, "</svg>")
+    return String(take!(io))
+end
+
+"""
+    rank_histogram_chart(counts; title, expected) -> String
+
+Generate an inline SVG bar chart for SBC rank histograms or similar uniform-calibration
+checks. `counts` is a vector of bin counts; `expected` is the expected count per bin
+under uniformity.
+"""
+function rank_histogram_chart(
+    counts::Vector{<:Real};
+    title::String = "Rank histogram",
+    expected::Union{Float64,Nothing} = nothing,
+)
+    n_bins = length(counts)
+    n_bins == 0 && return ""
+    exp_val = expected !== nothing ? expected : sum(counts) / n_bins
+    max_count = max(maximum(counts), exp_val) * 1.1
+
+    w, h = 400, 220
+    pad_l, pad_r, pad_t, pad_b = 45, 10, 30, 35
+    plot_w = w - pad_l - pad_r
+    plot_h = h - pad_t - pad_b
+    bar_gap = 1
+
+    io = IOBuffer()
+    write(io, "<svg width=\"$(w)\" height=\"$(h)\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family:sans-serif;\">")
+    write(io, "<text x=\"$(w÷2)\" y=\"16\" text-anchor=\"middle\" font-size=\"13\" fill=\"#333\">$(title)</text>")
+
+    bar_w = plot_w / n_bins - bar_gap
+    for i in 1:n_bins
+        bh = plot_h * counts[i] / max_count
+        x = pad_l + (i - 1) * (plot_w / n_bins) + bar_gap / 2
+        y = pad_t + plot_h - bh
+        write(io, "<rect x=\"$(round(x,digits=1))\" y=\"$(round(y,digits=1))\" width=\"$(round(bar_w,digits=1))\" height=\"$(round(bh,digits=1))\" fill=\"steelblue\" stroke=\"white\" stroke-width=\"1\"/>")
+    end
+
+    # Expected reference line
+    ref_y = pad_t + plot_h - plot_h * exp_val / max_count
+    write(io, "<line x1=\"$(pad_l)\" y1=\"$(round(ref_y,digits=1))\" x2=\"$(w - pad_r)\" y2=\"$(round(ref_y,digits=1))\" stroke=\"red\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\"/>")
+
+    # X-axis labels (every other bin)
+    step = max(1, n_bins ÷ 10)
+    for i in 1:step:n_bins
+        x = pad_l + (i - 0.5) * (plot_w / n_bins)
+        write(io, "<text x=\"$(round(x,digits=1))\" y=\"$(pad_t + plot_h + 14)\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\">$(i)</text>")
+    end
+
+    # Y-axis
+    write(io, "<text x=\"$(pad_l - 5)\" y=\"$(pad_t + 4)\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">$(round(Int, max_count))</text>")
+    write(io, "<text x=\"$(pad_l - 5)\" y=\"$(pad_t + plot_h + 4)\" text-anchor=\"end\" font-size=\"9\" fill=\"#666\">0</text>")
+
+    write(io, "</svg>")
+    return String(take!(io))
+end
+
+"""
+    line_chart(x_labels, series; title, ylabel) -> String
+
+Generate an inline SVG line chart. `series` is a vector of (label, values) pairs.
+"""
+function line_chart(
+    x_labels::Vector{String},
+    series::Vector{Tuple{String,Vector{Float64}}};
+    title::String = "",
+    ylabel::String = "",
+)
+    n = length(x_labels)
+    n == 0 && return ""
+    w, h = 500, 280
+    pad_l, pad_r, pad_t, pad_b = 55, 120, 30, 40
+    plot_w = w - pad_l - pad_r
+    plot_h = h - pad_t - pad_b
+
+    all_vals = vcat([v for (_, v) in series]...)
+    ymin = minimum(all_vals) * 0.95
+    ymax = maximum(all_vals) * 1.05
+    yrange = max(ymax - ymin, 1e-6)
+
+    sx(i) = pad_l + (i - 1) * plot_w / max(n - 1, 1)
+    sy(v) = pad_t + plot_h * (1.0 - (v - ymin) / yrange)
+
+    colours = ["#4e79a7", "#e15759", "#76b7b2", "#59a14f", "#edc949"]
+
+    io = IOBuffer()
+    write(io, "<svg width=\"$(w)\" height=\"$(h)\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family:sans-serif;\">")
+    !isempty(title) && write(io, "<text x=\"$(pad_l + plot_w÷2)\" y=\"16\" text-anchor=\"middle\" font-size=\"13\" fill=\"#333\">$(title)</text>")
+
+    # Axes
+    write(io, "<line x1=\"$(pad_l)\" y1=\"$(pad_t)\" x2=\"$(pad_l)\" y2=\"$(pad_t+plot_h)\" stroke=\"#ccc\"/>")
+    write(io, "<line x1=\"$(pad_l)\" y1=\"$(pad_t+plot_h)\" x2=\"$(pad_l+plot_w)\" y2=\"$(pad_t+plot_h)\" stroke=\"#ccc\"/>")
+
+    for (si, (label, vals)) in enumerate(series)
+        col = colours[mod1(si, length(colours))]
+        points = join(["$(round(sx(i),digits=1)),$(round(sy(vals[i]),digits=1))" for i in 1:min(n, length(vals))], " ")
+        write(io, "<polyline points=\"$(points)\" fill=\"none\" stroke=\"$(col)\" stroke-width=\"2\"/>")
+        # Legend
+        ly = pad_t + 10 + (si - 1) * 16
+        write(io, "<line x1=\"$(w - pad_r + 10)\" y1=\"$(ly)\" x2=\"$(w - pad_r + 25)\" y2=\"$(ly)\" stroke=\"$(col)\" stroke-width=\"2\"/>")
+        write(io, "<text x=\"$(w - pad_r + 28)\" y=\"$(ly + 4)\" font-size=\"10\" fill=\"#333\">$(label)</text>")
+    end
+
+    # X-axis labels (show subset to avoid crowding)
+    step = max(1, n ÷ 8)
+    for i in 1:step:n
+        x = round(sx(i), digits=1)
+        write(io, "<text x=\"$(x)\" y=\"$(pad_t + plot_h + 14)\" text-anchor=\"middle\" font-size=\"9\" fill=\"#666\" transform=\"rotate(-30, $(x), $(pad_t + plot_h + 14))\">$(x_labels[i])</text>")
+    end
+
+    # Y-axis label
+    !isempty(ylabel) && write(io, "<text x=\"14\" y=\"$(pad_t + plot_h÷2)\" text-anchor=\"middle\" font-size=\"11\" fill=\"#666\" transform=\"rotate(-90, 14, $(pad_t + plot_h÷2))\">$(ylabel)</text>")
 
     write(io, "</svg>")
     return String(take!(io))
