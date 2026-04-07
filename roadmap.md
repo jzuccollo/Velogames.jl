@@ -85,21 +85,37 @@ $$E[\text{VG points}] = E[\text{finish}] + E[\text{assists}] + E[\text{breakaway
 
 ## Known issues
 
-### VG points distributions underestimate scoring riders (March 2026)
+### VG points distributions underestimate scoring riders (March–April 2026)
 
-The most significant calibration problem identified from the first six prospective races of 2026 (Omloop, Kuurne, Strade, Trofeo, Nokere, MSR). The model's simulated VG points distributions systematically underestimate how many points riders actually earn when they do score. Aggregate mean PIT for scoring riders is 0.86 (target: 0.5), and the bias is consistent across all six races.
+The most significant calibration problem, now confirmed across 10 prospective races (Omloop, Kuurne, Strade, Trofeo, Nokere, MSR, Brugge De Panne, Dwars Door Vlaanderen, E3, Gent-Wevelgem). Aggregate mean PIT for scoring riders is 0.828 (target: 0.5), consistent across all 10 races. The drop from 0.86 (6 races) is composition effects from the more predictable Flemish races, not model improvement.
 
-The underestimation is worst for outsiders and mid-tier riders: when a cheap rider scores at all, they almost always score far more than the model predicted (bottom-25% mean PIT = 0.94, 92% with PIT > 0.9). Favourites are underestimated too but less severely (top-25% mean PIT = 0.75).
+The underestimation is worst for outsiders and mid-tier riders: bottom-25% mean PIT = 0.9, middle-50% mean PIT = 0.9, top-25% mean PIT = 0.7. The favourite z-score bias (-0.6 in the historical backtest) and PIT right-skew (0.7) are consistent: the model slightly overestimates favourite *position* but underestimates their *VG points* due to the convex scoring table at top positions.
 
-The consequence for team selection is severe. The optimiser sees expected value concentrated in expensive favourites and builds top-heavy teams (e.g. MSR: 88/100 credits on three riders). When one favourite blanks — as Ganna did, finishing 33rd, three positions outside the scoring cutoff — the team collapses. Meanwhile, cheap riders the model ignored delivered massive value (Vendrame cost 12, scored 330; Zambanini cost 12, scored 255; Tarozzi cost 4, scored 120).
+Higher posterior uncertainty correlates with *worse* PIT, not better (Trofeo mean uncertainty 1.3, PIT 0.9 vs Dwars 0.6, PIT 0.8). This confirms the problem is asymmetric: unknown riders in stochastic races have heavily right-skewed outcomes that symmetric noise cannot capture.
 
-The strength model's rank ordering is reasonable (Spearman rho 0.25–0.50 across races). The failure is specifically in converting strength to VG points — the simulation underestimates the right tail for weak and mid-tier riders. Simply widening uncertainty doesn't fix this: Trofeo Laigueglia has the widest posterior uncertainty (mean 1.29) but still shows mean PIT 0.87. The shape of the scoring distribution is wrong, not just its width.
+Three race-type clusters emerge from big-miss rates:
 
-The big-miss rate (strong riders scoring zero) varies enormously by race type: 0% for Strade Bianche, 20% for MSR/Omloop, up to 60% for Kuurne. The model applies the same uncertainty framework to all races and cannot adapt to this heterogeneity.
+| Cluster | Races | Big-miss rate | Characteristic |
+|---------|-------|---------------|----------------|
+| Selective | Strade, Dwars, E3 | 0–10% | Hard course thins the bunch; favourites nearly always score |
+| Standard | Brugge, MSR, Omloop | 20% | Mix of selection and bunch dynamics |
+| Stochastic | Kuurne, Nokere, Gent-Wevelgem, Trofeo | 30–60% | Bunch sprints or minor races; favourites frequently blank |
 
-### Oracle signal dominance
+### Oracle signal dominance (updated April 2026)
 
-The oracle signal shifts the posterior by 1.03 on average — nearly double PCS (0.55) and triple odds (0.36). MSR had the highest mean signal shift of any race (0.586), driven by 9 active signals all pulling strongly. The oracle's disproportionate influence may amplify the overconcentration problem by pushing the model's attention toward the same favourites the oracle rates highly. Its variance (0.5) may need increasing.
+With 10 races, the oracle's mean |shift| is 1.7 — nearly 3× odds (0.7) and 3× PCS (0.5). The oracle's massive shifts do not translate into measurably better rank ordering: prospective rho with oracle+odds (0.2–0.5) is comparable to the historical backtest median of 0.5 which runs without market signals. The `_odds_to_oracle_ratio` has been increased from 2.0 to 3.5 to reduce oracle precision.
+
+### Trajectory signal removed (April 2026)
+
+The trajectory signal (year-on-year PCS change) contributed mean |shift| of only 0.2 with 4% precision share across 10 races. It has been fully removed: the `trajectory_score` field on `RiderSignalData`, `shift_trajectory` field on `StrengthEstimate`, `_form_to_trajectory_ratio` on `BayesianConfig`, `trajectory_variance()`, and the `disable_trajectory` parameter are all deleted.
+
+### VG history decay reduced (April 2026)
+
+The VG race history decay rate was reduced from 1.3 to 0.8 per year. The old rate made even 1-year-old data imprecise (variance 2.5 + 1.3 = 3.8). Recent-edition VG performance is genuinely informative for race-specific suitability.
+
+### SBC test failure explained (April 2026)
+
+The SBC reports chi-squared p = 0.0 (non-uniform CDF ranks). This is a test bug, not a model bug: the SBC generates *independent* synthetic signals but `estimate_rider_strength` applies a *block-correlation discount* (within ρ=0.5, between ρ=0.15), making the posterior systematically wider than warranted by the uncorrelated DGP. Additionally, the SBC generates odds+oracle but never sets `race_has_market=true`. Per-signal SBC (one signal at a time) has been added to the backtesting report to verify each conjugate update individually.
 
 ### Breakaway heuristic limitations
 
@@ -107,42 +123,41 @@ Breakaway points are estimated heuristically from simulated finishing positions,
 
 The impact is larger than previously thought. In MSR 2026, 8 riders scored exactly 120 VG points each purely from breakaway sectors (Tarozzi, Maestri, Marcellusi, Faure Prost, Belletta, Milesi, Moro, Tronchon). The model predicted these riders at 0.5–65 expected VG points. PCS breakaway data for the race was entirely missing (zero riders flagged), so the model fell back on the position-based heuristic alone. For Cat 1 races where breakaway points are 60 per sector (max 240 per rider), the heuristic is inadequate.
 
-### Notebooks excluded from the Quarto build
-
-`stagerace_predictor.qmd`, `historical_analysis.qmd`, and `index.qmd` exist but are not in `_quarto.yml`. The stage race notebook has a small bug: references undefined `vg_history` variable at line 88 (fix: replace with `n_vg_hist > 0` check). To publish: fix the bug, add all three to `_quarto.yml`, and verify they render.
-
 ---
 
 ## Improvement plan
 
-### Summary assessment (March 2026, revised after early-season review)
+### Summary assessment (April 2026, revised after 10-race review)
 
-The system correctly identifies the key problem — signal fusion under uncertainty, with a non-linear scoring function — and solves it with appropriate tools. The resampled optimisation handles Jensen's inequality bias correctly, the archival system is excellent, and the prospective evaluation framework accumulates real signal incrementally. The strength model's rank ordering is reasonable (Spearman rho 0.25–0.50 across six prospective races).
+The system correctly identifies the key problem — signal fusion under uncertainty, with a non-linear scoring function — and solves it with appropriate tools. The resampled optimisation handles Jensen's inequality bias correctly, the archival system is excellent, and the prospective evaluation framework accumulates real signal incrementally. The strength model's rank ordering is reasonable (Spearman rho 0.2–0.5 across 10 prospective races, median 0.5 in the 120-race historical backtest).
 
-The single largest problem is that the **VG points simulation systematically underestimates scoring riders**, especially cheap and mid-tier ones. This causes the optimiser to overconcentrate budget in expensive favourites, building fragile teams that collapse when one star blanks. The PIT-by-tier analysis from six 2026 races shows outsiders are underestimated most severely (mean PIT 0.94), with the problem diminishing but still present for favourites (mean PIT 0.75). This is not a strength estimation problem — rank ordering is decent — but a scoring distribution problem. The simulation's VG points draws for cheap riders are too pessimistic, lacking sufficient right-tail probability mass for breakaway contributions, surprise finishes, and tactical results.
+The single largest problem remains that the **VG points simulation systematically underestimates scoring riders** (mean PIT 0.828 across 10 races, target 0.5). The problem is structural: higher posterior uncertainty correlates with *worse* PIT, confirming that symmetric noise cannot capture the right-skewed outcomes of cheap riders in stochastic races. This is not a width problem but a shape problem.
 
-Three other gaps remain significant: (1) the tournament dimension is absent — ownership adjustment would diversify teams away from consensus picks, partially mitigating the overconcentration even without fixing the underlying distributions; (2) the per-stage grand tour simulation is unbuilt; (3) the model applies identical uncertainty to all race types despite big-miss rates ranging from 0% (Strade) to 60% (Kuurne).
+A new insight from 10 races is that **race selectivity drives prediction difficulty** more than any model parameter. Three clusters are visible: selective races (Strade, Dwars, E3: 0–10% big-miss rate), standard (Brugge, MSR, Omloop: ~20%), and stochastic (Kuurne, Nokere, Gent-Wevelgem, Trofeo: 30–60%). The model applies identical uncertainty to all — race-type-specific noise is now the most actionable improvement.
 
-Several structural concerns are noted but do not require immediate action: the block-correlation discount and `market_discount` compound in mathematically inconsistent ways; the trajectory signal contributes very little precision; the oracle signal is disproportionately influential (mean |shift| 1.03, nearly 2× PCS and 3× odds).
+Changes made in April 2026: (1) oracle precision reduced (`_odds_to_oracle_ratio` 2.0 → 3.5) after 10 races showed mean |shift| 1.7 with no rank-ordering benefit; (2) trajectory signal removed (mean |shift| 0.2, 4% precision share); (3) VG history decay reduced (1.3 → 0.8) to make recent editions more informative; (4) backtesting report expanded with per-signal SBC, predicted-vs-actual scatter plots, signal directional accuracy, race selectivity clustering, per-race PIT-by-tier, and cumulative calibration tracking.
 
 ### Prioritised improvements
 
 | Priority | Improvement | Expected impact | Status |
 | -------- | ----------- | --------------- | ------ |
 | 1 | **Fix VG points calibration for mid-tier riders** | High — the single largest source of team selection error. See note below | Not done |
-| 2 | **Ownership-adjusted team selection** | High — diversifies teams away from overconcentration even with current calibration. Free data in `selected` column | Not done |
-| 3 | **Phase 4: Per-stage grand tour simulation** | High — current aggregate model ignores course composition entirely | Planned — see detailed design below |
-| 4 | **Race-type-specific uncertainty** | Moderate — big-miss rate ranges 0–60% across race types; one-size-fits-all framework cannot adapt | Not done |
-| 5 | **Reduce oracle signal precision** | Low-moderate — oracle's mean abs shift of 1.03 is disproportionate; may amplify overconcentration in favourites | Not done — confirm via signal-vs-calibration analysis |
-| 6 | **Remove trajectory signal** | Simplification at negligible predictive cost — mean abs shift only 0.20 | Option — confirm via signal analysis first |
-| 7 | **Validate similar-race history** | Could remove a noise source for races with ≥3 exact-history years | Option — confirm via ablation |
-| 8 | **Simplify market/history interaction** | Code clarity; functionally equivalent when odds are present | Option — see note below |
-| 9 | **Correlated position simulation** | Low-moderate; more useful for stage races and team-heavy strategies | Not done |
-| 10 | **ML augmentation** | ~3% above tuned baseline per Kholkine; requires 90+ race training set | Not done — prerequisites missing |
+| 2 | **Race-type selectivity parameter** | High — most actionable new insight. Add selectivity to `RaceInfo`, scale simulation noise by race type | Not done |
+| 3 | **Ownership-adjusted team selection** | High — diversifies teams away from overconcentration even with current calibration. Free data in `selected` column | Not done |
+| 4 | **Phase 4: Per-stage grand tour simulation** | High — current aggregate model ignores course composition entirely | Planned — see detailed design below |
+| 5 | **Reduce oracle signal precision** | Low-moderate — oracle mean abs shift was 1.7, disproportionate vs odds (0.7) | Done — `_odds_to_oracle_ratio` 2.0 → 3.5 |
+| 6 | **Remove trajectory signal** | Simplification at negligible predictive cost | Done — signal removed from estimation |
+| 7 | **Reduce VG history decay** | Makes recent edition data more informative | Done — 1.3 → 0.8 |
+| 8 | **Validate similar-race history** | Could remove a noise source for races with ≥3 exact-history years | Option — confirm via ablation |
+| 9 | **Simplify market/history interaction** | Code clarity; functionally equivalent when odds are present | Option — see note below |
+| 10 | **Correlated position simulation** | Low-moderate; more useful for stage races and team-heavy strategies | Not done |
+| 11 | **ML augmentation** | ~3% above tuned baseline per Kholkine; requires 90+ race training set | Not done — prerequisites missing |
 
-**Note on fixing VG points calibration (priority 1):** The problem is that the simulation's VG points distributions for cheap riders are too concentrated near zero. Several potential approaches: (a) heavier tails in the simulation noise (current df=5 may still be too light for the VG scoring cliff at position 31); (b) explicitly modelling a higher breakaway contribution floor for riders with any breakaway history; (c) recalibrating the position-to-strength mapping so that weak riders have wider, more right-skewed strength distributions; (d) a post-hoc calibration step that adjusts simulated VG points distributions using prospective PIT data. Approach (b) is the most targeted since breakaway points are a major source of cheap-rider value, but the PIT data suggests the issue is broader than breakaways alone.
+**Note on fixing VG points calibration (priority 1):** The problem is that the simulation's VG points distributions for cheap riders are too concentrated near zero. Several potential approaches: (a) heavier tails in the simulation noise (current df=5 may still be too light for the VG scoring cliff at position 31); (b) explicitly modelling a higher breakaway contribution floor for riders with any breakaway history; (c) recalibrating the position-to-strength mapping so that weak riders have wider, more right-skewed strength distributions; (d) a post-hoc calibration step that adjusts simulated VG points distributions using prospective PIT data. Approach (b) is the most targeted since breakaway points are a major source of cheap-rider value, but the PIT data suggests the issue is broader than breakaways alone. The 10-race data confirms that simply widening uncertainty does not help — Trofeo (mean uncertainty 1.3) still shows PIT 0.9.
 
-**Note on simplifying the market/history interaction (priority 8):** `market_discount` inflates non-market signal variances 8× when odds are present; the block-correlation discount then re-discounts the already-discounted precision. The clean fix is to skip non-market signals entirely when `race_has_market = true` — functionally equivalent, removes the interaction, and eliminates dead computation. This is a bigger refactor but would substantially clarify `estimate_rider_strength`. Deprioritised because the signal-vs-calibration analysis shows no clear relationship between signal load and calibration quality — the scoring distribution problem is more fundamental.
+**Note on race-type selectivity (priority 2):** Three clusters emerge from big-miss rates. A `selectivity` field on `RaceInfo` (e.g. `:selective`, `:standard`, `:stochastic`) could control `simulation_df` (heavier tails for stochastic races) or inject position-dependent noise asymmetry. The key insight is that the inverse uncertainty-PIT relationship means the problem is specifically about right-tail probability mass for low-strength riders in stochastic races, not about uncertainty width in general.
+
+**Note on simplifying the market/history interaction (priority 9):** `market_discount` inflates non-market signal variances 8× when odds are present; the block-correlation discount then re-discounts the already-discounted precision. The clean fix is to skip non-market signals entirely when `race_has_market = true` — functionally equivalent, removes the interaction, and eliminates dead computation. Deprioritised because the signal-vs-calibration analysis shows no clear relationship between signal load and calibration quality.
 
 ### Completed improvements
 
@@ -153,8 +168,10 @@ Several structural concerns are noted but do not require immediate action: the b
 | 3. Course profile matching | Terrain-similar race history via `SIMILAR_RACES` | Manual curation of terrain groupings; automatic PCS profile scraping deferred as low priority. |
 | 4. Leader/domestique roles | Domestique strength discount + max-per-team constraint | Heuristic leader detection by estimated strength within the field. |
 | 5. Recent form signal | PCS form page scraping, z-scored as Bayesian update | Covers top ~40-60 riders; race-agnostic (no terrain filtering). |
-| 6. Season-adaptive VG + trajectory | VG variance scales with season progress; trajectory captures improvement/decline | `vg_season_penalty` inflates early-season VG variance; trajectory compares current PCS to historical mean. |
+| 6. Season-adaptive VG | VG variance scales with season progress | `vg_season_penalty` inflates early-season VG variance. Trajectory signal removed April 2026 (negligible contribution). |
 | 7. Student's t noise | Heavy-tailed simulation noise via `simulation_df` parameter | `_rand_t(rng, df)` in `simulation.jl`. Default `simulation_df=nothing` (Gaussian); notebooks use df=5. |
+| 8. Oracle precision + VG history decay (April 2026) | Reduced oracle influence, improved VG history recency | `_odds_to_oracle_ratio` 2.0 → 3.5; `vg_hist_decay_rate` 1.3 → 0.8. |
+| 9. Enhanced backtesting report (April 2026) | Per-signal SBC, predicted-vs-actual scatter, signal directional accuracy, race selectivity clustering, calibration history tracking | Standalone HTML report via `render_backtesting.jl`. |
 
 ---
 
