@@ -77,37 +77,95 @@ function html_callout(
 
     if collapsed
         summary = isempty(title) ? titlecase(type) : title
-        return """<details style="margin:1em 0; border-left:4px solid $border; padding:0.5em 1em; background:$bg;">
+        return """<details style="margin:1.25em 0; border-left:4px solid $border; padding:0.5em 1em; background:$bg; border-radius:6px;">
 <summary style="color:$colour; font-weight:bold; cursor:pointer;">$summary</summary>
 $content
 </details>\n"""
     end
 
     header = isempty(title) ? "" : "<strong style=\"color:$colour;\">$title</strong><br>"
-    return """<div style="margin:1em 0; border-left:4px solid $border; padding:0.75em 1em; background:$bg;">
+    return """<div style="margin:1.25em 0; border-left:4px solid $border; padding:0.75em 1em; background:$bg; border-radius:6px;">
 $header$content
 </div>\n"""
 end
 
 const _HTML_PAGE_CSS = """
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-       max-width: 960px; margin: 2em auto; padding: 0 1em; color: #333; line-height: 1.6; }
-h1, h2, h3, h4 { margin-top: 1.5em; }
-h1 { border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
-table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
-th, td { padding: 0.4em 0.8em; text-align: left; border-bottom: 1px solid #ddd; }
-th { background: #f8f9fa; font-weight: 600; }
-tr:hover { background: #f5f5f5; }
-.table-striped tbody tr:nth-child(odd) { background: #fafafa; }
-details { margin: 1em 0; }
-summary { cursor: pointer; font-weight: bold; }
-nav#toc { position: fixed; top: 2em; right: 2em; width: 220px; max-height: 80vh;
-          overflow-y: auto; font-size: 0.85em; border-left: 2px solid #ddd; padding-left: 1em; }
-nav#toc a { display: block; padding: 0.2em 0; color: #555; text-decoration: none; }
-nav#toc a:hover { color: #007bff; }
-nav#toc .toc-h3 { padding-left: 1em; font-size: 0.9em; }
-@media (max-width: 1200px) { nav#toc { display: none; } body { max-width: 800px; } }
-.subtitle { color: #666; font-size: 1.1em; margin-top: -0.8em; margin-bottom: 1.5em; }
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  margin: 0; padding: 0; color: #2d3436; line-height: 1.7; background: #f0f2f5;
+  -webkit-font-smoothing: antialiased;
+}
+.page-header {
+  background: linear-gradient(135deg, #043b5c 0%, #066aab 100%);
+  color: #fff; padding: 2.5em 1.5em 2em;
+}
+.header-content { max-width: 900px; margin: 0 auto; }
+.page-header h1 {
+  font-size: 2em; font-weight: 700; letter-spacing: -0.02em;
+  margin: 0 0 0.15em; border: none; padding: 0; color: #fff;
+}
+.page-header .subtitle { color: rgba(255,255,255,0.75); font-size: 1.05em; margin: 0; font-weight: 400; }
+.page-header .home-link {
+  display: inline-block; margin-bottom: 0.5em; color: rgba(255,255,255,0.6);
+  font-size: 0.85em; text-decoration: none; transition: color 0.15s;
+}
+.page-header .home-link:hover { color: #fff; text-decoration: none; }
+.content {
+  max-width: 900px; margin: -1em auto 3em; padding: 2em 2.5em 2.5em;
+  background: #fff; border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  position: relative; z-index: 1;
+}
+h1, h2, h3, h4 { font-weight: 700; color: #054d78; margin-top: 2em; margin-bottom: 0.5em; }
+h2 { font-size: 1.5em; letter-spacing: -0.01em; padding-bottom: 0.3em; border-bottom: 2px solid #d4a843; }
+h3 { font-size: 1.15em; color: #4a5568; font-weight: 600; }
+h4 { font-size: 1em; }
+p { margin: 0.75em 0; }
+a { color: #066aab; text-decoration: none; transition: color 0.15s; }
+a:hover { color: #043b5c; text-decoration: underline; }
+table {
+  border-collapse: collapse; width: 100%; margin: 1.25em 0; font-size: 0.88em;
+  background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px #e2e8f0;
+}
+thead { background: #f7fafc; }
+th {
+  padding: 0.7em 1em; text-align: left; font-weight: 600; color: #4a5568;
+  font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em;
+  border-bottom: 2px solid #d4a843;
+}
+td { padding: 0.55em 1em; text-align: left; border-bottom: 1px solid #edf2f7; color: #2d3436; }
+.table-striped tbody tr:nth-child(even) { background: #f7fafc; }
+tbody tr { transition: background 0.1s; }
+tbody tr:hover { background: #edf2f7; }
+details { margin: 1.25em 0; border-radius: 6px; overflow: hidden; }
+summary { cursor: pointer; font-weight: 600; padding: 0.5em 0; }
+details[open] summary { margin-bottom: 0.5em; }
+.js-plotly-plot { margin: 1em 0; border-radius: 6px; overflow: hidden; }
+nav#toc {
+  position: fixed; top: 2.5em; right: 2em; width: 220px; max-height: 80vh;
+  overflow-y: auto; font-size: 0.82em; border-left: 3px solid #e2e8f0;
+  padding-left: 1em; z-index: 10;
+}
+nav#toc a {
+  display: block; padding: 0.25em 0; color: #718096; text-decoration: none;
+  transition: color 0.15s, padding-left 0.15s; line-height: 1.4;
+}
+nav#toc a:hover { color: #066aab; padding-left: 0.3em; }
+nav#toc .toc-h3 { padding-left: 1em; font-size: 0.92em; }
+@media (max-width: 1280px) { nav#toc { display: none; } }
+@media (max-width: 768px) {
+  .content { margin: 0; padding: 1.25em 1em; border-radius: 0; box-shadow: none; }
+  .page-header { padding: 1.5em 1em 1.25em; }
+  .page-header h1 { font-size: 1.5em; }
+  table { font-size: 0.82em; }
+  th, td { padding: 0.4em 0.6em; }
+}
+@media (max-width: 480px) {
+  .content { padding: 1em 0.75em; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+}
 """
 
 const _HTML_PAGE_TOC_JS = """
@@ -135,9 +193,11 @@ function html_page(;
     subtitle::String = "",
     body::String,
     include_plotly::Bool = false,
+    home_url::String = "",
 )
     plotly_script = include_plotly ? "\n<script src=\"https://cdn.plot.ly/plotly-2.35.2.min.js\"></script>" : ""
     subtitle_html = isempty(subtitle) ? "" : "<p class=\"subtitle\">$subtitle</p>\n"
+    home_html = isempty(home_url) ? "" : "<a class=\"home-link\" href=\"$home_url\">&larr; All races</a>\n"
 
     return """<!DOCTYPE html>
 <html lang="en">
@@ -148,8 +208,13 @@ function html_page(;
 <style>$(_HTML_PAGE_CSS)</style>$plotly_script
 </head>
 <body>
-<h1>$title</h1>
-$subtitle_html$body
+<header class="page-header">
+<div class="header-content">
+$home_html<h1>$title</h1>
+$subtitle_html</div>
+</header>
+<main class="content">
+$body</main>
 <nav id="toc"></nav>
 <script>$(_HTML_PAGE_TOC_JS)</script>
 </body>

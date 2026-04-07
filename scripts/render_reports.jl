@@ -304,6 +304,7 @@ function report_html(;
         subtitle="Fantasy retrospective — $race_date",
         body=body,
         include_plotly=true,
+        home_url="../index.html",
     )
 end
 

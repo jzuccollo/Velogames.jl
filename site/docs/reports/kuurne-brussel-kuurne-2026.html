@@ -1,162 +1,99 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
-
+<html lang="en">
+<head>
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.9.36">
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-
-
-<title>Kuurne - Brussel - Kuurne 2026 – Velogames: race reports</title>
-<style>
-/* Default styles provided by pandoc.
-** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
-*/
-code{white-space: pre-wrap;}
-span.smallcaps{font-variant: small-caps;}
-div.columns{display: flex; gap: min(4vw, 1.5em);}
-div.column{flex: auto; overflow-x: auto;}
-div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
-ul.task-list{list-style: none;}
-ul.task-list li input[type="checkbox"] {
-  width: 0.8em;
-  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
-  vertical-align: middle;
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kuurne - Brussel - Kuurne 2026</title>
+<style>*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  margin: 0; padding: 0; color: #2d3436; line-height: 1.7; background: #f0f2f5;
+  -webkit-font-smoothing: antialiased;
+}
+.page-header {
+  background: linear-gradient(135deg, #043b5c 0%, #066aab 100%);
+  color: #fff; padding: 2.5em 1.5em 2em;
+}
+.header-content { max-width: 900px; margin: 0 auto; }
+.page-header h1 {
+  font-size: 2em; font-weight: 700; letter-spacing: -0.02em;
+  margin: 0 0 0.15em; border: none; padding: 0; color: #fff;
+}
+.page-header .subtitle { color: rgba(255,255,255,0.75); font-size: 1.05em; margin: 0; font-weight: 400; }
+.page-header .home-link {
+  display: inline-block; margin-bottom: 0.5em; color: rgba(255,255,255,0.6);
+  font-size: 0.85em; text-decoration: none; transition: color 0.15s;
+}
+.page-header .home-link:hover { color: #fff; text-decoration: none; }
+.content {
+  max-width: 900px; margin: -1em auto 3em; padding: 2em 2.5em 2.5em;
+  background: #fff; border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  position: relative; z-index: 1;
+}
+h1, h2, h3, h4 { font-weight: 700; color: #054d78; margin-top: 2em; margin-bottom: 0.5em; }
+h2 { font-size: 1.5em; letter-spacing: -0.01em; padding-bottom: 0.3em; border-bottom: 2px solid #d4a843; }
+h3 { font-size: 1.15em; color: #4a5568; font-weight: 600; }
+h4 { font-size: 1em; }
+p { margin: 0.75em 0; }
+a { color: #066aab; text-decoration: none; transition: color 0.15s; }
+a:hover { color: #043b5c; text-decoration: underline; }
+table {
+  border-collapse: collapse; width: 100%; margin: 1.25em 0; font-size: 0.88em;
+  background: #fff; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px #e2e8f0;
+}
+thead { background: #f7fafc; }
+th {
+  padding: 0.7em 1em; text-align: left; font-weight: 600; color: #4a5568;
+  font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em;
+  border-bottom: 2px solid #d4a843;
+}
+td { padding: 0.55em 1em; text-align: left; border-bottom: 1px solid #edf2f7; color: #2d3436; }
+.table-striped tbody tr:nth-child(even) { background: #f7fafc; }
+tbody tr { transition: background 0.1s; }
+tbody tr:hover { background: #edf2f7; }
+details { margin: 1.25em 0; border-radius: 6px; overflow: hidden; }
+summary { cursor: pointer; font-weight: 600; padding: 0.5em 0; }
+details[open] summary { margin-bottom: 0.5em; }
+.js-plotly-plot { margin: 1em 0; border-radius: 6px; overflow: hidden; }
+nav#toc {
+  position: fixed; top: 2.5em; right: 2em; width: 220px; max-height: 80vh;
+  overflow-y: auto; font-size: 0.82em; border-left: 3px solid #e2e8f0;
+  padding-left: 1em; z-index: 10;
+}
+nav#toc a {
+  display: block; padding: 0.25em 0; color: #718096; text-decoration: none;
+  transition: color 0.15s, padding-left 0.15s; line-height: 1.4;
+}
+nav#toc a:hover { color: #066aab; padding-left: 0.3em; }
+nav#toc .toc-h3 { padding-left: 1em; font-size: 0.92em; }
+@media (max-width: 1280px) { nav#toc { display: none; } }
+@media (max-width: 768px) {
+  .content { margin: 0; padding: 1.25em 1em; border-radius: 0; box-shadow: none; }
+  .page-header { padding: 1.5em 1em 1.25em; }
+  .page-header h1 { font-size: 1.5em; }
+  table { font-size: 0.82em; }
+  th, td { padding: 0.4em 0.6em; }
+}
+@media (max-width: 480px) {
+  .content { padding: 1em 0.75em; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
 }
 </style>
-
-
-<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
-<script src="../site_libs/quarto-nav/headroom.min.js"></script>
-<script src="../site_libs/clipboard/clipboard.min.js"></script>
-<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
-<script src="../site_libs/quarto-search/fuse.min.js"></script>
-<script src="../site_libs/quarto-search/quarto-search.js"></script>
-<meta name="quarto:offset" content="../">
-<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
-<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="../site_libs/quarto-html/popper.min.js"></script>
-<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
-<script src="../site_libs/quarto-html/anchor.min.js"></script>
-<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
-<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
-<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-54ca3c8880fd8c986106ce3bf5c7adc7.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
-<script id="quarto-search-options" type="application/json">{
-  "location": "navbar",
-  "copy-button": false,
-  "collapse-after": 3,
-  "panel-placement": "end",
-  "type": "overlay",
-  "limit": 50,
-  "keyboard-shortcut": [
-    "f",
-    "/",
-    "s"
-  ],
-  "show-item-context": false,
-  "language": {
-    "search-no-results-text": "No results",
-    "search-matching-documents-text": "matching documents",
-    "search-copy-link-title": "Copy link to search",
-    "search-hide-matches-text": "Hide additional matches",
-    "search-more-match-text": "more match in this document",
-    "search-more-matches-text": "more matches in this document",
-    "search-clear-button-title": "Clear",
-    "search-text-placeholder": "",
-    "search-detached-cancel-button-title": "Cancel",
-    "search-submit-button-title": "Submit",
-    "search-label": "Search"
-  }
-}</script>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-
-
 </head>
-
-<body class="nav-fixed quarto-light">
-
-<div id="quarto-search-results"></div>
-  <header id="quarto-header" class="headroom fixed-top">
-    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
-      <div class="navbar-container container-fluid">
-      <div class="navbar-brand-container mx-auto">
-    <a class="navbar-brand" href="../index.html">
-    <span class="navbar-title">Velogames: race reports</span>
-    </a>
-  </div>
-            <div id="quarto-search" class="" title="Search"></div>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
-  <span class="navbar-toggler-icon"></span>
-</button>
-          <div class="collapse navbar-collapse" id="navbarCollapse">
-            <ul class="navbar-nav navbar-nav-scroll me-auto">
-  <li class="nav-item">
-    <a class="nav-link" href="../index.html"> 
-<span class="menu-text">Home</span></a>
-  </li>  
-</ul>
-          </div> <!-- /navcollapse -->
-            <div class="quarto-navbar-tools">
+<body>
+<header class="page-header">
+<div class="header-content">
+<a class="home-link" href="../index.html">&larr; All races</a>
+<h1>Kuurne - Brussel - Kuurne 2026</h1>
+<p class="subtitle">Fantasy retrospective — 1 March 2026</p>
 </div>
-      </div> <!-- /container-fluid -->
-    </nav>
 </header>
-<!-- content -->
-<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
-<!-- sidebar -->
-<!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <nav id="TOC" role="doc-toc" class="toc-active">
-    <h2 id="toc-title">On this page</h2>
-   
-  <ul>
-  <li><a href="#how-the-race-played-out" id="toc-how-the-race-played-out" class="nav-link active" data-scroll-target="#how-the-race-played-out">How the race played out</a></li>
-  <li><a href="#the-perfect-team" id="toc-the-perfect-team" class="nav-link" data-scroll-target="#the-perfect-team">The perfect team</a></li>
-  <li><a href="#the-cheapest-winning-team" id="toc-the-cheapest-winning-team" class="nav-link" data-scroll-target="#the-cheapest-winning-team">The cheapest winning team</a></li>
-  <li><a href="#was-it-worth-paying-more" id="toc-was-it-worth-paying-more" class="nav-link" data-scroll-target="#was-it-worth-paying-more">Was it worth paying more?</a>
-  <ul class="collapse">
-  <li><a href="#points-scored-by-price" id="toc-points-scored-by-price" class="nav-link" data-scroll-target="#points-scored-by-price">Points scored by price</a></li>
-  <li><a href="#top-scorers-this-race" id="toc-top-scorers-this-race" class="nav-link" data-scroll-target="#top-scorers-this-race">Top scorers this race</a></li>
-  <li><a href="#points-per-credit-by-price" id="toc-points-per-credit-by-price" class="nav-link" data-scroll-target="#points-per-credit-by-price">Points per credit by price</a></li>
-  <li><a href="#best-value-picks" id="toc-best-value-picks" class="nav-link" data-scroll-target="#best-value-picks">Best value picks</a></li>
-  </ul></li>
-  <li><a href="#the-ones-to-avoid" id="toc-the-ones-to-avoid" class="nav-link" data-scroll-target="#the-ones-to-avoid">The ones to avoid</a>
-  <ul class="collapse">
-  <li><a href="#priciest-blanks" id="toc-priciest-blanks" class="nav-link" data-scroll-target="#priciest-blanks">Priciest blanks</a></li>
-  <li><a href="#biggest-premium-disappointments" id="toc-biggest-premium-disappointments" class="nav-link" data-scroll-target="#biggest-premium-disappointments">Biggest premium disappointments</a></li>
-  </ul></li>
-  <li><a href="#how-did-the-teams-fare" id="toc-how-did-the-teams-fare" class="nav-link" data-scroll-target="#how-did-the-teams-fare">How did the teams fare?</a></li>
-  </ul>
-</nav>
-    </div>
-<!-- main -->
-<main class="content" id="quarto-document-content">
-
-<header id="title-block-header" class="quarto-title-block default">
-<div class="quarto-title">
-<h1 class="title">Kuurne - Brussel - Kuurne 2026</h1>
-<p class="subtitle lead">Fantasy retrospective — 1 March 2026</p>
-</div>
-
-
-
-<div class="quarto-title-meta">
-
-    
-  
-    
-  </div>
-  
-
-
-</header>
-
-
+<main class="content">
 <p><strong>6 month write off</strong> won our fantasy league with <strong>488</strong> points. But could they have done better? Read on to find out.</p>
-<section id="how-the-race-played-out" class="level2">
-<h2 class="anchored" data-anchor-id="how-the-race-played-out">How the race played out</h2>
+<h2 id="how-the-race-played-out">How the race played out</h2>
 <ul>
 <li><strong>Riders who scored</strong>: 45 out of 173 starters</li>
 <li><strong>Top scorer</strong>: Matthew Brennan with 320 points</li>
@@ -165,1028 +102,127 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>Perfect team score</strong>: 1440 points for 100 credits</li>
 <li><strong>League winner</strong>: 6 month write off with 488 points</li>
 </ul>
-</section>
-<section id="the-perfect-team" class="level2">
-<h2 class="anchored" data-anchor-id="the-perfect-team">The perfect team</h2>
+<h2 id="the-perfect-team">The perfect team</h2>
 <p>With the benefit of hindsight, this is the highest-scoring team that fits within the budget.</p>
-<p>The perfect team scores <strong>1440</strong> points, costing <strong>100</strong> out of 100 credits. That’s <strong>952</strong> points more than our league winner.</p>
-<div id="88c790d4" class="cell" data-execution_count="5">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="6">
-<table class="caption-top table table-sm table-striped small">
-<colgroup>
-<col style="width: 24%">
-<col style="width: 38%">
-<col style="width: 8%">
-<col style="width: 11%">
-<col style="width: 17%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Rider</th>
-<th>Team</th>
-<th>Cost</th>
-<th>Points</th>
-<th>Pts/credit</th>
-</tr>
-</thead>
+<p>The perfect team scores <strong>1440</strong> points, costing <strong>100</strong> out of 100 credits. That's <strong>952</strong> points more than our league winner.</p>
+<table class="table table-striped table-sm">
+<thead><tr><th>Rider</th><th>Team</th><th>Cost</th><th>Points</th><th>Pts/credit</th></tr></thead>
 <tbody>
-<tr class="odd">
-<td>Matthew Brennan</td>
-<td>Team Visma - Lease a Bike</td>
-<td>24</td>
-<td>320</td>
-<td>13.3</td>
-</tr>
-<tr class="even">
-<td>Luca Mozzato</td>
-<td>Tudor Pro Cycling Team</td>
-<td>14</td>
-<td>295</td>
-<td>21.1</td>
-</tr>
-<tr class="odd">
-<td>Matteo Trentin</td>
-<td>Tudor Pro Cycling Team</td>
-<td>20</td>
-<td>270</td>
-<td>13.5</td>
-</tr>
-<tr class="even">
-<td>Matevž Govekar</td>
-<td>Bahrain - Victorious</td>
-<td>8</td>
-<td>210</td>
-<td>26.2</td>
-</tr>
-<tr class="odd">
-<td>Mike Teunissen</td>
-<td>XDS Astana Team</td>
-<td>18</td>
-<td>180</td>
-<td>10.0</td>
-</tr>
-<tr class="even">
-<td>Laurenz Rex</td>
-<td>Soudal Quick-Step</td>
-<td>16</td>
-<td>165</td>
-<td>10.3</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</section>
-<section id="the-cheapest-winning-team" class="level2">
-<h2 class="anchored" data-anchor-id="the-cheapest-winning-team">The cheapest winning team</h2>
-<p>What’s the minimum investment that could have beaten <strong>6 month write off</strong>? This team scores <strong>495</strong> points for just <strong>32</strong> credits, leaving <strong>68</strong> credits on the table.</p>
-<div id="1b7b8790" class="cell" data-execution_count="7">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="8">
-<table class="caption-top table table-sm table-striped small">
-<colgroup>
-<col style="width: 30%">
-<col style="width: 37%">
-<col style="width: 7%">
-<col style="width: 10%">
-<col style="width: 15%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Rider</th>
-<th>Team</th>
-<th>Cost</th>
-<th>Points</th>
-<th>Pts/credit</th>
-</tr>
-</thead>
+<tr><td>Matthew Brennan</td><td>Team Visma - Lease a Bike</td><td>24.0</td><td>320.0</td><td>13.3</td></tr>
+<tr><td>Luca Mozzato</td><td>Tudor Pro Cycling Team</td><td>14.0</td><td>295.0</td><td>21.1</td></tr>
+<tr><td>Matteo Trentin</td><td>Tudor Pro Cycling Team</td><td>20.0</td><td>270.0</td><td>13.5</td></tr>
+<tr><td>Matevž Govekar</td><td>Bahrain - Victorious</td><td>8.0</td><td>210.0</td><td>26.2</td></tr>
+<tr><td>Mike Teunissen</td><td>XDS Astana Team</td><td>18.0</td><td>180.0</td><td>10.0</td></tr>
+<tr><td>Laurenz Rex</td><td>Soudal Quick-Step</td><td>16.0</td><td>165.0</td><td>10.3</td></tr>
+</tbody></table>
+<h2 id="the-cheapest-winning-team">The cheapest winning team</h2>
+<p>What's the minimum investment that could have beaten <strong>6 month write off</strong>? This team scores <strong>495</strong> points for just <strong>32</strong> credits, leaving <strong>68</strong> credits on the table.</p>
+<table class="table table-striped table-sm">
+<thead><tr><th>Rider</th><th>Team</th><th>Cost</th><th>Points</th><th>Pts/credit</th></tr></thead>
 <tbody>
-<tr class="odd">
-<td>Matevž Govekar</td>
-<td>Bahrain - Victorious</td>
-<td>8</td>
-<td>210</td>
-<td>26.2</td>
-</tr>
-<tr class="even">
-<td>Steffen De Schuyteneer</td>
-<td>Lotto Intermarché</td>
-<td>6</td>
-<td>84</td>
-<td>14.0</td>
-</tr>
-<tr class="odd">
-<td>Ben Oliver</td>
-<td>Modern Adventure Pro Cycling</td>
-<td>6</td>
-<td>66</td>
-<td>11.0</td>
-</tr>
-<tr class="even">
-<td>Pietro Mattio</td>
-<td>Team Visma - Lease a Bike</td>
-<td>4</td>
-<td>45</td>
-<td>11.2</td>
-</tr>
-<tr class="odd">
-<td>Robin Froidevaux</td>
-<td>Tudor Pro Cycling Team</td>
-<td>4</td>
-<td>45</td>
-<td>11.2</td>
-</tr>
-<tr class="even">
-<td>Petr Kelemen</td>
-<td>Tudor Pro Cycling Team</td>
-<td>4</td>
-<td>45</td>
-<td>11.2</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</section>
-<section id="was-it-worth-paying-more" class="level2">
-<h2 class="anchored" data-anchor-id="was-it-worth-paying-more">Was it worth paying more?</h2>
-<section id="points-scored-by-price" class="level3">
-<h3 class="anchored" data-anchor-id="points-scored-by-price">Points scored by price</h3>
-<p>Each dot is a rider. Hover to see who they are. The dashed line shows the general trend — if it slopes upward, pricier riders tended to score more; if it’s flat or slopes down, the cheaper picks were just as good.</p>
+<tr><td>Matevž Govekar</td><td>Bahrain - Victorious</td><td>8.0</td><td>210.0</td><td>26.2</td></tr>
+<tr><td>Steffen De Schuyteneer</td><td>Lotto Intermarché</td><td>6.0</td><td>84.0</td><td>14.0</td></tr>
+<tr><td>Ben Oliver</td><td>Modern Adventure Pro Cycling</td><td>6.0</td><td>66.0</td><td>11.0</td></tr>
+<tr><td>Pietro Mattio</td><td>Team Visma - Lease a Bike</td><td>4.0</td><td>45.0</td><td>11.2</td></tr>
+<tr><td>Robin Froidevaux</td><td>Tudor Pro Cycling Team</td><td>4.0</td><td>45.0</td><td>11.2</td></tr>
+<tr><td>Petr Kelemen</td><td>Tudor Pro Cycling Team</td><td>4.0</td><td>45.0</td><td>11.2</td></tr>
+</tbody></table>
+<h2 id="was-it-worth-paying-more">Was it worth paying more?</h2>
+<h3 id="points-scored-by-price">Points scored by price</h3>
+<p>Each dot is a rider. The dashed line shows the general trend.</p>
 <div id="plot-pts" style="width:100%; height:500px;"></div>
-<script>Plotly.newPlot('plot-pts', {"data":[{"x":[26.000621775164934,25.923777756100687,24.08086353739076,21.989378078060504,22.059189650280327,20.092767235956035,20.064000690217554,20.06084521850737,19.960645280832477,19.99631139460066,20.051425186231324,17.973841868108202,17.90983046742156,15.878021458871572,15.90540294032575,16.110323977427367,15.923541710200707,15.929007483201636,13.888386154454912,13.870626594889218,14.029662016659016,14.013386358782887,13.92631285922298,13.92983811862952,14.087119978570295,14.058839188388555,11.934544512457812,12.098689315436808,12.017296365646631,12.006635864606775,11.967001296071095,12.08270448750533,12.095636871151983,11.954970937736766,11.881196666734356,11.995410556624707,12.014344502201993,12.07137811271952,12.031025973061405,11.86279855624308,10.084634952535618,10.01580950184692,10.020478636618437,10.145589377192032,10.045260786907793,9.935631318336949,9.980589208747375,8.084137801146287,7.893463042920276,7.850555117344529,8.107328030749152,8.0311559519563,7.863492025826491,7.85067825824402,8.101944660834146,8.051024929377418,8.126677950539372,8.050629687356029,8.091327749360811,7.870407895573775,7.911820029537773,8.090215942793192,7.879179188148198,6.088407285095802,6.085003530938098,5.8709883069804825,6.132061783416685,5.861380554128891,5.877040022589306,6.13910254408286,6.110892662890512,5.948303441919888,6.028290542149189,6.03866139994698,5.949014744459465,5.865003715070219,6.008150790919077,6.045627933198638,5.877595354695555,5.96906013473245,6.011263737951732,5.886361231760954,6.06306298565827,5.939347038364013,6.12580429898145,6.118202573764313,6.102342955382098,6.069645325669615,6.009526176101286,6.017924095226329,5.918546241958654,5.878030667444639,6.111611670483219,5.933254841000045,5.990451851934694,5.887507778580859,5.9731590956198755,5.978720971865132,6.138677779397411,5.897601787262549,5.952243131771534,6.014929621476095,6.139955547677641,6.026312577377552,6.093166301725584,4.011543836927579,3.9555538435547914,3.9335081533540928,4.055157821572161,3.8594643504618804,3.8535616127415375,3.975773584621624,4.080203669343982,3.950233229425256,3.980998908969997,4.114185545062251,4.139200255126257,4.111602474902455,4.049366749531316,3.947678958004554,4.1494480687967945,4.088304425275899,3.976410961755545,3.9510149314419984,3.968582579317265,3.9382583320422233,3.8747780780527212,3.9285386051771254],"mode":"markers","y":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"type":"scatter","name":"Did not score","hoverinfo":"text","text":["Jonathan Milan (Lidl - Trek)<br>Cost: 26, Points: 0","Arnaud De Lie (Lotto Intermarché)<br>Cost: 26, Points: 0","Paul Magnier (Soudal Quick-Step)<br>Cost: 24, Points: 0","Tim Wellens (UAE Team Emirates - XRG)<br>Cost: 22, Points: 0","Biniam Girmay (NSN Cycling Team)<br>Cost: 22, Points: 0","Toms Skujiņš (Lidl - Trek)<br>Cost: 20, Points: 0","Emilien Jeannière (TotalEnergies)<br>Cost: 20, Points: 0","Dylan Groenewegen (Unibet Rose Rockets)<br>Cost: 20, Points: 0","Kaden Groves (Alpecin-Premier Tech)<br>Cost: 20, Points: 0","Jonas Abrahamsen (Uno-X Mobility)<br>Cost: 20, Points: 0","Rasmus Tiller (Uno-X Mobility)<br>Cost: 20, Points: 0","Juan Sebastián Molano (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0","Florian Vermeersch (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0","Phil Bauhaus (Bahrain - Victorious)<br>Cost: 16, Points: 0","Dylan Van Baarle (Soudal Quick-Step)<br>Cost: 16, Points: 0","Nils Politt (UAE Team Emirates - XRG)<br>Cost: 16, Points: 0","Pascal Ackermann (Team Jayco AlUla)<br>Cost: 16, Points: 0","Alexis Renard (Cofidis)<br>Cost: 16, Points: 0","Davide Ballerini (XDS Astana Team)<br>Cost: 14, Points: 0","Laurence Pithie (Red Bull - BORA - hansgrohe)<br>Cost: 14, Points: 0","Marijn Van Den Berg (EF Education - EasyPost)<br>Cost: 14, Points: 0","Rory Townsend (Unibet Rose Rockets)<br>Cost: 14, Points: 0","Paul Penhoët (Groupama - FDJ United)<br>Cost: 14, Points: 0","Pavel Bittner (Team Picnic PostNL)<br>Cost: 14, Points: 0","Brent Van Moer (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0","Fred Wright (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0","Oliver Naesen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0","Rasmus Søjberg Pedersen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0","Max Kanter (XDS Astana Team)<br>Cost: 12, Points: 0","Kasper Asgreen (EF Education - EasyPost)<br>Cost: 12, Points: 0","Mikkel Frølich Honoré (EF Education - EasyPost)<br>Cost: 12, Points: 0","Jenno Berckmoes (Lotto Intermarché)<br>Cost: 12, Points: 0","Yves Lampaert (Soudal Quick-Step)<br>Cost: 12, Points: 0","Rick Pluimers (Tudor Pro Cycling Team)<br>Cost: 12, Points: 0","Lewis Askey (NSN Cycling Team)<br>Cost: 12, Points: 0","Stanisław Aniołkowski (Cofidis)<br>Cost: 12, Points: 0","Bastien Tronchon (Groupama - FDJ United)<br>Cost: 12, Points: 0","Riley Sheehan (NSN Cycling Team)<br>Cost: 12, Points: 0","John Degenkolb (Team Picnic PostNL)<br>Cost: 12, Points: 0","Matteo Moschetti (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 12, Points: 0","Arne Marit (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0","Mick Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0","Edward Theuns (Lidl - Trek)<br>Cost: 10, Points: 0","Max Walscheid (Lidl - Trek)<br>Cost: 10, Points: 0","Tom Crabbe (Team Flanders - Baloise)<br>Cost: 10, Points: 0","Amaury Capiot (Team Jayco AlUla)<br>Cost: 10, Points: 0","Hugo Page (Cofidis)<br>Cost: 10, Points: 0","Daan Hoole (Decathlon CMA CGM Team)<br>Cost: 8, Points: 0","Aaron Gate (XDS Astana Team)<br>Cost: 8, Points: 0","Alec Segaert (Bahrain - Victorious)<br>Cost: 8, Points: 0","Noah Hobbs (EF Education - EasyPost)<br>Cost: 8, Points: 0","Luca Van Boven (Lotto Intermarché)<br>Cost: 8, Points: 0","Dries Van Gestel (Soudal Quick-Step)<br>Cost: 8, Points: 0","Julius Johansen (UAE Team Emirates - XRG)<br>Cost: 8, Points: 0","Riley Pickrell (Modern Adventure Pro Cycling)<br>Cost: 8, Points: 0","Orluis Aular (Movistar Team)<br>Cost: 8, Points: 0","Clément Alleno (Burgos Burpellet BH)<br>Cost: 8, Points: 0","Hartthijs De Vries (Unibet Rose Rockets)<br>Cost: 8, Points: 0","Silvan Dillier (Alpecin-Premier Tech)<br>Cost: 8, Points: 0","Elmar Reinders (Unibet Rose Rockets)<br>Cost: 8, Points: 0","Piet Allegaert (Cofidis)<br>Cost: 8, Points: 0","Clément Russo (Groupama - FDJ United)<br>Cost: 8, Points: 0","Aimé De Gendt (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 8, Points: 0","Lev Gonov (XDS Astana Team)<br>Cost: 6, Points: 0","Alessandro Romele (XDS Astana Team)<br>Cost: 6, Points: 0","Jakob Söderqvist (Lidl - Trek)<br>Cost: 6, Points: 0","Gleb Syritsa (XDS Astana Team)<br>Cost: 6, Points: 0","Kamil Gradek (Bahrain - Victorious)<br>Cost: 6, Points: 0","Romet Pajur (Red Bull - BORA - hansgrohe)<br>Cost: 6, Points: 0","Colby Simmons (EF Education - EasyPost)<br>Cost: 6, Points: 0","Alexys Brunel (TotalEnergies)<br>Cost: 6, Points: 0","Samuel Leroux (TotalEnergies)<br>Cost: 6, Points: 0","Liam Slock (Lotto Intermarché)<br>Cost: 6, Points: 0","Baptiste Vadic (TotalEnergies)<br>Cost: 6, Points: 0","Bert Van Lerberghe (Soudal Quick-Step)<br>Cost: 6, Points: 0","Ceriel Desal (Soudal Quick-Step)<br>Cost: 6, Points: 0","Aivaras Mikutis (Tudor Pro Cycling Team)<br>Cost: 6, Points: 0","Rune Herregodts (UAE Team Emirates - XRG)<br>Cost: 6, Points: 0","Mark Stewart (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 0","Josh Burnett (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Daniel Cavia (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Filip Maciejuk (Movistar Team)<br>Cost: 6, Points: 0","Manlio Moro (Movistar Team)<br>Cost: 6, Points: 0","César Macías (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Alexandre Mayer (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Jonas Geens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Cyril Barthe (Groupama - FDJ United)<br>Cost: 6, Points: 0","Niklas Larsen (Unibet Rose Rockets)<br>Cost: 6, Points: 0","Edward Planckaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Robert Donaldson (Team Jayco AlUla)<br>Cost: 6, Points: 0","Jonas Rickaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Martijn Rasenberg (Unibet Rose Rockets)<br>Cost: 6, Points: 0","Sente Sentjens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Guillaume Boivin (NSN Cycling Team)<br>Cost: 6, Points: 0","Jelte Krijnsen (Team Jayco AlUla)<br>Cost: 6, Points: 0","Luka Mezgec (Team Jayco AlUla)<br>Cost: 6, Points: 0","Carl-Frederik Bévort (Uno-X Mobility)<br>Cost: 6, Points: 0","Kelland O'Brien (Team Jayco AlUla)<br>Cost: 6, Points: 0","Ryan Mullen (NSN Cycling Team)<br>Cost: 6, Points: 0","Alex Kirsch (Cofidis)<br>Cost: 6, Points: 0","Frederik Frison (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0","Timo De Jong (Team Picnic PostNL)<br>Cost: 6, Points: 0","Nicolò Parisini (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0","Niklas Märkl (Team Picnic PostNL)<br>Cost: 6, Points: 0","Sander De Pestel (Decathlon CMA CGM Team)<br>Cost: 6, Points: 0","Alessandro Borgo (Bahrain - Victorious)<br>Cost: 4, Points: 0","Felix Ørn-Kristoff (Lotto Intermarché)<br>Cost: 4, Points: 0","Pierre Thierry (TotalEnergies)<br>Cost: 4, Points: 0","Samuel Boardman (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Ezra Caudell (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Sean Christian (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Georgios Bouglas (Burgos Burpellet BH)<br>Cost: 4, Points: 0","Brem Deman (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Ferre Geeraerts (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Vojtěch Kmínek (Burgos Burpellet BH)<br>Cost: 4, Points: 0","Jules Hesters (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Nolan Huysmans (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Artuur Torney (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Leander Van Hautegem (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Titouan Fontaine (Groupama - FDJ United)<br>Cost: 4, Points: 0","Jonas Hem Hvideberg (Uno-X Mobility)<br>Cost: 4, Points: 0","Jan Maas (Cofidis)<br>Cost: 4, Points: 0","Henrik Pedersen (Uno-X Mobility)<br>Cost: 4, Points: 0","Kamil Małecki (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 4, Points: 0","Tim Naberman (Team Picnic PostNL)<br>Cost: 4, Points: 0","Timo Roosen (Team Picnic PostNL)<br>Cost: 4, Points: 0","Jarrad Drizners (Red Bull - BORA - hansgrohe)<br>Cost: 4, Points: 0","Stan Dewulf (Decathlon CMA CGM Team)<br>Cost: 4, Points: 0"],"marker":{"color":"#aaaaaa","symbol":"x","opacity":0.35,"size":5}},{"x":[26.082763677490412,22.095256373170496,21.933534243562562,19.97391343208512,15.885608760076192,16.12612314155611,16.05198668717807,14.030375851262153,13.935344642060455,14.008218436083148,12.10072045672214,11.983953950201869,11.919694275551509,12.110965346071909,11.85518317818473,11.889263155177654,12.125533821054502,11.925997659962558,10.077131222481494,9.893396858723284,7.993264820038736,7.969411647848508,7.879542532594441,8.146613916274573,8.041664340065438,8.02240782626239,8.045161025906175,8.072899471233475,5.8730950871063925,5.935425491228251,6.13518495125293,5.971014658158952,6.024885707763234,5.851297819114708,4.142946080651527,4.032812420553838,3.992744349161505,3.994885382621821,3.887523965557212],"mode":"markers","y":[78,129,51,24,45,114,156,30,96,120,12,45,30,138,45,60,30,147,108,30,45,72,102,48,36,90,30,42,45,18,84,66,54,30,45,45,45,30,30],"type":"scatter","name":"Other riders","hoverinfo":"text","text":["Jasper Philipsen (Alpecin-Premier Tech)<br>Cost: 26, Points: 78, Value: 3.0","Jordi Meeus (Red Bull - BORA - hansgrohe)<br>Cost: 22, Points: 129, Value: 5.9","Christophe Laporte (Team Visma - Lease a Bike)<br>Cost: 22, Points: 51, Value: 2.3","Matej Mohorič (Bahrain - Victorious)<br>Cost: 20, Points: 24, Value: 1.2","Axel Zingle (Team Visma - Lease a Bike)<br>Cost: 16, Points: 45, Value: 2.8","Jon Barrenetxea (Movistar Team)<br>Cost: 16, Points: 114, Value: 7.1","Tobias Lund Andresen (Decathlon CMA CGM Team)<br>Cost: 16, Points: 156, Value: 9.8","Roger Adrià (Movistar Team)<br>Cost: 14, Points: 30, Value: 2.1","Iván García Cortina (Movistar Team)<br>Cost: 14, Points: 96, Value: 6.9","Hugo Hofstetter (NSN Cycling Team)<br>Cost: 14, Points: 120, Value: 8.6","Héctor Álvarez (Lidl - Trek)<br>Cost: 12, Points: 12, Value: 1.0","Timo Kielich (Team Visma - Lease a Bike)<br>Cost: 12, Points: 45, Value: 3.8","Vincenzo Albanese (EF Education - EasyPost)<br>Cost: 12, Points: 30, Value: 2.5","Luke Lamperti (EF Education - EasyPost)<br>Cost: 12, Points: 138, Value: 11.5","Marco Haller (Tudor Pro Cycling Team)<br>Cost: 12, Points: 45, Value: 3.8","Carlos Canal (Movistar Team)<br>Cost: 12, Points: 60, Value: 5.0","Dries De Bondt (Team Jayco AlUla)<br>Cost: 12, Points: 30, Value: 2.5","Cees Bol (Decathlon CMA CGM Team)<br>Cost: 12, Points: 147, Value: 12.2","Tim Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 108, Value: 10.8","Matis Louvel (NSN Cycling Team)<br>Cost: 10, Points: 30, Value: 3.0","Filippo Fiorelli (Team Visma - Lease a Bike)<br>Cost: 8, Points: 45, Value: 5.6","Pau Miquel (Bahrain - Victorious)<br>Cost: 8, Points: 72, Value: 9.0","Florian Dauphin (TotalEnergies)<br>Cost: 8, Points: 102, Value: 12.8","Vito Braet (Lotto Intermarché)<br>Cost: 8, Points: 48, Value: 6.0","Rui Oliveira (UAE Team Emirates - XRG)<br>Cost: 8, Points: 36, Value: 4.5","Matyáš Kopecký (Unibet Rose Rockets)<br>Cost: 8, Points: 90, Value: 11.2","Johan Jacobs (Groupama - FDJ United)<br>Cost: 8, Points: 30, Value: 3.8","Erik Nordsæter Resell (Uno-X Mobility)<br>Cost: 8, Points: 42, Value: 5.2","Matisse Van Kerckhove (Team Visma - Lease a Bike)<br>Cost: 6, Points: 45, Value: 7.5","Rayan Boulahoite (TotalEnergies)<br>Cost: 6, Points: 18, Value: 3.0","Steffen De Schuyteneer (Lotto Intermarché)<br>Cost: 6, Points: 84, Value: 14.0","Ben Oliver (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 66, Value: 11.0","Axel Huens (Groupama - FDJ United)<br>Cost: 6, Points: 54, Value: 9.0","Storm Ingebrigtsen (Uno-X Mobility)<br>Cost: 6, Points: 30, Value: 5.0","Pietro Mattio (Team Visma - Lease a Bike)<br>Cost: 4, Points: 45, Value: 11.2","Robin Froidevaux (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Petr Kelemen (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Cole Kessler (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 30, Value: 7.5","Frits Biesterbos (Team Picnic PostNL)<br>Cost: 4, Points: 30, Value: 7.5"],"marker":{"opacity":0.5,"size":6}},{"x":[23.976007213885378,20.14437975284409,18.096946282862596,16.011544359762933,14.036961983658845,7.9738038298876],"mode":"markers","y":[320,270,180,165,295,210],"type":"scatter","name":"Optimal team","hoverinfo":"text","text":["Matthew Brennan (Team Visma - Lease a Bike)<br>Cost: 24, Points: 320, Value: 13.3","Matteo Trentin (Tudor Pro Cycling Team)<br>Cost: 20, Points: 270, Value: 13.5","Mike Teunissen (XDS Astana Team)<br>Cost: 18, Points: 180, Value: 10.0","Laurenz Rex (Soudal Quick-Step)<br>Cost: 16, Points: 165, Value: 10.3","Luca Mozzato (Tudor Pro Cycling Team)<br>Cost: 14, Points: 295, Value: 21.1","Matevž Govekar (Bahrain - Victorious)<br>Cost: 8, Points: 210, Value: 26.2"],"marker":{"opacity":0.9,"size":10}},{"mode":"lines","line":{"color":"#666666","dash":"dash","width":1.5},"y":[5.275922319737523,70.53524332879837],"type":"scatter","name":"Trend (pricier riders scored more)","hoverinfo":"skip","x":[4,26]}],"layout":{"xaxis":{"title":{"text":"Cost (credits)"}},"hovermode":"closest","template":"plotly_white","margin":{"l":50,"b":50,"r":50,"t":60},"yaxis":{"title":{"text":"Points scored"}}}}.data, {"data":[{"x":[26.000621775164934,25.923777756100687,24.08086353739076,21.989378078060504,22.059189650280327,20.092767235956035,20.064000690217554,20.06084521850737,19.960645280832477,19.99631139460066,20.051425186231324,17.973841868108202,17.90983046742156,15.878021458871572,15.90540294032575,16.110323977427367,15.923541710200707,15.929007483201636,13.888386154454912,13.870626594889218,14.029662016659016,14.013386358782887,13.92631285922298,13.92983811862952,14.087119978570295,14.058839188388555,11.934544512457812,12.098689315436808,12.017296365646631,12.006635864606775,11.967001296071095,12.08270448750533,12.095636871151983,11.954970937736766,11.881196666734356,11.995410556624707,12.014344502201993,12.07137811271952,12.031025973061405,11.86279855624308,10.084634952535618,10.01580950184692,10.020478636618437,10.145589377192032,10.045260786907793,9.935631318336949,9.980589208747375,8.084137801146287,7.893463042920276,7.850555117344529,8.107328030749152,8.0311559519563,7.863492025826491,7.85067825824402,8.101944660834146,8.051024929377418,8.126677950539372,8.050629687356029,8.091327749360811,7.870407895573775,7.911820029537773,8.090215942793192,7.879179188148198,6.088407285095802,6.085003530938098,5.8709883069804825,6.132061783416685,5.861380554128891,5.877040022589306,6.13910254408286,6.110892662890512,5.948303441919888,6.028290542149189,6.03866139994698,5.949014744459465,5.865003715070219,6.008150790919077,6.045627933198638,5.877595354695555,5.96906013473245,6.011263737951732,5.886361231760954,6.06306298565827,5.939347038364013,6.12580429898145,6.118202573764313,6.102342955382098,6.069645325669615,6.009526176101286,6.017924095226329,5.918546241958654,5.878030667444639,6.111611670483219,5.933254841000045,5.990451851934694,5.887507778580859,5.9731590956198755,5.978720971865132,6.138677779397411,5.897601787262549,5.952243131771534,6.014929621476095,6.139955547677641,6.026312577377552,6.093166301725584,4.011543836927579,3.9555538435547914,3.9335081533540928,4.055157821572161,3.8594643504618804,3.8535616127415375,3.975773584621624,4.080203669343982,3.950233229425256,3.980998908969997,4.114185545062251,4.139200255126257,4.111602474902455,4.049366749531316,3.947678958004554,4.1494480687967945,4.088304425275899,3.976410961755545,3.9510149314419984,3.968582579317265,3.9382583320422233,3.8747780780527212,3.9285386051771254],"mode":"markers","y":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"type":"scatter","name":"Did not score","hoverinfo":"text","text":["Jonathan Milan (Lidl - Trek)<br>Cost: 26, Points: 0","Arnaud De Lie (Lotto Intermarché)<br>Cost: 26, Points: 0","Paul Magnier (Soudal Quick-Step)<br>Cost: 24, Points: 0","Tim Wellens (UAE Team Emirates - XRG)<br>Cost: 22, Points: 0","Biniam Girmay (NSN Cycling Team)<br>Cost: 22, Points: 0","Toms Skujiņš (Lidl - Trek)<br>Cost: 20, Points: 0","Emilien Jeannière (TotalEnergies)<br>Cost: 20, Points: 0","Dylan Groenewegen (Unibet Rose Rockets)<br>Cost: 20, Points: 0","Kaden Groves (Alpecin-Premier Tech)<br>Cost: 20, Points: 0","Jonas Abrahamsen (Uno-X Mobility)<br>Cost: 20, Points: 0","Rasmus Tiller (Uno-X Mobility)<br>Cost: 20, Points: 0","Juan Sebastián Molano (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0","Florian Vermeersch (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0","Phil Bauhaus (Bahrain - Victorious)<br>Cost: 16, Points: 0","Dylan Van Baarle (Soudal Quick-Step)<br>Cost: 16, Points: 0","Nils Politt (UAE Team Emirates - XRG)<br>Cost: 16, Points: 0","Pascal Ackermann (Team Jayco AlUla)<br>Cost: 16, Points: 0","Alexis Renard (Cofidis)<br>Cost: 16, Points: 0","Davide Ballerini (XDS Astana Team)<br>Cost: 14, Points: 0","Laurence Pithie (Red Bull - BORA - hansgrohe)<br>Cost: 14, Points: 0","Marijn Van Den Berg (EF Education - EasyPost)<br>Cost: 14, Points: 0","Rory Townsend (Unibet Rose Rockets)<br>Cost: 14, Points: 0","Paul Penhoët (Groupama - FDJ United)<br>Cost: 14, Points: 0","Pavel Bittner (Team Picnic PostNL)<br>Cost: 14, Points: 0","Brent Van Moer (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0","Fred Wright (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0","Oliver Naesen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0","Rasmus Søjberg Pedersen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0","Max Kanter (XDS Astana Team)<br>Cost: 12, Points: 0","Kasper Asgreen (EF Education - EasyPost)<br>Cost: 12, Points: 0","Mikkel Frølich Honoré (EF Education - EasyPost)<br>Cost: 12, Points: 0","Jenno Berckmoes (Lotto Intermarché)<br>Cost: 12, Points: 0","Yves Lampaert (Soudal Quick-Step)<br>Cost: 12, Points: 0","Rick Pluimers (Tudor Pro Cycling Team)<br>Cost: 12, Points: 0","Lewis Askey (NSN Cycling Team)<br>Cost: 12, Points: 0","Stanisław Aniołkowski (Cofidis)<br>Cost: 12, Points: 0","Bastien Tronchon (Groupama - FDJ United)<br>Cost: 12, Points: 0","Riley Sheehan (NSN Cycling Team)<br>Cost: 12, Points: 0","John Degenkolb (Team Picnic PostNL)<br>Cost: 12, Points: 0","Matteo Moschetti (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 12, Points: 0","Arne Marit (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0","Mick Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0","Edward Theuns (Lidl - Trek)<br>Cost: 10, Points: 0","Max Walscheid (Lidl - Trek)<br>Cost: 10, Points: 0","Tom Crabbe (Team Flanders - Baloise)<br>Cost: 10, Points: 0","Amaury Capiot (Team Jayco AlUla)<br>Cost: 10, Points: 0","Hugo Page (Cofidis)<br>Cost: 10, Points: 0","Daan Hoole (Decathlon CMA CGM Team)<br>Cost: 8, Points: 0","Aaron Gate (XDS Astana Team)<br>Cost: 8, Points: 0","Alec Segaert (Bahrain - Victorious)<br>Cost: 8, Points: 0","Noah Hobbs (EF Education - EasyPost)<br>Cost: 8, Points: 0","Luca Van Boven (Lotto Intermarché)<br>Cost: 8, Points: 0","Dries Van Gestel (Soudal Quick-Step)<br>Cost: 8, Points: 0","Julius Johansen (UAE Team Emirates - XRG)<br>Cost: 8, Points: 0","Riley Pickrell (Modern Adventure Pro Cycling)<br>Cost: 8, Points: 0","Orluis Aular (Movistar Team)<br>Cost: 8, Points: 0","Clément Alleno (Burgos Burpellet BH)<br>Cost: 8, Points: 0","Hartthijs De Vries (Unibet Rose Rockets)<br>Cost: 8, Points: 0","Silvan Dillier (Alpecin-Premier Tech)<br>Cost: 8, Points: 0","Elmar Reinders (Unibet Rose Rockets)<br>Cost: 8, Points: 0","Piet Allegaert (Cofidis)<br>Cost: 8, Points: 0","Clément Russo (Groupama - FDJ United)<br>Cost: 8, Points: 0","Aimé De Gendt (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 8, Points: 0","Lev Gonov (XDS Astana Team)<br>Cost: 6, Points: 0","Alessandro Romele (XDS Astana Team)<br>Cost: 6, Points: 0","Jakob Söderqvist (Lidl - Trek)<br>Cost: 6, Points: 0","Gleb Syritsa (XDS Astana Team)<br>Cost: 6, Points: 0","Kamil Gradek (Bahrain - Victorious)<br>Cost: 6, Points: 0","Romet Pajur (Red Bull - BORA - hansgrohe)<br>Cost: 6, Points: 0","Colby Simmons (EF Education - EasyPost)<br>Cost: 6, Points: 0","Alexys Brunel (TotalEnergies)<br>Cost: 6, Points: 0","Samuel Leroux (TotalEnergies)<br>Cost: 6, Points: 0","Liam Slock (Lotto Intermarché)<br>Cost: 6, Points: 0","Baptiste Vadic (TotalEnergies)<br>Cost: 6, Points: 0","Bert Van Lerberghe (Soudal Quick-Step)<br>Cost: 6, Points: 0","Ceriel Desal (Soudal Quick-Step)<br>Cost: 6, Points: 0","Aivaras Mikutis (Tudor Pro Cycling Team)<br>Cost: 6, Points: 0","Rune Herregodts (UAE Team Emirates - XRG)<br>Cost: 6, Points: 0","Mark Stewart (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 0","Josh Burnett (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Daniel Cavia (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Filip Maciejuk (Movistar Team)<br>Cost: 6, Points: 0","Manlio Moro (Movistar Team)<br>Cost: 6, Points: 0","César Macías (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Alexandre Mayer (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Jonas Geens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Cyril Barthe (Groupama - FDJ United)<br>Cost: 6, Points: 0","Niklas Larsen (Unibet Rose Rockets)<br>Cost: 6, Points: 0","Edward Planckaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Robert Donaldson (Team Jayco AlUla)<br>Cost: 6, Points: 0","Jonas Rickaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Martijn Rasenberg (Unibet Rose Rockets)<br>Cost: 6, Points: 0","Sente Sentjens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Guillaume Boivin (NSN Cycling Team)<br>Cost: 6, Points: 0","Jelte Krijnsen (Team Jayco AlUla)<br>Cost: 6, Points: 0","Luka Mezgec (Team Jayco AlUla)<br>Cost: 6, Points: 0","Carl-Frederik Bévort (Uno-X Mobility)<br>Cost: 6, Points: 0","Kelland O'Brien (Team Jayco AlUla)<br>Cost: 6, Points: 0","Ryan Mullen (NSN Cycling Team)<br>Cost: 6, Points: 0","Alex Kirsch (Cofidis)<br>Cost: 6, Points: 0","Frederik Frison (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0","Timo De Jong (Team Picnic PostNL)<br>Cost: 6, Points: 0","Nicolò Parisini (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0","Niklas Märkl (Team Picnic PostNL)<br>Cost: 6, Points: 0","Sander De Pestel (Decathlon CMA CGM Team)<br>Cost: 6, Points: 0","Alessandro Borgo (Bahrain - Victorious)<br>Cost: 4, Points: 0","Felix Ørn-Kristoff (Lotto Intermarché)<br>Cost: 4, Points: 0","Pierre Thierry (TotalEnergies)<br>Cost: 4, Points: 0","Samuel Boardman (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Ezra Caudell (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Sean Christian (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Georgios Bouglas (Burgos Burpellet BH)<br>Cost: 4, Points: 0","Brem Deman (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Ferre Geeraerts (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Vojtěch Kmínek (Burgos Burpellet BH)<br>Cost: 4, Points: 0","Jules Hesters (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Nolan Huysmans (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Artuur Torney (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Leander Van Hautegem (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Titouan Fontaine (Groupama - FDJ United)<br>Cost: 4, Points: 0","Jonas Hem Hvideberg (Uno-X Mobility)<br>Cost: 4, Points: 0","Jan Maas (Cofidis)<br>Cost: 4, Points: 0","Henrik Pedersen (Uno-X Mobility)<br>Cost: 4, Points: 0","Kamil Małecki (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 4, Points: 0","Tim Naberman (Team Picnic PostNL)<br>Cost: 4, Points: 0","Timo Roosen (Team Picnic PostNL)<br>Cost: 4, Points: 0","Jarrad Drizners (Red Bull - BORA - hansgrohe)<br>Cost: 4, Points: 0","Stan Dewulf (Decathlon CMA CGM Team)<br>Cost: 4, Points: 0"],"marker":{"color":"#aaaaaa","symbol":"x","opacity":0.35,"size":5}},{"x":[26.082763677490412,22.095256373170496,21.933534243562562,19.97391343208512,15.885608760076192,16.12612314155611,16.05198668717807,14.030375851262153,13.935344642060455,14.008218436083148,12.10072045672214,11.983953950201869,11.919694275551509,12.110965346071909,11.85518317818473,11.889263155177654,12.125533821054502,11.925997659962558,10.077131222481494,9.893396858723284,7.993264820038736,7.969411647848508,7.879542532594441,8.146613916274573,8.041664340065438,8.02240782626239,8.045161025906175,8.072899471233475,5.8730950871063925,5.935425491228251,6.13518495125293,5.971014658158952,6.024885707763234,5.851297819114708,4.142946080651527,4.032812420553838,3.992744349161505,3.994885382621821,3.887523965557212],"mode":"markers","y":[78,129,51,24,45,114,156,30,96,120,12,45,30,138,45,60,30,147,108,30,45,72,102,48,36,90,30,42,45,18,84,66,54,30,45,45,45,30,30],"type":"scatter","name":"Other riders","hoverinfo":"text","text":["Jasper Philipsen (Alpecin-Premier Tech)<br>Cost: 26, Points: 78, Value: 3.0","Jordi Meeus (Red Bull - BORA - hansgrohe)<br>Cost: 22, Points: 129, Value: 5.9","Christophe Laporte (Team Visma - Lease a Bike)<br>Cost: 22, Points: 51, Value: 2.3","Matej Mohorič (Bahrain - Victorious)<br>Cost: 20, Points: 24, Value: 1.2","Axel Zingle (Team Visma - Lease a Bike)<br>Cost: 16, Points: 45, Value: 2.8","Jon Barrenetxea (Movistar Team)<br>Cost: 16, Points: 114, Value: 7.1","Tobias Lund Andresen (Decathlon CMA CGM Team)<br>Cost: 16, Points: 156, Value: 9.8","Roger Adrià (Movistar Team)<br>Cost: 14, Points: 30, Value: 2.1","Iván García Cortina (Movistar Team)<br>Cost: 14, Points: 96, Value: 6.9","Hugo Hofstetter (NSN Cycling Team)<br>Cost: 14, Points: 120, Value: 8.6","Héctor Álvarez (Lidl - Trek)<br>Cost: 12, Points: 12, Value: 1.0","Timo Kielich (Team Visma - Lease a Bike)<br>Cost: 12, Points: 45, Value: 3.8","Vincenzo Albanese (EF Education - EasyPost)<br>Cost: 12, Points: 30, Value: 2.5","Luke Lamperti (EF Education - EasyPost)<br>Cost: 12, Points: 138, Value: 11.5","Marco Haller (Tudor Pro Cycling Team)<br>Cost: 12, Points: 45, Value: 3.8","Carlos Canal (Movistar Team)<br>Cost: 12, Points: 60, Value: 5.0","Dries De Bondt (Team Jayco AlUla)<br>Cost: 12, Points: 30, Value: 2.5","Cees Bol (Decathlon CMA CGM Team)<br>Cost: 12, Points: 147, Value: 12.2","Tim Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 108, Value: 10.8","Matis Louvel (NSN Cycling Team)<br>Cost: 10, Points: 30, Value: 3.0","Filippo Fiorelli (Team Visma - Lease a Bike)<br>Cost: 8, Points: 45, Value: 5.6","Pau Miquel (Bahrain - Victorious)<br>Cost: 8, Points: 72, Value: 9.0","Florian Dauphin (TotalEnergies)<br>Cost: 8, Points: 102, Value: 12.8","Vito Braet (Lotto Intermarché)<br>Cost: 8, Points: 48, Value: 6.0","Rui Oliveira (UAE Team Emirates - XRG)<br>Cost: 8, Points: 36, Value: 4.5","Matyáš Kopecký (Unibet Rose Rockets)<br>Cost: 8, Points: 90, Value: 11.2","Johan Jacobs (Groupama - FDJ United)<br>Cost: 8, Points: 30, Value: 3.8","Erik Nordsæter Resell (Uno-X Mobility)<br>Cost: 8, Points: 42, Value: 5.2","Matisse Van Kerckhove (Team Visma - Lease a Bike)<br>Cost: 6, Points: 45, Value: 7.5","Rayan Boulahoite (TotalEnergies)<br>Cost: 6, Points: 18, Value: 3.0","Steffen De Schuyteneer (Lotto Intermarché)<br>Cost: 6, Points: 84, Value: 14.0","Ben Oliver (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 66, Value: 11.0","Axel Huens (Groupama - FDJ United)<br>Cost: 6, Points: 54, Value: 9.0","Storm Ingebrigtsen (Uno-X Mobility)<br>Cost: 6, Points: 30, Value: 5.0","Pietro Mattio (Team Visma - Lease a Bike)<br>Cost: 4, Points: 45, Value: 11.2","Robin Froidevaux (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Petr Kelemen (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Cole Kessler (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 30, Value: 7.5","Frits Biesterbos (Team Picnic PostNL)<br>Cost: 4, Points: 30, Value: 7.5"],"marker":{"opacity":0.5,"size":6}},{"x":[23.976007213885378,20.14437975284409,18.096946282862596,16.011544359762933,14.036961983658845,7.9738038298876],"mode":"markers","y":[320,270,180,165,295,210],"type":"scatter","name":"Optimal team","hoverinfo":"text","text":["Matthew Brennan (Team Visma - Lease a Bike)<br>Cost: 24, Points: 320, Value: 13.3","Matteo Trentin (Tudor Pro Cycling Team)<br>Cost: 20, Points: 270, Value: 13.5","Mike Teunissen (XDS Astana Team)<br>Cost: 18, Points: 180, Value: 10.0","Laurenz Rex (Soudal Quick-Step)<br>Cost: 16, Points: 165, Value: 10.3","Luca Mozzato (Tudor Pro Cycling Team)<br>Cost: 14, Points: 295, Value: 21.1","Matevž Govekar (Bahrain - Victorious)<br>Cost: 8, Points: 210, Value: 26.2"],"marker":{"opacity":0.9,"size":10}},{"mode":"lines","line":{"color":"#666666","dash":"dash","width":1.5},"y":[5.275922319737523,70.53524332879837],"type":"scatter","name":"Trend (pricier riders scored more)","hoverinfo":"skip","x":[4,26]}],"layout":{"xaxis":{"title":{"text":"Cost (credits)"}},"hovermode":"closest","template":"plotly_white","margin":{"l":50,"b":50,"r":50,"t":60},"yaxis":{"title":{"text":"Points scored"}}}}.layout, {responsive: true})</script>
-</section>
-<section id="top-scorers-this-race" class="level3">
-<h3 class="anchored" data-anchor-id="top-scorers-this-race">Top scorers this race</h3>
-<div id="9a49863c" class="cell" data-execution_count="9">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="10">
-<table class="caption-top table table-sm table-striped small">
-<colgroup>
-<col style="width: 30%">
-<col style="width: 40%">
-<col style="width: 8%">
-<col style="width: 11%">
-<col style="width: 9%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Rider</th>
-<th>Team</th>
-<th>Cost</th>
-<th>Points</th>
-<th>Value</th>
-</tr>
-</thead>
+<script>Plotly.newPlot('plot-pts', {"data":[{"x":[25.873944795569187,26.023834362280695,23.943293109896484,21.944366393166437,21.911342812367252,19.879883725682927,20.03980966493926,20.054290887791225,19.99618424412359,19.995329688237685,20.100608376389857,18.023387873244882,18.102198257951116,16.02856925217919,16.136443891983294,15.963549513026123,15.9311718639703,16.055446132217735,13.989964711131035,13.893756927064075,13.88028464995154,14.125164803436803,13.952460767520565,13.923627907652588,13.956396721535041,13.88336832449329,11.864684239211927,12.122628072642145,11.964716532503962,12.138841331976,11.857419984525686,11.990734339474587,12.13905615672294,12.060063636642804,12.108364544533496,11.934955209082407,11.940656422112044,12.037142177832957,12.09936336959638,11.999645070530667,10.00013385696792,9.967916910149999,9.987691640001108,9.912260540022952,9.89703861754461,10.072900459427306,9.992370310596558,8.139604766302476,8.04535229072234,7.938082164082311,8.091370452895632,7.858157265802926,7.9888260181050645,8.134464654952282,8.049274357138742,7.969197341244777,8.089130048093661,7.887356313982573,7.936717047054149,7.959808049255462,8.10761437387763,8.044460199710011,8.110623692166662,5.869482519857815,5.996457286442759,5.90914565119357,6.064427368905313,5.853774047009187,6.0084269166296504,5.961911595418651,5.910943492180082,5.991153423681187,6.000944970679023,5.988526648319013,6.00123000459686,5.92893416516928,5.853134811731983,6.102598894451702,5.968223307957572,6.057605023580397,5.992541320173678,6.071756094514437,5.876360048923559,5.874932571487025,5.976834739386598,6.04908212472912,5.880421724183867,5.971021824507377,5.909467746596224,5.994563896647283,6.108302799964924,6.013163782183738,5.9169774290890285,5.945713465160553,6.023759544145365,6.140273007024055,5.985113193238662,6.092121841266292,6.016646739504996,5.988157176034904,6.076695710427659,5.866383923746393,5.876882031675977,6.026634455780471,6.083087912063324,3.9046101991153037,3.925698632716117,4.042259394723764,3.9214423254185724,3.8632800985616593,4.074976249607865,3.8533010956302487,3.866436791736941,4.101485016849078,3.9268842845102476,4.088591372006011,3.9743999396840684,3.942128628799841,3.8692364370681167,3.9444747191862746,4.011409845812541,4.0384368543944875,4.143462458312624,3.8738866982370634,3.8789716546470174,4.00103190355381,4.078808165373721,4.136845846109164],"mode":"markers","y":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"type":"scatter","name":"Did not score","hoverinfo":"text","text":["Jonathan Milan (Lidl - Trek)<br>Cost: 26, Points: 0","Arnaud De Lie (Lotto Intermarché)<br>Cost: 26, Points: 0","Paul Magnier (Soudal Quick-Step)<br>Cost: 24, Points: 0","Tim Wellens (UAE Team Emirates - XRG)<br>Cost: 22, Points: 0","Biniam Girmay (NSN Cycling Team)<br>Cost: 22, Points: 0","Toms Skujiņš (Lidl - Trek)<br>Cost: 20, Points: 0","Emilien Jeannière (TotalEnergies)<br>Cost: 20, Points: 0","Dylan Groenewegen (Unibet Rose Rockets)<br>Cost: 20, Points: 0","Kaden Groves (Alpecin-Premier Tech)<br>Cost: 20, Points: 0","Jonas Abrahamsen (Uno-X Mobility)<br>Cost: 20, Points: 0","Rasmus Tiller (Uno-X Mobility)<br>Cost: 20, Points: 0","Juan Sebastián Molano (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0","Florian Vermeersch (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0","Phil Bauhaus (Bahrain - Victorious)<br>Cost: 16, Points: 0","Dylan Van Baarle (Soudal Quick-Step)<br>Cost: 16, Points: 0","Nils Politt (UAE Team Emirates - XRG)<br>Cost: 16, Points: 0","Pascal Ackermann (Team Jayco AlUla)<br>Cost: 16, Points: 0","Alexis Renard (Cofidis)<br>Cost: 16, Points: 0","Davide Ballerini (XDS Astana Team)<br>Cost: 14, Points: 0","Laurence Pithie (Red Bull - BORA - hansgrohe)<br>Cost: 14, Points: 0","Marijn Van Den Berg (EF Education - EasyPost)<br>Cost: 14, Points: 0","Rory Townsend (Unibet Rose Rockets)<br>Cost: 14, Points: 0","Paul Penhoët (Groupama - FDJ United)<br>Cost: 14, Points: 0","Pavel Bittner (Team Picnic PostNL)<br>Cost: 14, Points: 0","Brent Van Moer (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0","Fred Wright (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0","Oliver Naesen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0","Rasmus Søjberg Pedersen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0","Max Kanter (XDS Astana Team)<br>Cost: 12, Points: 0","Kasper Asgreen (EF Education - EasyPost)<br>Cost: 12, Points: 0","Mikkel Frølich Honoré (EF Education - EasyPost)<br>Cost: 12, Points: 0","Jenno Berckmoes (Lotto Intermarché)<br>Cost: 12, Points: 0","Yves Lampaert (Soudal Quick-Step)<br>Cost: 12, Points: 0","Rick Pluimers (Tudor Pro Cycling Team)<br>Cost: 12, Points: 0","Lewis Askey (NSN Cycling Team)<br>Cost: 12, Points: 0","Stanisław Aniołkowski (Cofidis)<br>Cost: 12, Points: 0","Bastien Tronchon (Groupama - FDJ United)<br>Cost: 12, Points: 0","Riley Sheehan (NSN Cycling Team)<br>Cost: 12, Points: 0","John Degenkolb (Team Picnic PostNL)<br>Cost: 12, Points: 0","Matteo Moschetti (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 12, Points: 0","Arne Marit (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0","Mick Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0","Edward Theuns (Lidl - Trek)<br>Cost: 10, Points: 0","Max Walscheid (Lidl - Trek)<br>Cost: 10, Points: 0","Tom Crabbe (Team Flanders - Baloise)<br>Cost: 10, Points: 0","Amaury Capiot (Team Jayco AlUla)<br>Cost: 10, Points: 0","Hugo Page (Cofidis)<br>Cost: 10, Points: 0","Daan Hoole (Decathlon CMA CGM Team)<br>Cost: 8, Points: 0","Aaron Gate (XDS Astana Team)<br>Cost: 8, Points: 0","Alec Segaert (Bahrain - Victorious)<br>Cost: 8, Points: 0","Noah Hobbs (EF Education - EasyPost)<br>Cost: 8, Points: 0","Luca Van Boven (Lotto Intermarché)<br>Cost: 8, Points: 0","Dries Van Gestel (Soudal Quick-Step)<br>Cost: 8, Points: 0","Julius Johansen (UAE Team Emirates - XRG)<br>Cost: 8, Points: 0","Riley Pickrell (Modern Adventure Pro Cycling)<br>Cost: 8, Points: 0","Orluis Aular (Movistar Team)<br>Cost: 8, Points: 0","Clément Alleno (Burgos Burpellet BH)<br>Cost: 8, Points: 0","Hartthijs De Vries (Unibet Rose Rockets)<br>Cost: 8, Points: 0","Silvan Dillier (Alpecin-Premier Tech)<br>Cost: 8, Points: 0","Elmar Reinders (Unibet Rose Rockets)<br>Cost: 8, Points: 0","Piet Allegaert (Cofidis)<br>Cost: 8, Points: 0","Clément Russo (Groupama - FDJ United)<br>Cost: 8, Points: 0","Aimé De Gendt (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 8, Points: 0","Lev Gonov (XDS Astana Team)<br>Cost: 6, Points: 0","Alessandro Romele (XDS Astana Team)<br>Cost: 6, Points: 0","Jakob Söderqvist (Lidl - Trek)<br>Cost: 6, Points: 0","Gleb Syritsa (XDS Astana Team)<br>Cost: 6, Points: 0","Kamil Gradek (Bahrain - Victorious)<br>Cost: 6, Points: 0","Romet Pajur (Red Bull - BORA - hansgrohe)<br>Cost: 6, Points: 0","Colby Simmons (EF Education - EasyPost)<br>Cost: 6, Points: 0","Alexys Brunel (TotalEnergies)<br>Cost: 6, Points: 0","Samuel Leroux (TotalEnergies)<br>Cost: 6, Points: 0","Liam Slock (Lotto Intermarché)<br>Cost: 6, Points: 0","Baptiste Vadic (TotalEnergies)<br>Cost: 6, Points: 0","Bert Van Lerberghe (Soudal Quick-Step)<br>Cost: 6, Points: 0","Ceriel Desal (Soudal Quick-Step)<br>Cost: 6, Points: 0","Aivaras Mikutis (Tudor Pro Cycling Team)<br>Cost: 6, Points: 0","Rune Herregodts (UAE Team Emirates - XRG)<br>Cost: 6, Points: 0","Mark Stewart (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 0","Josh Burnett (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Daniel Cavia (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Filip Maciejuk (Movistar Team)<br>Cost: 6, Points: 0","Manlio Moro (Movistar Team)<br>Cost: 6, Points: 0","César Macías (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Alexandre Mayer (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Jonas Geens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Cyril Barthe (Groupama - FDJ United)<br>Cost: 6, Points: 0","Niklas Larsen (Unibet Rose Rockets)<br>Cost: 6, Points: 0","Edward Planckaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Robert Donaldson (Team Jayco AlUla)<br>Cost: 6, Points: 0","Jonas Rickaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Martijn Rasenberg (Unibet Rose Rockets)<br>Cost: 6, Points: 0","Sente Sentjens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Guillaume Boivin (NSN Cycling Team)<br>Cost: 6, Points: 0","Jelte Krijnsen (Team Jayco AlUla)<br>Cost: 6, Points: 0","Luka Mezgec (Team Jayco AlUla)<br>Cost: 6, Points: 0","Carl-Frederik Bévort (Uno-X Mobility)<br>Cost: 6, Points: 0","Kelland O'Brien (Team Jayco AlUla)<br>Cost: 6, Points: 0","Ryan Mullen (NSN Cycling Team)<br>Cost: 6, Points: 0","Alex Kirsch (Cofidis)<br>Cost: 6, Points: 0","Frederik Frison (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0","Timo De Jong (Team Picnic PostNL)<br>Cost: 6, Points: 0","Nicolò Parisini (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0","Niklas Märkl (Team Picnic PostNL)<br>Cost: 6, Points: 0","Sander De Pestel (Decathlon CMA CGM Team)<br>Cost: 6, Points: 0","Alessandro Borgo (Bahrain - Victorious)<br>Cost: 4, Points: 0","Felix Ørn-Kristoff (Lotto Intermarché)<br>Cost: 4, Points: 0","Pierre Thierry (TotalEnergies)<br>Cost: 4, Points: 0","Samuel Boardman (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Ezra Caudell (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Sean Christian (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Georgios Bouglas (Burgos Burpellet BH)<br>Cost: 4, Points: 0","Brem Deman (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Ferre Geeraerts (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Vojtěch Kmínek (Burgos Burpellet BH)<br>Cost: 4, Points: 0","Jules Hesters (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Nolan Huysmans (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Artuur Torney (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Leander Van Hautegem (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Titouan Fontaine (Groupama - FDJ United)<br>Cost: 4, Points: 0","Jonas Hem Hvideberg (Uno-X Mobility)<br>Cost: 4, Points: 0","Jan Maas (Cofidis)<br>Cost: 4, Points: 0","Henrik Pedersen (Uno-X Mobility)<br>Cost: 4, Points: 0","Kamil Małecki (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 4, Points: 0","Tim Naberman (Team Picnic PostNL)<br>Cost: 4, Points: 0","Timo Roosen (Team Picnic PostNL)<br>Cost: 4, Points: 0","Jarrad Drizners (Red Bull - BORA - hansgrohe)<br>Cost: 4, Points: 0","Stan Dewulf (Decathlon CMA CGM Team)<br>Cost: 4, Points: 0"],"marker":{"color":"#aaaaaa","symbol":"x","opacity":0.35,"size":5}},{"x":[26.046449602386982,22.138330883647598,22.064835677202936,20.10381885115629,15.896024317744912,16.068014171718076,16.077276457334587,13.85725027509315,14.010471901061019,13.994555344961343,12.104325880806321,11.866833467324762,11.941553356013793,12.119880043165837,12.092968800851496,11.943538081164533,11.86554877194226,12.107200382763539,10.08238021406189,10.092735837484254,7.89077502876497,8.129157725853402,8.043437480258095,8.106680157402682,8.042517918165823,8.058048934070912,8.003170878846818,7.916302814531751,5.945268040004988,6.043514166813266,5.952805639095722,5.994889722533479,5.863156801208333,5.915763224903177,3.940798002660031,3.957196772572066,4.1234088374067195,4.078158767450745,4.012118904518101],"mode":"markers","y":[78,129,51,24,45,114,156,30,96,120,12,45,30,138,45,60,30,147,108,30,45,72,102,48,36,90,30,42,45,18,84,66,54,30,45,45,45,30,30],"type":"scatter","name":"Other riders","hoverinfo":"text","text":["Jasper Philipsen (Alpecin-Premier Tech)<br>Cost: 26, Points: 78, Value: 3.0","Jordi Meeus (Red Bull - BORA - hansgrohe)<br>Cost: 22, Points: 129, Value: 5.9","Christophe Laporte (Team Visma - Lease a Bike)<br>Cost: 22, Points: 51, Value: 2.3","Matej Mohorič (Bahrain - Victorious)<br>Cost: 20, Points: 24, Value: 1.2","Axel Zingle (Team Visma - Lease a Bike)<br>Cost: 16, Points: 45, Value: 2.8","Jon Barrenetxea (Movistar Team)<br>Cost: 16, Points: 114, Value: 7.1","Tobias Lund Andresen (Decathlon CMA CGM Team)<br>Cost: 16, Points: 156, Value: 9.8","Roger Adrià (Movistar Team)<br>Cost: 14, Points: 30, Value: 2.1","Iván García Cortina (Movistar Team)<br>Cost: 14, Points: 96, Value: 6.9","Hugo Hofstetter (NSN Cycling Team)<br>Cost: 14, Points: 120, Value: 8.6","Héctor Álvarez (Lidl - Trek)<br>Cost: 12, Points: 12, Value: 1.0","Timo Kielich (Team Visma - Lease a Bike)<br>Cost: 12, Points: 45, Value: 3.8","Vincenzo Albanese (EF Education - EasyPost)<br>Cost: 12, Points: 30, Value: 2.5","Luke Lamperti (EF Education - EasyPost)<br>Cost: 12, Points: 138, Value: 11.5","Marco Haller (Tudor Pro Cycling Team)<br>Cost: 12, Points: 45, Value: 3.8","Carlos Canal (Movistar Team)<br>Cost: 12, Points: 60, Value: 5.0","Dries De Bondt (Team Jayco AlUla)<br>Cost: 12, Points: 30, Value: 2.5","Cees Bol (Decathlon CMA CGM Team)<br>Cost: 12, Points: 147, Value: 12.2","Tim Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 108, Value: 10.8","Matis Louvel (NSN Cycling Team)<br>Cost: 10, Points: 30, Value: 3.0","Filippo Fiorelli (Team Visma - Lease a Bike)<br>Cost: 8, Points: 45, Value: 5.6","Pau Miquel (Bahrain - Victorious)<br>Cost: 8, Points: 72, Value: 9.0","Florian Dauphin (TotalEnergies)<br>Cost: 8, Points: 102, Value: 12.8","Vito Braet (Lotto Intermarché)<br>Cost: 8, Points: 48, Value: 6.0","Rui Oliveira (UAE Team Emirates - XRG)<br>Cost: 8, Points: 36, Value: 4.5","Matyáš Kopecký (Unibet Rose Rockets)<br>Cost: 8, Points: 90, Value: 11.2","Johan Jacobs (Groupama - FDJ United)<br>Cost: 8, Points: 30, Value: 3.8","Erik Nordsæter Resell (Uno-X Mobility)<br>Cost: 8, Points: 42, Value: 5.2","Matisse Van Kerckhove (Team Visma - Lease a Bike)<br>Cost: 6, Points: 45, Value: 7.5","Rayan Boulahoite (TotalEnergies)<br>Cost: 6, Points: 18, Value: 3.0","Steffen De Schuyteneer (Lotto Intermarché)<br>Cost: 6, Points: 84, Value: 14.0","Ben Oliver (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 66, Value: 11.0","Axel Huens (Groupama - FDJ United)<br>Cost: 6, Points: 54, Value: 9.0","Storm Ingebrigtsen (Uno-X Mobility)<br>Cost: 6, Points: 30, Value: 5.0","Pietro Mattio (Team Visma - Lease a Bike)<br>Cost: 4, Points: 45, Value: 11.2","Robin Froidevaux (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Petr Kelemen (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Cole Kessler (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 30, Value: 7.5","Frits Biesterbos (Team Picnic PostNL)<br>Cost: 4, Points: 30, Value: 7.5"],"marker":{"opacity":0.5,"size":6}},{"x":[23.961615538032678,19.976539396036383,17.89796580379475,16.030151354522236,13.866147781341724,8.06998211977999],"mode":"markers","y":[320,270,180,165,295,210],"type":"scatter","name":"Optimal team","hoverinfo":"text","text":["Matthew Brennan (Team Visma - Lease a Bike)<br>Cost: 24, Points: 320, Value: 13.3","Matteo Trentin (Tudor Pro Cycling Team)<br>Cost: 20, Points: 270, Value: 13.5","Mike Teunissen (XDS Astana Team)<br>Cost: 18, Points: 180, Value: 10.0","Laurenz Rex (Soudal Quick-Step)<br>Cost: 16, Points: 165, Value: 10.3","Luca Mozzato (Tudor Pro Cycling Team)<br>Cost: 14, Points: 295, Value: 21.1","Matevž Govekar (Bahrain - Victorious)<br>Cost: 8, Points: 210, Value: 26.2"],"marker":{"opacity":0.9,"size":10}},{"mode":"lines","line":{"color":"#666666","dash":"dash","width":1.5},"y":[5.275922319737523,70.53524332879837],"type":"scatter","name":"Trend (pricier riders scored more)","hoverinfo":"skip","x":[4,26]}],"layout":{"xaxis":{"title":{"text":"Cost (credits)"}},"hovermode":"closest","template":"plotly_white","margin":{"l":50,"b":50,"r":50,"t":60},"yaxis":{"title":{"text":"Points scored"}}}}.data, {"data":[{"x":[25.873944795569187,26.023834362280695,23.943293109896484,21.944366393166437,21.911342812367252,19.879883725682927,20.03980966493926,20.054290887791225,19.99618424412359,19.995329688237685,20.100608376389857,18.023387873244882,18.102198257951116,16.02856925217919,16.136443891983294,15.963549513026123,15.9311718639703,16.055446132217735,13.989964711131035,13.893756927064075,13.88028464995154,14.125164803436803,13.952460767520565,13.923627907652588,13.956396721535041,13.88336832449329,11.864684239211927,12.122628072642145,11.964716532503962,12.138841331976,11.857419984525686,11.990734339474587,12.13905615672294,12.060063636642804,12.108364544533496,11.934955209082407,11.940656422112044,12.037142177832957,12.09936336959638,11.999645070530667,10.00013385696792,9.967916910149999,9.987691640001108,9.912260540022952,9.89703861754461,10.072900459427306,9.992370310596558,8.139604766302476,8.04535229072234,7.938082164082311,8.091370452895632,7.858157265802926,7.9888260181050645,8.134464654952282,8.049274357138742,7.969197341244777,8.089130048093661,7.887356313982573,7.936717047054149,7.959808049255462,8.10761437387763,8.044460199710011,8.110623692166662,5.869482519857815,5.996457286442759,5.90914565119357,6.064427368905313,5.853774047009187,6.0084269166296504,5.961911595418651,5.910943492180082,5.991153423681187,6.000944970679023,5.988526648319013,6.00123000459686,5.92893416516928,5.853134811731983,6.102598894451702,5.968223307957572,6.057605023580397,5.992541320173678,6.071756094514437,5.876360048923559,5.874932571487025,5.976834739386598,6.04908212472912,5.880421724183867,5.971021824507377,5.909467746596224,5.994563896647283,6.108302799964924,6.013163782183738,5.9169774290890285,5.945713465160553,6.023759544145365,6.140273007024055,5.985113193238662,6.092121841266292,6.016646739504996,5.988157176034904,6.076695710427659,5.866383923746393,5.876882031675977,6.026634455780471,6.083087912063324,3.9046101991153037,3.925698632716117,4.042259394723764,3.9214423254185724,3.8632800985616593,4.074976249607865,3.8533010956302487,3.866436791736941,4.101485016849078,3.9268842845102476,4.088591372006011,3.9743999396840684,3.942128628799841,3.8692364370681167,3.9444747191862746,4.011409845812541,4.0384368543944875,4.143462458312624,3.8738866982370634,3.8789716546470174,4.00103190355381,4.078808165373721,4.136845846109164],"mode":"markers","y":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"type":"scatter","name":"Did not score","hoverinfo":"text","text":["Jonathan Milan (Lidl - Trek)<br>Cost: 26, Points: 0","Arnaud De Lie (Lotto Intermarché)<br>Cost: 26, Points: 0","Paul Magnier (Soudal Quick-Step)<br>Cost: 24, Points: 0","Tim Wellens (UAE Team Emirates - XRG)<br>Cost: 22, Points: 0","Biniam Girmay (NSN Cycling Team)<br>Cost: 22, Points: 0","Toms Skujiņš (Lidl - Trek)<br>Cost: 20, Points: 0","Emilien Jeannière (TotalEnergies)<br>Cost: 20, Points: 0","Dylan Groenewegen (Unibet Rose Rockets)<br>Cost: 20, Points: 0","Kaden Groves (Alpecin-Premier Tech)<br>Cost: 20, Points: 0","Jonas Abrahamsen (Uno-X Mobility)<br>Cost: 20, Points: 0","Rasmus Tiller (Uno-X Mobility)<br>Cost: 20, Points: 0","Juan Sebastián Molano (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0","Florian Vermeersch (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0","Phil Bauhaus (Bahrain - Victorious)<br>Cost: 16, Points: 0","Dylan Van Baarle (Soudal Quick-Step)<br>Cost: 16, Points: 0","Nils Politt (UAE Team Emirates - XRG)<br>Cost: 16, Points: 0","Pascal Ackermann (Team Jayco AlUla)<br>Cost: 16, Points: 0","Alexis Renard (Cofidis)<br>Cost: 16, Points: 0","Davide Ballerini (XDS Astana Team)<br>Cost: 14, Points: 0","Laurence Pithie (Red Bull - BORA - hansgrohe)<br>Cost: 14, Points: 0","Marijn Van Den Berg (EF Education - EasyPost)<br>Cost: 14, Points: 0","Rory Townsend (Unibet Rose Rockets)<br>Cost: 14, Points: 0","Paul Penhoët (Groupama - FDJ United)<br>Cost: 14, Points: 0","Pavel Bittner (Team Picnic PostNL)<br>Cost: 14, Points: 0","Brent Van Moer (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0","Fred Wright (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0","Oliver Naesen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0","Rasmus Søjberg Pedersen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0","Max Kanter (XDS Astana Team)<br>Cost: 12, Points: 0","Kasper Asgreen (EF Education - EasyPost)<br>Cost: 12, Points: 0","Mikkel Frølich Honoré (EF Education - EasyPost)<br>Cost: 12, Points: 0","Jenno Berckmoes (Lotto Intermarché)<br>Cost: 12, Points: 0","Yves Lampaert (Soudal Quick-Step)<br>Cost: 12, Points: 0","Rick Pluimers (Tudor Pro Cycling Team)<br>Cost: 12, Points: 0","Lewis Askey (NSN Cycling Team)<br>Cost: 12, Points: 0","Stanisław Aniołkowski (Cofidis)<br>Cost: 12, Points: 0","Bastien Tronchon (Groupama - FDJ United)<br>Cost: 12, Points: 0","Riley Sheehan (NSN Cycling Team)<br>Cost: 12, Points: 0","John Degenkolb (Team Picnic PostNL)<br>Cost: 12, Points: 0","Matteo Moschetti (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 12, Points: 0","Arne Marit (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0","Mick Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0","Edward Theuns (Lidl - Trek)<br>Cost: 10, Points: 0","Max Walscheid (Lidl - Trek)<br>Cost: 10, Points: 0","Tom Crabbe (Team Flanders - Baloise)<br>Cost: 10, Points: 0","Amaury Capiot (Team Jayco AlUla)<br>Cost: 10, Points: 0","Hugo Page (Cofidis)<br>Cost: 10, Points: 0","Daan Hoole (Decathlon CMA CGM Team)<br>Cost: 8, Points: 0","Aaron Gate (XDS Astana Team)<br>Cost: 8, Points: 0","Alec Segaert (Bahrain - Victorious)<br>Cost: 8, Points: 0","Noah Hobbs (EF Education - EasyPost)<br>Cost: 8, Points: 0","Luca Van Boven (Lotto Intermarché)<br>Cost: 8, Points: 0","Dries Van Gestel (Soudal Quick-Step)<br>Cost: 8, Points: 0","Julius Johansen (UAE Team Emirates - XRG)<br>Cost: 8, Points: 0","Riley Pickrell (Modern Adventure Pro Cycling)<br>Cost: 8, Points: 0","Orluis Aular (Movistar Team)<br>Cost: 8, Points: 0","Clément Alleno (Burgos Burpellet BH)<br>Cost: 8, Points: 0","Hartthijs De Vries (Unibet Rose Rockets)<br>Cost: 8, Points: 0","Silvan Dillier (Alpecin-Premier Tech)<br>Cost: 8, Points: 0","Elmar Reinders (Unibet Rose Rockets)<br>Cost: 8, Points: 0","Piet Allegaert (Cofidis)<br>Cost: 8, Points: 0","Clément Russo (Groupama - FDJ United)<br>Cost: 8, Points: 0","Aimé De Gendt (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 8, Points: 0","Lev Gonov (XDS Astana Team)<br>Cost: 6, Points: 0","Alessandro Romele (XDS Astana Team)<br>Cost: 6, Points: 0","Jakob Söderqvist (Lidl - Trek)<br>Cost: 6, Points: 0","Gleb Syritsa (XDS Astana Team)<br>Cost: 6, Points: 0","Kamil Gradek (Bahrain - Victorious)<br>Cost: 6, Points: 0","Romet Pajur (Red Bull - BORA - hansgrohe)<br>Cost: 6, Points: 0","Colby Simmons (EF Education - EasyPost)<br>Cost: 6, Points: 0","Alexys Brunel (TotalEnergies)<br>Cost: 6, Points: 0","Samuel Leroux (TotalEnergies)<br>Cost: 6, Points: 0","Liam Slock (Lotto Intermarché)<br>Cost: 6, Points: 0","Baptiste Vadic (TotalEnergies)<br>Cost: 6, Points: 0","Bert Van Lerberghe (Soudal Quick-Step)<br>Cost: 6, Points: 0","Ceriel Desal (Soudal Quick-Step)<br>Cost: 6, Points: 0","Aivaras Mikutis (Tudor Pro Cycling Team)<br>Cost: 6, Points: 0","Rune Herregodts (UAE Team Emirates - XRG)<br>Cost: 6, Points: 0","Mark Stewart (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 0","Josh Burnett (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Daniel Cavia (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Filip Maciejuk (Movistar Team)<br>Cost: 6, Points: 0","Manlio Moro (Movistar Team)<br>Cost: 6, Points: 0","César Macías (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Alexandre Mayer (Burgos Burpellet BH)<br>Cost: 6, Points: 0","Jonas Geens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Cyril Barthe (Groupama - FDJ United)<br>Cost: 6, Points: 0","Niklas Larsen (Unibet Rose Rockets)<br>Cost: 6, Points: 0","Edward Planckaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Robert Donaldson (Team Jayco AlUla)<br>Cost: 6, Points: 0","Jonas Rickaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Martijn Rasenberg (Unibet Rose Rockets)<br>Cost: 6, Points: 0","Sente Sentjens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0","Guillaume Boivin (NSN Cycling Team)<br>Cost: 6, Points: 0","Jelte Krijnsen (Team Jayco AlUla)<br>Cost: 6, Points: 0","Luka Mezgec (Team Jayco AlUla)<br>Cost: 6, Points: 0","Carl-Frederik Bévort (Uno-X Mobility)<br>Cost: 6, Points: 0","Kelland O'Brien (Team Jayco AlUla)<br>Cost: 6, Points: 0","Ryan Mullen (NSN Cycling Team)<br>Cost: 6, Points: 0","Alex Kirsch (Cofidis)<br>Cost: 6, Points: 0","Frederik Frison (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0","Timo De Jong (Team Picnic PostNL)<br>Cost: 6, Points: 0","Nicolò Parisini (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0","Niklas Märkl (Team Picnic PostNL)<br>Cost: 6, Points: 0","Sander De Pestel (Decathlon CMA CGM Team)<br>Cost: 6, Points: 0","Alessandro Borgo (Bahrain - Victorious)<br>Cost: 4, Points: 0","Felix Ørn-Kristoff (Lotto Intermarché)<br>Cost: 4, Points: 0","Pierre Thierry (TotalEnergies)<br>Cost: 4, Points: 0","Samuel Boardman (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Ezra Caudell (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Sean Christian (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0","Georgios Bouglas (Burgos Burpellet BH)<br>Cost: 4, Points: 0","Brem Deman (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Ferre Geeraerts (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Vojtěch Kmínek (Burgos Burpellet BH)<br>Cost: 4, Points: 0","Jules Hesters (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Nolan Huysmans (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Artuur Torney (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Leander Van Hautegem (Team Flanders - Baloise)<br>Cost: 4, Points: 0","Titouan Fontaine (Groupama - FDJ United)<br>Cost: 4, Points: 0","Jonas Hem Hvideberg (Uno-X Mobility)<br>Cost: 4, Points: 0","Jan Maas (Cofidis)<br>Cost: 4, Points: 0","Henrik Pedersen (Uno-X Mobility)<br>Cost: 4, Points: 0","Kamil Małecki (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 4, Points: 0","Tim Naberman (Team Picnic PostNL)<br>Cost: 4, Points: 0","Timo Roosen (Team Picnic PostNL)<br>Cost: 4, Points: 0","Jarrad Drizners (Red Bull - BORA - hansgrohe)<br>Cost: 4, Points: 0","Stan Dewulf (Decathlon CMA CGM Team)<br>Cost: 4, Points: 0"],"marker":{"color":"#aaaaaa","symbol":"x","opacity":0.35,"size":5}},{"x":[26.046449602386982,22.138330883647598,22.064835677202936,20.10381885115629,15.896024317744912,16.068014171718076,16.077276457334587,13.85725027509315,14.010471901061019,13.994555344961343,12.104325880806321,11.866833467324762,11.941553356013793,12.119880043165837,12.092968800851496,11.943538081164533,11.86554877194226,12.107200382763539,10.08238021406189,10.092735837484254,7.89077502876497,8.129157725853402,8.043437480258095,8.106680157402682,8.042517918165823,8.058048934070912,8.003170878846818,7.916302814531751,5.945268040004988,6.043514166813266,5.952805639095722,5.994889722533479,5.863156801208333,5.915763224903177,3.940798002660031,3.957196772572066,4.1234088374067195,4.078158767450745,4.012118904518101],"mode":"markers","y":[78,129,51,24,45,114,156,30,96,120,12,45,30,138,45,60,30,147,108,30,45,72,102,48,36,90,30,42,45,18,84,66,54,30,45,45,45,30,30],"type":"scatter","name":"Other riders","hoverinfo":"text","text":["Jasper Philipsen (Alpecin-Premier Tech)<br>Cost: 26, Points: 78, Value: 3.0","Jordi Meeus (Red Bull - BORA - hansgrohe)<br>Cost: 22, Points: 129, Value: 5.9","Christophe Laporte (Team Visma - Lease a Bike)<br>Cost: 22, Points: 51, Value: 2.3","Matej Mohorič (Bahrain - Victorious)<br>Cost: 20, Points: 24, Value: 1.2","Axel Zingle (Team Visma - Lease a Bike)<br>Cost: 16, Points: 45, Value: 2.8","Jon Barrenetxea (Movistar Team)<br>Cost: 16, Points: 114, Value: 7.1","Tobias Lund Andresen (Decathlon CMA CGM Team)<br>Cost: 16, Points: 156, Value: 9.8","Roger Adrià (Movistar Team)<br>Cost: 14, Points: 30, Value: 2.1","Iván García Cortina (Movistar Team)<br>Cost: 14, Points: 96, Value: 6.9","Hugo Hofstetter (NSN Cycling Team)<br>Cost: 14, Points: 120, Value: 8.6","Héctor Álvarez (Lidl - Trek)<br>Cost: 12, Points: 12, Value: 1.0","Timo Kielich (Team Visma - Lease a Bike)<br>Cost: 12, Points: 45, Value: 3.8","Vincenzo Albanese (EF Education - EasyPost)<br>Cost: 12, Points: 30, Value: 2.5","Luke Lamperti (EF Education - EasyPost)<br>Cost: 12, Points: 138, Value: 11.5","Marco Haller (Tudor Pro Cycling Team)<br>Cost: 12, Points: 45, Value: 3.8","Carlos Canal (Movistar Team)<br>Cost: 12, Points: 60, Value: 5.0","Dries De Bondt (Team Jayco AlUla)<br>Cost: 12, Points: 30, Value: 2.5","Cees Bol (Decathlon CMA CGM Team)<br>Cost: 12, Points: 147, Value: 12.2","Tim Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 108, Value: 10.8","Matis Louvel (NSN Cycling Team)<br>Cost: 10, Points: 30, Value: 3.0","Filippo Fiorelli (Team Visma - Lease a Bike)<br>Cost: 8, Points: 45, Value: 5.6","Pau Miquel (Bahrain - Victorious)<br>Cost: 8, Points: 72, Value: 9.0","Florian Dauphin (TotalEnergies)<br>Cost: 8, Points: 102, Value: 12.8","Vito Braet (Lotto Intermarché)<br>Cost: 8, Points: 48, Value: 6.0","Rui Oliveira (UAE Team Emirates - XRG)<br>Cost: 8, Points: 36, Value: 4.5","Matyáš Kopecký (Unibet Rose Rockets)<br>Cost: 8, Points: 90, Value: 11.2","Johan Jacobs (Groupama - FDJ United)<br>Cost: 8, Points: 30, Value: 3.8","Erik Nordsæter Resell (Uno-X Mobility)<br>Cost: 8, Points: 42, Value: 5.2","Matisse Van Kerckhove (Team Visma - Lease a Bike)<br>Cost: 6, Points: 45, Value: 7.5","Rayan Boulahoite (TotalEnergies)<br>Cost: 6, Points: 18, Value: 3.0","Steffen De Schuyteneer (Lotto Intermarché)<br>Cost: 6, Points: 84, Value: 14.0","Ben Oliver (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 66, Value: 11.0","Axel Huens (Groupama - FDJ United)<br>Cost: 6, Points: 54, Value: 9.0","Storm Ingebrigtsen (Uno-X Mobility)<br>Cost: 6, Points: 30, Value: 5.0","Pietro Mattio (Team Visma - Lease a Bike)<br>Cost: 4, Points: 45, Value: 11.2","Robin Froidevaux (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Petr Kelemen (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Cole Kessler (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 30, Value: 7.5","Frits Biesterbos (Team Picnic PostNL)<br>Cost: 4, Points: 30, Value: 7.5"],"marker":{"opacity":0.5,"size":6}},{"x":[23.961615538032678,19.976539396036383,17.89796580379475,16.030151354522236,13.866147781341724,8.06998211977999],"mode":"markers","y":[320,270,180,165,295,210],"type":"scatter","name":"Optimal team","hoverinfo":"text","text":["Matthew Brennan (Team Visma - Lease a Bike)<br>Cost: 24, Points: 320, Value: 13.3","Matteo Trentin (Tudor Pro Cycling Team)<br>Cost: 20, Points: 270, Value: 13.5","Mike Teunissen (XDS Astana Team)<br>Cost: 18, Points: 180, Value: 10.0","Laurenz Rex (Soudal Quick-Step)<br>Cost: 16, Points: 165, Value: 10.3","Luca Mozzato (Tudor Pro Cycling Team)<br>Cost: 14, Points: 295, Value: 21.1","Matevž Govekar (Bahrain - Victorious)<br>Cost: 8, Points: 210, Value: 26.2"],"marker":{"opacity":0.9,"size":10}},{"mode":"lines","line":{"color":"#666666","dash":"dash","width":1.5},"y":[5.275922319737523,70.53524332879837],"type":"scatter","name":"Trend (pricier riders scored more)","hoverinfo":"skip","x":[4,26]}],"layout":{"xaxis":{"title":{"text":"Cost (credits)"}},"hovermode":"closest","template":"plotly_white","margin":{"l":50,"b":50,"r":50,"t":60},"yaxis":{"title":{"text":"Points scored"}}}}.layout, {responsive: true})</script><h3 id="top-scorers-this-race">Top scorers this race</h3>
+<table class="table table-striped table-sm">
+<thead><tr><th>Rider</th><th>Team</th><th>Cost</th><th>Points</th><th>Value</th></tr></thead>
 <tbody>
-<tr class="odd">
-<td>Matthew Brennan</td>
-<td>Team Visma - Lease a Bike</td>
-<td>24</td>
-<td>320</td>
-<td>13.3</td>
-</tr>
-<tr class="even">
-<td>Luca Mozzato</td>
-<td>Tudor Pro Cycling Team</td>
-<td>14</td>
-<td>295</td>
-<td>21.1</td>
-</tr>
-<tr class="odd">
-<td>Matteo Trentin</td>
-<td>Tudor Pro Cycling Team</td>
-<td>20</td>
-<td>270</td>
-<td>13.5</td>
-</tr>
-<tr class="even">
-<td>Matevž Govekar</td>
-<td>Bahrain - Victorious</td>
-<td>8</td>
-<td>210</td>
-<td>26.2</td>
-</tr>
-<tr class="odd">
-<td>Mike Teunissen</td>
-<td>XDS Astana Team</td>
-<td>18</td>
-<td>180</td>
-<td>10.0</td>
-</tr>
-<tr class="even">
-<td>Laurenz Rex</td>
-<td>Soudal Quick-Step</td>
-<td>16</td>
-<td>165</td>
-<td>10.3</td>
-</tr>
-<tr class="odd">
-<td>Tobias Lund Andresen</td>
-<td>Decathlon CMA CGM Team</td>
-<td>16</td>
-<td>156</td>
-<td>9.8</td>
-</tr>
-<tr class="even">
-<td>Cees Bol</td>
-<td>Decathlon CMA CGM Team</td>
-<td>12</td>
-<td>147</td>
-<td>12.2</td>
-</tr>
-<tr class="odd">
-<td>Luke Lamperti</td>
-<td>EF Education - EasyPost</td>
-<td>12</td>
-<td>138</td>
-<td>11.5</td>
-</tr>
-<tr class="even">
-<td>Jordi Meeus</td>
-<td>Red Bull - BORA - hansgrohe</td>
-<td>22</td>
-<td>129</td>
-<td>5.9</td>
-</tr>
-<tr class="odd">
-<td>Hugo Hofstetter</td>
-<td>NSN Cycling Team</td>
-<td>14</td>
-<td>120</td>
-<td>8.6</td>
-</tr>
-<tr class="even">
-<td>Jon Barrenetxea</td>
-<td>Movistar Team</td>
-<td>16</td>
-<td>114</td>
-<td>7.1</td>
-</tr>
-<tr class="odd">
-<td>Tim Van Dijke</td>
-<td>Red Bull - BORA - hansgrohe</td>
-<td>10</td>
-<td>108</td>
-<td>10.8</td>
-</tr>
-<tr class="even">
-<td>Florian Dauphin</td>
-<td>TotalEnergies</td>
-<td>8</td>
-<td>102</td>
-<td>12.8</td>
-</tr>
-<tr class="odd">
-<td>Iván García Cortina</td>
-<td>Movistar Team</td>
-<td>14</td>
-<td>96</td>
-<td>6.9</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</section>
-<section id="points-per-credit-by-price" class="level3">
-<h3 class="anchored" data-anchor-id="points-per-credit-by-price">Points per credit by price</h3>
-<p>This shows how efficiently each rider converted their price tag into points — higher is better. The dashed line shows whether paying more tended to buy better efficiency.</p>
+<tr><td>Matthew Brennan</td><td>Team Visma - Lease a Bike</td><td>24.0</td><td>320.0</td><td>13.3</td></tr>
+<tr><td>Luca Mozzato</td><td>Tudor Pro Cycling Team</td><td>14.0</td><td>295.0</td><td>21.1</td></tr>
+<tr><td>Matteo Trentin</td><td>Tudor Pro Cycling Team</td><td>20.0</td><td>270.0</td><td>13.5</td></tr>
+<tr><td>Matevž Govekar</td><td>Bahrain - Victorious</td><td>8.0</td><td>210.0</td><td>26.2</td></tr>
+<tr><td>Mike Teunissen</td><td>XDS Astana Team</td><td>18.0</td><td>180.0</td><td>10.0</td></tr>
+<tr><td>Laurenz Rex</td><td>Soudal Quick-Step</td><td>16.0</td><td>165.0</td><td>10.3</td></tr>
+<tr><td>Tobias Lund Andresen</td><td>Decathlon CMA CGM Team</td><td>16.0</td><td>156.0</td><td>9.8</td></tr>
+<tr><td>Cees Bol</td><td>Decathlon CMA CGM Team</td><td>12.0</td><td>147.0</td><td>12.2</td></tr>
+<tr><td>Luke Lamperti</td><td>EF Education - EasyPost</td><td>12.0</td><td>138.0</td><td>11.5</td></tr>
+<tr><td>Jordi Meeus</td><td>Red Bull - BORA - hansgrohe</td><td>22.0</td><td>129.0</td><td>5.9</td></tr>
+<tr><td>Hugo Hofstetter</td><td>NSN Cycling Team</td><td>14.0</td><td>120.0</td><td>8.6</td></tr>
+<tr><td>Jon Barrenetxea</td><td>Movistar Team</td><td>16.0</td><td>114.0</td><td>7.1</td></tr>
+<tr><td>Tim Van Dijke</td><td>Red Bull - BORA - hansgrohe</td><td>10.0</td><td>108.0</td><td>10.8</td></tr>
+<tr><td>Florian Dauphin</td><td>TotalEnergies</td><td>8.0</td><td>102.0</td><td>12.8</td></tr>
+<tr><td>Iván García Cortina</td><td>Movistar Team</td><td>14.0</td><td>96.0</td><td>6.9</td></tr>
+</tbody></table>
+<h3 id="points-per-credit-by-price">Points per credit by price</h3>
+<p>How efficiently each rider converted their price tag into points.</p>
 <div id="plot-val" style="width:100%; height:500px;"></div>
-<script>Plotly.newPlot('plot-val', {"data":[{"x":[26.000621775164934,25.923777756100687,24.08086353739076,21.989378078060504,22.059189650280327,20.092767235956035,20.064000690217554,20.06084521850737,19.960645280832477,19.99631139460066,20.051425186231324,17.973841868108202,17.90983046742156,15.878021458871572,15.90540294032575,16.110323977427367,15.923541710200707,15.929007483201636,13.888386154454912,13.870626594889218,14.029662016659016,14.013386358782887,13.92631285922298,13.92983811862952,14.087119978570295,14.058839188388555,11.934544512457812,12.098689315436808,12.017296365646631,12.006635864606775,11.967001296071095,12.08270448750533,12.095636871151983,11.954970937736766,11.881196666734356,11.995410556624707,12.014344502201993,12.07137811271952,12.031025973061405,11.86279855624308,10.084634952535618,10.01580950184692,10.020478636618437,10.145589377192032,10.045260786907793,9.935631318336949,9.980589208747375,8.084137801146287,7.893463042920276,7.850555117344529,8.107328030749152,8.0311559519563,7.863492025826491,7.85067825824402,8.101944660834146,8.051024929377418,8.126677950539372,8.050629687356029,8.091327749360811,7.870407895573775,7.911820029537773,8.090215942793192,7.879179188148198,6.088407285095802,6.085003530938098,5.8709883069804825,6.132061783416685,5.861380554128891,5.877040022589306,6.13910254408286,6.110892662890512,5.948303441919888,6.028290542149189,6.03866139994698,5.949014744459465,5.865003715070219,6.008150790919077,6.045627933198638,5.877595354695555,5.96906013473245,6.011263737951732,5.886361231760954,6.06306298565827,5.939347038364013,6.12580429898145,6.118202573764313,6.102342955382098,6.069645325669615,6.009526176101286,6.017924095226329,5.918546241958654,5.878030667444639,6.111611670483219,5.933254841000045,5.990451851934694,5.887507778580859,5.9731590956198755,5.978720971865132,6.138677779397411,5.897601787262549,5.952243131771534,6.014929621476095,6.139955547677641,6.026312577377552,6.093166301725584,4.011543836927579,3.9555538435547914,3.9335081533540928,4.055157821572161,3.8594643504618804,3.8535616127415375,3.975773584621624,4.080203669343982,3.950233229425256,3.980998908969997,4.114185545062251,4.139200255126257,4.111602474902455,4.049366749531316,3.947678958004554,4.1494480687967945,4.088304425275899,3.976410961755545,3.9510149314419984,3.968582579317265,3.9382583320422233,3.8747780780527212,3.9285386051771254],"mode":"markers","y":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"type":"scatter","name":"Did not score","hoverinfo":"text","text":["Jonathan Milan (Lidl - Trek)<br>Cost: 26, Points: 0, Value: 0","Arnaud De Lie (Lotto Intermarché)<br>Cost: 26, Points: 0, Value: 0","Paul Magnier (Soudal Quick-Step)<br>Cost: 24, Points: 0, Value: 0","Tim Wellens (UAE Team Emirates - XRG)<br>Cost: 22, Points: 0, Value: 0","Biniam Girmay (NSN Cycling Team)<br>Cost: 22, Points: 0, Value: 0","Toms Skujiņš (Lidl - Trek)<br>Cost: 20, Points: 0, Value: 0","Emilien Jeannière (TotalEnergies)<br>Cost: 20, Points: 0, Value: 0","Dylan Groenewegen (Unibet Rose Rockets)<br>Cost: 20, Points: 0, Value: 0","Kaden Groves (Alpecin-Premier Tech)<br>Cost: 20, Points: 0, Value: 0","Jonas Abrahamsen (Uno-X Mobility)<br>Cost: 20, Points: 0, Value: 0","Rasmus Tiller (Uno-X Mobility)<br>Cost: 20, Points: 0, Value: 0","Juan Sebastián Molano (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0, Value: 0","Florian Vermeersch (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0, Value: 0","Phil Bauhaus (Bahrain - Victorious)<br>Cost: 16, Points: 0, Value: 0","Dylan Van Baarle (Soudal Quick-Step)<br>Cost: 16, Points: 0, Value: 0","Nils Politt (UAE Team Emirates - XRG)<br>Cost: 16, Points: 0, Value: 0","Pascal Ackermann (Team Jayco AlUla)<br>Cost: 16, Points: 0, Value: 0","Alexis Renard (Cofidis)<br>Cost: 16, Points: 0, Value: 0","Davide Ballerini (XDS Astana Team)<br>Cost: 14, Points: 0, Value: 0","Laurence Pithie (Red Bull - BORA - hansgrohe)<br>Cost: 14, Points: 0, Value: 0","Marijn Van Den Berg (EF Education - EasyPost)<br>Cost: 14, Points: 0, Value: 0","Rory Townsend (Unibet Rose Rockets)<br>Cost: 14, Points: 0, Value: 0","Paul Penhoët (Groupama - FDJ United)<br>Cost: 14, Points: 0, Value: 0","Pavel Bittner (Team Picnic PostNL)<br>Cost: 14, Points: 0, Value: 0","Brent Van Moer (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0, Value: 0","Fred Wright (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0, Value: 0","Oliver Naesen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0, Value: 0","Rasmus Søjberg Pedersen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0, Value: 0","Max Kanter (XDS Astana Team)<br>Cost: 12, Points: 0, Value: 0","Kasper Asgreen (EF Education - EasyPost)<br>Cost: 12, Points: 0, Value: 0","Mikkel Frølich Honoré (EF Education - EasyPost)<br>Cost: 12, Points: 0, Value: 0","Jenno Berckmoes (Lotto Intermarché)<br>Cost: 12, Points: 0, Value: 0","Yves Lampaert (Soudal Quick-Step)<br>Cost: 12, Points: 0, Value: 0","Rick Pluimers (Tudor Pro Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Lewis Askey (NSN Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Stanisław Aniołkowski (Cofidis)<br>Cost: 12, Points: 0, Value: 0","Bastien Tronchon (Groupama - FDJ United)<br>Cost: 12, Points: 0, Value: 0","Riley Sheehan (NSN Cycling Team)<br>Cost: 12, Points: 0, Value: 0","John Degenkolb (Team Picnic PostNL)<br>Cost: 12, Points: 0, Value: 0","Matteo Moschetti (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Arne Marit (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0, Value: 0","Mick Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0, Value: 0","Edward Theuns (Lidl - Trek)<br>Cost: 10, Points: 0, Value: 0","Max Walscheid (Lidl - Trek)<br>Cost: 10, Points: 0, Value: 0","Tom Crabbe (Team Flanders - Baloise)<br>Cost: 10, Points: 0, Value: 0","Amaury Capiot (Team Jayco AlUla)<br>Cost: 10, Points: 0, Value: 0","Hugo Page (Cofidis)<br>Cost: 10, Points: 0, Value: 0","Daan Hoole (Decathlon CMA CGM Team)<br>Cost: 8, Points: 0, Value: 0","Aaron Gate (XDS Astana Team)<br>Cost: 8, Points: 0, Value: 0","Alec Segaert (Bahrain - Victorious)<br>Cost: 8, Points: 0, Value: 0","Noah Hobbs (EF Education - EasyPost)<br>Cost: 8, Points: 0, Value: 0","Luca Van Boven (Lotto Intermarché)<br>Cost: 8, Points: 0, Value: 0","Dries Van Gestel (Soudal Quick-Step)<br>Cost: 8, Points: 0, Value: 0","Julius Johansen (UAE Team Emirates - XRG)<br>Cost: 8, Points: 0, Value: 0","Riley Pickrell (Modern Adventure Pro Cycling)<br>Cost: 8, Points: 0, Value: 0","Orluis Aular (Movistar Team)<br>Cost: 8, Points: 0, Value: 0","Clément Alleno (Burgos Burpellet BH)<br>Cost: 8, Points: 0, Value: 0","Hartthijs De Vries (Unibet Rose Rockets)<br>Cost: 8, Points: 0, Value: 0","Silvan Dillier (Alpecin-Premier Tech)<br>Cost: 8, Points: 0, Value: 0","Elmar Reinders (Unibet Rose Rockets)<br>Cost: 8, Points: 0, Value: 0","Piet Allegaert (Cofidis)<br>Cost: 8, Points: 0, Value: 0","Clément Russo (Groupama - FDJ United)<br>Cost: 8, Points: 0, Value: 0","Aimé De Gendt (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 8, Points: 0, Value: 0","Lev Gonov (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Alessandro Romele (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Jakob Söderqvist (Lidl - Trek)<br>Cost: 6, Points: 0, Value: 0","Gleb Syritsa (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Kamil Gradek (Bahrain - Victorious)<br>Cost: 6, Points: 0, Value: 0","Romet Pajur (Red Bull - BORA - hansgrohe)<br>Cost: 6, Points: 0, Value: 0","Colby Simmons (EF Education - EasyPost)<br>Cost: 6, Points: 0, Value: 0","Alexys Brunel (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Samuel Leroux (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Liam Slock (Lotto Intermarché)<br>Cost: 6, Points: 0, Value: 0","Baptiste Vadic (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Bert Van Lerberghe (Soudal Quick-Step)<br>Cost: 6, Points: 0, Value: 0","Ceriel Desal (Soudal Quick-Step)<br>Cost: 6, Points: 0, Value: 0","Aivaras Mikutis (Tudor Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Rune Herregodts (UAE Team Emirates - XRG)<br>Cost: 6, Points: 0, Value: 0","Mark Stewart (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 0, Value: 0","Josh Burnett (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Daniel Cavia (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Filip Maciejuk (Movistar Team)<br>Cost: 6, Points: 0, Value: 0","Manlio Moro (Movistar Team)<br>Cost: 6, Points: 0, Value: 0","César Macías (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Alexandre Mayer (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Jonas Geens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Cyril Barthe (Groupama - FDJ United)<br>Cost: 6, Points: 0, Value: 0","Niklas Larsen (Unibet Rose Rockets)<br>Cost: 6, Points: 0, Value: 0","Edward Planckaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Robert Donaldson (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Jonas Rickaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Martijn Rasenberg (Unibet Rose Rockets)<br>Cost: 6, Points: 0, Value: 0","Sente Sentjens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Guillaume Boivin (NSN Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Jelte Krijnsen (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Luka Mezgec (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Carl-Frederik Bévort (Uno-X Mobility)<br>Cost: 6, Points: 0, Value: 0","Kelland O'Brien (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Ryan Mullen (NSN Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Alex Kirsch (Cofidis)<br>Cost: 6, Points: 0, Value: 0","Frederik Frison (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Timo De Jong (Team Picnic PostNL)<br>Cost: 6, Points: 0, Value: 0","Nicolò Parisini (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Niklas Märkl (Team Picnic PostNL)<br>Cost: 6, Points: 0, Value: 0","Sander De Pestel (Decathlon CMA CGM Team)<br>Cost: 6, Points: 0, Value: 0","Alessandro Borgo (Bahrain - Victorious)<br>Cost: 4, Points: 0, Value: 0","Felix Ørn-Kristoff (Lotto Intermarché)<br>Cost: 4, Points: 0, Value: 0","Pierre Thierry (TotalEnergies)<br>Cost: 4, Points: 0, Value: 0","Samuel Boardman (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Ezra Caudell (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Sean Christian (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Georgios Bouglas (Burgos Burpellet BH)<br>Cost: 4, Points: 0, Value: 0","Brem Deman (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Ferre Geeraerts (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Vojtěch Kmínek (Burgos Burpellet BH)<br>Cost: 4, Points: 0, Value: 0","Jules Hesters (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Nolan Huysmans (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Artuur Torney (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Leander Van Hautegem (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Titouan Fontaine (Groupama - FDJ United)<br>Cost: 4, Points: 0, Value: 0","Jonas Hem Hvideberg (Uno-X Mobility)<br>Cost: 4, Points: 0, Value: 0","Jan Maas (Cofidis)<br>Cost: 4, Points: 0, Value: 0","Henrik Pedersen (Uno-X Mobility)<br>Cost: 4, Points: 0, Value: 0","Kamil Małecki (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 4, Points: 0, Value: 0","Tim Naberman (Team Picnic PostNL)<br>Cost: 4, Points: 0, Value: 0","Timo Roosen (Team Picnic PostNL)<br>Cost: 4, Points: 0, Value: 0","Jarrad Drizners (Red Bull - BORA - hansgrohe)<br>Cost: 4, Points: 0, Value: 0","Stan Dewulf (Decathlon CMA CGM Team)<br>Cost: 4, Points: 0, Value: 0"],"marker":{"color":"#aaaaaa","symbol":"x","opacity":0.35,"size":5}},{"x":[26.082763677490412,22.095256373170496,21.933534243562562,19.97391343208512,15.885608760076192,16.12612314155611,16.05198668717807,14.030375851262153,13.935344642060455,14.008218436083148,12.10072045672214,11.983953950201869,11.919694275551509,12.110965346071909,11.85518317818473,11.889263155177654,12.125533821054502,11.925997659962558,10.077131222481494,9.893396858723284,7.993264820038736,7.969411647848508,7.879542532594441,8.146613916274573,8.041664340065438,8.02240782626239,8.045161025906175,8.072899471233475,5.8730950871063925,5.935425491228251,6.13518495125293,5.971014658158952,6.024885707763234,5.851297819114708,4.142946080651527,4.032812420553838,3.992744349161505,3.994885382621821,3.887523965557212],"mode":"markers","y":[3,5.9,2.3,1.2,2.8,7.1,9.8,2.1,6.9,8.6,1,3.8,2.5,11.5,3.8,5,2.5,12.2,10.8,3,5.6,9,12.8,6,4.5,11.2,3.8,5.2,7.5,3,14,11,9,5,11.2,11.2,11.2,7.5,7.5],"type":"scatter","name":"Other riders","hoverinfo":"text","text":["Jasper Philipsen (Alpecin-Premier Tech)<br>Cost: 26, Points: 78, Value: 3.0","Jordi Meeus (Red Bull - BORA - hansgrohe)<br>Cost: 22, Points: 129, Value: 5.9","Christophe Laporte (Team Visma - Lease a Bike)<br>Cost: 22, Points: 51, Value: 2.3","Matej Mohorič (Bahrain - Victorious)<br>Cost: 20, Points: 24, Value: 1.2","Axel Zingle (Team Visma - Lease a Bike)<br>Cost: 16, Points: 45, Value: 2.8","Jon Barrenetxea (Movistar Team)<br>Cost: 16, Points: 114, Value: 7.1","Tobias Lund Andresen (Decathlon CMA CGM Team)<br>Cost: 16, Points: 156, Value: 9.8","Roger Adrià (Movistar Team)<br>Cost: 14, Points: 30, Value: 2.1","Iván García Cortina (Movistar Team)<br>Cost: 14, Points: 96, Value: 6.9","Hugo Hofstetter (NSN Cycling Team)<br>Cost: 14, Points: 120, Value: 8.6","Héctor Álvarez (Lidl - Trek)<br>Cost: 12, Points: 12, Value: 1.0","Timo Kielich (Team Visma - Lease a Bike)<br>Cost: 12, Points: 45, Value: 3.8","Vincenzo Albanese (EF Education - EasyPost)<br>Cost: 12, Points: 30, Value: 2.5","Luke Lamperti (EF Education - EasyPost)<br>Cost: 12, Points: 138, Value: 11.5","Marco Haller (Tudor Pro Cycling Team)<br>Cost: 12, Points: 45, Value: 3.8","Carlos Canal (Movistar Team)<br>Cost: 12, Points: 60, Value: 5.0","Dries De Bondt (Team Jayco AlUla)<br>Cost: 12, Points: 30, Value: 2.5","Cees Bol (Decathlon CMA CGM Team)<br>Cost: 12, Points: 147, Value: 12.2","Tim Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 108, Value: 10.8","Matis Louvel (NSN Cycling Team)<br>Cost: 10, Points: 30, Value: 3.0","Filippo Fiorelli (Team Visma - Lease a Bike)<br>Cost: 8, Points: 45, Value: 5.6","Pau Miquel (Bahrain - Victorious)<br>Cost: 8, Points: 72, Value: 9.0","Florian Dauphin (TotalEnergies)<br>Cost: 8, Points: 102, Value: 12.8","Vito Braet (Lotto Intermarché)<br>Cost: 8, Points: 48, Value: 6.0","Rui Oliveira (UAE Team Emirates - XRG)<br>Cost: 8, Points: 36, Value: 4.5","Matyáš Kopecký (Unibet Rose Rockets)<br>Cost: 8, Points: 90, Value: 11.2","Johan Jacobs (Groupama - FDJ United)<br>Cost: 8, Points: 30, Value: 3.8","Erik Nordsæter Resell (Uno-X Mobility)<br>Cost: 8, Points: 42, Value: 5.2","Matisse Van Kerckhove (Team Visma - Lease a Bike)<br>Cost: 6, Points: 45, Value: 7.5","Rayan Boulahoite (TotalEnergies)<br>Cost: 6, Points: 18, Value: 3.0","Steffen De Schuyteneer (Lotto Intermarché)<br>Cost: 6, Points: 84, Value: 14.0","Ben Oliver (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 66, Value: 11.0","Axel Huens (Groupama - FDJ United)<br>Cost: 6, Points: 54, Value: 9.0","Storm Ingebrigtsen (Uno-X Mobility)<br>Cost: 6, Points: 30, Value: 5.0","Pietro Mattio (Team Visma - Lease a Bike)<br>Cost: 4, Points: 45, Value: 11.2","Robin Froidevaux (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Petr Kelemen (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Cole Kessler (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 30, Value: 7.5","Frits Biesterbos (Team Picnic PostNL)<br>Cost: 4, Points: 30, Value: 7.5"],"marker":{"opacity":0.5,"size":6}},{"x":[23.976007213885378,20.14437975284409,18.096946282862596,16.011544359762933,14.036961983658845,7.9738038298876],"mode":"markers","y":[13.3,13.5,10.0,10.3,21.1,26.2],"type":"scatter","name":"Optimal team","hoverinfo":"text","text":["Matthew Brennan (Team Visma - Lease a Bike)<br>Cost: 24, Points: 320, Value: 13.3","Matteo Trentin (Tudor Pro Cycling Team)<br>Cost: 20, Points: 270, Value: 13.5","Mike Teunissen (XDS Astana Team)<br>Cost: 18, Points: 180, Value: 10.0","Laurenz Rex (Soudal Quick-Step)<br>Cost: 16, Points: 165, Value: 10.3","Luca Mozzato (Tudor Pro Cycling Team)<br>Cost: 14, Points: 295, Value: 21.1","Matevž Govekar (Bahrain - Victorious)<br>Cost: 8, Points: 210, Value: 26.2"],"marker":{"opacity":0.9,"size":10}},{"mode":"lines","line":{"color":"#666666","dash":"dash","width":1.5},"y":[1.6202363486008484,3.2910751282666872],"type":"scatter","name":"Trend (pricier riders were more efficient)","hoverinfo":"skip","x":[4,26]}],"layout":{"xaxis":{"title":{"text":"Cost (credits)"}},"hovermode":"closest","template":"plotly_white","margin":{"l":50,"b":50,"r":50,"t":60},"yaxis":{"title":{"text":"Value (points per credit)"}}}}.data, {"data":[{"x":[26.000621775164934,25.923777756100687,24.08086353739076,21.989378078060504,22.059189650280327,20.092767235956035,20.064000690217554,20.06084521850737,19.960645280832477,19.99631139460066,20.051425186231324,17.973841868108202,17.90983046742156,15.878021458871572,15.90540294032575,16.110323977427367,15.923541710200707,15.929007483201636,13.888386154454912,13.870626594889218,14.029662016659016,14.013386358782887,13.92631285922298,13.92983811862952,14.087119978570295,14.058839188388555,11.934544512457812,12.098689315436808,12.017296365646631,12.006635864606775,11.967001296071095,12.08270448750533,12.095636871151983,11.954970937736766,11.881196666734356,11.995410556624707,12.014344502201993,12.07137811271952,12.031025973061405,11.86279855624308,10.084634952535618,10.01580950184692,10.020478636618437,10.145589377192032,10.045260786907793,9.935631318336949,9.980589208747375,8.084137801146287,7.893463042920276,7.850555117344529,8.107328030749152,8.0311559519563,7.863492025826491,7.85067825824402,8.101944660834146,8.051024929377418,8.126677950539372,8.050629687356029,8.091327749360811,7.870407895573775,7.911820029537773,8.090215942793192,7.879179188148198,6.088407285095802,6.085003530938098,5.8709883069804825,6.132061783416685,5.861380554128891,5.877040022589306,6.13910254408286,6.110892662890512,5.948303441919888,6.028290542149189,6.03866139994698,5.949014744459465,5.865003715070219,6.008150790919077,6.045627933198638,5.877595354695555,5.96906013473245,6.011263737951732,5.886361231760954,6.06306298565827,5.939347038364013,6.12580429898145,6.118202573764313,6.102342955382098,6.069645325669615,6.009526176101286,6.017924095226329,5.918546241958654,5.878030667444639,6.111611670483219,5.933254841000045,5.990451851934694,5.887507778580859,5.9731590956198755,5.978720971865132,6.138677779397411,5.897601787262549,5.952243131771534,6.014929621476095,6.139955547677641,6.026312577377552,6.093166301725584,4.011543836927579,3.9555538435547914,3.9335081533540928,4.055157821572161,3.8594643504618804,3.8535616127415375,3.975773584621624,4.080203669343982,3.950233229425256,3.980998908969997,4.114185545062251,4.139200255126257,4.111602474902455,4.049366749531316,3.947678958004554,4.1494480687967945,4.088304425275899,3.976410961755545,3.9510149314419984,3.968582579317265,3.9382583320422233,3.8747780780527212,3.9285386051771254],"mode":"markers","y":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"type":"scatter","name":"Did not score","hoverinfo":"text","text":["Jonathan Milan (Lidl - Trek)<br>Cost: 26, Points: 0, Value: 0","Arnaud De Lie (Lotto Intermarché)<br>Cost: 26, Points: 0, Value: 0","Paul Magnier (Soudal Quick-Step)<br>Cost: 24, Points: 0, Value: 0","Tim Wellens (UAE Team Emirates - XRG)<br>Cost: 22, Points: 0, Value: 0","Biniam Girmay (NSN Cycling Team)<br>Cost: 22, Points: 0, Value: 0","Toms Skujiņš (Lidl - Trek)<br>Cost: 20, Points: 0, Value: 0","Emilien Jeannière (TotalEnergies)<br>Cost: 20, Points: 0, Value: 0","Dylan Groenewegen (Unibet Rose Rockets)<br>Cost: 20, Points: 0, Value: 0","Kaden Groves (Alpecin-Premier Tech)<br>Cost: 20, Points: 0, Value: 0","Jonas Abrahamsen (Uno-X Mobility)<br>Cost: 20, Points: 0, Value: 0","Rasmus Tiller (Uno-X Mobility)<br>Cost: 20, Points: 0, Value: 0","Juan Sebastián Molano (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0, Value: 0","Florian Vermeersch (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0, Value: 0","Phil Bauhaus (Bahrain - Victorious)<br>Cost: 16, Points: 0, Value: 0","Dylan Van Baarle (Soudal Quick-Step)<br>Cost: 16, Points: 0, Value: 0","Nils Politt (UAE Team Emirates - XRG)<br>Cost: 16, Points: 0, Value: 0","Pascal Ackermann (Team Jayco AlUla)<br>Cost: 16, Points: 0, Value: 0","Alexis Renard (Cofidis)<br>Cost: 16, Points: 0, Value: 0","Davide Ballerini (XDS Astana Team)<br>Cost: 14, Points: 0, Value: 0","Laurence Pithie (Red Bull - BORA - hansgrohe)<br>Cost: 14, Points: 0, Value: 0","Marijn Van Den Berg (EF Education - EasyPost)<br>Cost: 14, Points: 0, Value: 0","Rory Townsend (Unibet Rose Rockets)<br>Cost: 14, Points: 0, Value: 0","Paul Penhoët (Groupama - FDJ United)<br>Cost: 14, Points: 0, Value: 0","Pavel Bittner (Team Picnic PostNL)<br>Cost: 14, Points: 0, Value: 0","Brent Van Moer (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0, Value: 0","Fred Wright (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0, Value: 0","Oliver Naesen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0, Value: 0","Rasmus Søjberg Pedersen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0, Value: 0","Max Kanter (XDS Astana Team)<br>Cost: 12, Points: 0, Value: 0","Kasper Asgreen (EF Education - EasyPost)<br>Cost: 12, Points: 0, Value: 0","Mikkel Frølich Honoré (EF Education - EasyPost)<br>Cost: 12, Points: 0, Value: 0","Jenno Berckmoes (Lotto Intermarché)<br>Cost: 12, Points: 0, Value: 0","Yves Lampaert (Soudal Quick-Step)<br>Cost: 12, Points: 0, Value: 0","Rick Pluimers (Tudor Pro Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Lewis Askey (NSN Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Stanisław Aniołkowski (Cofidis)<br>Cost: 12, Points: 0, Value: 0","Bastien Tronchon (Groupama - FDJ United)<br>Cost: 12, Points: 0, Value: 0","Riley Sheehan (NSN Cycling Team)<br>Cost: 12, Points: 0, Value: 0","John Degenkolb (Team Picnic PostNL)<br>Cost: 12, Points: 0, Value: 0","Matteo Moschetti (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Arne Marit (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0, Value: 0","Mick Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0, Value: 0","Edward Theuns (Lidl - Trek)<br>Cost: 10, Points: 0, Value: 0","Max Walscheid (Lidl - Trek)<br>Cost: 10, Points: 0, Value: 0","Tom Crabbe (Team Flanders - Baloise)<br>Cost: 10, Points: 0, Value: 0","Amaury Capiot (Team Jayco AlUla)<br>Cost: 10, Points: 0, Value: 0","Hugo Page (Cofidis)<br>Cost: 10, Points: 0, Value: 0","Daan Hoole (Decathlon CMA CGM Team)<br>Cost: 8, Points: 0, Value: 0","Aaron Gate (XDS Astana Team)<br>Cost: 8, Points: 0, Value: 0","Alec Segaert (Bahrain - Victorious)<br>Cost: 8, Points: 0, Value: 0","Noah Hobbs (EF Education - EasyPost)<br>Cost: 8, Points: 0, Value: 0","Luca Van Boven (Lotto Intermarché)<br>Cost: 8, Points: 0, Value: 0","Dries Van Gestel (Soudal Quick-Step)<br>Cost: 8, Points: 0, Value: 0","Julius Johansen (UAE Team Emirates - XRG)<br>Cost: 8, Points: 0, Value: 0","Riley Pickrell (Modern Adventure Pro Cycling)<br>Cost: 8, Points: 0, Value: 0","Orluis Aular (Movistar Team)<br>Cost: 8, Points: 0, Value: 0","Clément Alleno (Burgos Burpellet BH)<br>Cost: 8, Points: 0, Value: 0","Hartthijs De Vries (Unibet Rose Rockets)<br>Cost: 8, Points: 0, Value: 0","Silvan Dillier (Alpecin-Premier Tech)<br>Cost: 8, Points: 0, Value: 0","Elmar Reinders (Unibet Rose Rockets)<br>Cost: 8, Points: 0, Value: 0","Piet Allegaert (Cofidis)<br>Cost: 8, Points: 0, Value: 0","Clément Russo (Groupama - FDJ United)<br>Cost: 8, Points: 0, Value: 0","Aimé De Gendt (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 8, Points: 0, Value: 0","Lev Gonov (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Alessandro Romele (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Jakob Söderqvist (Lidl - Trek)<br>Cost: 6, Points: 0, Value: 0","Gleb Syritsa (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Kamil Gradek (Bahrain - Victorious)<br>Cost: 6, Points: 0, Value: 0","Romet Pajur (Red Bull - BORA - hansgrohe)<br>Cost: 6, Points: 0, Value: 0","Colby Simmons (EF Education - EasyPost)<br>Cost: 6, Points: 0, Value: 0","Alexys Brunel (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Samuel Leroux (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Liam Slock (Lotto Intermarché)<br>Cost: 6, Points: 0, Value: 0","Baptiste Vadic (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Bert Van Lerberghe (Soudal Quick-Step)<br>Cost: 6, Points: 0, Value: 0","Ceriel Desal (Soudal Quick-Step)<br>Cost: 6, Points: 0, Value: 0","Aivaras Mikutis (Tudor Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Rune Herregodts (UAE Team Emirates - XRG)<br>Cost: 6, Points: 0, Value: 0","Mark Stewart (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 0, Value: 0","Josh Burnett (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Daniel Cavia (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Filip Maciejuk (Movistar Team)<br>Cost: 6, Points: 0, Value: 0","Manlio Moro (Movistar Team)<br>Cost: 6, Points: 0, Value: 0","César Macías (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Alexandre Mayer (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Jonas Geens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Cyril Barthe (Groupama - FDJ United)<br>Cost: 6, Points: 0, Value: 0","Niklas Larsen (Unibet Rose Rockets)<br>Cost: 6, Points: 0, Value: 0","Edward Planckaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Robert Donaldson (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Jonas Rickaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Martijn Rasenberg (Unibet Rose Rockets)<br>Cost: 6, Points: 0, Value: 0","Sente Sentjens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Guillaume Boivin (NSN Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Jelte Krijnsen (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Luka Mezgec (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Carl-Frederik Bévort (Uno-X Mobility)<br>Cost: 6, Points: 0, Value: 0","Kelland O'Brien (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Ryan Mullen (NSN Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Alex Kirsch (Cofidis)<br>Cost: 6, Points: 0, Value: 0","Frederik Frison (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Timo De Jong (Team Picnic PostNL)<br>Cost: 6, Points: 0, Value: 0","Nicolò Parisini (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Niklas Märkl (Team Picnic PostNL)<br>Cost: 6, Points: 0, Value: 0","Sander De Pestel (Decathlon CMA CGM Team)<br>Cost: 6, Points: 0, Value: 0","Alessandro Borgo (Bahrain - Victorious)<br>Cost: 4, Points: 0, Value: 0","Felix Ørn-Kristoff (Lotto Intermarché)<br>Cost: 4, Points: 0, Value: 0","Pierre Thierry (TotalEnergies)<br>Cost: 4, Points: 0, Value: 0","Samuel Boardman (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Ezra Caudell (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Sean Christian (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Georgios Bouglas (Burgos Burpellet BH)<br>Cost: 4, Points: 0, Value: 0","Brem Deman (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Ferre Geeraerts (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Vojtěch Kmínek (Burgos Burpellet BH)<br>Cost: 4, Points: 0, Value: 0","Jules Hesters (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Nolan Huysmans (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Artuur Torney (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Leander Van Hautegem (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Titouan Fontaine (Groupama - FDJ United)<br>Cost: 4, Points: 0, Value: 0","Jonas Hem Hvideberg (Uno-X Mobility)<br>Cost: 4, Points: 0, Value: 0","Jan Maas (Cofidis)<br>Cost: 4, Points: 0, Value: 0","Henrik Pedersen (Uno-X Mobility)<br>Cost: 4, Points: 0, Value: 0","Kamil Małecki (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 4, Points: 0, Value: 0","Tim Naberman (Team Picnic PostNL)<br>Cost: 4, Points: 0, Value: 0","Timo Roosen (Team Picnic PostNL)<br>Cost: 4, Points: 0, Value: 0","Jarrad Drizners (Red Bull - BORA - hansgrohe)<br>Cost: 4, Points: 0, Value: 0","Stan Dewulf (Decathlon CMA CGM Team)<br>Cost: 4, Points: 0, Value: 0"],"marker":{"color":"#aaaaaa","symbol":"x","opacity":0.35,"size":5}},{"x":[26.082763677490412,22.095256373170496,21.933534243562562,19.97391343208512,15.885608760076192,16.12612314155611,16.05198668717807,14.030375851262153,13.935344642060455,14.008218436083148,12.10072045672214,11.983953950201869,11.919694275551509,12.110965346071909,11.85518317818473,11.889263155177654,12.125533821054502,11.925997659962558,10.077131222481494,9.893396858723284,7.993264820038736,7.969411647848508,7.879542532594441,8.146613916274573,8.041664340065438,8.02240782626239,8.045161025906175,8.072899471233475,5.8730950871063925,5.935425491228251,6.13518495125293,5.971014658158952,6.024885707763234,5.851297819114708,4.142946080651527,4.032812420553838,3.992744349161505,3.994885382621821,3.887523965557212],"mode":"markers","y":[3,5.9,2.3,1.2,2.8,7.1,9.8,2.1,6.9,8.6,1,3.8,2.5,11.5,3.8,5,2.5,12.2,10.8,3,5.6,9,12.8,6,4.5,11.2,3.8,5.2,7.5,3,14,11,9,5,11.2,11.2,11.2,7.5,7.5],"type":"scatter","name":"Other riders","hoverinfo":"text","text":["Jasper Philipsen (Alpecin-Premier Tech)<br>Cost: 26, Points: 78, Value: 3.0","Jordi Meeus (Red Bull - BORA - hansgrohe)<br>Cost: 22, Points: 129, Value: 5.9","Christophe Laporte (Team Visma - Lease a Bike)<br>Cost: 22, Points: 51, Value: 2.3","Matej Mohorič (Bahrain - Victorious)<br>Cost: 20, Points: 24, Value: 1.2","Axel Zingle (Team Visma - Lease a Bike)<br>Cost: 16, Points: 45, Value: 2.8","Jon Barrenetxea (Movistar Team)<br>Cost: 16, Points: 114, Value: 7.1","Tobias Lund Andresen (Decathlon CMA CGM Team)<br>Cost: 16, Points: 156, Value: 9.8","Roger Adrià (Movistar Team)<br>Cost: 14, Points: 30, Value: 2.1","Iván García Cortina (Movistar Team)<br>Cost: 14, Points: 96, Value: 6.9","Hugo Hofstetter (NSN Cycling Team)<br>Cost: 14, Points: 120, Value: 8.6","Héctor Álvarez (Lidl - Trek)<br>Cost: 12, Points: 12, Value: 1.0","Timo Kielich (Team Visma - Lease a Bike)<br>Cost: 12, Points: 45, Value: 3.8","Vincenzo Albanese (EF Education - EasyPost)<br>Cost: 12, Points: 30, Value: 2.5","Luke Lamperti (EF Education - EasyPost)<br>Cost: 12, Points: 138, Value: 11.5","Marco Haller (Tudor Pro Cycling Team)<br>Cost: 12, Points: 45, Value: 3.8","Carlos Canal (Movistar Team)<br>Cost: 12, Points: 60, Value: 5.0","Dries De Bondt (Team Jayco AlUla)<br>Cost: 12, Points: 30, Value: 2.5","Cees Bol (Decathlon CMA CGM Team)<br>Cost: 12, Points: 147, Value: 12.2","Tim Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 108, Value: 10.8","Matis Louvel (NSN Cycling Team)<br>Cost: 10, Points: 30, Value: 3.0","Filippo Fiorelli (Team Visma - Lease a Bike)<br>Cost: 8, Points: 45, Value: 5.6","Pau Miquel (Bahrain - Victorious)<br>Cost: 8, Points: 72, Value: 9.0","Florian Dauphin (TotalEnergies)<br>Cost: 8, Points: 102, Value: 12.8","Vito Braet (Lotto Intermarché)<br>Cost: 8, Points: 48, Value: 6.0","Rui Oliveira (UAE Team Emirates - XRG)<br>Cost: 8, Points: 36, Value: 4.5","Matyáš Kopecký (Unibet Rose Rockets)<br>Cost: 8, Points: 90, Value: 11.2","Johan Jacobs (Groupama - FDJ United)<br>Cost: 8, Points: 30, Value: 3.8","Erik Nordsæter Resell (Uno-X Mobility)<br>Cost: 8, Points: 42, Value: 5.2","Matisse Van Kerckhove (Team Visma - Lease a Bike)<br>Cost: 6, Points: 45, Value: 7.5","Rayan Boulahoite (TotalEnergies)<br>Cost: 6, Points: 18, Value: 3.0","Steffen De Schuyteneer (Lotto Intermarché)<br>Cost: 6, Points: 84, Value: 14.0","Ben Oliver (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 66, Value: 11.0","Axel Huens (Groupama - FDJ United)<br>Cost: 6, Points: 54, Value: 9.0","Storm Ingebrigtsen (Uno-X Mobility)<br>Cost: 6, Points: 30, Value: 5.0","Pietro Mattio (Team Visma - Lease a Bike)<br>Cost: 4, Points: 45, Value: 11.2","Robin Froidevaux (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Petr Kelemen (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Cole Kessler (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 30, Value: 7.5","Frits Biesterbos (Team Picnic PostNL)<br>Cost: 4, Points: 30, Value: 7.5"],"marker":{"opacity":0.5,"size":6}},{"x":[23.976007213885378,20.14437975284409,18.096946282862596,16.011544359762933,14.036961983658845,7.9738038298876],"mode":"markers","y":[13.3,13.5,10.0,10.3,21.1,26.2],"type":"scatter","name":"Optimal team","hoverinfo":"text","text":["Matthew Brennan (Team Visma - Lease a Bike)<br>Cost: 24, Points: 320, Value: 13.3","Matteo Trentin (Tudor Pro Cycling Team)<br>Cost: 20, Points: 270, Value: 13.5","Mike Teunissen (XDS Astana Team)<br>Cost: 18, Points: 180, Value: 10.0","Laurenz Rex (Soudal Quick-Step)<br>Cost: 16, Points: 165, Value: 10.3","Luca Mozzato (Tudor Pro Cycling Team)<br>Cost: 14, Points: 295, Value: 21.1","Matevž Govekar (Bahrain - Victorious)<br>Cost: 8, Points: 210, Value: 26.2"],"marker":{"opacity":0.9,"size":10}},{"mode":"lines","line":{"color":"#666666","dash":"dash","width":1.5},"y":[1.6202363486008484,3.2910751282666872],"type":"scatter","name":"Trend (pricier riders were more efficient)","hoverinfo":"skip","x":[4,26]}],"layout":{"xaxis":{"title":{"text":"Cost (credits)"}},"hovermode":"closest","template":"plotly_white","margin":{"l":50,"b":50,"r":50,"t":60},"yaxis":{"title":{"text":"Value (points per credit)"}}}}.layout, {responsive: true})</script>
-</section>
-<section id="best-value-picks" class="level3">
-<h3 class="anchored" data-anchor-id="best-value-picks">Best value picks</h3>
+<script>Plotly.newPlot('plot-val', {"data":[{"x":[25.873944795569187,26.023834362280695,23.943293109896484,21.944366393166437,21.911342812367252,19.879883725682927,20.03980966493926,20.054290887791225,19.99618424412359,19.995329688237685,20.100608376389857,18.023387873244882,18.102198257951116,16.02856925217919,16.136443891983294,15.963549513026123,15.9311718639703,16.055446132217735,13.989964711131035,13.893756927064075,13.88028464995154,14.125164803436803,13.952460767520565,13.923627907652588,13.956396721535041,13.88336832449329,11.864684239211927,12.122628072642145,11.964716532503962,12.138841331976,11.857419984525686,11.990734339474587,12.13905615672294,12.060063636642804,12.108364544533496,11.934955209082407,11.940656422112044,12.037142177832957,12.09936336959638,11.999645070530667,10.00013385696792,9.967916910149999,9.987691640001108,9.912260540022952,9.89703861754461,10.072900459427306,9.992370310596558,8.139604766302476,8.04535229072234,7.938082164082311,8.091370452895632,7.858157265802926,7.9888260181050645,8.134464654952282,8.049274357138742,7.969197341244777,8.089130048093661,7.887356313982573,7.936717047054149,7.959808049255462,8.10761437387763,8.044460199710011,8.110623692166662,5.869482519857815,5.996457286442759,5.90914565119357,6.064427368905313,5.853774047009187,6.0084269166296504,5.961911595418651,5.910943492180082,5.991153423681187,6.000944970679023,5.988526648319013,6.00123000459686,5.92893416516928,5.853134811731983,6.102598894451702,5.968223307957572,6.057605023580397,5.992541320173678,6.071756094514437,5.876360048923559,5.874932571487025,5.976834739386598,6.04908212472912,5.880421724183867,5.971021824507377,5.909467746596224,5.994563896647283,6.108302799964924,6.013163782183738,5.9169774290890285,5.945713465160553,6.023759544145365,6.140273007024055,5.985113193238662,6.092121841266292,6.016646739504996,5.988157176034904,6.076695710427659,5.866383923746393,5.876882031675977,6.026634455780471,6.083087912063324,3.9046101991153037,3.925698632716117,4.042259394723764,3.9214423254185724,3.8632800985616593,4.074976249607865,3.8533010956302487,3.866436791736941,4.101485016849078,3.9268842845102476,4.088591372006011,3.9743999396840684,3.942128628799841,3.8692364370681167,3.9444747191862746,4.011409845812541,4.0384368543944875,4.143462458312624,3.8738866982370634,3.8789716546470174,4.00103190355381,4.078808165373721,4.136845846109164],"mode":"markers","y":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"type":"scatter","name":"Did not score","hoverinfo":"text","text":["Jonathan Milan (Lidl - Trek)<br>Cost: 26, Points: 0, Value: 0","Arnaud De Lie (Lotto Intermarché)<br>Cost: 26, Points: 0, Value: 0","Paul Magnier (Soudal Quick-Step)<br>Cost: 24, Points: 0, Value: 0","Tim Wellens (UAE Team Emirates - XRG)<br>Cost: 22, Points: 0, Value: 0","Biniam Girmay (NSN Cycling Team)<br>Cost: 22, Points: 0, Value: 0","Toms Skujiņš (Lidl - Trek)<br>Cost: 20, Points: 0, Value: 0","Emilien Jeannière (TotalEnergies)<br>Cost: 20, Points: 0, Value: 0","Dylan Groenewegen (Unibet Rose Rockets)<br>Cost: 20, Points: 0, Value: 0","Kaden Groves (Alpecin-Premier Tech)<br>Cost: 20, Points: 0, Value: 0","Jonas Abrahamsen (Uno-X Mobility)<br>Cost: 20, Points: 0, Value: 0","Rasmus Tiller (Uno-X Mobility)<br>Cost: 20, Points: 0, Value: 0","Juan Sebastián Molano (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0, Value: 0","Florian Vermeersch (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0, Value: 0","Phil Bauhaus (Bahrain - Victorious)<br>Cost: 16, Points: 0, Value: 0","Dylan Van Baarle (Soudal Quick-Step)<br>Cost: 16, Points: 0, Value: 0","Nils Politt (UAE Team Emirates - XRG)<br>Cost: 16, Points: 0, Value: 0","Pascal Ackermann (Team Jayco AlUla)<br>Cost: 16, Points: 0, Value: 0","Alexis Renard (Cofidis)<br>Cost: 16, Points: 0, Value: 0","Davide Ballerini (XDS Astana Team)<br>Cost: 14, Points: 0, Value: 0","Laurence Pithie (Red Bull - BORA - hansgrohe)<br>Cost: 14, Points: 0, Value: 0","Marijn Van Den Berg (EF Education - EasyPost)<br>Cost: 14, Points: 0, Value: 0","Rory Townsend (Unibet Rose Rockets)<br>Cost: 14, Points: 0, Value: 0","Paul Penhoët (Groupama - FDJ United)<br>Cost: 14, Points: 0, Value: 0","Pavel Bittner (Team Picnic PostNL)<br>Cost: 14, Points: 0, Value: 0","Brent Van Moer (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0, Value: 0","Fred Wright (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0, Value: 0","Oliver Naesen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0, Value: 0","Rasmus Søjberg Pedersen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0, Value: 0","Max Kanter (XDS Astana Team)<br>Cost: 12, Points: 0, Value: 0","Kasper Asgreen (EF Education - EasyPost)<br>Cost: 12, Points: 0, Value: 0","Mikkel Frølich Honoré (EF Education - EasyPost)<br>Cost: 12, Points: 0, Value: 0","Jenno Berckmoes (Lotto Intermarché)<br>Cost: 12, Points: 0, Value: 0","Yves Lampaert (Soudal Quick-Step)<br>Cost: 12, Points: 0, Value: 0","Rick Pluimers (Tudor Pro Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Lewis Askey (NSN Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Stanisław Aniołkowski (Cofidis)<br>Cost: 12, Points: 0, Value: 0","Bastien Tronchon (Groupama - FDJ United)<br>Cost: 12, Points: 0, Value: 0","Riley Sheehan (NSN Cycling Team)<br>Cost: 12, Points: 0, Value: 0","John Degenkolb (Team Picnic PostNL)<br>Cost: 12, Points: 0, Value: 0","Matteo Moschetti (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Arne Marit (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0, Value: 0","Mick Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0, Value: 0","Edward Theuns (Lidl - Trek)<br>Cost: 10, Points: 0, Value: 0","Max Walscheid (Lidl - Trek)<br>Cost: 10, Points: 0, Value: 0","Tom Crabbe (Team Flanders - Baloise)<br>Cost: 10, Points: 0, Value: 0","Amaury Capiot (Team Jayco AlUla)<br>Cost: 10, Points: 0, Value: 0","Hugo Page (Cofidis)<br>Cost: 10, Points: 0, Value: 0","Daan Hoole (Decathlon CMA CGM Team)<br>Cost: 8, Points: 0, Value: 0","Aaron Gate (XDS Astana Team)<br>Cost: 8, Points: 0, Value: 0","Alec Segaert (Bahrain - Victorious)<br>Cost: 8, Points: 0, Value: 0","Noah Hobbs (EF Education - EasyPost)<br>Cost: 8, Points: 0, Value: 0","Luca Van Boven (Lotto Intermarché)<br>Cost: 8, Points: 0, Value: 0","Dries Van Gestel (Soudal Quick-Step)<br>Cost: 8, Points: 0, Value: 0","Julius Johansen (UAE Team Emirates - XRG)<br>Cost: 8, Points: 0, Value: 0","Riley Pickrell (Modern Adventure Pro Cycling)<br>Cost: 8, Points: 0, Value: 0","Orluis Aular (Movistar Team)<br>Cost: 8, Points: 0, Value: 0","Clément Alleno (Burgos Burpellet BH)<br>Cost: 8, Points: 0, Value: 0","Hartthijs De Vries (Unibet Rose Rockets)<br>Cost: 8, Points: 0, Value: 0","Silvan Dillier (Alpecin-Premier Tech)<br>Cost: 8, Points: 0, Value: 0","Elmar Reinders (Unibet Rose Rockets)<br>Cost: 8, Points: 0, Value: 0","Piet Allegaert (Cofidis)<br>Cost: 8, Points: 0, Value: 0","Clément Russo (Groupama - FDJ United)<br>Cost: 8, Points: 0, Value: 0","Aimé De Gendt (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 8, Points: 0, Value: 0","Lev Gonov (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Alessandro Romele (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Jakob Söderqvist (Lidl - Trek)<br>Cost: 6, Points: 0, Value: 0","Gleb Syritsa (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Kamil Gradek (Bahrain - Victorious)<br>Cost: 6, Points: 0, Value: 0","Romet Pajur (Red Bull - BORA - hansgrohe)<br>Cost: 6, Points: 0, Value: 0","Colby Simmons (EF Education - EasyPost)<br>Cost: 6, Points: 0, Value: 0","Alexys Brunel (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Samuel Leroux (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Liam Slock (Lotto Intermarché)<br>Cost: 6, Points: 0, Value: 0","Baptiste Vadic (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Bert Van Lerberghe (Soudal Quick-Step)<br>Cost: 6, Points: 0, Value: 0","Ceriel Desal (Soudal Quick-Step)<br>Cost: 6, Points: 0, Value: 0","Aivaras Mikutis (Tudor Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Rune Herregodts (UAE Team Emirates - XRG)<br>Cost: 6, Points: 0, Value: 0","Mark Stewart (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 0, Value: 0","Josh Burnett (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Daniel Cavia (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Filip Maciejuk (Movistar Team)<br>Cost: 6, Points: 0, Value: 0","Manlio Moro (Movistar Team)<br>Cost: 6, Points: 0, Value: 0","César Macías (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Alexandre Mayer (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Jonas Geens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Cyril Barthe (Groupama - FDJ United)<br>Cost: 6, Points: 0, Value: 0","Niklas Larsen (Unibet Rose Rockets)<br>Cost: 6, Points: 0, Value: 0","Edward Planckaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Robert Donaldson (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Jonas Rickaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Martijn Rasenberg (Unibet Rose Rockets)<br>Cost: 6, Points: 0, Value: 0","Sente Sentjens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Guillaume Boivin (NSN Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Jelte Krijnsen (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Luka Mezgec (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Carl-Frederik Bévort (Uno-X Mobility)<br>Cost: 6, Points: 0, Value: 0","Kelland O'Brien (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Ryan Mullen (NSN Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Alex Kirsch (Cofidis)<br>Cost: 6, Points: 0, Value: 0","Frederik Frison (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Timo De Jong (Team Picnic PostNL)<br>Cost: 6, Points: 0, Value: 0","Nicolò Parisini (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Niklas Märkl (Team Picnic PostNL)<br>Cost: 6, Points: 0, Value: 0","Sander De Pestel (Decathlon CMA CGM Team)<br>Cost: 6, Points: 0, Value: 0","Alessandro Borgo (Bahrain - Victorious)<br>Cost: 4, Points: 0, Value: 0","Felix Ørn-Kristoff (Lotto Intermarché)<br>Cost: 4, Points: 0, Value: 0","Pierre Thierry (TotalEnergies)<br>Cost: 4, Points: 0, Value: 0","Samuel Boardman (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Ezra Caudell (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Sean Christian (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Georgios Bouglas (Burgos Burpellet BH)<br>Cost: 4, Points: 0, Value: 0","Brem Deman (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Ferre Geeraerts (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Vojtěch Kmínek (Burgos Burpellet BH)<br>Cost: 4, Points: 0, Value: 0","Jules Hesters (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Nolan Huysmans (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Artuur Torney (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Leander Van Hautegem (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Titouan Fontaine (Groupama - FDJ United)<br>Cost: 4, Points: 0, Value: 0","Jonas Hem Hvideberg (Uno-X Mobility)<br>Cost: 4, Points: 0, Value: 0","Jan Maas (Cofidis)<br>Cost: 4, Points: 0, Value: 0","Henrik Pedersen (Uno-X Mobility)<br>Cost: 4, Points: 0, Value: 0","Kamil Małecki (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 4, Points: 0, Value: 0","Tim Naberman (Team Picnic PostNL)<br>Cost: 4, Points: 0, Value: 0","Timo Roosen (Team Picnic PostNL)<br>Cost: 4, Points: 0, Value: 0","Jarrad Drizners (Red Bull - BORA - hansgrohe)<br>Cost: 4, Points: 0, Value: 0","Stan Dewulf (Decathlon CMA CGM Team)<br>Cost: 4, Points: 0, Value: 0"],"marker":{"color":"#aaaaaa","symbol":"x","opacity":0.35,"size":5}},{"x":[26.046449602386982,22.138330883647598,22.064835677202936,20.10381885115629,15.896024317744912,16.068014171718076,16.077276457334587,13.85725027509315,14.010471901061019,13.994555344961343,12.104325880806321,11.866833467324762,11.941553356013793,12.119880043165837,12.092968800851496,11.943538081164533,11.86554877194226,12.107200382763539,10.08238021406189,10.092735837484254,7.89077502876497,8.129157725853402,8.043437480258095,8.106680157402682,8.042517918165823,8.058048934070912,8.003170878846818,7.916302814531751,5.945268040004988,6.043514166813266,5.952805639095722,5.994889722533479,5.863156801208333,5.915763224903177,3.940798002660031,3.957196772572066,4.1234088374067195,4.078158767450745,4.012118904518101],"mode":"markers","y":[3,5.9,2.3,1.2,2.8,7.1,9.8,2.1,6.9,8.6,1,3.8,2.5,11.5,3.8,5,2.5,12.2,10.8,3,5.6,9,12.8,6,4.5,11.2,3.8,5.2,7.5,3,14,11,9,5,11.2,11.2,11.2,7.5,7.5],"type":"scatter","name":"Other riders","hoverinfo":"text","text":["Jasper Philipsen (Alpecin-Premier Tech)<br>Cost: 26, Points: 78, Value: 3.0","Jordi Meeus (Red Bull - BORA - hansgrohe)<br>Cost: 22, Points: 129, Value: 5.9","Christophe Laporte (Team Visma - Lease a Bike)<br>Cost: 22, Points: 51, Value: 2.3","Matej Mohorič (Bahrain - Victorious)<br>Cost: 20, Points: 24, Value: 1.2","Axel Zingle (Team Visma - Lease a Bike)<br>Cost: 16, Points: 45, Value: 2.8","Jon Barrenetxea (Movistar Team)<br>Cost: 16, Points: 114, Value: 7.1","Tobias Lund Andresen (Decathlon CMA CGM Team)<br>Cost: 16, Points: 156, Value: 9.8","Roger Adrià (Movistar Team)<br>Cost: 14, Points: 30, Value: 2.1","Iván García Cortina (Movistar Team)<br>Cost: 14, Points: 96, Value: 6.9","Hugo Hofstetter (NSN Cycling Team)<br>Cost: 14, Points: 120, Value: 8.6","Héctor Álvarez (Lidl - Trek)<br>Cost: 12, Points: 12, Value: 1.0","Timo Kielich (Team Visma - Lease a Bike)<br>Cost: 12, Points: 45, Value: 3.8","Vincenzo Albanese (EF Education - EasyPost)<br>Cost: 12, Points: 30, Value: 2.5","Luke Lamperti (EF Education - EasyPost)<br>Cost: 12, Points: 138, Value: 11.5","Marco Haller (Tudor Pro Cycling Team)<br>Cost: 12, Points: 45, Value: 3.8","Carlos Canal (Movistar Team)<br>Cost: 12, Points: 60, Value: 5.0","Dries De Bondt (Team Jayco AlUla)<br>Cost: 12, Points: 30, Value: 2.5","Cees Bol (Decathlon CMA CGM Team)<br>Cost: 12, Points: 147, Value: 12.2","Tim Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 108, Value: 10.8","Matis Louvel (NSN Cycling Team)<br>Cost: 10, Points: 30, Value: 3.0","Filippo Fiorelli (Team Visma - Lease a Bike)<br>Cost: 8, Points: 45, Value: 5.6","Pau Miquel (Bahrain - Victorious)<br>Cost: 8, Points: 72, Value: 9.0","Florian Dauphin (TotalEnergies)<br>Cost: 8, Points: 102, Value: 12.8","Vito Braet (Lotto Intermarché)<br>Cost: 8, Points: 48, Value: 6.0","Rui Oliveira (UAE Team Emirates - XRG)<br>Cost: 8, Points: 36, Value: 4.5","Matyáš Kopecký (Unibet Rose Rockets)<br>Cost: 8, Points: 90, Value: 11.2","Johan Jacobs (Groupama - FDJ United)<br>Cost: 8, Points: 30, Value: 3.8","Erik Nordsæter Resell (Uno-X Mobility)<br>Cost: 8, Points: 42, Value: 5.2","Matisse Van Kerckhove (Team Visma - Lease a Bike)<br>Cost: 6, Points: 45, Value: 7.5","Rayan Boulahoite (TotalEnergies)<br>Cost: 6, Points: 18, Value: 3.0","Steffen De Schuyteneer (Lotto Intermarché)<br>Cost: 6, Points: 84, Value: 14.0","Ben Oliver (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 66, Value: 11.0","Axel Huens (Groupama - FDJ United)<br>Cost: 6, Points: 54, Value: 9.0","Storm Ingebrigtsen (Uno-X Mobility)<br>Cost: 6, Points: 30, Value: 5.0","Pietro Mattio (Team Visma - Lease a Bike)<br>Cost: 4, Points: 45, Value: 11.2","Robin Froidevaux (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Petr Kelemen (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Cole Kessler (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 30, Value: 7.5","Frits Biesterbos (Team Picnic PostNL)<br>Cost: 4, Points: 30, Value: 7.5"],"marker":{"opacity":0.5,"size":6}},{"x":[23.961615538032678,19.976539396036383,17.89796580379475,16.030151354522236,13.866147781341724,8.06998211977999],"mode":"markers","y":[13.3,13.5,10.0,10.3,21.1,26.2],"type":"scatter","name":"Optimal team","hoverinfo":"text","text":["Matthew Brennan (Team Visma - Lease a Bike)<br>Cost: 24, Points: 320, Value: 13.3","Matteo Trentin (Tudor Pro Cycling Team)<br>Cost: 20, Points: 270, Value: 13.5","Mike Teunissen (XDS Astana Team)<br>Cost: 18, Points: 180, Value: 10.0","Laurenz Rex (Soudal Quick-Step)<br>Cost: 16, Points: 165, Value: 10.3","Luca Mozzato (Tudor Pro Cycling Team)<br>Cost: 14, Points: 295, Value: 21.1","Matevž Govekar (Bahrain - Victorious)<br>Cost: 8, Points: 210, Value: 26.2"],"marker":{"opacity":0.9,"size":10}},{"mode":"lines","line":{"color":"#666666","dash":"dash","width":1.5},"y":[1.6202363486008484,3.2910751282666872],"type":"scatter","name":"Trend (pricier riders were more efficient)","hoverinfo":"skip","x":[4,26]}],"layout":{"xaxis":{"title":{"text":"Cost (credits)"}},"hovermode":"closest","template":"plotly_white","margin":{"l":50,"b":50,"r":50,"t":60},"yaxis":{"title":{"text":"Value (points per credit)"}}}}.data, {"data":[{"x":[25.873944795569187,26.023834362280695,23.943293109896484,21.944366393166437,21.911342812367252,19.879883725682927,20.03980966493926,20.054290887791225,19.99618424412359,19.995329688237685,20.100608376389857,18.023387873244882,18.102198257951116,16.02856925217919,16.136443891983294,15.963549513026123,15.9311718639703,16.055446132217735,13.989964711131035,13.893756927064075,13.88028464995154,14.125164803436803,13.952460767520565,13.923627907652588,13.956396721535041,13.88336832449329,11.864684239211927,12.122628072642145,11.964716532503962,12.138841331976,11.857419984525686,11.990734339474587,12.13905615672294,12.060063636642804,12.108364544533496,11.934955209082407,11.940656422112044,12.037142177832957,12.09936336959638,11.999645070530667,10.00013385696792,9.967916910149999,9.987691640001108,9.912260540022952,9.89703861754461,10.072900459427306,9.992370310596558,8.139604766302476,8.04535229072234,7.938082164082311,8.091370452895632,7.858157265802926,7.9888260181050645,8.134464654952282,8.049274357138742,7.969197341244777,8.089130048093661,7.887356313982573,7.936717047054149,7.959808049255462,8.10761437387763,8.044460199710011,8.110623692166662,5.869482519857815,5.996457286442759,5.90914565119357,6.064427368905313,5.853774047009187,6.0084269166296504,5.961911595418651,5.910943492180082,5.991153423681187,6.000944970679023,5.988526648319013,6.00123000459686,5.92893416516928,5.853134811731983,6.102598894451702,5.968223307957572,6.057605023580397,5.992541320173678,6.071756094514437,5.876360048923559,5.874932571487025,5.976834739386598,6.04908212472912,5.880421724183867,5.971021824507377,5.909467746596224,5.994563896647283,6.108302799964924,6.013163782183738,5.9169774290890285,5.945713465160553,6.023759544145365,6.140273007024055,5.985113193238662,6.092121841266292,6.016646739504996,5.988157176034904,6.076695710427659,5.866383923746393,5.876882031675977,6.026634455780471,6.083087912063324,3.9046101991153037,3.925698632716117,4.042259394723764,3.9214423254185724,3.8632800985616593,4.074976249607865,3.8533010956302487,3.866436791736941,4.101485016849078,3.9268842845102476,4.088591372006011,3.9743999396840684,3.942128628799841,3.8692364370681167,3.9444747191862746,4.011409845812541,4.0384368543944875,4.143462458312624,3.8738866982370634,3.8789716546470174,4.00103190355381,4.078808165373721,4.136845846109164],"mode":"markers","y":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"type":"scatter","name":"Did not score","hoverinfo":"text","text":["Jonathan Milan (Lidl - Trek)<br>Cost: 26, Points: 0, Value: 0","Arnaud De Lie (Lotto Intermarché)<br>Cost: 26, Points: 0, Value: 0","Paul Magnier (Soudal Quick-Step)<br>Cost: 24, Points: 0, Value: 0","Tim Wellens (UAE Team Emirates - XRG)<br>Cost: 22, Points: 0, Value: 0","Biniam Girmay (NSN Cycling Team)<br>Cost: 22, Points: 0, Value: 0","Toms Skujiņš (Lidl - Trek)<br>Cost: 20, Points: 0, Value: 0","Emilien Jeannière (TotalEnergies)<br>Cost: 20, Points: 0, Value: 0","Dylan Groenewegen (Unibet Rose Rockets)<br>Cost: 20, Points: 0, Value: 0","Kaden Groves (Alpecin-Premier Tech)<br>Cost: 20, Points: 0, Value: 0","Jonas Abrahamsen (Uno-X Mobility)<br>Cost: 20, Points: 0, Value: 0","Rasmus Tiller (Uno-X Mobility)<br>Cost: 20, Points: 0, Value: 0","Juan Sebastián Molano (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0, Value: 0","Florian Vermeersch (UAE Team Emirates - XRG)<br>Cost: 18, Points: 0, Value: 0","Phil Bauhaus (Bahrain - Victorious)<br>Cost: 16, Points: 0, Value: 0","Dylan Van Baarle (Soudal Quick-Step)<br>Cost: 16, Points: 0, Value: 0","Nils Politt (UAE Team Emirates - XRG)<br>Cost: 16, Points: 0, Value: 0","Pascal Ackermann (Team Jayco AlUla)<br>Cost: 16, Points: 0, Value: 0","Alexis Renard (Cofidis)<br>Cost: 16, Points: 0, Value: 0","Davide Ballerini (XDS Astana Team)<br>Cost: 14, Points: 0, Value: 0","Laurence Pithie (Red Bull - BORA - hansgrohe)<br>Cost: 14, Points: 0, Value: 0","Marijn Van Den Berg (EF Education - EasyPost)<br>Cost: 14, Points: 0, Value: 0","Rory Townsend (Unibet Rose Rockets)<br>Cost: 14, Points: 0, Value: 0","Paul Penhoët (Groupama - FDJ United)<br>Cost: 14, Points: 0, Value: 0","Pavel Bittner (Team Picnic PostNL)<br>Cost: 14, Points: 0, Value: 0","Brent Van Moer (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0, Value: 0","Fred Wright (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 14, Points: 0, Value: 0","Oliver Naesen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0, Value: 0","Rasmus Søjberg Pedersen (Decathlon CMA CGM Team)<br>Cost: 12, Points: 0, Value: 0","Max Kanter (XDS Astana Team)<br>Cost: 12, Points: 0, Value: 0","Kasper Asgreen (EF Education - EasyPost)<br>Cost: 12, Points: 0, Value: 0","Mikkel Frølich Honoré (EF Education - EasyPost)<br>Cost: 12, Points: 0, Value: 0","Jenno Berckmoes (Lotto Intermarché)<br>Cost: 12, Points: 0, Value: 0","Yves Lampaert (Soudal Quick-Step)<br>Cost: 12, Points: 0, Value: 0","Rick Pluimers (Tudor Pro Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Lewis Askey (NSN Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Stanisław Aniołkowski (Cofidis)<br>Cost: 12, Points: 0, Value: 0","Bastien Tronchon (Groupama - FDJ United)<br>Cost: 12, Points: 0, Value: 0","Riley Sheehan (NSN Cycling Team)<br>Cost: 12, Points: 0, Value: 0","John Degenkolb (Team Picnic PostNL)<br>Cost: 12, Points: 0, Value: 0","Matteo Moschetti (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 12, Points: 0, Value: 0","Arne Marit (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0, Value: 0","Mick Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 0, Value: 0","Edward Theuns (Lidl - Trek)<br>Cost: 10, Points: 0, Value: 0","Max Walscheid (Lidl - Trek)<br>Cost: 10, Points: 0, Value: 0","Tom Crabbe (Team Flanders - Baloise)<br>Cost: 10, Points: 0, Value: 0","Amaury Capiot (Team Jayco AlUla)<br>Cost: 10, Points: 0, Value: 0","Hugo Page (Cofidis)<br>Cost: 10, Points: 0, Value: 0","Daan Hoole (Decathlon CMA CGM Team)<br>Cost: 8, Points: 0, Value: 0","Aaron Gate (XDS Astana Team)<br>Cost: 8, Points: 0, Value: 0","Alec Segaert (Bahrain - Victorious)<br>Cost: 8, Points: 0, Value: 0","Noah Hobbs (EF Education - EasyPost)<br>Cost: 8, Points: 0, Value: 0","Luca Van Boven (Lotto Intermarché)<br>Cost: 8, Points: 0, Value: 0","Dries Van Gestel (Soudal Quick-Step)<br>Cost: 8, Points: 0, Value: 0","Julius Johansen (UAE Team Emirates - XRG)<br>Cost: 8, Points: 0, Value: 0","Riley Pickrell (Modern Adventure Pro Cycling)<br>Cost: 8, Points: 0, Value: 0","Orluis Aular (Movistar Team)<br>Cost: 8, Points: 0, Value: 0","Clément Alleno (Burgos Burpellet BH)<br>Cost: 8, Points: 0, Value: 0","Hartthijs De Vries (Unibet Rose Rockets)<br>Cost: 8, Points: 0, Value: 0","Silvan Dillier (Alpecin-Premier Tech)<br>Cost: 8, Points: 0, Value: 0","Elmar Reinders (Unibet Rose Rockets)<br>Cost: 8, Points: 0, Value: 0","Piet Allegaert (Cofidis)<br>Cost: 8, Points: 0, Value: 0","Clément Russo (Groupama - FDJ United)<br>Cost: 8, Points: 0, Value: 0","Aimé De Gendt (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 8, Points: 0, Value: 0","Lev Gonov (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Alessandro Romele (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Jakob Söderqvist (Lidl - Trek)<br>Cost: 6, Points: 0, Value: 0","Gleb Syritsa (XDS Astana Team)<br>Cost: 6, Points: 0, Value: 0","Kamil Gradek (Bahrain - Victorious)<br>Cost: 6, Points: 0, Value: 0","Romet Pajur (Red Bull - BORA - hansgrohe)<br>Cost: 6, Points: 0, Value: 0","Colby Simmons (EF Education - EasyPost)<br>Cost: 6, Points: 0, Value: 0","Alexys Brunel (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Samuel Leroux (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Liam Slock (Lotto Intermarché)<br>Cost: 6, Points: 0, Value: 0","Baptiste Vadic (TotalEnergies)<br>Cost: 6, Points: 0, Value: 0","Bert Van Lerberghe (Soudal Quick-Step)<br>Cost: 6, Points: 0, Value: 0","Ceriel Desal (Soudal Quick-Step)<br>Cost: 6, Points: 0, Value: 0","Aivaras Mikutis (Tudor Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Rune Herregodts (UAE Team Emirates - XRG)<br>Cost: 6, Points: 0, Value: 0","Mark Stewart (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 0, Value: 0","Josh Burnett (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Daniel Cavia (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Filip Maciejuk (Movistar Team)<br>Cost: 6, Points: 0, Value: 0","Manlio Moro (Movistar Team)<br>Cost: 6, Points: 0, Value: 0","César Macías (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Alexandre Mayer (Burgos Burpellet BH)<br>Cost: 6, Points: 0, Value: 0","Jonas Geens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Cyril Barthe (Groupama - FDJ United)<br>Cost: 6, Points: 0, Value: 0","Niklas Larsen (Unibet Rose Rockets)<br>Cost: 6, Points: 0, Value: 0","Edward Planckaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Robert Donaldson (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Jonas Rickaert (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Martijn Rasenberg (Unibet Rose Rockets)<br>Cost: 6, Points: 0, Value: 0","Sente Sentjens (Alpecin-Premier Tech)<br>Cost: 6, Points: 0, Value: 0","Guillaume Boivin (NSN Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Jelte Krijnsen (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Luka Mezgec (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Carl-Frederik Bévort (Uno-X Mobility)<br>Cost: 6, Points: 0, Value: 0","Kelland O'Brien (Team Jayco AlUla)<br>Cost: 6, Points: 0, Value: 0","Ryan Mullen (NSN Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Alex Kirsch (Cofidis)<br>Cost: 6, Points: 0, Value: 0","Frederik Frison (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Timo De Jong (Team Picnic PostNL)<br>Cost: 6, Points: 0, Value: 0","Nicolò Parisini (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 6, Points: 0, Value: 0","Niklas Märkl (Team Picnic PostNL)<br>Cost: 6, Points: 0, Value: 0","Sander De Pestel (Decathlon CMA CGM Team)<br>Cost: 6, Points: 0, Value: 0","Alessandro Borgo (Bahrain - Victorious)<br>Cost: 4, Points: 0, Value: 0","Felix Ørn-Kristoff (Lotto Intermarché)<br>Cost: 4, Points: 0, Value: 0","Pierre Thierry (TotalEnergies)<br>Cost: 4, Points: 0, Value: 0","Samuel Boardman (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Ezra Caudell (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Sean Christian (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 0, Value: 0","Georgios Bouglas (Burgos Burpellet BH)<br>Cost: 4, Points: 0, Value: 0","Brem Deman (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Ferre Geeraerts (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Vojtěch Kmínek (Burgos Burpellet BH)<br>Cost: 4, Points: 0, Value: 0","Jules Hesters (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Nolan Huysmans (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Artuur Torney (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Leander Van Hautegem (Team Flanders - Baloise)<br>Cost: 4, Points: 0, Value: 0","Titouan Fontaine (Groupama - FDJ United)<br>Cost: 4, Points: 0, Value: 0","Jonas Hem Hvideberg (Uno-X Mobility)<br>Cost: 4, Points: 0, Value: 0","Jan Maas (Cofidis)<br>Cost: 4, Points: 0, Value: 0","Henrik Pedersen (Uno-X Mobility)<br>Cost: 4, Points: 0, Value: 0","Kamil Małecki (Pinarello-Q36.5 Pro Cycling Team)<br>Cost: 4, Points: 0, Value: 0","Tim Naberman (Team Picnic PostNL)<br>Cost: 4, Points: 0, Value: 0","Timo Roosen (Team Picnic PostNL)<br>Cost: 4, Points: 0, Value: 0","Jarrad Drizners (Red Bull - BORA - hansgrohe)<br>Cost: 4, Points: 0, Value: 0","Stan Dewulf (Decathlon CMA CGM Team)<br>Cost: 4, Points: 0, Value: 0"],"marker":{"color":"#aaaaaa","symbol":"x","opacity":0.35,"size":5}},{"x":[26.046449602386982,22.138330883647598,22.064835677202936,20.10381885115629,15.896024317744912,16.068014171718076,16.077276457334587,13.85725027509315,14.010471901061019,13.994555344961343,12.104325880806321,11.866833467324762,11.941553356013793,12.119880043165837,12.092968800851496,11.943538081164533,11.86554877194226,12.107200382763539,10.08238021406189,10.092735837484254,7.89077502876497,8.129157725853402,8.043437480258095,8.106680157402682,8.042517918165823,8.058048934070912,8.003170878846818,7.916302814531751,5.945268040004988,6.043514166813266,5.952805639095722,5.994889722533479,5.863156801208333,5.915763224903177,3.940798002660031,3.957196772572066,4.1234088374067195,4.078158767450745,4.012118904518101],"mode":"markers","y":[3,5.9,2.3,1.2,2.8,7.1,9.8,2.1,6.9,8.6,1,3.8,2.5,11.5,3.8,5,2.5,12.2,10.8,3,5.6,9,12.8,6,4.5,11.2,3.8,5.2,7.5,3,14,11,9,5,11.2,11.2,11.2,7.5,7.5],"type":"scatter","name":"Other riders","hoverinfo":"text","text":["Jasper Philipsen (Alpecin-Premier Tech)<br>Cost: 26, Points: 78, Value: 3.0","Jordi Meeus (Red Bull - BORA - hansgrohe)<br>Cost: 22, Points: 129, Value: 5.9","Christophe Laporte (Team Visma - Lease a Bike)<br>Cost: 22, Points: 51, Value: 2.3","Matej Mohorič (Bahrain - Victorious)<br>Cost: 20, Points: 24, Value: 1.2","Axel Zingle (Team Visma - Lease a Bike)<br>Cost: 16, Points: 45, Value: 2.8","Jon Barrenetxea (Movistar Team)<br>Cost: 16, Points: 114, Value: 7.1","Tobias Lund Andresen (Decathlon CMA CGM Team)<br>Cost: 16, Points: 156, Value: 9.8","Roger Adrià (Movistar Team)<br>Cost: 14, Points: 30, Value: 2.1","Iván García Cortina (Movistar Team)<br>Cost: 14, Points: 96, Value: 6.9","Hugo Hofstetter (NSN Cycling Team)<br>Cost: 14, Points: 120, Value: 8.6","Héctor Álvarez (Lidl - Trek)<br>Cost: 12, Points: 12, Value: 1.0","Timo Kielich (Team Visma - Lease a Bike)<br>Cost: 12, Points: 45, Value: 3.8","Vincenzo Albanese (EF Education - EasyPost)<br>Cost: 12, Points: 30, Value: 2.5","Luke Lamperti (EF Education - EasyPost)<br>Cost: 12, Points: 138, Value: 11.5","Marco Haller (Tudor Pro Cycling Team)<br>Cost: 12, Points: 45, Value: 3.8","Carlos Canal (Movistar Team)<br>Cost: 12, Points: 60, Value: 5.0","Dries De Bondt (Team Jayco AlUla)<br>Cost: 12, Points: 30, Value: 2.5","Cees Bol (Decathlon CMA CGM Team)<br>Cost: 12, Points: 147, Value: 12.2","Tim Van Dijke (Red Bull - BORA - hansgrohe)<br>Cost: 10, Points: 108, Value: 10.8","Matis Louvel (NSN Cycling Team)<br>Cost: 10, Points: 30, Value: 3.0","Filippo Fiorelli (Team Visma - Lease a Bike)<br>Cost: 8, Points: 45, Value: 5.6","Pau Miquel (Bahrain - Victorious)<br>Cost: 8, Points: 72, Value: 9.0","Florian Dauphin (TotalEnergies)<br>Cost: 8, Points: 102, Value: 12.8","Vito Braet (Lotto Intermarché)<br>Cost: 8, Points: 48, Value: 6.0","Rui Oliveira (UAE Team Emirates - XRG)<br>Cost: 8, Points: 36, Value: 4.5","Matyáš Kopecký (Unibet Rose Rockets)<br>Cost: 8, Points: 90, Value: 11.2","Johan Jacobs (Groupama - FDJ United)<br>Cost: 8, Points: 30, Value: 3.8","Erik Nordsæter Resell (Uno-X Mobility)<br>Cost: 8, Points: 42, Value: 5.2","Matisse Van Kerckhove (Team Visma - Lease a Bike)<br>Cost: 6, Points: 45, Value: 7.5","Rayan Boulahoite (TotalEnergies)<br>Cost: 6, Points: 18, Value: 3.0","Steffen De Schuyteneer (Lotto Intermarché)<br>Cost: 6, Points: 84, Value: 14.0","Ben Oliver (Modern Adventure Pro Cycling)<br>Cost: 6, Points: 66, Value: 11.0","Axel Huens (Groupama - FDJ United)<br>Cost: 6, Points: 54, Value: 9.0","Storm Ingebrigtsen (Uno-X Mobility)<br>Cost: 6, Points: 30, Value: 5.0","Pietro Mattio (Team Visma - Lease a Bike)<br>Cost: 4, Points: 45, Value: 11.2","Robin Froidevaux (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Petr Kelemen (Tudor Pro Cycling Team)<br>Cost: 4, Points: 45, Value: 11.2","Cole Kessler (Modern Adventure Pro Cycling)<br>Cost: 4, Points: 30, Value: 7.5","Frits Biesterbos (Team Picnic PostNL)<br>Cost: 4, Points: 30, Value: 7.5"],"marker":{"opacity":0.5,"size":6}},{"x":[23.961615538032678,19.976539396036383,17.89796580379475,16.030151354522236,13.866147781341724,8.06998211977999],"mode":"markers","y":[13.3,13.5,10.0,10.3,21.1,26.2],"type":"scatter","name":"Optimal team","hoverinfo":"text","text":["Matthew Brennan (Team Visma - Lease a Bike)<br>Cost: 24, Points: 320, Value: 13.3","Matteo Trentin (Tudor Pro Cycling Team)<br>Cost: 20, Points: 270, Value: 13.5","Mike Teunissen (XDS Astana Team)<br>Cost: 18, Points: 180, Value: 10.0","Laurenz Rex (Soudal Quick-Step)<br>Cost: 16, Points: 165, Value: 10.3","Luca Mozzato (Tudor Pro Cycling Team)<br>Cost: 14, Points: 295, Value: 21.1","Matevž Govekar (Bahrain - Victorious)<br>Cost: 8, Points: 210, Value: 26.2"],"marker":{"opacity":0.9,"size":10}},{"mode":"lines","line":{"color":"#666666","dash":"dash","width":1.5},"y":[1.6202363486008484,3.2910751282666872],"type":"scatter","name":"Trend (pricier riders were more efficient)","hoverinfo":"skip","x":[4,26]}],"layout":{"xaxis":{"title":{"text":"Cost (credits)"}},"hovermode":"closest","template":"plotly_white","margin":{"l":50,"b":50,"r":50,"t":60},"yaxis":{"title":{"text":"Value (points per credit)"}}}}.layout, {responsive: true})</script><h3 id="best-value-picks">Best value picks</h3>
 <p>The ten riders who scored the most points per credit spent.</p>
-<div id="e5f0c755" class="cell" data-execution_count="11">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="12">
-<table class="caption-top table table-sm table-striped small">
-<colgroup>
-<col style="width: 33%">
-<col style="width: 37%">
-<col style="width: 8%">
-<col style="width: 11%">
-<col style="width: 9%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Rider</th>
-<th>Team</th>
-<th>Cost</th>
-<th>Points</th>
-<th>Value</th>
-</tr>
-</thead>
+<table class="table table-striped table-sm">
+<thead><tr><th>Rider</th><th>Team</th><th>Cost</th><th>Points</th><th>Value</th></tr></thead>
 <tbody>
-<tr class="odd">
-<td>Matevž Govekar</td>
-<td>Bahrain - Victorious</td>
-<td>8</td>
-<td>210</td>
-<td>26.2</td>
-</tr>
-<tr class="even">
-<td>Luca Mozzato</td>
-<td>Tudor Pro Cycling Team</td>
-<td>14</td>
-<td>295</td>
-<td>21.1</td>
-</tr>
-<tr class="odd">
-<td>Steffen De Schuyteneer</td>
-<td>Lotto Intermarché</td>
-<td>6</td>
-<td>84</td>
-<td>14.0</td>
-</tr>
-<tr class="even">
-<td>Matteo Trentin</td>
-<td>Tudor Pro Cycling Team</td>
-<td>20</td>
-<td>270</td>
-<td>13.5</td>
-</tr>
-<tr class="odd">
-<td>Matthew Brennan</td>
-<td>Team Visma - Lease a Bike</td>
-<td>24</td>
-<td>320</td>
-<td>13.3</td>
-</tr>
-<tr class="even">
-<td>Florian Dauphin</td>
-<td>TotalEnergies</td>
-<td>8</td>
-<td>102</td>
-<td>12.8</td>
-</tr>
-<tr class="odd">
-<td>Cees Bol</td>
-<td>Decathlon CMA CGM Team</td>
-<td>12</td>
-<td>147</td>
-<td>12.2</td>
-</tr>
-<tr class="even">
-<td>Luke Lamperti</td>
-<td>EF Education - EasyPost</td>
-<td>12</td>
-<td>138</td>
-<td>11.5</td>
-</tr>
-<tr class="odd">
-<td>Matyáš Kopecký</td>
-<td>Unibet Rose Rockets</td>
-<td>8</td>
-<td>90</td>
-<td>11.2</td>
-</tr>
-<tr class="even">
-<td>Pietro Mattio</td>
-<td>Team Visma - Lease a Bike</td>
-<td>4</td>
-<td>45</td>
-<td>11.2</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</section>
-</section>
-<section id="the-ones-to-avoid" class="level2">
-<h2 class="anchored" data-anchor-id="the-ones-to-avoid">The ones to avoid</h2>
-<section id="priciest-blanks" class="level3">
-<h3 class="anchored" data-anchor-id="priciest-blanks">Priciest blanks</h3>
+<tr><td>Matevž Govekar</td><td>Bahrain - Victorious</td><td>8.0</td><td>210.0</td><td>26.2</td></tr>
+<tr><td>Luca Mozzato</td><td>Tudor Pro Cycling Team</td><td>14.0</td><td>295.0</td><td>21.1</td></tr>
+<tr><td>Steffen De Schuyteneer</td><td>Lotto Intermarché</td><td>6.0</td><td>84.0</td><td>14.0</td></tr>
+<tr><td>Matteo Trentin</td><td>Tudor Pro Cycling Team</td><td>20.0</td><td>270.0</td><td>13.5</td></tr>
+<tr><td>Matthew Brennan</td><td>Team Visma - Lease a Bike</td><td>24.0</td><td>320.0</td><td>13.3</td></tr>
+<tr><td>Florian Dauphin</td><td>TotalEnergies</td><td>8.0</td><td>102.0</td><td>12.8</td></tr>
+<tr><td>Cees Bol</td><td>Decathlon CMA CGM Team</td><td>12.0</td><td>147.0</td><td>12.2</td></tr>
+<tr><td>Luke Lamperti</td><td>EF Education - EasyPost</td><td>12.0</td><td>138.0</td><td>11.5</td></tr>
+<tr><td>Matyáš Kopecký</td><td>Unibet Rose Rockets</td><td>8.0</td><td>90.0</td><td>11.2</td></tr>
+<tr><td>Pietro Mattio</td><td>Team Visma - Lease a Bike</td><td>4.0</td><td>45.0</td><td>11.2</td></tr>
+</tbody></table>
+<h2 id="the-ones-to-avoid">The ones to avoid</h2>
+<h3 id="priciest-blanks">Priciest blanks</h3>
 <p>The most expensive riders who failed to score a single point.</p>
-<div id="d95a29a4" class="cell" data-execution_count="12">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="13">
-<table class="caption-top table table-sm table-striped small">
-<thead>
-<tr class="header">
-<th>Rider</th>
-<th>Team</th>
-<th>Cost</th>
-<th>Points</th>
-</tr>
-</thead>
+<table class="table table-striped table-sm">
+<thead><tr><th>Rider</th><th>Team</th><th>Cost</th><th>Points</th></tr></thead>
 <tbody>
-<tr class="odd">
-<td>Jonathan Milan</td>
-<td>Lidl - Trek</td>
-<td>26</td>
-<td>0</td>
-</tr>
-<tr class="even">
-<td>Arnaud De Lie</td>
-<td>Lotto Intermarché</td>
-<td>26</td>
-<td>0</td>
-</tr>
-<tr class="odd">
-<td>Paul Magnier</td>
-<td>Soudal Quick-Step</td>
-<td>24</td>
-<td>0</td>
-</tr>
-<tr class="even">
-<td>Tim Wellens</td>
-<td>UAE Team Emirates - XRG</td>
-<td>22</td>
-<td>0</td>
-</tr>
-<tr class="odd">
-<td>Biniam Girmay</td>
-<td>NSN Cycling Team</td>
-<td>22</td>
-<td>0</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</section>
-<section id="biggest-premium-disappointments" class="level3">
-<h3 class="anchored" data-anchor-id="biggest-premium-disappointments">Biggest premium disappointments</h3>
+<tr><td>Jonathan Milan</td><td>Lidl - Trek</td><td>26.0</td><td>0.0</td></tr>
+<tr><td>Arnaud De Lie</td><td>Lotto Intermarché</td><td>26.0</td><td>0.0</td></tr>
+<tr><td>Paul Magnier</td><td>Soudal Quick-Step</td><td>24.0</td><td>0.0</td></tr>
+<tr><td>Tim Wellens</td><td>UAE Team Emirates - XRG</td><td>22.0</td><td>0.0</td></tr>
+<tr><td>Biniam Girmay</td><td>NSN Cycling Team</td><td>22.0</td><td>0.0</td></tr>
+</tbody></table>
+<h3 id="biggest-premium-disappointments">Biggest premium disappointments</h3>
 <p>The five most expensive riders (8+ credits) who scored the least for their price.</p>
-<div id="94e3200f" class="cell" data-execution_count="13">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="14">
-<table class="caption-top table table-sm table-striped small">
-<colgroup>
-<col style="width: 27%">
-<col style="width: 36%">
-<col style="width: 8%">
-<col style="width: 10%">
-<col style="width: 16%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Rider</th>
-<th>Team</th>
-<th>Cost</th>
-<th>Points</th>
-<th>Pts/credit</th>
-</tr>
-</thead>
+<table class="table table-striped table-sm">
+<thead><tr><th>Rider</th><th>Team</th><th>Cost</th><th>Points</th><th>Pts/credit</th></tr></thead>
 <tbody>
-<tr class="odd">
-<td>Héctor Álvarez</td>
-<td>Lidl - Trek</td>
-<td>12</td>
-<td>12</td>
-<td>1.0</td>
-</tr>
-<tr class="even">
-<td>Matej Mohorič</td>
-<td>Bahrain - Victorious</td>
-<td>20</td>
-<td>24</td>
-<td>1.2</td>
-</tr>
-<tr class="odd">
-<td>Roger Adrià</td>
-<td>Movistar Team</td>
-<td>14</td>
-<td>30</td>
-<td>2.1</td>
-</tr>
-<tr class="even">
-<td>Christophe Laporte</td>
-<td>Team Visma - Lease a Bike</td>
-<td>22</td>
-<td>51</td>
-<td>2.3</td>
-</tr>
-<tr class="odd">
-<td>Vincenzo Albanese</td>
-<td>EF Education - EasyPost</td>
-<td>12</td>
-<td>30</td>
-<td>2.5</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</section>
-</section>
-<section id="how-did-the-teams-fare" class="level2">
-<h2 class="anchored" data-anchor-id="how-did-the-teams-fare">How did the teams fare?</h2>
+<tr><td>Héctor Álvarez</td><td>Lidl - Trek</td><td>12.0</td><td>12.0</td><td>1.0</td></tr>
+<tr><td>Matej Mohorič</td><td>Bahrain - Victorious</td><td>20.0</td><td>24.0</td><td>1.2</td></tr>
+<tr><td>Roger Adrià</td><td>Movistar Team</td><td>14.0</td><td>30.0</td><td>2.1</td></tr>
+<tr><td>Christophe Laporte</td><td>Team Visma - Lease a Bike</td><td>22.0</td><td>51.0</td><td>2.3</td></tr>
+<tr><td>Vincenzo Albanese</td><td>EF Education - EasyPost</td><td>12.0</td><td>30.0</td><td>2.5</td></tr>
+</tbody></table>
+<h2 id="how-did-the-teams-fare">How did the teams fare?</h2>
 <p>Which squads delivered the most points across all their riders?</p>
-<div id="45437331" class="cell" data-execution_count="14">
-<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="15">
-<table class="caption-top table table-sm table-striped small">
-<colgroup>
-<col style="width: 39%">
-<col style="width: 10%">
-<col style="width: 8%">
-<col style="width: 12%">
-<col style="width: 13%">
-<col style="width: 16%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Team</th>
-<th>Points</th>
-<th>Cost</th>
-<th>Scorers</th>
-<th>Starters</th>
-<th>Pts/credit</th>
-</tr>
-</thead>
+<table class="table table-striped table-sm">
+<thead><tr><th>Team</th><th>Points</th><th>Cost</th><th>Scorers</th><th>Starters</th><th>Pts/credit</th></tr></thead>
 <tbody>
-<tr class="odd">
-<td>Tudor Pro Cycling Team</td>
-<td>700</td>
-<td>72</td>
-<td>5</td>
-<td>7</td>
-<td>9.7</td>
-</tr>
-<tr class="even">
-<td>Team Visma - Lease a Bike</td>
-<td>596</td>
-<td>92</td>
-<td>7</td>
-<td>7</td>
-<td>6.5</td>
-</tr>
-<tr class="odd">
-<td>Bahrain - Victorious</td>
-<td>306</td>
-<td>70</td>
-<td>3</td>
-<td>7</td>
-<td>4.4</td>
-</tr>
-<tr class="even">
-<td>Decathlon CMA CGM Team</td>
-<td>303</td>
-<td>70</td>
-<td>2</td>
-<td>7</td>
-<td>4.3</td>
-</tr>
-<tr class="odd">
-<td>Movistar Team</td>
-<td>300</td>
-<td>76</td>
-<td>4</td>
-<td>7</td>
-<td>3.9</td>
-</tr>
-<tr class="even">
-<td>Red Bull - BORA - hansgrohe</td>
-<td>237</td>
-<td>76</td>
-<td>2</td>
-<td>7</td>
-<td>3.1</td>
-</tr>
-<tr class="odd">
-<td>XDS Astana Team</td>
-<td>180</td>
-<td>70</td>
-<td>1</td>
-<td>7</td>
-<td>2.6</td>
-</tr>
-<tr class="even">
-<td>EF Education - EasyPost</td>
-<td>168</td>
-<td>76</td>
-<td>2</td>
-<td>7</td>
-<td>2.2</td>
-</tr>
-<tr class="odd">
-<td>Soudal Quick-Step</td>
-<td>165</td>
-<td>88</td>
-<td>1</td>
-<td>7</td>
-<td>1.9</td>
-</tr>
-<tr class="even">
-<td>NSN Cycling Team</td>
-<td>150</td>
-<td>82</td>
-<td>2</td>
-<td>7</td>
-<td>1.8</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-
-
-</section>
-
-</main> <!-- /main -->
-<script id="quarto-html-after-body" type="application/javascript">
-  window.document.addEventListener("DOMContentLoaded", function (event) {
-    const icon = "";
-    const anchorJS = new window.AnchorJS();
-    anchorJS.options = {
-      placement: 'right',
-      icon: icon
-    };
-    anchorJS.add('.anchored');
-    const isCodeAnnotation = (el) => {
-      for (const clz of el.classList) {
-        if (clz.startsWith('code-annotation-')) {                     
-          return true;
-        }
-      }
-      return false;
-    }
-    const onCopySuccess = function(e) {
-      // button target
-      const button = e.trigger;
-      // don't keep focus
-      button.blur();
-      // flash "checked"
-      button.classList.add('code-copy-button-checked');
-      var currentTitle = button.getAttribute("title");
-      button.setAttribute("title", "Copied!");
-      let tooltip;
-      if (window.bootstrap) {
-        button.setAttribute("data-bs-toggle", "tooltip");
-        button.setAttribute("data-bs-placement", "left");
-        button.setAttribute("data-bs-title", "Copied!");
-        tooltip = new bootstrap.Tooltip(button, 
-          { trigger: "manual", 
-            customClass: "code-copy-button-tooltip",
-            offset: [0, -8]});
-        tooltip.show();    
-      }
-      setTimeout(function() {
-        if (tooltip) {
-          tooltip.hide();
-          button.removeAttribute("data-bs-title");
-          button.removeAttribute("data-bs-toggle");
-          button.removeAttribute("data-bs-placement");
-        }
-        button.setAttribute("title", currentTitle);
-        button.classList.remove('code-copy-button-checked');
-      }, 1000);
-      // clear code selection
-      e.clearSelection();
-    }
-    const getTextToCopy = function(trigger) {
-      const outerScaffold = trigger.parentElement.cloneNode(true);
-      const codeEl = outerScaffold.querySelector('code');
-      for (const childEl of codeEl.children) {
-        if (isCodeAnnotation(childEl)) {
-          childEl.remove();
-        }
-      }
-      return codeEl.innerText;
-    }
-    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
-      text: getTextToCopy
-    });
-    clipboard.on('success', onCopySuccess);
-    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
-      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
-        text: getTextToCopy,
-        container: window.document.getElementById('quarto-embedded-source-code-modal')
-      });
-      clipboardModal.on('success', onCopySuccess);
-    }
-      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
-      var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp('/' + window.location.host + '/');
-      var isInternal = (href) => {
-          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
-      }
-      // Inspect non-navigation links and adorn them if external
-     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
-      for (var i=0; i<links.length; i++) {
-        const link = links[i];
-        if (!isInternal(link.href)) {
-          // undo the damage that might have been done by quarto-nav.js in the case of
-          // links that we want to consider external
-          if (link.dataset.originalHref !== undefined) {
-            link.href = link.dataset.originalHref;
-          }
-            // default icon
-            link.classList.add("external");
-        }
-      }
-    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
-      const config = {
-        allowHTML: true,
-        maxWidth: 500,
-        delay: 100,
-        arrow: false,
-        appendTo: function(el) {
-            return el.parentElement;
-        },
-        interactive: true,
-        interactiveBorder: 10,
-        theme: 'quarto',
-        placement: 'bottom-start',
-      };
-      if (contentFn) {
-        config.content = contentFn;
-      }
-      if (onTriggerFn) {
-        config.onTrigger = onTriggerFn;
-      }
-      if (onUntriggerFn) {
-        config.onUntrigger = onUntriggerFn;
-      }
-      window.tippy(el, config); 
-    }
-    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
-    for (var i=0; i<noterefs.length; i++) {
-      const ref = noterefs[i];
-      tippyHover(ref, function() {
-        // use id or data attribute instead here
-        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
-        try { href = new URL(href).hash; } catch {}
-        const id = href.replace(/^#\/?/, "");
-        const note = window.document.getElementById(id);
-        if (note) {
-          return note.innerHTML;
-        } else {
-          return "";
-        }
-      });
-    }
-    const xrefs = window.document.querySelectorAll('a.quarto-xref');
-    const processXRef = (id, note) => {
-      // Strip column container classes
-      const stripColumnClz = (el) => {
-        el.classList.remove("page-full", "page-columns");
-        if (el.children) {
-          for (const child of el.children) {
-            stripColumnClz(child);
-          }
-        }
-      }
-      stripColumnClz(note)
-      if (id === null || id.startsWith('sec-')) {
-        // Special case sections, only their first couple elements
-        const container = document.createElement("div");
-        if (note.children && note.children.length > 2) {
-          container.appendChild(note.children[0].cloneNode(true));
-          for (let i = 1; i < note.children.length; i++) {
-            const child = note.children[i];
-            if (child.tagName === "P" && child.innerText === "") {
-              continue;
-            } else {
-              container.appendChild(child.cloneNode(true));
-              break;
-            }
-          }
-          if (window.Quarto?.typesetMath) {
-            window.Quarto.typesetMath(container);
-          }
-          return container.innerHTML
-        } else {
-          if (window.Quarto?.typesetMath) {
-            window.Quarto.typesetMath(note);
-          }
-          return note.innerHTML;
-        }
-      } else {
-        // Remove any anchor links if they are present
-        const anchorLink = note.querySelector('a.anchorjs-link');
-        if (anchorLink) {
-          anchorLink.remove();
-        }
-        if (window.Quarto?.typesetMath) {
-          window.Quarto.typesetMath(note);
-        }
-        if (note.classList.contains("callout")) {
-          return note.outerHTML;
-        } else {
-          return note.innerHTML;
-        }
-      }
-    }
-    for (var i=0; i<xrefs.length; i++) {
-      const xref = xrefs[i];
-      tippyHover(xref, undefined, function(instance) {
-        instance.disable();
-        let url = xref.getAttribute('href');
-        let hash = undefined; 
-        if (url.startsWith('#')) {
-          hash = url;
-        } else {
-          try { hash = new URL(url).hash; } catch {}
-        }
-        if (hash) {
-          const id = hash.replace(/^#\/?/, "");
-          const note = window.document.getElementById(id);
-          if (note !== null) {
-            try {
-              const html = processXRef(id, note.cloneNode(true));
-              instance.setContent(html);
-            } finally {
-              instance.enable();
-              instance.show();
-            }
-          } else {
-            // See if we can fetch this
-            fetch(url.split('#')[0])
-            .then(res => res.text())
-            .then(html => {
-              const parser = new DOMParser();
-              const htmlDoc = parser.parseFromString(html, "text/html");
-              const note = htmlDoc.getElementById(id);
-              if (note !== null) {
-                const html = processXRef(id, note);
-                instance.setContent(html);
-              } 
-            }).finally(() => {
-              instance.enable();
-              instance.show();
-            });
-          }
-        } else {
-          // See if we can fetch a full url (with no hash to target)
-          // This is a special case and we should probably do some content thinning / targeting
-          fetch(url)
-          .then(res => res.text())
-          .then(html => {
-            const parser = new DOMParser();
-            const htmlDoc = parser.parseFromString(html, "text/html");
-            const note = htmlDoc.querySelector('main.content');
-            if (note !== null) {
-              // This should only happen for chapter cross references
-              // (since there is no id in the URL)
-              // remove the first header
-              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
-                note.children[0].remove();
-              }
-              const html = processXRef(null, note);
-              instance.setContent(html);
-            } 
-          }).finally(() => {
-            instance.enable();
-            instance.show();
-          });
-        }
-      }, function(instance) {
-      });
-    }
-        let selectedAnnoteEl;
-        const selectorForAnnotation = ( cell, annotation) => {
-          let cellAttr = 'data-code-cell="' + cell + '"';
-          let lineAttr = 'data-code-annotation="' +  annotation + '"';
-          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
-          return selector;
-        }
-        const selectCodeLines = (annoteEl) => {
-          const doc = window.document;
-          const targetCell = annoteEl.getAttribute("data-target-cell");
-          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
-          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
-          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
-          const lineIds = lines.map((line) => {
-            return targetCell + "-" + line;
-          })
-          let top = null;
-          let height = null;
-          let parent = null;
-          if (lineIds.length > 0) {
-              //compute the position of the single el (top and bottom and make a div)
-              const el = window.document.getElementById(lineIds[0]);
-              top = el.offsetTop;
-              height = el.offsetHeight;
-              parent = el.parentElement.parentElement;
-            if (lineIds.length > 1) {
-              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
-              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
-              height = bottom - top;
-            }
-            if (top !== null && height !== null && parent !== null) {
-              // cook up a div (if necessary) and position it 
-              let div = window.document.getElementById("code-annotation-line-highlight");
-              if (div === null) {
-                div = window.document.createElement("div");
-                div.setAttribute("id", "code-annotation-line-highlight");
-                div.style.position = 'absolute';
-                parent.appendChild(div);
-              }
-              div.style.top = top - 2 + "px";
-              div.style.height = height + 4 + "px";
-              div.style.left = 0;
-              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
-              if (gutterDiv === null) {
-                gutterDiv = window.document.createElement("div");
-                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
-                gutterDiv.style.position = 'absolute';
-                const codeCell = window.document.getElementById(targetCell);
-                const gutter = codeCell.querySelector('.code-annotation-gutter');
-                gutter.appendChild(gutterDiv);
-              }
-              gutterDiv.style.top = top - 2 + "px";
-              gutterDiv.style.height = height + 4 + "px";
-            }
-            selectedAnnoteEl = annoteEl;
-          }
-        };
-        const unselectCodeLines = () => {
-          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
-          elementsIds.forEach((elId) => {
-            const div = window.document.getElementById(elId);
-            if (div) {
-              div.remove();
-            }
-          });
-          selectedAnnoteEl = undefined;
-        };
-          // Handle positioning of the toggle
-      window.addEventListener(
-        "resize",
-        throttle(() => {
-          elRect = undefined;
-          if (selectedAnnoteEl) {
-            selectCodeLines(selectedAnnoteEl);
-          }
-        }, 10)
-      );
-      function throttle(fn, ms) {
-      let throttle = false;
-      let timer;
-        return (...args) => {
-          if(!throttle) { // first call gets through
-              fn.apply(this, args);
-              throttle = true;
-          } else { // all the others get throttled
-              if(timer) clearTimeout(timer); // cancel #2
-              timer = setTimeout(() => {
-                fn.apply(this, args);
-                timer = throttle = false;
-              }, ms);
-          }
-        };
-      }
-        // Attach click handler to the DT
-        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
-        for (const annoteDlNode of annoteDls) {
-          annoteDlNode.addEventListener('click', (event) => {
-            const clickedEl = event.target;
-            if (clickedEl !== selectedAnnoteEl) {
-              unselectCodeLines();
-              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
-              if (activeEl) {
-                activeEl.classList.remove('code-annotation-active');
-              }
-              selectCodeLines(clickedEl);
-              clickedEl.classList.add('code-annotation-active');
-            } else {
-              // Unselect the line
-              unselectCodeLines();
-              clickedEl.classList.remove('code-annotation-active');
-            }
-          });
-        }
-    const findCites = (el) => {
-      const parentEl = el.parentElement;
-      if (parentEl) {
-        const cites = parentEl.dataset.cites;
-        if (cites) {
-          return {
-            el,
-            cites: cites.split(' ')
-          };
-        } else {
-          return findCites(el.parentElement)
-        }
-      } else {
-        return undefined;
-      }
-    };
-    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
-    for (var i=0; i<bibliorefs.length; i++) {
-      const ref = bibliorefs[i];
-      const citeInfo = findCites(ref);
-      if (citeInfo) {
-        tippyHover(citeInfo.el, function() {
-          var popup = window.document.createElement('div');
-          citeInfo.cites.forEach(function(cite) {
-            var citeDiv = window.document.createElement('div');
-            citeDiv.classList.add('hanging-indent');
-            citeDiv.classList.add('csl-entry');
-            var biblioDiv = window.document.getElementById('ref-' + cite);
-            if (biblioDiv) {
-              citeDiv.innerHTML = biblioDiv.innerHTML;
-            }
-            popup.appendChild(citeDiv);
-          });
-          return popup.innerHTML;
-        });
-      }
-    }
+<tr><td>Tudor Pro Cycling Team</td><td>700.0</td><td>72.0</td><td>5.0</td><td>7.0</td><td>9.7</td></tr>
+<tr><td>Team Visma - Lease a Bike</td><td>596.0</td><td>92.0</td><td>7.0</td><td>7.0</td><td>6.5</td></tr>
+<tr><td>Bahrain - Victorious</td><td>306.0</td><td>70.0</td><td>3.0</td><td>7.0</td><td>4.4</td></tr>
+<tr><td>Decathlon CMA CGM Team</td><td>303.0</td><td>70.0</td><td>2.0</td><td>7.0</td><td>4.3</td></tr>
+<tr><td>Movistar Team</td><td>300.0</td><td>76.0</td><td>4.0</td><td>7.0</td><td>3.9</td></tr>
+<tr><td>Red Bull - BORA - hansgrohe</td><td>237.0</td><td>76.0</td><td>2.0</td><td>7.0</td><td>3.1</td></tr>
+<tr><td>XDS Astana Team</td><td>180.0</td><td>70.0</td><td>1.0</td><td>7.0</td><td>2.6</td></tr>
+<tr><td>EF Education - EasyPost</td><td>168.0</td><td>76.0</td><td>2.0</td><td>7.0</td><td>2.2</td></tr>
+<tr><td>Soudal Quick-Step</td><td>165.0</td><td>88.0</td><td>1.0</td><td>7.0</td><td>1.9</td></tr>
+<tr><td>NSN Cycling Team</td><td>150.0</td><td>82.0</td><td>2.0</td><td>7.0</td><td>1.8</td></tr>
+</tbody></table>
+</main>
+<nav id="toc"></nav>
+<script>document.addEventListener('DOMContentLoaded', function() {
+  var toc = document.getElementById('toc');
+  if (!toc) return;
+  var headings = document.querySelectorAll('h2[id], h3[id]');
+  headings.forEach(function(h) {
+    var a = document.createElement('a');
+    a.href = '#' + h.id;
+    a.textContent = h.textContent;
+    if (h.tagName === 'H3') a.className = 'toc-h3';
+    toc.appendChild(a);
   });
-  </script>
-</div> <!-- /content -->
-
-
-
-
-</body></html>
+});
+</script>
+</body>
+</html>
