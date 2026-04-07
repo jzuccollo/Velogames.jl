@@ -366,6 +366,16 @@ function main()
     end
 
     league_winners = load_league_winners()
+
+    # Archive results for any league winners not yet in the archive
+    for ((pcs_slug, year), _) in league_winners
+        year in years || continue
+        if load_race_snapshot("vg_results", pcs_slug, year) === nothing
+            println("  Archiving results for $pcs_slug $year...")
+            _ensure_results_archived(pcs_slug, year)
+        end
+    end
+
     races = list_completed_races(years)
     println("Found $(nrow(races)) completed races")
 

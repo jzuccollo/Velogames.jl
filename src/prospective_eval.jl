@@ -121,6 +121,19 @@ function prospective_season_summary(year::Int; archive_dir::String = DEFAULT_ARC
         feather_path = joinpath(race_dir, "$year.feather")
         isfile(feather_path) || continue
 
+        # Auto-archive PCS results if predictions exist but results don't
+        if load_race_snapshot("pcs_results", pcs_slug, year; archive_dir = archive_dir) === nothing
+            try
+                pcs_results = getpcsraceresults(pcs_slug, year)
+                if nrow(pcs_results) > 0
+                    save_race_snapshot(pcs_results, "pcs_results", pcs_slug, year; archive_dir = archive_dir)
+                    @info "Auto-archived PCS results for $pcs_slug $year"
+                end
+            catch e
+                @warn "Failed to auto-archive PCS results for $pcs_slug $year: $e"
+            end
+        end
+
         result = evaluate_prospective(pcs_slug, year; archive_dir = archive_dir)
         result === nothing && continue
 
@@ -176,6 +189,26 @@ function prospective_pit_values(
             load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
         vg_results =
             load_race_snapshot("vg_results", pcs_slug, year; archive_dir = archive_dir)
+
+        # Auto-archive VG results if missing
+        if vg_results === nothing
+            try
+                race_info = _find_race_by_slug(pcs_slug)
+                if race_info !== nothing
+                    vg_racelist = getvgracelist(year)
+                    race_num = match_vg_race_number(race_info.name, vg_racelist)
+                    if race_num !== nothing
+                        vg_results = getvgraceresults(year, race_num)
+                        if vg_results !== nothing && nrow(vg_results) > 0
+                            save_race_snapshot(vg_results, "vg_results", pcs_slug, year; archive_dir = archive_dir)
+                            @info "Auto-archived VG results for $pcs_slug $year"
+                        end
+                    end
+                end
+            catch e
+                @warn "Failed to auto-archive VG results for $pcs_slug $year: $e"
+            end
+        end
 
         predictions === nothing && continue
         vg_results === nothing && continue
@@ -308,7 +341,7 @@ function signal_value_analysis(year::Int; archive_dir::String = DEFAULT_ARCHIVE_
         predictions === nothing && continue
 
         shift_cols =
-            filter(c -> startswith(string(c), "shift_"), propertynames(predictions))
+            filter(c -> startswith(string(c), "shift_") && c != :shift_trajectory, propertynames(predictions))
         for col in shift_cols
             signal = Symbol(replace(string(col), "shift_" => ""))
             vals = abs.(predictions[!, col])
