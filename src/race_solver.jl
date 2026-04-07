@@ -43,7 +43,6 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :shift_pcs,
             :shift_vg,
             :shift_form,
-            :shift_trajectory,
             :shift_history,
             :shift_vg_history,
             :shift_oracle,

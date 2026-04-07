@@ -355,6 +355,22 @@ function prefetch_race_data(
     seasons_df = load_race_snapshot("pcs_seasons", race.pcs_slug, race.year)
     if seasons_df !== nothing
         @info "Loaded archived PCS seasons for $(race.name) $(race.year): $(length(unique(seasons_df.riderkey))) riders"
+    else
+        if !isempty(pcs_slug_map)
+            try
+                seasons_df = getpcsriderseasons_batch(
+                    pcs_slug_map;
+                    cache_config = cache_config,
+                    force_refresh = force_refresh,
+                )
+                if seasons_df !== nothing && nrow(seasons_df) > 0
+                    save_race_snapshot(seasons_df, "pcs_seasons", race.pcs_slug, race.year)
+                    @info "Archived PCS seasons for $(race.name) $(race.year): $(length(unique(seasons_df.riderkey))) riders"
+                end
+            catch e
+                @warn "Failed to fetch PCS seasons for $(race.name) $(race.year): $e"
+            end
+        end
     end
 
     # --- 6. Fetch VG race history (prior editions + similar + within-year) ---
@@ -489,8 +505,9 @@ function backtest_race(
     # PCS form
     form_df = :form in signals ? data.form_df : nothing
 
-    # Cross-season PCS points (for trajectory)
-    seasons_df = :trajectory in signals ? data.seasons_df : nothing
+    # Cross-season PCS points (trajectory signal removed, but seasons_df
+    # may still be used by estimate_strengths for PCS recency scaling)
+    seasons_df = data.seasons_df
 
     # --- Run prediction pipeline ---
     scoring = get_scoring(race.category > 0 ? race.category : 2)
@@ -513,7 +530,6 @@ function backtest_race(
         race_date = race.date,
         simulation_df = simulation_df,
         domestique_discount = domestique_discount,
-        disable_trajectory = !(:trajectory in signals),
         total_distance_km = race_distance_km,
     )
 
@@ -594,7 +610,6 @@ function backtest_race(
         :shift_pcs,
         :shift_vg,
         :shift_form,
-        :shift_trajectory,
         :shift_history,
         :shift_vg_history,
         :shift_oracle,
@@ -973,7 +988,7 @@ end
 # ---------------------------------------------------------------------------
 
 """Signal subsets for ablation study."""
-const _BASELINE_SIGNALS = [:pcs, :vg_season, :race_history, :vg_history, :form, :trajectory]
+const _BASELINE_SIGNALS = [:pcs, :vg_season, :race_history, :vg_history, :form]
 
 const ABLATION_SETS = [
     ("no_signals", Symbol[]),
@@ -983,7 +998,6 @@ const ABLATION_SETS = [
     ("no_race_history", filter(!=(:race_history), _BASELINE_SIGNALS)),
     ("no_vg_history", filter(!=(:vg_history), _BASELINE_SIGNALS)),
     ("no_form", filter(!=(:form), _BASELINE_SIGNALS)),
-    ("no_trajectory", filter(!=(:trajectory), _BASELINE_SIGNALS)),
     ("baseline", copy(_BASELINE_SIGNALS)),
     ("baseline+odds", [_BASELINE_SIGNALS; :odds]),
     ("baseline+oracle", [_BASELINE_SIGNALS; :oracle]),

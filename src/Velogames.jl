@@ -93,7 +93,6 @@ export BayesianConfig,
     pcs_variance,
     vg_variance,
     form_variance,
-    trajectory_variance,
     hist_base_variance,
     vg_hist_base_variance,
     odds_variance,
@@ -160,7 +159,10 @@ export html_page,
     simulate_vg_draws,
     compute_pit_values,
     pit_histogram_chart,
-    team_total_distribution_chart
+    team_total_distribution_chart,
+    scatter_chart,
+    rank_histogram_chart,
+    line_chart
 
 # Include all modules (order matters for dependencies)
 include("cache_utils.jl")

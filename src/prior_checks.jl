@@ -59,7 +59,6 @@ function _generate_synthetic_signals(
         :pcs,
         :vg,
         :form,
-        :trajectory,
         :history,
         :vg_history,
         :odds,
@@ -82,10 +81,6 @@ function _generate_synthetic_signals(
     # Form
     form_score = :form in available_signals ?
         true_strength + randn(rng) * sqrt(form_variance(config)) : 0.0
-
-    # Trajectory
-    trajectory_score = :trajectory in available_signals ?
-        true_strength * 0.3 + randn(rng) * sqrt(trajectory_variance(config)) : 0.0
 
     # Race history
     race_history, race_history_years_ago, race_history_variance_penalties =
@@ -133,7 +128,7 @@ function _generate_synthetic_signals(
     end
 
     return RiderSignalData(;
-        pcs_score, has_pcs, vg_points, form_score, trajectory_score,
+        pcs_score, has_pcs, vg_points, form_score,
         race_history, race_history_years_ago, race_history_variance_penalties,
         vg_race_history, vg_race_history_years_ago,
         odds_implied_prob, oracle_implied_prob,
@@ -177,7 +172,6 @@ function prior_predictive_check(
         :pcs,
         :vg,
         :form,
-        :trajectory,
         :history,
         :vg_history,
         :odds,
@@ -371,7 +365,6 @@ function simulation_based_calibration(
         :pcs,
         :vg,
         :form,
-        :trajectory,
         :history,
         :vg_history,
         :odds,

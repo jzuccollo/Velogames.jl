@@ -472,107 +472,25 @@ end
 # Cross-season trajectory
 # =========================================================================
 
-@testset "Cross-season trajectory signal" begin
-    @testset "trajectory shifts strength for improving rider" begin
-        rider_df = DataFrame(
-            rider = ["Rising", "Declining", "Stable"],
-            team = ["A", "B", "C"],
-            cost = [15, 15, 15],
-            points = [300.0, 300.0, 300.0],
-            riderkey = ["rising", "declining", "stable"],
-            oneday = [1000, 1000, 1000],
-            has_pcs_data = [true, true, true],
-        )
-
-        # Seasons data: Rising rider improving, Declining rider getting worse
-        seasons_df = DataFrame(
-            riderkey = repeat(["rising", "declining", "stable"], inner = 5),
-            year = repeat([2022, 2023, 2024, 2025, 2026], 3),
-            pcs_points = [
-                # Rising: 500 -> 600 -> 800 -> 1200 -> 1500
-                500.0,
-                600.0,
-                800.0,
-                1200.0,
-                1500.0,
-                # Declining: 1500 -> 1200 -> 800 -> 600 -> 500
-                1500.0,
-                1200.0,
-                800.0,
-                600.0,
-                500.0,
-                # Stable: 800 all years
-                800.0,
-                800.0,
-                800.0,
-                800.0,
-                800.0,
-            ],
-            pcs_rank = fill(100, 15),
-        )
-
-        with_traj = predict_expected_points(
-            rider_df,
-            SCORING_CAT2;
-            n_sims = 5000,
-            seasons_df = seasons_df,
-            race_year = 2026,
-        )
-
-        without_traj = predict_expected_points(
-            rider_df,
-            SCORING_CAT2;
-            n_sims = 5000,
-            disable_trajectory = true,
-            seasons_df = seasons_df,
-            race_year = 2026,
-        )
-
-        # Trajectory should produce different expected points
-        @test with_traj.shift_trajectory[1] > 0.0   # Rising rider gets positive shift
-        @test with_traj.shift_trajectory[2] < 0.0   # Declining rider gets negative shift
-        @test with_traj.has_seasons[1] == true
-        @test with_traj.has_seasons[2] == true
-
-        # Disabled trajectory should have zero shifts
-        @test all(without_traj.shift_trajectory .== 0.0)
-    end
-
-    @testset "trajectory handles missing seasons data" begin
+@testset "Trajectory signal removed" begin
+    @testset "no shift_trajectory column in output" begin
         rider_df = DataFrame(
             rider = ["A", "B"],
             team = ["X", "Y"],
-            cost = [10, 10],
-            points = [200.0, 200.0],
+            cost = [15, 15],
+            points = [300.0, 300.0],
             riderkey = ["a", "b"],
-            oneday = [500, 500],
+            oneday = [1000, 1000],
             has_pcs_data = [true, true],
         )
 
-        # No seasons data at all
         result = predict_expected_points(
             rider_df,
             SCORING_CAT2;
-            n_sims = 1000,
-            seasons_df = nothing,
+            n_sims = 500,
         )
-        @test all(result.shift_trajectory .== 0.0)
 
-        # Only one season (not enough for trajectory)
-        single_season = DataFrame(
-            riderkey = ["a"],
-            year = [2026],
-            pcs_points = [1000.0],
-            pcs_rank = [50],
-        )
-        result2 = predict_expected_points(
-            rider_df,
-            SCORING_CAT2;
-            n_sims = 1000,
-            seasons_df = single_season,
-            race_year = 2026,
-        )
-        @test result2.shift_trajectory[1] == 0.0
+        @test :shift_trajectory ∉ propertynames(result)
     end
 
     @testset "getpcsriderseasons_batch empty input" begin

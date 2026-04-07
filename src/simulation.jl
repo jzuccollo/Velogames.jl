@@ -62,7 +62,6 @@ struct StrengthEstimate
     shift_pcs::Float64
     shift_vg::Float64
     shift_form::Float64
-    shift_trajectory::Float64
     shift_history::Float64
     shift_vg_history::Float64
     shift_oracle::Float64
@@ -108,9 +107,11 @@ that group together, preserving these ratios.
 ### 3. Temporal decay rates (set once)
 
 `hist_decay_rate` and `vg_hist_decay_rate` control how quickly historical
-results lose relevance: variance = base + decay_rate × years_ago. These are
-independent of the scale factors because they control *how fast* signal
-degrades rather than *how much* to trust the signal source.
+results lose relevance: variance = base + decay_rate × years_ago.
+`pcs_season_decay` controls how quickly past seasons' PCS points lose weight
+when computing the ability signal (half-life ≈ ln(2)/rate seasons).
+These are independent of the scale factors because they control *how fast*
+signal degrades rather than *how much* to trust the signal source.
 
 ### 4. Other parameters
 
@@ -137,13 +138,14 @@ degrades rather than *how much* to trust the signal source.
 
     # --- Fixed ratios between signals within each group (domain knowledge, not tuned) ---
 
-    # Market: oracle is less precise than odds
-    _odds_to_oracle_ratio::Float64 = 2.0
+    # Market: oracle is less precise than odds (increased from 2.0 after
+    # 10-race 2026 review showed oracle mean |shift| of 1.7 — disproportionate
+    # influence with no measurable rank-ordering benefit over the no-market backtest)
+    _odds_to_oracle_ratio::Float64 = 3.5
 
     # Historical: race history and VG history are noisier than recent form
     _form_to_hist_ratio::Float64 = 3.0
     _form_to_vg_hist_ratio::Float64 = 5.0
-    _form_to_trajectory_ratio::Float64 = 3.0
 
     # Ability: VG season points match PCS specialty in precision
     _pcs_to_vg_ratio::Float64 = 1.0
@@ -151,7 +153,12 @@ degrades rather than *how much* to trust the signal source.
     # --- Temporal decay (independent, not grouped) ---
 
     hist_decay_rate::Float64 = 3.2
-    vg_hist_decay_rate::Float64 = 1.3
+    # Reduced from 1.3: recent-edition VG results are genuinely informative
+    # but the old decay made even 1-year-old data imprecise (var 2.5+1.3=3.8)
+    vg_hist_decay_rate::Float64 = 0.8
+    # PCS season decay: weight = exp(-rate × years_ago). Default 0.7 gives
+    # half-life ≈ 1 season (last season ~50%, 2 years ago ~25%, 3 years ago ~12%).
+    pcs_season_decay::Float64 = 0.7
 
     # --- Other parameters ---
 
@@ -175,17 +182,27 @@ degrades rather than *how much* to trust the signal source.
     # --- Absence floors ---
     # When a signal covers the field but a rider is missing, absence is
     # informative. `floor_signals` controls which signals apply this logic.
-    # All floor observations use `floor_variance_multiplier × base_variance`
+    # Floor observations use per-signal variance multipliers × base_variance
     # (less precise than direct observations).
     #
     # Two floor mechanisms:
     #   :odds, :oracle — market-based: absent riders share the residual
     #       probability mass (data-driven, varies per race).
-    #   :form, :qualitative — fixed: absent riders get `absence_floor_strength`
-    #       as a z-score observation (same for every race, tunable below).
-    floor_signals::Set{Symbol} = Set([:odds, :oracle])
-    floor_variance_multiplier::Float64 = 2.0
-    absence_floor_strength::Float64 = -0.5
+    #   :form, :qualitative — fixed: absent riders get a per-signal floor
+    #       strength as a z-score observation. Stronger floors for sources
+    #       with broader coverage (odds > oracle > qualitative).
+    floor_signals::Set{Symbol} = Set([:odds, :oracle, :qualitative])
+    # Per-signal floor config: (strength, variance_multiplier).
+    # Strength is the z-score observation for absent riders.
+    # Variance multiplier scales the signal's base variance for floor observations
+    # (higher = weaker floor). Sources with broader coverage warrant stronger
+    # floors (lower multiplier, more negative strength).
+    odds_floor_variance_multiplier::Float64 = 2.0
+    oracle_floor_variance_multiplier::Float64 = 2.0
+    form_absence_floor::Float64 = -0.5
+    form_floor_variance_multiplier::Float64 = 2.0
+    qualitative_absence_floor::Float64 = -0.15
+    qualitative_floor_variance_multiplier::Float64 = 4.0
     # --- Market discount ---
     # When odds exist for a race, non-market signal variances are multiplied
     # by this factor for ALL riders (race-level, not per-rider). The market
@@ -201,8 +218,6 @@ end
 pcs_variance(c::BayesianConfig) = 1.0 / c.ability_precision_scale
 vg_variance(c::BayesianConfig) = c._pcs_to_vg_ratio / c.ability_precision_scale
 form_variance(c::BayesianConfig) = 1.0 / c.history_precision_scale
-trajectory_variance(c::BayesianConfig) =
-    c._form_to_trajectory_ratio / c.history_precision_scale
 hist_base_variance(c::BayesianConfig) = c._form_to_hist_ratio / c.history_precision_scale
 vg_hist_base_variance(c::BayesianConfig) =
     c._form_to_vg_hist_ratio / c.history_precision_scale
@@ -262,7 +277,6 @@ remain as separate arguments to `estimate_rider_strength`.
     oracle_floor_strength::Float64 = 0.0
     form_floor_strength::Float64 = 0.0
     qualitative_floor_strength::Float64 = 0.0
-    trajectory_score::Float64 = 0.0
     qualitative_adjustments::Vector{Float64} = Float64[]
     qualitative_confidences::Vector{Float64} = Float64[]
 end
@@ -314,7 +328,7 @@ function estimate_rider_strength(
        race_history_variance_penalties, vg_points, form_score,
        vg_race_history, vg_race_history_years_ago, odds_implied_prob,
        oracle_implied_prob, odds_floor_strength, oracle_floor_strength,
-       form_floor_strength, qualitative_floor_strength, trajectory_score,
+       form_floor_strength, qualitative_floor_strength,
        qualitative_adjustments, qualitative_confidences) = signals
     # --- Uninformative prior ---
     # Start from a diffuse prior (mean=0, large variance). All signals,
@@ -369,25 +383,12 @@ function estimate_rider_strength(
         n_signals += 1
         n_history += 1
     elseif form_floor_strength != 0.0
-        floor_var = form_variance(config) * config.floor_variance_multiplier * md
+        floor_var = form_variance(config) * config.form_floor_variance_multiplier * md
         posterior = bayesian_update(posterior, form_floor_strength, floor_var)
         n_signals += 1
         n_history += 1
     end
     shift_form = posterior.mean - mean_before
-
-    # --- Update with trajectory signal ---
-    # Captures improving (positive) or declining (negative) riders by comparing
-    # current PCS ability to historical race performance. Only applied when
-    # the caller has computed a trajectory score (riders with race history).
-    mean_before = posterior.mean
-    if trajectory_score != 0.0
-        posterior =
-            bayesian_update(posterior, trajectory_score, trajectory_variance(config) * md)
-        n_signals += 1
-        n_history += 1
-    end
-    shift_trajectory = posterior.mean - mean_before
 
     # --- Update with PCS race-specific history ---
     # Each past result in this or similar races is a strong signal.
@@ -441,7 +442,7 @@ function estimate_rider_strength(
         n_signals += 1
         n_market += 1
     elseif oracle_floor_strength != 0.0
-        floor_var = oracle_variance(config) * config.floor_variance_multiplier
+        floor_var = oracle_variance(config) * config.oracle_floor_variance_multiplier
         posterior = bayesian_update(posterior, oracle_floor_strength, floor_var)
         n_signals += 1
         n_market += 1
@@ -464,7 +465,7 @@ function estimate_rider_strength(
             end
         end
     elseif qualitative_floor_strength != 0.0
-        floor_var = qualitative_base_variance(config) * config.floor_variance_multiplier
+        floor_var = qualitative_base_variance(config) * config.qualitative_floor_variance_multiplier
         posterior = bayesian_update(posterior, qualitative_floor_strength, floor_var)
         n_signals += 1
         n_market += 1
@@ -481,7 +482,7 @@ function estimate_rider_strength(
         n_signals += 1
         n_market += 1
     elseif odds_floor_strength != 0.0
-        floor_var = odds_variance(config) * config.floor_variance_multiplier
+        floor_var = odds_variance(config) * config.odds_floor_variance_multiplier
         posterior = bayesian_update(posterior, odds_floor_strength, floor_var)
         n_signals += 1
         n_market += 1
@@ -539,7 +540,6 @@ function estimate_rider_strength(
         shift_pcs,
         shift_vg,
         shift_form,
-        shift_trajectory,
         shift_history,
         shift_vg_history,
         shift_oracle,
@@ -909,7 +909,6 @@ function estimate_strengths(
     race_year::Union{Int,Nothing}=nothing,
     race_date::Union{Date,Nothing}=nothing,
     domestique_discount::Float64=0.0,
-    disable_trajectory::Bool=false,
 )
     df = copy(rider_df)
     n_riders = nrow(df)
@@ -935,7 +934,7 @@ function estimate_strengths(
     @info "Season-adaptive VG variance: $(round(effective_vg_variance, digits=2)) " *
           "($(round(100 * frac_nonzero, digits=0))% with points, scale=$(round(season_scale, digits=2)))"
 
-    # --- Current year and month (needed by PCS recency scaling, trajectory, and race history) ---
+    # --- Current year (needed by race history and PCS season decay) ---
     current_year = if race_date !== nothing
         Dates.year(race_date)
     elseif race_year !== nothing
@@ -943,7 +942,7 @@ function estimate_strengths(
     else
         Dates.year(Dates.today())
     end
-    current_month = Dates.month(race_date !== nothing ? race_date : Dates.today())
+
 
     # --- Compute PCS z-scores (race-type-dependent) ---
     pcs_z = zeros(n_riders)
@@ -971,39 +970,38 @@ function estimate_strengths(
         end
     end
 
-    # --- Build seasons lookup and apply PCS recency scaling ---
-    # PCS specialty scores accumulate over a rider's entire career and do not
-    # decay. A rider who peaked 3-5 years ago retains a high specialty score
-    # despite declining current form. We scale the z-scored PCS specialty down
-    # by a recency ratio: mean of the last two complete seasons' overall PCS
-    # points divided by the rider's career-peak season. Clamped to [0.3, 1.0]
-    # so past champions still receive partial credit.
-    # The seasons_lookup is also used by the trajectory block below.
-    seasons_lookup_pre = Dict{String,DataFrame}()
+    # --- Replace career-cumulative PCS specialty with decay-weighted season points ---
+    # Career specialty scores never decay, so for riders with season-level data
+    # we substitute a decay-weighted average of recent PCS season points. This
+    # naturally captures current ability without career-cumulative bias. Riders
+    # without season data keep their career specialty z-score as fallback.
+    seasons_keys = Set{String}()
     if seasons_df !== nothing &&
        :riderkey in propertynames(seasons_df) &&
        :pcs_points in propertynames(seasons_df) &&
        :year in propertynames(seasons_df)
         for g in groupby(seasons_df, :riderkey)
-            seasons_lookup_pre[first(g.riderkey)] = DataFrame(g)
+            key = first(g.riderkey)
+            push!(seasons_keys, key)
+
+            weights = [exp(-bayesian_config.pcs_season_decay * (current_year - r.year)) for r in eachrow(g)]
+            weighted_pts = sum(weights .* g.pcs_points) / sum(weights)
+
+            idx = findfirst(==(key), df.riderkey)
+            idx === nothing && continue
+            pcs_z[idx] = weighted_pts
         end
-        for i = 1:n_riders
-            key = df.riderkey[i]
-            rider_seas = get(seasons_lookup_pre, key, nothing)
-            rider_seas === nothing && continue
 
-            sorted_seas = sort(rider_seas, :year, rev=true)
-            complete = current_month < 4 ?
-                filter(r -> r.year < current_year, sorted_seas) : sorted_seas
-            nrow(complete) < 1 && continue
+        # Log-transform before z-scoring: season points are heavily right-skewed
+        # (top riders 3000+, domestiques ~50), so raw z-scores produce extreme
+        # outliers. log1p compresses the scale so relative differences matter
+        # equally across the range.
+        pcs_z = log1p.(max.(pcs_z, 0.0))
 
-            recent_mean = mean(first(complete, min(2, nrow(complete))).pcs_points)
-            career_max  = maximum(rider_seas.pcs_points)
-            career_max == 0.0 && continue
-
-            recency_ratio = clamp(recent_mean / career_max, 0.3, 1.0)
-            pcs_z[i] *= recency_ratio
-        end
+        # Re-z-score after substitution so the mixed signal is normalised
+        pcs_mean = mean(pcs_z)
+        pcs_std = std(pcs_z)
+        pcs_z = pcs_std > 0 ? (pcs_z .- pcs_mean) ./ pcs_std : zeros(n_riders)
     end
 
     # --- Build odds lookup (with surname re-matching for unmatched riders) ---
@@ -1082,14 +1080,24 @@ function estimate_strengths(
        :riderkey in propertynames(qualitative_df) &&
        :adjustment in propertynames(qualitative_df) &&
        :confidence in propertynames(qualitative_df)
+        :rider in propertynames(qualitative_df) && rematch_riderkeys!(qualitative_df, df)
+        rider_keys_set = Set(df.riderkey)
+        unmatched = String[]
         for row in eachrow(qualitative_df)
             key = row.riderkey
+            if key ∉ rider_keys_set
+                push!(unmatched, :rider in propertynames(qualitative_df) ? row.rider : key)
+                continue
+            end
             adj = Float64(row.adjustment)
             conf = Float64(row.confidence)
             if !haskey(qualitative_lookup, key)
                 qualitative_lookup[key] = Tuple{Float64,Float64}[]
             end
             push!(qualitative_lookup[key], (adj, conf))
+        end
+        if !isempty(unmatched)
+            @warn "Qualitative riders not matched to startlist" unmatched
         end
     end
 
@@ -1115,14 +1123,14 @@ function estimate_strengths(
     # --- Compute floor strengths for non-market signals ---
     form_floor_strength_val = 0.0
     if :form in bayesian_config.floor_signals && !isempty(form_lookup)
-        form_floor_strength_val = bayesian_config.absence_floor_strength
+        form_floor_strength_val = bayesian_config.form_absence_floor
         n_with_form = length(intersect(keys(form_lookup), rider_keys))
         @info "Form floor: $n_with_form with form, $(n_riders - n_with_form) with floor (strength=$(round(form_floor_strength_val, digits=2)))"
     end
 
     qualitative_floor_strength_val = 0.0
     if :qualitative in bayesian_config.floor_signals && !isempty(qualitative_lookup)
-        qualitative_floor_strength_val = bayesian_config.absence_floor_strength
+        qualitative_floor_strength_val = bayesian_config.qualitative_absence_floor
         n_with_qual = length(intersect(keys(qualitative_lookup), rider_keys))
         @info "Qualitative floor: $n_with_qual with intel, $(n_riders - n_with_qual) with floor (strength=$(round(qualitative_floor_strength_val, digits=2)))"
     end
@@ -1186,57 +1194,8 @@ function estimate_strengths(
         @info "VG history lookup: $(length(vg_history_lookup)) riders with historical VG scores"
     end
 
-    # --- Compute trajectory scores ---
-    # Year-on-year change in PCS ranking points between the two most recent
-    # complete seasons. The current year is excluded early in the season
-    # (before April) because March points are artificially low and would
-    # distort the signal. Normalised by the larger of the two season totals
-    # so a 100->200 rise is as notable as a 1000->2000 rise.
-    # Riders without at least two qualifying seasons get 0 (no update).
-    # seasons_lookup_pre is already built from seasons_df in the PCS scaling block above.
-    trajectory_raw = zeros(n_riders)
-
-    has_trajectory = falses(n_riders)
-    for i = 1:n_riders
-        key = df.riderkey[i]
-        rider_seasons = get(seasons_lookup_pre, key, nothing)
-        rider_seasons === nothing && continue
-
-        sorted = sort(rider_seasons, :year, rev=true)
-        # Exclude the current year if early season — points are too sparse to trust
-        comparison = current_month < 4 ?
-            filter(r -> r.year < current_year, sorted) : sorted
-
-        nrow(comparison) < 2 && continue
-
-        most_recent = comparison[1, :pcs_points]
-        prev        = comparison[2, :pcs_points]
-        baseline    = max(most_recent, prev)
-        baseline == 0.0 && continue
-
-        trajectory_raw[i] = (most_recent - prev) / baseline
-        has_trajectory[i] = true
-    end
-
-    # Z-score trajectories across riders who have multi-season data
-    if count(has_trajectory) > 1
-        traj_vals = trajectory_raw[has_trajectory]
-        traj_mean = mean(traj_vals)
-        traj_std = std(traj_vals)
-        if traj_std > 0
-            for i = 1:n_riders
-                if has_trajectory[i]
-                    trajectory_raw[i] = (trajectory_raw[i] - traj_mean) / traj_std
-                else
-                    trajectory_raw[i] = 0.0
-                end
-            end
-        end
-    end
-
-    if disable_trajectory
-        trajectory_raw .= 0.0
-    end
+    # Trajectory signal removed: 10-race 2026 review confirmed negligible
+    # contribution (mean |shift| 0.2, precision share 4%).
 
     # --- PCS availability (needed for estimation) ---
     has_pcs = if :has_pcs_data in propertynames(df)
@@ -1257,7 +1216,6 @@ function estimate_strengths(
     shifts_pcs = Vector{Float64}(undef, n_riders)
     shifts_vg = Vector{Float64}(undef, n_riders)
     shifts_form = Vector{Float64}(undef, n_riders)
-    shifts_trajectory = Vector{Float64}(undef, n_riders)
     shifts_history = Vector{Float64}(undef, n_riders)
     shifts_vg_history = Vector{Float64}(undef, n_riders)
     shifts_oracle = Vector{Float64}(undef, n_riders)
@@ -1299,7 +1257,6 @@ function estimate_strengths(
                 race_history_variance_penalties=hist_penalties,
                 vg_points=vg_z[i],
                 form_score=form_val,
-                trajectory_score=trajectory_raw[i],
                 vg_race_history=vg_hist_strengths,
                 vg_race_history_years_ago=vg_hist_years,
                 odds_implied_prob=odds_prob,
@@ -1322,7 +1279,6 @@ function estimate_strengths(
         shifts_pcs[i] = est.shift_pcs
         shifts_vg[i] = est.shift_vg
         shifts_form[i] = est.shift_form
-        shifts_trajectory[i] = est.shift_trajectory
         shifts_history[i] = est.shift_history
         shifts_vg_history[i] = est.shift_vg_history
         shifts_oracle[i] = est.shift_oracle
@@ -1356,7 +1312,7 @@ function estimate_strengths(
     has_oracle = [haskey(oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_qualitative = [haskey(qualitative_lookup, df.riderkey[i]) for i = 1:n_riders]
     has_form = [haskey(form_lookup, df.riderkey[i]) for i = 1:n_riders]
-    has_seasons = [haskey(seasons_lookup_pre, df.riderkey[i]) for i = 1:n_riders]
+    has_seasons = [in(df.riderkey[i], seasons_keys) for i = 1:n_riders]
 
     # --- Add results to DataFrame ---
     df[!, :strength] = round.(strengths, digits=3)
@@ -1375,7 +1331,6 @@ function estimate_strengths(
     df[!, :shift_pcs] = round.(shifts_pcs, digits=3)
     df[!, :shift_vg] = round.(shifts_vg, digits=3)
     df[!, :shift_form] = round.(shifts_form, digits=3)
-    df[!, :shift_trajectory] = round.(shifts_trajectory, digits=3)
     df[!, :shift_history] = round.(shifts_history, digits=3)
     df[!, :shift_vg_history] = round.(shifts_vg_history, digits=3)
     df[!, :shift_oracle] = round.(shifts_oracle, digits=3)
@@ -1399,7 +1354,6 @@ function estimate_strengths(
     race_year::Union{Int,Nothing}=nothing,
     race_date::Union{Date,Nothing}=nothing,
     domestique_discount::Float64=0.0,
-    disable_trajectory::Bool=false,
 )
     estimate_strengths(
         data.rider_df;
@@ -1415,7 +1369,6 @@ function estimate_strengths(
         race_year=race_year,
         race_date=race_date,
         domestique_discount=domestique_discount,
-        disable_trajectory=disable_trajectory,
     )
 end
 
@@ -1463,7 +1416,6 @@ function predict_expected_points(
     simulation_df::Union{Int,Nothing}=nothing,
     risk_aversion::Float64=0.0,
     domestique_discount::Float64=0.0,
-    disable_trajectory::Bool=false,
     total_distance_km::Float64=0.0,
 )
     df = estimate_strengths(
@@ -1480,7 +1432,6 @@ function predict_expected_points(
         race_year=race_year,
         race_date=race_date,
         domestique_discount=domestique_discount,
-        disable_trajectory=disable_trajectory,
     )
 
     # MC simulation for expected points (used by backtesting)
@@ -1516,7 +1467,6 @@ function predict_expected_points(
     simulation_df::Union{Int,Nothing}=nothing,
     risk_aversion::Float64=0.0,
     domestique_discount::Float64=0.0,
-    disable_trajectory::Bool=false,
     total_distance_km::Float64=0.0,
 )
     predict_expected_points(
@@ -1538,7 +1488,6 @@ function predict_expected_points(
         simulation_df=simulation_df,
         risk_aversion=risk_aversion,
         domestique_discount=domestique_discount,
-        disable_trajectory=disable_trajectory,
         total_distance_km=total_distance_km,
     )
 end
