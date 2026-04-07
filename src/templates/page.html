@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{title}}</title>
+    <style>
+      {{css}}
+    </style>
+    {{plotly_script}}
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="header-content">
+        {{home_link}}
+        <h1>{{title}}</h1>
+        {{subtitle}}
+      </div>
+    </header>
+    <main class="content">{{body}}</main>
+    <nav id="toc"></nav>
+    <script>
+      {
+        {
+          toc_js;
+        }
+      }
+    </script>
+  </body>
+</html>
