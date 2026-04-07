@@ -17,15 +17,15 @@
     @test names(df) == ["rider", "odds", "riderkey"]
     @test nrow(df) == 2
 
-    # Pogacar: best (minimum decimal) of 1/4+1=1.25, 1/3+1=1.333, 2/7+1=1.286 → 1.25
+    # Pogacar: median of 1/4+1=1.25, 1/3+1=1.333, 2/7+1=1.286 → 1.286
     pog = df[df.riderkey .== createkey("POGACAR TADEJ"), :]
     @test nrow(pog) == 1
-    @test pog.odds[1] ≈ 1.25
+    @test pog.odds[1] ≈ 2/7 + 1
 
-    # Van der Poel: best of 9+1=10, 8+1=9, 10+1=11 → 9.0
+    # Van der Poel: median of 9+1=10, 8+1=9, 10+1=11 → 10.0
     vdp = df[df.riderkey .== createkey("VAN DER POEL MATHIEU"), :]
     @test nrow(vdp) == 1
-    @test vdp.odds[1] ≈ 9.0
+    @test vdp.odds[1] ≈ 10.0
 
     # Empty input returns empty DataFrame with correct schema
     empty_df = parse_oddschecker_odds("")

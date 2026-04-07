@@ -55,14 +55,27 @@ function getpcsraceresults(
         # so scrape_pcs_table gives wrong rider names; the link text is always the clean rider name.
         # div.svg_shield breakaway indicators are only present in JavaScript-rendered HTML, not
         # in raw HTTP responses, so in_breakaway is always false.
+        _empty_results() = DataFrame(
+            position = Int[],
+            rider = String[],
+            team = String[],
+            riderkey = String[],
+            in_breakaway = Bool[],
+            breakaway_km = Union{Float64,Missing}[],
+        )
+
         response = try
             HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
         catch e
+            if e isa HTTP.Exceptions.StatusError
+                @warn "HTTP $(e.status) for $url — caching empty result"
+                return _empty_results()
+            end
             error("Failed to fetch $url: $e")
         end
         page = Gumbo.parsehtml(String(response.body))
         tables = collect(eachmatch(sel"table", page.root))
-        isempty(tables) && error("No tables found at $url")
+        isempty(tables) && return _empty_results()
         rows = collect(eachmatch(sel"tr", tables[1]))[2:end]  # skip header
 
         positions = Int[]
@@ -90,7 +103,7 @@ function getpcsraceresults(
             push!(teams, team_name)
         end
 
-        isempty(riders) && error("No rider rows found at $url")
+        isempty(riders) && return _empty_results()
 
         result = DataFrame(
             position = positions,

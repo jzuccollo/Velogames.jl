@@ -98,12 +98,16 @@ function save_to_cache(
 )
     data_file, meta_file = cache_paths(key, cache_dir)
 
-    # Save data
-    Feather.write(data_file, data)
-
-    # Save metadata
+    # Save metadata first (marks this URL as attempted, even if data is empty)
     meta = CacheMetadata(url, now(), "1.0", params)
     write(meta_file, JSON3.write(meta))
+
+    # Save data (Feather can't serialise empty string columns, so skip
+    # the data file for empty results — the metadata alone marks the
+    # cache entry as valid so cached_fetch won't refetch)
+    if nrow(data) > 0
+        Feather.write(data_file, data)
+    end
 end
 
 """
@@ -155,6 +159,11 @@ function cached_fetch(
             _MEMORY_CACHE[key] = cached_data
             return cached_data
         end
+        # Metadata exists but no data file → cached empty result
+        verbose && @info "Loading cached empty result: $url"
+        empty_df = DataFrame()
+        _MEMORY_CACHE[key] = empty_df
+        return empty_df
     end
 
     # 3. Fetch from network
