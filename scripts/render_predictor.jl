@@ -64,11 +64,11 @@ config = setup_race(race_name, race_year; cache_config=race_cache)
 scoring = get_scoring(config.category > 0 ? config.category : 2)
 
 # --- Qualitative intelligence ---
-qualitative_df = load_race_snapshot("qualitative", config.pcs_slug, race_year)
-if qualitative_df !== nothing
-    @info "Qualitative intelligence: loaded $(nrow(qualitative_df)) rider assessments from archive"
-else
-    qual_sources = DataFrame[]
+# Fetch from configured URLs if present; fall back to archive only when no sources are configured
+has_qual_sources = !isempty(qualitative_youtube_url) || !isempty(qualitative_article_url) || !isempty(qualitative_json_file)
+qual_sources = DataFrame[]
+
+if has_qual_sources
     _qual_riders = Ref{Vector{String}}()
     function _get_qual_riders()
         if !isassigned(_qual_riders)
@@ -99,21 +99,31 @@ else
         end
     end
 
-    if !isempty(qual_sources)
-        global qualitative_df = reduce(vcat, qual_sources)
-        qualitative_df = combine(groupby(qualitative_df, :riderkey),
-            :adjustment => mean => :adjustment,
-            :confidence => mean => :confidence,
-            :reasoning => first => :reasoning,
-        )
-    elseif !isempty(qualitative_json_file)
+    if isempty(qual_sources) && !isempty(qualitative_json_file)
         try
-            global qualitative_df = load_qualitative_file(qualitative_json_file)
-            @info "Qualitative intelligence: $(nrow(qualitative_df)) rider assessments loaded from file"
+            push!(qual_sources, load_qualitative_file(qualitative_json_file))
+            @info "Qualitative intelligence: $(nrow(last(qual_sources))) rider assessments loaded from file"
         catch e
             @warn "Failed to load qualitative file: $e"
         end
     end
+end
+
+qualitative_df = if !isempty(qual_sources)
+    combined = reduce(vcat, qual_sources)
+    combine(groupby(combined, :riderkey),
+        :adjustment => mean => :adjustment,
+        :confidence => mean => :confidence,
+        :reasoning => first => :reasoning,
+    )
+elseif !has_qual_sources
+    archived = load_race_snapshot("qualitative", config.pcs_slug, race_year)
+    if archived !== nothing
+        @info "Qualitative intelligence: loaded $(nrow(archived)) rider assessments from archive"
+    end
+    archived
+else
+    nothing
 end
 
 predicted, chosenteam, top_teams, sim_vg_points = solve_oneday(config;
@@ -169,7 +179,7 @@ similar_str = isempty(similar_races) ? "None configured" : join(similar_races, "
 
 sources_df = DataFrame(
     Source = [
-        "PCS specialty ratings", "VG season points", "PCS form (6 weeks)", "Career trajectory",
+        "PCS season points", "VG season points", "PCS form (6 weeks)", "Career trajectory",
         "PCS race history ($(history_years) yrs)", "Similar races", "VG race history",
         "Cycling Oracle", "Qualitative intel", "Odds",
     ],
@@ -192,8 +202,8 @@ write(io, html_callout(sources_html; title="Data sources", collapsed=false))
 # --- Signal impact ---
 
 rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["PCS specialty", "VG season points", "PCS form", "Trajectory", "PCS race history", "VG race history", "Cycling Oracle", "Qualitative intel", "Betfair odds"]
-shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_trajectory, :shift_history, :shift_vg_history, :shift_oracle, :shift_qualitative, :shift_odds]
+signal_names = ["PCS seasons", "VG season points", "PCS form", "PCS race history", "VG race history", "Cycling Oracle", "Qualitative intel", "Betfair odds"]
+shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_history, :shift_vg_history, :shift_oracle, :shift_qualitative, :shift_odds]
 affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
 

@@ -19,7 +19,7 @@ const QUALITATIVE_ADJUSTMENTS = Dict(
 const QUALITATIVE_CONFIDENCES = Dict("high" => 0.8, "medium" => 0.5, "low" => 0.3)
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-const ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+const ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
 
 """
@@ -94,17 +94,23 @@ $transcript
 Using the transcript above and your cycling knowledge:"""
     end
 
-    return """You are a professional cycling analyst. $source_instruction
+    return """You are a professional cycling analyst extracting race intelligence from preview articles and podcasts. $source_instruction
 
 Race: $race_name ($race_date)
 
-For each rider below who is mentioned or about whom you have relevant intelligence, provide a JSON assessment. Only include riders where you have specific intelligence — omit riders with nothing notable.
+For each rider in the startlist below who is mentioned in the source text, provide a JSON assessment. The source may be in any language — match riders by name regardless of language.
+
+Important guidelines:
+- SKIP riders mentioned as absent, injured, or not starting — they are not relevant.
+- Base your assessment strictly on what the source says. If the source rates a rider as a top favourite, that is a strong positive signal. If a rider is listed among outsiders, that is a slight positive. Do not second-guess the source's assessment with your own interpretation.
+- If the source provides a structured ranking (e.g. star ratings, tiers), use that as the primary basis for your category assignment.
+- Include every rider discussed who IS racing, even if the intelligence is minor.
 
 Riders in the startlist:
 $rider_list
 
-For each rider with intelligence, provide:
-- "rider": exact name from the list above
+For each mentioned rider who is starting the race, provide:
+- "rider": exact name from the startlist above (match by surname if needed)
 - "category": one of: strong_positive, moderate_positive, slight_positive, neutral, slight_negative, moderate_negative, strong_negative
 - "confidence": one of: high (clear specific intelligence), medium (reasonable impression), low (speculative)
 - "reasoning": one sentence explaining the assessment
@@ -112,8 +118,8 @@ For each rider with intelligence, provide:
 Respond with a JSON array only, no other text. Example:
 ```json
 [
-  {"rider": "Mathieu van der Poel", "category": "moderate_positive", "confidence": "high", "reasoning": "Won recent Kuurne and looks in top form for cobbled classics."},
-  {"rider": "Wout van Aert", "category": "slight_negative", "confidence": "medium", "reasoning": "Returning from injury, unclear match fitness despite training reports."}
+  {"rider": "Mathieu van der Poel", "category": "moderate_positive", "confidence": "high", "reasoning": "Rated as top favourite (4 stars), won recent Kuurne and looks in top form."},
+  {"rider": "Wout van Aert", "category": "slight_negative", "confidence": "medium", "reasoning": "Listed among outsiders despite being a former winner, suggesting uncertain form."}
 ]
 ```"""
 end
@@ -217,23 +223,41 @@ function fetch_article_text(url::String)
     response = HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
     page = Gumbo.parsehtml(String(response.body))
 
-    # Remove script and style nodes by collecting only text-bearing nodes
-    texts = String[]
-    function collect_text(node)
+    # Collect all text from each block element, filtering out short blocks (nav fragments)
+    # but preserving short inline nodes (rider names in <a>/<strong> tags)
+    block_tags = Set(["p", "div", "article", "section", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td", "th", "figcaption", "blockquote"])
+    skip_tags = Set(["script", "style", "nav", "footer", "header", "aside"])
+    blocks = String[]
+
+    function collect_inline_text(node)
+        if isa(node, Gumbo.HTMLText)
+            return strip(node.text)
+        elseif isa(node, Gumbo.HTMLElement)
+            tag = lowercase(string(Gumbo.tag(node)))
+            tag in skip_tags && return ""
+            parts = [collect_inline_text(child) for child in Gumbo.children(node)]
+            return join(filter(!isempty, parts), " ")
+        end
+        return ""
+    end
+
+    function collect_blocks(node)
         if isa(node, Gumbo.HTMLElement)
             tag = lowercase(string(Gumbo.tag(node)))
-            tag in ("script", "style", "nav", "footer", "header", "aside") && return
-            for child in Gumbo.children(node)
-                collect_text(child)
+            tag in skip_tags && return
+            if tag in block_tags
+                text = collect_inline_text(node)
+                length(text) > 20 && push!(blocks, text)
+            else
+                for child in Gumbo.children(node)
+                    collect_blocks(child)
+                end
             end
-        elseif isa(node, Gumbo.HTMLText)
-            t = strip(node.text)
-            length(t) > 20 && push!(texts, t)  # skip nav fragments and whitespace
         end
     end
-    collect_text(page.root)
+    collect_blocks(page.root)
 
-    return join(texts, " ")
+    return join(blocks, "\n\n")
 end
 
 
