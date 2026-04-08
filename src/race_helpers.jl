@@ -553,9 +553,10 @@ vg_classics_url(
 """VG game ID for one-day classics ridescore URLs (may change with 2026 rebrand)."""
 vg_classics_game_id(year::Int) = 13  # Update if 2026 uses a different game ID
 
-"""Grand tour URL patterns (separate competition from one-day classics)."""
-const _GRAND_TOUR_PATTERNS =
+"""Stage race URL patterns (separate VG competitions from one-day classics)."""
+const _STAGE_RACE_PATTERNS =
     Dict{String,NamedTuple{(:slug, :template),Tuple{String,String}}}(
+        # Grand tours
         "tdf" => (
             slug="velogame",
             template="https://www.velogames.com/velogame/{year}/riders.php",
@@ -580,6 +581,63 @@ const _GRAND_TOUR_PATTERNS =
             (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php"),
         "giroditalia" =>
             (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php"),
+        # Week-long stage races
+        "parisnice" => (
+            slug="pn",
+            template="https://www.velogames.com/pn/{year}/riders.php",
+        ),
+        "tirrenoadriatico" => (
+            slug="tirreno-adriatico",
+            template="https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
+        ),
+        "tirreno" => (
+            slug="tirreno-adriatico",
+            template="https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
+        ),
+        "catalunya" => (
+            slug="catalunya",
+            template="https://www.velogames.com/catalunya/{year}/riders.php",
+        ),
+        "voltaacatalunya" => (
+            slug="catalunya",
+            template="https://www.velogames.com/catalunya/{year}/riders.php",
+        ),
+        "itzulia" => (
+            slug="itzulia",
+            template="https://www.velogames.com/itzulia/{year}/riders.php",
+        ),
+        "itzuliabasquecountry" => (
+            slug="itzulia",
+            template="https://www.velogames.com/itzulia/{year}/riders.php",
+        ),
+        "romandie" => (
+            slug="romandie",
+            template="https://www.velogames.com/romandie/{year}/riders.php",
+        ),
+        "tourderomandie" => (
+            slug="romandie",
+            template="https://www.velogames.com/romandie/{year}/riders.php",
+        ),
+        "dauphine" => (
+            slug="criterium-du-dauphine",
+            template="https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+        ),
+        "criteriumdudauphine" => (
+            slug="criterium-du-dauphine",
+            template="https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+        ),
+        "tourauvergne" => (
+            slug="criterium-du-dauphine",
+            template="https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+        ),
+        "suisse" => (
+            slug="suisse",
+            template="https://www.velogames.com/suisse/{year}/riders.php",
+        ),
+        "tourdesuisse" => (
+            slug="suisse",
+            template="https://www.velogames.com/suisse/{year}/riders.php",
+        ),
     )
 
 """Human-friendly aliases mapping to PCS slugs for one-day classics races."""
@@ -648,14 +706,15 @@ race schedule; grand tours have their own URL patterns.
 function get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
     race_lower = replace(lowercase(strip(race_name)), r"[-\s]" => "")
 
-    # Grand tours have their own URL templates
-    if haskey(_GRAND_TOUR_PATTERNS, race_lower)
-        gt = _GRAND_TOUR_PATTERNS[race_lower]
+    # Stage races have their own URL templates
+    if haskey(_STAGE_RACE_PATTERNS, race_lower)
+        gt = _STAGE_RACE_PATTERNS[race_lower]
+        pcs_slug = get(_STAGE_RACE_PCS_SLUGS, race_lower, "")
         return (
             slug=gt.slug,
             template=gt.template,
             category=0,
-            pcs_slug="",
+            pcs_slug=pcs_slug,
             total_distance_km=0.0,
         )
     end
@@ -783,6 +842,147 @@ function print_race_info(config::RaceConfig)
     println("  Directory: $(config.cache.cache_dir)")
     println("  Max Age:   $(config.cache.max_age_hours) hours")
     println("="^60)
+end
+
+
+# ---------------------------------------------------------------------------
+# Stage race metadata
+# ---------------------------------------------------------------------------
+
+"""
+    StageProfile
+
+Metadata for a single stage in a grand tour: type, terrain, distance, climbs.
+"""
+struct StageProfile
+    stage_number::Int
+    stage_type::Symbol          # :flat, :hilly, :mountain, :itt, :ttt
+    distance_km::Float64
+    profile_score::Int          # PCS ProfileScore (0-400+)
+    vertical_meters::Int
+    gradient_final_km::Float64
+    n_hc_climbs::Int
+    n_cat1_climbs::Int
+    n_intermediate_sprints::Int
+    is_summit_finish::Bool
+end
+
+"""
+    StageRaceConfig
+
+Configuration for a grand tour stage race prediction.
+"""
+struct StageRaceConfig
+    name::String
+    year::Int
+    pcs_slug::String
+    vg_slug::String
+    n_stages::Int
+    stages::Vector{StageProfile}
+    cache::CacheConfig
+end
+
+# Convenience constructors for stage profiles
+flat_stage(n; km=180.0, ps=15, vert=1000, sprints=1) =
+    StageProfile(n, :flat, km, ps, vert, 0.2, 0, 0, sprints, false)
+
+mountain_stage(
+    n;
+    km=180.0,
+    ps=300,
+    vert=4000,
+    gradient=5.0,
+    hc=1,
+    cat1=1,
+    sprints=0,
+    summit=true,
+) = StageProfile(n, :mountain, km, ps, vert, gradient, hc, cat1, sprints, summit)
+
+hilly_stage(n; km=180.0, ps=100, vert=2500, gradient=1.0, cat1=1, sprints=1) =
+    StageProfile(n, :hilly, km, ps, vert, gradient, 0, cat1, sprints, false)
+
+itt_stage(n; km=40.0, ps=15, vert=300) =
+    StageProfile(n, :itt, km, ps, vert, 0.2, 0, 0, 0, false)
+
+ttt_stage(n; km=30.0) =
+    StageProfile(n, :ttt, km, 5, 200, 0.1, 0, 0, 0, false)
+
+"""Stage race VG slug mapping (PCS slug → VG slug)."""
+const _STAGE_RACE_VG_SLUGS = Dict(
+    "tour-de-france" => "velogame",
+    "giro-d-italia" => "giro",
+    "vuelta-a-espana" => "spain",
+    "paris-nice" => "pn",
+    "tirreno-adriatico" => "tirreno-adriatico",
+    "volta-a-catalunya" => "catalunya",
+    "itzulia-basque-country" => "itzulia",
+    "tour-de-romandie" => "romandie",
+    "criterium-du-dauphine" => "criterium-du-dauphine",
+    "tour-de-suisse" => "suisse",
+)
+
+"""Stage race PCS slug mapping from common aliases."""
+const _STAGE_RACE_PCS_SLUGS = Dict(
+    # Grand tours
+    "tdf" => "tour-de-france",
+    "tour" => "tour-de-france",
+    "tourdefrance" => "tour-de-france",
+    "giro" => "giro-d-italia",
+    "giroditalia" => "giro-d-italia",
+    "vuelta" => "vuelta-a-espana",
+    "spain" => "vuelta-a-espana",
+    # Week-long stage races
+    "parisnice" => "paris-nice",
+    "tirrenoadriatico" => "tirreno-adriatico",
+    "tirreno" => "tirreno-adriatico",
+    "catalunya" => "volta-a-catalunya",
+    "voltaacatalunya" => "volta-a-catalunya",
+    "itzulia" => "itzulia-basque-country",
+    "itzuliabasquecountry" => "itzulia-basque-country",
+    "romandie" => "tour-de-romandie",
+    "tourderomandie" => "tour-de-romandie",
+    "dauphine" => "criterium-du-dauphine",
+    "criteriumdudauphine" => "criterium-du-dauphine",
+    "tourauvergne" => "criterium-du-dauphine",
+    "suisse" => "tour-de-suisse",
+    "tourdesuisse" => "tour-de-suisse",
+)
+
+"""
+    setup_stage_race(race_name, year, stages; cache_config) -> StageRaceConfig
+
+Set up a grand tour stage race with stage profiles.
+
+`race_name` can be an alias (e.g. "tdf", "giro") or a PCS slug.
+`stages` should come from `getpcs_stage_profiles` or manual construction
+via convenience constructors (`flat_stage`, `mountain_stage`, etc.).
+"""
+function setup_stage_race(
+    race_name::String,
+    year::Int,
+    stages::Vector{StageProfile};
+    cache_config::CacheConfig=DEFAULT_CACHE,
+)
+    key = replace(lowercase(race_name), " " => "", "-" => "")
+    pcs_slug = get(_STAGE_RACE_PCS_SLUGS, key, race_name)
+    vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
+    if isempty(vg_slug)
+        @warn "Unknown grand tour '$race_name' — VG slug unknown, data fetching may fail"
+        vg_slug = pcs_slug
+    end
+
+    n_stages = length(stages)
+    config = StageRaceConfig(race_name, year, pcs_slug, vg_slug, n_stages, stages, cache_config)
+
+    stage_types = [s.stage_type for s in stages]
+    n_flat = count(==(:flat), stage_types)
+    n_hilly = count(==(:hilly), stage_types)
+    n_mountain = count(==(:mountain), stage_types)
+    n_itt = count(==(:itt), stage_types)
+    n_ttt = count(==(:ttt), stage_types)
+    @info "Stage race setup" race = race_name year n_stages flat = n_flat hilly = n_hilly mountain = n_mountain itt = n_itt ttt = n_ttt
+
+    return config
 end
 
 
