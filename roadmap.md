@@ -1,6 +1,6 @@
 # Velogames.jl improvement roadmap
 
-## Current state (March 2026)
+## Current state (April 2026)
 
 The package implements expected Velogames points prediction using:
 
@@ -8,11 +8,13 @@ The package implements expected Velogames points prediction using:
 - PCS race-specific history for one-day classics and stage races, plus terrain-similar race history via `SIMILAR_RACES`
 - VG historical race points from past editions as a Bayesian signal
 - PCS startlist filtering to remove DNS riders
-- Bayesian strength estimation combining PCS, VG season points, PCS form scores, PCS race history (with variance penalties for similar races), VG race history, optional Cycling Oracle predictions, and optional Betfair odds
-- Monte Carlo race simulation with Student's t noise (df=5 in notebooks) converting strength to position probabilities to expected VG points
-- JuMP optimisation over expected VG points
+- Bayesian strength estimation combining PCS seasons, VG season points, PCS form scores, PCS race history (with variance penalties for similar races), VG race history, optional Cycling Oracle predictions, optional Betfair odds, and optional qualitative intelligence (podcast/news extraction via Claude API)
+- Monte Carlo race simulation with Student's t noise (df=5 in render scripts) converting strength to position probabilities to expected VG points
+- Resampled optimisation (JuMP/HiGHS) over expected VG points, drawing noisy strengths per resample to handle Jensen's inequality from the nonlinear scoring function
 - Risk-adjusted optimisation via ratio-based penalty: `E / (1 + γ * CV_down)` where `CV_down` is the downside coefficient of variation
 - Class-aware PCS blending for stage races (aggregate approach)
+- Prospective evaluation framework archiving predictions and results for incremental calibration assessment
+- Standalone HTML report generation via `scripts/render_*.jl` (no Quarto/pandoc dependency)
 
 ## Prediction engine data flows
 
@@ -20,24 +22,30 @@ The package implements expected Velogames points prediction using:
 
 The strength model combines multiple signals grouped into three precision families. Effective variances are computed from base values, fixed within-group ratios, and tuneable scale factors. Accessor functions (e.g. `pcs_variance(config)`) compute the effective variance from the config.
 
-**Signal groups and default effective variances (at scale = 1.0):**
+**Active signals (after April 2026 ablation — see "Signal ablation findings"):**
 
 | Signal                | Source                    | Group     | Base variance | Notes                                                                                        |
 | --------------------- | ------------------------- | --------- | ------------- | -------------------------------------------------------------------------------------------- |
-| PCS specialty prior   | `getpcsriderpts_batch()`  | Ability   | 7.9           | Z-scored across field. For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS`    |
-| VG season points      | `getvgriders()`           | Ability   | 1.4×scale     | Season-adaptive: `effective = vg_var * (1 + penalty * (1 - frac_nonzero))`                   |
-| PCS form score        | `getpcsraceform()`        | History   | 0.9           | Z-scored across field. Top ~40-60 riders by recent cross-race results from PCS form page     |
-| Trajectory            | Derived (PCS vs history)  | History   | 3.5           | `pcs_z - mean(history_z)`, z-scored. Captures improving/declining riders                     |
-| PCS race history      | `getpcsracehistory()`     | History   | 3.0+decay/yr  | Recency-weighted: recent years get lower variance (higher precision)                         |
+| PCS seasons           | `getpcsriderpts_batch()`  | Ability   | 7.9           | Z-scored across field. Best discriminator across all tiers (ρ=0.16–0.34). For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS` |
+| VG season points      | `getvgriders()`           | Ability   | 1.4×scale     | Season-adaptive: `effective = vg_var * (1 + penalty * (1 - frac_nonzero))`. Strong for top-tier discrimination (ρ=0.287) |
+| PCS race history      | `getpcsracehistory()`     | History   | 3.0+decay/yr  | Recency-weighted. Strong for bottom/middle tiers (ρ=0.23–0.25), weak for top (ρ=0.004)      |
 | Similar-race history  | `getpcsracehistory()`     | History   | +penalty      | Same as race history but with variance penalty. Races from `SIMILAR_RACES` terrain mapping   |
-| VG race history       | `getvgracepoints()`       | History   | 4.8+decay/yr  | Z-scored per year. Actual VG points from past editions (finish + assist + breakaway)         |
-| Cycling Oracle        | `get_cycling_oracle()`    | Market    | 0.5           | Independent signal from cyclingoracle.com predictions. Broader race coverage than Betfair    |
-| Betting odds          | `getodds()`               | Market    | 0.3           | Strongest single signal when available. Uses Betfair Exchange API (market ID required)       |
-| Odds/Oracle floor     | Derived (absence signal)  | Market    | var × 2.0     | When market data exists but rider absent, floor observation from residual probability mass    |
+| Betting odds          | `getodds()`               | Market    | 0.3           | Strongest top-tier signal (ρ=0.464 for top 25%). Applied uniformly when odds are present (position-dependent discount deferred — Finding 4) |
+| Odds floor            | Derived (absence signal)  | Market    | var × 2.0     | When odds data exists but rider absent, floor observation from residual probability mass     |
+| Cycling Oracle        | `get_cycling_oracle()`    | Market    | `_odds_to_oracle_ratio`/scale | Broader coverage than Betfair. Removal deferred (Finding 2): degrades middle-tier discrimination at d=8.0 but combined effect with other changes unclear. Re-evaluate after 20+ races with odds. |
+
+**Signals disabled by April 2026 ablation (estimation pipeline disabled; code retained for backtesting; data collection continues):**
+
+| Signal | Reason for disabling | Within-tier ρ evidence |
+|--------|---------------------|----------------------|
+| PCS form score | Near-zero discrimination in all tiers | ρ=-0.014 (bottom), 0.003 (middle), 0.106 (top) |
+| VG race history | Near-zero discrimination, anti-informative for top riders | ρ=0.056 (bottom), 0.048 (middle), -0.071 (top) |
+| Qualitative | Anti-informative for top riders | ρ=-0.141 (middle, n=26), -0.291 (top, n=60) |
+| Trajectory | Negligible contribution | Mean absolute shift 0.2, 4% precision share — fully removed from code |
 
 Odds are converted to strength via log-odds relative to a uniform baseline (`odds_normalisation`, default 1.0). This puts odds on a comparable scale to PCS z-scores and the logit-based position_to_strength (~±5 for a 150-rider field).
 
-When odds or oracle data is available for a race, riders absent from the market receive a floor observation. The floor probability is computed as the residual probability mass (1 − sum of listed probabilities) divided by the number of absent riders. If the overround pushes residual probability below 0.001, the floor defaults to half the minimum listed probability. Floor observations use `floor_variance_multiplier` (default 2.0) times the base odds/oracle variance, reflecting lower precision than direct pricing.
+When odds data is available for a race, riders absent from the market receive a floor observation. The floor probability is computed as the residual probability mass (1 − sum of listed probabilities) divided by the number of absent riders. If the overround pushes residual probability below 0.001, the floor defaults to half the minimum listed probability. Floor observations use `floor_variance_multiplier` (default 2.0) times the base odds variance, reflecting lower precision than direct pricing.
 
 ### Bayesian updating
 
@@ -101,18 +109,6 @@ Three race-type clusters emerge from big-miss rates:
 | Standard | Brugge, MSR, Omloop | 20% | Mix of selection and bunch dynamics |
 | Stochastic | Kuurne, Nokere, Gent-Wevelgem, Trofeo | 30–60% | Bunch sprints or minor races; favourites frequently blank |
 
-### Oracle signal dominance (updated April 2026)
-
-With 10 races, the oracle's mean |shift| is 1.7 — nearly 3× odds (0.7) and 3× PCS (0.5). The oracle's massive shifts do not translate into measurably better rank ordering: prospective rho with oracle+odds (0.2–0.5) is comparable to the historical backtest median of 0.5 which runs without market signals. The `_odds_to_oracle_ratio` has been increased from 2.0 to 3.5 to reduce oracle precision.
-
-### Trajectory signal removed (April 2026)
-
-The trajectory signal (year-on-year PCS change) contributed mean |shift| of only 0.2 with 4% precision share across 10 races. It has been fully removed: the `trajectory_score` field on `RiderSignalData`, `shift_trajectory` field on `StrengthEstimate`, `_form_to_trajectory_ratio` on `BayesianConfig`, `trajectory_variance()`, and the `disable_trajectory` parameter are all deleted.
-
-### VG history decay reduced (April 2026)
-
-The VG race history decay rate was reduced from 1.3 to 0.8 per year. The old rate made even 1-year-old data imprecise (variance 2.5 + 1.3 = 3.8). Recent-edition VG performance is genuinely informative for race-specific suitability.
-
 ### SBC test failure explained (April 2026)
 
 The SBC reports chi-squared p = 0.0 (non-uniform CDF ranks). This is a test bug, not a model bug: the SBC generates *independent* synthetic signals but `estimate_rider_strength` applies a *block-correlation discount* (within ρ=0.5, between ρ=0.15), making the posterior systematically wider than warranted by the uncorrelated DGP. Additionally, the SBC generates odds+oracle but never sets `race_has_market=true`. Per-signal SBC (one signal at a time) has been added to the backtesting report to verify each conjugate update individually.
@@ -127,51 +123,199 @@ The impact is larger than previously thought. In MSR 2026, 8 riders scored exact
 
 ## Improvement plan
 
-### Summary assessment (April 2026, revised after 10-race review)
+### Summary assessment (April 2026, revised after signal ablation study)
 
-The system correctly identifies the key problem — signal fusion under uncertainty, with a non-linear scoring function — and solves it with appropriate tools. The resampled optimisation handles Jensen's inequality bias correctly, the archival system is excellent, and the prospective evaluation framework accumulates real signal incrementally. The strength model's rank ordering is reasonable (Spearman rho 0.2–0.5 across 10 prospective races, median 0.5 in the 120-race historical backtest).
+The system's rank ordering is reasonable (Spearman rho 0.2–0.5 across 11 prospective races, median 0.5 in the 120-race historical backtest). The resampled optimisation handles Jensen's inequality, the archival system works well, and the prospective evaluation framework accumulates real signal incrementally.
 
-The single largest problem remains that the **VG points simulation systematically underestimates scoring riders** (mean PIT 0.828 across 10 races, target 0.5). The problem is structural: higher posterior uncertainty correlates with *worse* PIT, confirming that symmetric noise cannot capture the right-skewed outcomes of cheap riders in stochastic races. This is not a width problem but a shape problem.
+The **VG points calibration problem** (mean PIT 0.828) is real but deprioritised: the underestimation is roughly uniform across cheap riders, so correcting it changes budget allocation but not rider selection among cheap riders. Among cheap riders, signal discrimination is poor because signals are sparse, and distributional corrections don't add new information about which ones will score. Over 40 cumulative races, correctly ranking the top riders is far more valuable.
 
-A new insight from 10 races is that **race selectivity drives prediction difficulty** more than any model parameter. Three clusters are visible: selective races (Strade, Dwars, E3: 0–10% big-miss rate), standard (Brugge, MSR, Omloop: ~20%), and stochastic (Kuurne, Nokere, Gent-Wevelgem, Trofeo: 30–60%). The model applies identical uncertainty to all — race-type-specific noise is now the most actionable improvement.
+A **signal ablation study** (April 2026) across 11 prospective races identified four candidate improvements — see "Signal ablation findings" below. The point estimates suggest overall Spearman ρ improves from 0.479 to 0.518 (market races) and from 0.509 to 0.526 (non-market races). However, a red team review (April 2026) identified statistical limitations that affect which findings are actionable — see "Red team assessment" below the findings.
 
-Changes made in April 2026: (1) oracle precision reduced (`_odds_to_oracle_ratio` 2.0 → 3.5) after 10 races showed mean |shift| 1.7 with no rank-ordering benefit; (2) trajectory signal removed (mean |shift| 0.2, 4% precision share); (3) VG history decay reduced (1.3 → 0.8) to make recent editions more informative; (4) backtesting report expanded with per-signal SBC, predicted-vs-actual scatter plots, signal directional accuracy, race selectivity clustering, per-race PIT-by-tier, and cumulative calibration tracking.
+### Signal ablation findings (April 2026)
+
+#### Method
+
+The ablation used the 11 prospective 2026 races (Omloop through Ronde van Vlaanderen) as a held-out evaluation set. For each signal configuration, `backtest_race` was run with `store_rider_details=true`, and Spearman ρ was computed within predicted strength quartiles (bottom 25%, middle 50%, top 25%) as well as overall. This within-tier metric measures whether a signal helps order riders *relative to each other within a group*, not just whether it separates favourites from the field. The diagnostic framework includes:
+
+- **Discrimination by position band**: Spearman ρ within bands of actual PCS finishing position (1–10, 11–20, 21–40, 41+)
+- **Within-tier signal discrimination**: per-signal Spearman ρ between shift values and actual positions, stratified by predicted strength quartile
+- **Signal ablation**: re-running the full prediction pipeline with different signal subsets and market discount values
+- **Position-dependent discount**: two-pass approach where tier assignment comes from a no-market run, then top-quartile riders use high-discount posteriors and the rest use low-discount posteriors
+
+The per-position-band analysis confirmed discrimination drops sharply outside the top 10 (ρ=0.4 for positions 1–10, 0.2 for 11–20, 0.1 for 21–40 in the historical backtest; similar pattern in prospective races). This means the model's team-selection value comes almost entirely from correctly ranking the top ~20 riders.
+
+#### Finding 1: Drop PCS form and VG race history
+
+Within-tier Spearman ρ between signal shift and actual position:
+
+| Signal | ρ (bottom 25%) | ρ (middle 50%) | ρ (top 25%) |
+|--------|---------------|----------------|-------------|
+| PCS seasons | 0.163 | 0.292 | 0.340 |
+| PCS race history | 0.254 | 0.230 | 0.004 |
+| VG season | 0.087 | 0.106 | 0.287 |
+| **PCS form** | **-0.014** | **0.003** | **0.106** |
+| **VG race history** | **0.056** | **0.048** | **-0.071** |
+
+PCS form is near zero across all tiers. VG race history is near zero everywhere and slightly anti-informative for top riders. These signals shift the posterior without improving ordering, adding noise that reduces the effective precision of correlated signals via the block-correlation discount.
+
+Non-market signal ablation results (per-tier Spearman ρ):
+
+| Tier | All non-market | Drop form+VG hist | Improvement |
+|------|---------------|-------------------|-------------|
+| Bottom 25% | 0.295 | 0.339 | +0.044 |
+| Middle 50% | 0.354 | 0.414 | +0.060 |
+| Top 25% | 0.342 | 0.394 | +0.052 |
+| Overall | 0.509 | 0.526 | +0.017 |
+
+Dropping both signals improves discrimination in every tier. The improvement is largest in the middle 50% (+0.060), which is the critical scoring boundary zone.
+
+**Signal set**: PCS seasons + VG season + PCS race history (3 signals, down from 5). Implemented as disabled shifts (code retained for backtesting re-enable). Done April 2026.
+
+#### Finding 2: Remove oracle signal entirely
+
+Market signal ablation (per-tier ρ, selected configurations):
+
+| Tier | No market | Odds+Oracle d=8.0 | Odds only d=8.0 | Oracle only d=8.0 |
+|------|-----------|-------------------|-----------------|-------------------|
+| Bottom 25% | 0.304 | 0.273 | 0.240 | 0.319 |
+| Middle 50% | 0.348 | 0.354 | 0.374 | 0.319 |
+| Top 25% | 0.342 | 0.445 | 0.464 | 0.385 |
+| Overall | 0.506 | 0.480 | 0.473 | 0.514 |
+
+At every discount level tested (8.0, 4.0, 2.0), "odds only" equals or beats "all market" (odds+oracle) for the top 25% and middle 50%. Oracle degrades middle-tier discrimination (ρ=0.319 vs 0.374 odds-only at d=8.0). Oracle-only without odds is barely better than no market (0.514 vs 0.506 overall) and worse for the middle tier (0.319 vs 0.348).
+
+Within-tier signal discrimination confirms: oracle has ρ=0.136 (bottom), -0.088 (middle), 0.119 (top) — inconsistent and near random.
+
+**Status**: Deferred (red team review, April 2026). Combined configuration test showed 5/6 races with odds worsen when oracle is removed alongside other signals. Oracle may contribute via block-correlation structure when paired with odds. Re-evaluate after 20+ races with odds (likely end of 2026 season).
+
+#### Finding 3: Remove qualitative intelligence signal
+
+Within-tier ρ: qualitative showed ρ=-0.141 (middle 50%, n=26) and ρ=-0.291 (top 25%, n=60). Small sample sizes but consistently anti-informative — the podcast-derived adjustments push riders in the wrong direction relative to their actual performance.
+
+The "Drop qualitative" ablation showed negligible impact (overall ρ 0.508 vs 0.509 for all non-market), confirming it contributes nothing positive. Given the anti-informative direction for the top tier where discrimination matters most, it has been disabled from the estimation pipeline. Done April 2026.
+
+#### Finding 4: Implement position-dependent market discount for odds
+
+The current `market_discount=8.0` inflates non-market signal variances uniformly when odds are present. The ablation showed this is a trade-off that harms mid-field discrimination:
+
+| Tier | No market | Odds d=8.0 | Odds d=4.0 | Odds d=2.0 | Pos-dep odds top25% |
+|------|-----------|-----------|-----------|-----------|---------------------|
+| Bottom 25% | 0.304 | 0.240 | 0.285 | 0.334 | 0.328 |
+| Middle 50% | 0.348 | 0.374 | 0.362 | 0.367 | **0.424** |
+| Top 25% | 0.342 | 0.464 | 0.476 | 0.474 | **0.483** |
+| Overall | 0.506 | 0.473 | 0.479 | 0.495 | **0.518** |
+
+No uniform discount value simultaneously improves all tiers. Position-dependent discount (full discount=8.0 for top-quartile riders by PCS z-score, discount=1.0 for everyone else) is the only configuration that beats no-market in every tier. It achieves the best top-25% ρ (0.483), the best middle-50% ρ (0.424), and the best overall ρ (0.518).
+
+The mechanism: odds genuinely differentiate among favourites (ρ=0.464 for top-25% with uniform d=8.0) but are uninformative for the rest of the field. With uniform discount, the precision benefit for top riders comes at the cost of suppressing PCS seasons (the best mid-field signal, ρ=0.292 for middle 50%) via the 8× variance inflation. Position-dependent discount preserves PCS seasons' influence for mid-field riders whilst letting odds dominate for favourites.
+
+**Implementation**: In `estimate_rider_strength`, after computing the PCS z-score (before applying any signals), determine each rider's tier. Riders in the top quartile by PCS z-score get `effective_market_discount = config.market_discount` (8.0). All other riders get `effective_market_discount = 1.0` (no discount). The `md` variable used in the signal updates (which currently applies `config.market_discount` uniformly) should be replaced with a per-rider `md_i`. This requires:
+
+1. After PCS z-score computation (~line 970), compute the 75th percentile: `pcs_q75 = quantile(pcs_z, 0.75)`
+2. Create a per-rider discount vector: `md_per_rider = [pcs_z[i] >= pcs_q75 ? config.market_discount : 1.0 for i in 1:n_riders]`
+3. In each signal update where `md` is used as a variance multiplier, replace `md` with `md_per_rider[i]` for the current rider's loop index
+
+The `race_has_market` flag and `market_discount` config parameter remain — they control whether the mechanism is active (when odds are present). The change is only in how the discount is applied (per-rider instead of uniform).
+
+**Verification**: Run the backtesting report. The "Market signal configurations" ablation should show the pos-dep configuration matching the new default. For races with odds, overall ρ should be ≥0.51. For races without odds, results should be unchanged (market discount is not applied).
+
+#### Per-race consistency check
+
+Per-race Spearman ρ for key configurations:
+
+| Race | Has odds | No market | Odds d=8.0 | Odds only d=8.0 |
+|------|----------|-----------|-----------|-----------------|
+| E3 Saxo Classic | ✓ | 0.631 | 0.686 | 0.690 |
+| Ronde van Vlaanderen | ✓ | 0.575 | 0.646 | 0.646 |
+| Strade Bianche | ✓ | 0.630 | 0.494 | 0.492 |
+| Dwars door Vlaanderen | ✓ | 0.482 | 0.337 | 0.324 |
+| Milano-Sanremo | ✓ | 0.561 | 0.510 | 0.491 |
+| Gent-Wevelgem | ✓ | 0.488 | 0.398 | 0.399 |
+| Ronde Van Brugge | — | 0.473 | 0.490 | 0.473 |
+| Omloop Nieuwsblad | — | 0.561 | 0.547 | 0.561 |
+| Trofeo Laigueglia | — | 0.512 | 0.512 | 0.512 |
+| Kuurne - Brussel - Kuurne | — | 0.286 | 0.277 | 0.286 |
+| Nokere Koerse | — | 0.332 | 0.341 | 0.332 |
+
+Odds improve ρ for E3 (+0.059) and RVV (+0.071) but hurt for Strade (-0.136), Dwars (-0.145), MSR (-0.051), and GW (-0.090). This reinforces that odds' value is concentrated in a subset of races and riders — position-dependent discount handles this correctly by only trusting odds for the riders they're informative about. Races without odds are unaffected by market discount changes; their improvement comes from the non-market signal cleanup.
+
+#### Summary of recommended changes
+
+| Change | Current | Recommended | Expected ρ improvement |
+|--------|---------|-------------|----------------------|
+| Drop PCS form signal | Active | Remove from estimation | +0.017 overall (no-market races) |
+| Drop VG race history signal | Active | Remove from estimation | (included in above) |
+| Drop oracle signal | Active | Remove from estimation | +0.02 top-25% (market races) |
+| Drop qualitative signal | Active | Remove from estimation | Marginal; removes anti-informative noise |
+| Position-dependent market discount | Uniform 8.0 | 8.0 for top-quartile, 1.0 for rest | +0.039 overall (market races) |
+
+Combined effect (extrapolated, not tested as a single configuration): overall ρ improves from 0.479 to ~0.52 for races with odds, and from 0.509 to ~0.53 for races without odds. The retained signal set would be PCS seasons + VG season + PCS race history + odds (position-dependent discount when available). The combined effect is now tested directly in the backtesting report (Part 4: Combined configuration test).
+
+### Red team assessment (April 2026)
+
+An internal red team review assessed the statistical robustness of the ablation findings. The key concerns and revised recommendations are below.
+
+#### Statistical limitations
+
+1. **No uncertainty quantification.** All ablation results were point estimates with no confidence intervals. With ~1,800 riders pooled across 11 races, the standard error per tier is approximately 0.05 (bottom/top 25%) to 0.03 (middle 50%, overall). Most claimed improvements are within 1–2 SEs. Race-stratified bootstrap CIs have now been added to all ablation tables in `render_backtesting.jl`.
+
+2. **Multiple comparisons.** The study tested 20 signal configurations × 4 tiers = 80 Spearman ρ values with no correction. At α=0.05, 4 spurious improvements are expected by chance. The recommended configurations were selected post-hoc from the best-performing results.
+
+3. **Interaction effects.** The four findings were evaluated individually, but they interact through the block-correlation discount. Removing signals changes the number of signals per cluster, which changes discount factors and effective precision of remaining signals. The combined effect is not the sum of individual improvements. A combined configuration test has now been added to the backtesting report to verify this directly.
+
+4. **Position-dependent discount circularity.** Finding 4's tier assignment uses the no-market model's predicted strengths to define quartiles, then evaluates different model configurations within those tiers. The tier boundaries are correlated with actual performance (PCS data is a strong predictor), creating a partially tautological test. The position-dependent mechanism also introduces a discontinuity at the quartile boundary and adds a tunable parameter (the threshold) on a small dataset.
+
+5. **Small market sample.** Only 6 of 11 races have odds data, giving ~990 riders for market-signal comparisons. Per-tier sample sizes drop to ~250, with SE ≈ 0.064. Claimed market-signal differences of 0.05–0.08 are at the edge of detectability.
+
+6. **Per-race heterogeneity.** The per-race table shows odds improve ρ for 2 races (E3: +0.059, RVV: +0.071) but hurt for 4 races (Strade: −0.136, Dwars: −0.145, MSR: −0.051, GW: −0.090). Pooled averages obscure this inconsistency. Sign consistency across races is a stronger indicator of real effects than pooled ρ differences.
+
+#### Revised recommendations
+
+| Finding | Verdict | Rationale |
+| ------- | ------- | --------- |
+| 1: Drop PCS form + VG race history | **Implement** | Mechanistically sound (near-zero within-tier ρ, adds noise via block-correlation discount). Consistent improvement direction across all tiers. Low risk: even if the ρ improvement is noise, removing signals that contribute nothing and add complexity is sensible. |
+| 2: Drop oracle | **Implement cautiously** | Reasonable direction. Re-evaluate after Finding 1 is implemented, since the block-correlation structure changes. |
+| 3: Drop qualitative | **Implement** | Negligible impact either way. Removes pipeline complexity. Sample sizes too small (n=26, n=60) to support the "anti-informative" claim, but the signal clearly contributes nothing positive. |
+| 4: Position-dependent market discount | **Defer** | Methodological concerns (circularity, overfitting risk, tiny n=6 races with odds). Wait until 20+ prospective races with odds are available (likely end of 2026 season). |
+
+#### Verification steps added to backtesting report
+
+1. **Bootstrap 95% CIs** (race-stratified, 1,000 resamples) now appear on all ablation tables, showing whether ρ differences between configurations have overlapping intervals.
+2. **Combined configuration test** runs findings 1–3 as a single configuration (proposed signal set: PCS seasons + VG season + PCS race history + odds) against the current default, avoiding the assumption that individual improvements are additive. Per-race breakdown shows improvement sign consistency.
 
 ### Prioritised improvements
 
 | Priority | Improvement | Expected impact | Status |
 | -------- | ----------- | --------------- | ------ |
-| 1 | **Fix VG points calibration for mid-tier riders** | High — the single largest source of team selection error. See note below | Not done |
-| 2 | **Race-type selectivity parameter** | High — most actionable new insight. Add selectivity to `RaceInfo`, scale simulation noise by race type | Not done |
-| 3 | **Ownership-adjusted team selection** | High — diversifies teams away from overconcentration even with current calibration. Free data in `selected` column | Not done |
-| 4 | **Phase 4: Per-stage grand tour simulation** | High — current aggregate model ignores course composition entirely | Planned — see detailed design below |
-| 5 | **Reduce oracle signal precision** | Low-moderate — oracle mean abs shift was 1.7, disproportionate vs odds (0.7) | Done — `_odds_to_oracle_ratio` 2.0 → 3.5 |
-| 6 | **Remove trajectory signal** | Simplification at negligible predictive cost | Done — signal removed from estimation |
-| 7 | **Reduce VG history decay** | Makes recent edition data more informative | Done — 1.3 → 0.8 |
-| 8 | **Validate similar-race history** | Could remove a noise source for races with ≥3 exact-history years | Option — confirm via ablation |
-| 9 | **Simplify market/history interaction** | Code clarity; functionally equivalent when odds are present | Option — see note below |
-| 10 | **Correlated position simulation** | Low-moderate; more useful for stage races and team-heavy strategies | Not done |
-| 11 | **ML augmentation** | ~3% above tuned baseline per Kholkine; requires 90+ race training set | Not done — prerequisites missing |
+| 1a | **Drop PCS form + VG race history + qualitative** (findings 1, 3) | Low-moderate — direction consistent, low risk even if ρ improvement is noise | **Done** (April 2026). Bootstrap CIs overlap but direction is 4/4 tiers positive; per-race 6/11 improve. Mechanistic argument sound: signals had near-zero within-tier ρ. |
+| 1b | **Drop oracle signal** (finding 2) | Unclear — combined config test shows 5/6 races with odds worsen when oracle is removed alongside other signals | Deferred. Oracle may contribute through block-correlation structure when paired with odds. Re-evaluate with more data. |
+| 1c | **Position-dependent market discount** (finding 4) | Uncertain — methodological concerns, defer until n≥20 races with odds | Deferred to end-of-2026 review |
+| 2 | **Phase 4: Per-stage grand tour simulation** | High — current aggregate model ignores course composition entirely | Planned — see detailed design below |
+| 3 | **Correlated position simulation** | Low-moderate; more useful for stage races and team-heavy strategies | Not done |
+| 4 | **ML augmentation** | ~3% above tuned baseline per Kholkine; requires 90+ race training set | Not done — prerequisites missing |
 
-**Note on fixing VG points calibration (priority 1):** The problem is that the simulation's VG points distributions for cheap riders are too concentrated near zero. Several potential approaches: (a) heavier tails in the simulation noise (current df=5 may still be too light for the VG scoring cliff at position 31); (b) explicitly modelling a higher breakaway contribution floor for riders with any breakaway history; (c) recalibrating the position-to-strength mapping so that weak riders have wider, more right-skewed strength distributions; (d) a post-hoc calibration step that adjusts simulated VG points distributions using prospective PIT data. Approach (b) is the most targeted since breakaway points are a major source of cheap-rider value, but the PIT data suggests the issue is broader than breakaways alone. The 10-race data confirms that simply widening uncertainty does not help — Trofeo (mean uncertainty 1.3) still shows PIT 0.9.
+**Note on VG points calibration (deprioritised):** The PIT right-skew (mean 0.828 across 11 races) is a real calibration problem but unlikely to materially improve team selection. The underestimation is roughly uniform across cheap riders, so correcting it changes budget allocation but not rider selection. Among cheap riders, signal discrimination is poor because signals are sparse, and distributional corrections don't add new information about which weak riders will score. Over 40 cumulative races, the budget allocation effect is second-order compared to correctly ranking the top riders where differentiation matters.
 
-**Note on race-type selectivity (priority 2):** Three clusters emerge from big-miss rates. A `selectivity` field on `RaceInfo` (e.g. `:selective`, `:standard`, `:stochastic`) could control `simulation_df` (heavier tails for stochastic races) or inject position-dependent noise asymmetry. The key insight is that the inverse uncertainty-PIT relationship means the problem is specifically about right-tail probability mass for low-strength riders in stochastic races, not about uncertainty width in general.
+**Note on race-type selectivity (deprioritised):** Three race-type clusters are observable (selective/standard/stochastic), but per-race noise adjustment suffers the same limitation as VG points calibration: it makes all weak riders look more likely to score without helping pick which ones.
 
-**Note on simplifying the market/history interaction (priority 9):** `market_discount` inflates non-market signal variances 8× when odds are present; the block-correlation discount then re-discounts the already-discounted precision. The clean fix is to skip non-market signals entirely when `race_has_market = true` — functionally equivalent, removes the interaction, and eliminates dead computation. Deprioritised because the signal-vs-calibration analysis shows no clear relationship between signal load and calibration quality.
+**Note on ownership-adjusted optimisation (not applicable):** VG scores accumulate across ~40 races — the objective is to maximise total points, not beat the field in any single race. Ownership-adjusted optimisation only helps when payoff depends on relative performance within a single contest.
 
 ### Completed improvements
 
 | Phase | Description | Key details |
 |-------|-------------|-------------|
 | 1. Odds integration | Betfair Exchange API + Cycling Oracle scraping as Bayesian signals | Strongest single predictor. Betfair coverage limited to major races; Oracle covers most European professional races. Both can be active simultaneously. |
-| 2. Calibration framework | Prior predictive checks, SBC, backtesting, prospective evaluation | `BayesianConfig` reparameterised to 3 scale factors + 2 decay rates. `backtesting.qmd` serves as unified calibration frontend. |
+| 2. Calibration framework | Prior predictive checks, SBC, backtesting, prospective evaluation | `BayesianConfig` reparameterised to 3 scale factors + 2 decay rates. `render_backtesting.jl` serves as unified calibration frontend. |
 | 3. Course profile matching | Terrain-similar race history via `SIMILAR_RACES` | Manual curation of terrain groupings; automatic PCS profile scraping deferred as low priority. |
 | 4. Leader/domestique roles | Domestique strength discount + max-per-team constraint | Heuristic leader detection by estimated strength within the field. |
 | 5. Recent form signal | PCS form page scraping, z-scored as Bayesian update | Covers top ~40-60 riders; race-agnostic (no terrain filtering). |
 | 6. Season-adaptive VG | VG variance scales with season progress | `vg_season_penalty` inflates early-season VG variance. Trajectory signal removed April 2026 (negligible contribution). |
-| 7. Student's t noise | Heavy-tailed simulation noise via `simulation_df` parameter | `_rand_t(rng, df)` in `simulation.jl`. Default `simulation_df=nothing` (Gaussian); notebooks use df=5. |
-| 8. Oracle precision + VG history decay (April 2026) | Reduced oracle influence, improved VG history recency | `_odds_to_oracle_ratio` 2.0 → 3.5; `vg_hist_decay_rate` 1.3 → 0.8. |
-| 9. Enhanced backtesting report (April 2026) | Per-signal SBC, predicted-vs-actual scatter, signal directional accuracy, race selectivity clustering, calibration history tracking | Standalone HTML report via `render_backtesting.jl`. |
+| 7. Student's t noise | Heavy-tailed simulation noise via `simulation_df` parameter | `_rand_t(rng, df)` in `simulation.jl`. Default `simulation_df=nothing` (Gaussian); render scripts use df=5. |
+| 8. Qualitative intelligence | YouTube transcript → Claude API extraction → rider adjustments | Automated pipeline via `get_qualitative_auto()` or manual workflow via `build_qualitative_prompt()`. |
+| 9. Signal cleanup (April 2026) | Trajectory removed, oracle precision reduced, VG history decay reduced | `_odds_to_oracle_ratio` 2.0 → 3.5; `vg_hist_decay_rate` 1.3 → 0.8; trajectory signal fully deleted. |
+| 10. Enhanced backtesting report (April 2026) | Per-signal SBC, predicted-vs-actual scatter, signal directional accuracy, race selectivity clustering, calibration history tracking | Standalone HTML report via `render_backtesting.jl`. 11 prospective races archived. |
+| 11. Discrimination diagnostics (April 2026) | Per-position-band ρ, within-tier signal discrimination, signal ablation study | Revealed PCS form, VG race history, and qualitative are noise. Position-dependent market discount shows promise but deferred pending more data. |
+| 12. Signal pruning (April 2026) | Disabled PCS form, VG race history, qualitative from estimation pipeline | Red team review + bootstrap CIs confirmed low-value signals. Data collection/archival continues; backtesting can re-enable via signal flags. Retained signal set: PCS seasons + VG season + PCS race history + oracle + odds. |
 
 ---
 
@@ -728,11 +872,11 @@ end
 
 **Incremental:** Depends on Step 4. The data fetching, strength estimation, and optimisation infrastructure are all reused.
 
-### Step 6: Notebooks (`notebooks/stagerace_predictor.qmd`, `notebooks/team_assessor.qmd`)
+### Step 6: Render scripts (`scripts/render_stagerace.jl`, `scripts/render_assessor.jl`)
 
-**Stage race predictor notebook (`stagerace_predictor.qmd`):**
+**Stage race render script (`scripts/render_stagerace.jl`):**
 
-Rewrite from scratch. Structure mirrors `oneday_predictor.qmd`:
+Rewrite from scratch. Structure mirrors `scripts/render_predictor.jl`:
 
 **Configuration section:**
 
@@ -788,13 +932,11 @@ race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), 6)
 
 - Same structure as one-day notebook
 
-**Fix the existing `vg_history` bug at line 87** (references undefined variable `vg_history` — should be `n_vg_hist` or similar).
+**Team assessor (`scripts/render_assessor.jl`):**
 
-**Team assessor (`team_assessor.qmd`):**
+Extend the existing script rather than creating a separate stage race version.
 
-Extend the existing notebook rather than creating a separate stage race version.
-
-**Changes to `team_assessor.qmd`:**
+**Changes to `scripts/render_assessor.jl`:**
 
 1. Add a `stages` variable in the configuration section (empty vector for one-day, populated for stage races)
 2. In the prediction section, detect `config.type == :stage` and call `solve_stage(config; stages=stages, ...)` instead of `solve_oneday`
@@ -807,7 +949,7 @@ Extend the existing notebook rather than creating a separate stage race version.
 
 ### Step 7: Backtesting and prospective evaluation (`src/backtest.jl`, `src/prospective_eval.jl`)
 
-Extend `backtesting.qmd` rather than creating a separate notebook.
+Extend `scripts/render_backtesting.jl` rather than creating a separate script.
 
 **New functions in `src/backtest.jl`:**
 
@@ -858,7 +1000,7 @@ No code changes needed for v1. The existing `evaluate_prospective` and `prospect
 
 The PIT calibration (`prospective_pit_values`) requires simulation draws via `simulate_vg_draws`. For stage races, a `simulate_vg_draws_stage` variant using per-stage simulation would be needed — this is a follow-up enhancement, not required for v1.
 
-**Changes to `backtesting.qmd`:**
+**Changes to `scripts/render_backtesting.jl`:**
 
 Add a "Stage race backtest" section after the one-day backtest:
 
@@ -909,7 +1051,7 @@ Steps 1 and 2 can proceed in parallel. Steps 3–5 are sequential. Steps 6 and 7
 
 5. **Team lock-in:** Teams locked at race start for main leaderboard (confirmed). The VG "Replacements Contest" is a separate game that we ignore.
 
-6. **Notebook strategy:** Extend existing team_assessor.qmd and backtesting.qmd rather than creating separate stage race versions. Rewrite stagerace_predictor.qmd from scratch.
+6. **Script strategy:** Extend existing `render_assessor.jl` and `render_backtesting.jl` rather than creating separate stage race versions. Rewrite `render_stagerace.jl` from scratch.
 
 7. **PCS stage data:** PCS scraping as the primary approach (confirmed working); manual encoding as fallback. Stage profiles are published months before the race, so manual encoding is feasible if PCS blocks automated requests.
 
@@ -919,31 +1061,32 @@ Steps 1 and 2 can proceed in parallel. Steps 3–5 are sequential. Steps 6 and 7
 
 ## Signal precision rationale
 
-### Parameter settings
+### Parameter settings (post-ablation)
+
+After the April 2026 ablation, the active market signals are odds + oracle (oracle removal deferred — Finding 2). The `history_precision_scale` controls PCS race history only (form and VG history disabled). The block-correlation discount has fewer active signals per cluster.
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
-| `market_precision_scale` | 4.0 | Odds are the best single predictor. At 4.0, odds variance = 0.25. |
-| `history_precision_scale` | 2.0 | Controls form, race history, VG history, and trajectory. Form precision is arguably too high relative to ML evidence, but it's bundled with race history (which IS important) under the same scale factor — separating them would add a fourth tuneable parameter. |
-| `ability_precision_scale` | 1.0 | PCS specialty and VG season points are broad career/season aggregates. At precision 1.0 they're one-third of odds. |
-| `_odds_to_oracle_ratio` | 2.0 | Oracle is a single algorithm; odds aggregate many models and private information. |
-| `_form_to_hist_ratio` | 3.0 | Per observation, form is more precise than a single year of race history. But 3 years of history collectively match form's precision — consistent with research showing race-specific results are among the best predictors. |
-| `_form_to_vg_hist_ratio` | 5.0 | VG history adds noise through the nonlinear VG scoring transformation. 1.67× noisier than PCS race history per observation. |
-| `_form_to_trajectory_ratio` | 3.0 | Career trajectory is a blunt signal. ML research found minor importance. |
+| `market_precision_scale` | 4.0 | Odds are the best single predictor for top-quartile riders. At 4.0, odds variance = 0.25. |
+| `history_precision_scale` | 2.0 | Controls PCS race history only (form and VG history removed by ablation). |
+| `ability_precision_scale` | 1.0 | PCS seasons and VG season points are broad career/season aggregates. At precision 1.0 they're one-third of odds. |
 | `_pcs_to_vg_ratio` | 1.0 | Both are broad ability measures. The `vg_season_penalty` handles early-season noise. |
-| `within_cluster_correlation` | 0.5 | With ρ_w=0.5 and 5 history observations, the within-cluster discount is 3.0, preventing false certainty from adding more years of race history. |
-| `between_cluster_correlation` | 0.15 | With 3 active clusters, the between-cluster discount is 1.3 — a modest correction. |
+| `within_cluster_correlation` | 0.5 | With ρ_w=0.5 and multiple history observations, the within-cluster discount prevents false certainty from adding more years of race history. |
+| `between_cluster_correlation` | 0.15 | With 2–3 active clusters, the between-cluster discount is modest. |
 | `hist_decay_rate` | 3.2 | A result from 3 years ago has variance 11.1 vs 1.5 for the current year. Aggressive decay is appropriate: rider form changes substantially year to year. |
-| `vg_hist_decay_rate` | 1.3 | VG history decays more slowly than PCS history — VG scoring is more stable across years than raw finishing positions. |
-| `market_discount` | 8.0 | When odds exist, non-market signal variances are inflated 8×. Non-market signals carry ~1/64 of their usual precision. For races without odds, all signal precisions are unchanged. |
+| `market_discount` | 8.0 (uniform) | Applied uniformly when odds are present. Position-dependent discount (8.0 for top quartile, 1.0 for rest) showed better per-tier ρ in ablation but is deferred — Finding 4. |
 
-### What the evidence does not support changing
+**Parameters removed by ablation:** `_form_to_hist_ratio`, `_form_to_vg_hist_ratio`, `vg_hist_decay_rate`, `form_variance()`, `vg_hist_base_variance()`. (`_odds_to_oracle_ratio` and `oracle_variance()` remain — oracle deferred.)
 
-With only ~5 prospective races accumulated as of March 2026, there is no evidence-based case for parameter changes. The prospective Spearman correlations (0.257–0.473) are consistent with the prior predictive checks and historical backtest results. Revisit after 15–20 prospective races with full signal coverage.
+### What the evidence supports and does not support
+
+The signal ablation study (11 prospective 2026 races) provides strong evidence for disabling form, VG history, and qualitative (all consistently near-zero or negative within-tier ρ), and for the position-dependent market discount (the only configuration that improves all tiers simultaneously). Oracle evidence is mixed and its removal is deferred. The evidence is consistent across race types (selective, standard, stochastic) and across both the 120-race historical backtest and the 11-race prospective set.
+
+The evidence does *not* support further precision-scale tuning — the remaining scales (market=4.0, history=2.0, ability=1.0) have not been ablated against alternatives, and the 11-race sample is too small for reliable continuous parameter optimisation. Revisit after 20+ prospective races.
 
 ### Market discount and block-correlation interaction
 
-`market_discount` and the block-correlation discount partially overlap: the discount decomposes observation precision by differencing sequential posteriors, but `market_discount` is already applied during those updates. The history cluster precision therefore gets discounted twice when odds are present. The practical effect is small — history precision is so low after `market_discount` that the block-correlation discount changes it little further — but the math is fragile. The clean long-term fix is to skip non-market signals entirely when `race_has_market = true` (see priority 6 in the improvement plan).
+With position-dependent discount, the market/block-correlation interaction simplifies. For top-quartile riders (discount=8.0), non-market signals are effectively suppressed as before. For everyone else (discount=1.0), all signals contribute at their natural precision with no market-driven inflation. The awkward double-discounting (market discount × block-correlation) now only affects the top quartile, where it is desirable (odds should dominate for favourites).
 
 ---
 
@@ -983,6 +1126,8 @@ Definitive result on ownership-adjusted optimisation. Modelled opponents' team s
 - 7x performance differential from ownership adjustment alone, without improving underlying player projections
 - Effect is strongest in large-field tournaments; negligible in head-to-head or small-league formats
 
+**Applicability to VG:** These results do not transfer to VG's format. VG scores accumulate across ~40 races in a season — the objective is to maximise total points, not to beat the field in any single race. Ownership-adjusted optimisation only helps when your payoff depends on relative performance within a single contest. In a cumulative format, what other players pick has no bearing on your score. The cumulative format also favours consistency over variance, further penalising the contrarian picks that ownership adjustment promotes.
+
 **Baronchelli et al. (2025) - "Data-driven team selection in Fantasy Premier League"**
 *arXiv:2505.02170v1*
 
@@ -1012,7 +1157,7 @@ Natural strata to check once sufficient data is available (15+ prospective races
 - **By cost**: cheap riders (cost 4–6) are where VG points calibration most affects team selection, since the optimiser frequently swaps between similarly-priced alternatives.
 - **By signal coverage**: riders with odds vs without. The `market_discount` parameter changes the model's behaviour substantially when odds are present, and the VG-points calibration could differ systematically between these groups.
 
-The implementation would add faceted PIT histograms or a calibration table by stratum to the prospective evaluation section of `backtesting.qmd`.
+The implementation would add faceted PIT histograms or a calibration table by stratum to the prospective evaluation section of `render_backtesting.jl`.
 
 ### Impact estimates summary
 
@@ -1022,10 +1167,10 @@ The implementation would add faceted PIT histograms or a calibration table by st
 | 2 | Calibration framework | High (indirect) | Strong (enables calibration) | Done |
 | 3 | Course profile matching | High | Strong (Kholkine, VeloRost) | Done (manual similar-races); PCS profile scraping deferred |
 | 4 | Stage race prediction | High (grand tours) | Moderate (community consensus) | Planned — see Phase 4 plan |
-| 5 | Ownership-adjusted optimisation | Very high for GPPs, low for small leagues | Strong (Haugh & Singal) | Not done |
+| 5 | Ownership-adjusted optimisation | Irrelevant — VG is cumulative points across ~40 races, not per-race GPP | Strong for GPPs (Haugh & Singal) but inapplicable here | Dropped |
 | 6 | Leader/domestique roles | Moderate | Moderate (VeloRost) | Done |
 | 7 | Recent form signal | Moderate-low | Weak (Kholkine: minimal weight) | Done |
-| 8 | Season-adaptive VG + trajectory | Moderate | Post-Kuurne analysis | Done |
+| 8 | Season-adaptive VG | Moderate | Post-Kuurne analysis | Done (trajectory removed April 2026 — negligible contribution) |
 | 9 | Student's t noise | Low-moderate | Moderate (fat-tailed cycling outcomes) | Done |
 | 10 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Not done |
 | 11 | ML models | Unknown | Weak (+3% over baseline) | Not done — prerequisites missing |
