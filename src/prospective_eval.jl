@@ -212,6 +212,7 @@ function prospective_pit_values(
 
         predictions === nothing && continue
         vg_results === nothing && continue
+        (nrow(vg_results) == 0 || !hasproperty(vg_results, :riderkey)) && continue
         !hasproperty(predictions, :strength) && continue
         !hasproperty(predictions, :uncertainty) && continue
 
