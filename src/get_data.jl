@@ -135,8 +135,8 @@ Returns a DataFrame with columns including `rider`, `pcsrank`, `pcspoints`, `rid
 """
 function getpcsraceranking(
     pageurl::String;
-    force_refresh::Bool = false,
-    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
 )
 
     function fetch_race_ranking(url, params)
@@ -194,8 +194,8 @@ function getpcsraceranking(
         fetch_race_ranking,
         pageurl,
         Dict();
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 end
 
@@ -209,9 +209,9 @@ Returns a DataFrame with cached data retrieval.
 """
 function getvgriders(
     pageurl::String;
-    force_refresh::Bool = false,
-    cache_config::CacheConfig = DEFAULT_CACHE,
-    verbose::Bool = true,
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
+    verbose::Bool=true,
 )
 
     function fetch_vg_data(url, params)
@@ -238,9 +238,9 @@ function getvgriders(
         fetch_vg_data,
         pageurl,
         Dict();
-        cache_config = cache_config,
-        force_refresh = force_refresh,
-        verbose = verbose,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
+        verbose=verbose,
     )
 end
 
@@ -262,9 +262,9 @@ Returns a DataFrame with columns: rider, oneday, gc, tt, sprint, climber, riderk
 """
 function getpcsriderpts(
     ridername::String;
-    pcs_slug::String = "",
-    force_refresh::Bool = false,
-    cache_config::CacheConfig = DEFAULT_CACHE,
+    pcs_slug::String="",
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
 )
 
     # Use provided slug (from startlist extraction), manual override, or heuristic
@@ -277,13 +277,13 @@ function getpcsriderpts(
     pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
 
     _missing_rider_df() = DataFrame(
-        rider = [ridername],
-        oneday = Union{Int,Missing}[missing],
-        gc = Union{Int,Missing}[missing],
-        tt = Union{Int,Missing}[missing],
-        sprint = Union{Int,Missing}[missing],
-        climber = Union{Int,Missing}[missing],
-        riderkey = [createkey(ridername)],
+        rider=[ridername],
+        oneday=Union{Int,Missing}[missing],
+        gc=Union{Int,Missing}[missing],
+        tt=Union{Int,Missing}[missing],
+        sprint=Union{Int,Missing}[missing],
+        climber=Union{Int,Missing}[missing],
+        riderkey=[createkey(ridername)],
     )
 
     function fetch_rider_pts(url, params)
@@ -317,13 +317,13 @@ function getpcsriderpts(
 
         rawpts = map(x -> parse(Int, nodeText(x)), value_elements[1:5])
         return DataFrame(
-            rider = [ridername],
-            oneday = [rawpts[1]],
-            gc = [rawpts[2]],
-            tt = [rawpts[3]],
-            sprint = [rawpts[4]],
-            climber = [rawpts[5]],
-            riderkey = [createkey(ridername)],
+            rider=[ridername],
+            oneday=[rawpts[1]],
+            gc=[rawpts[2]],
+            tt=[rawpts[3]],
+            sprint=[rawpts[4]],
+            climber=[rawpts[5]],
+            riderkey=[createkey(ridername)],
         )
     end
 
@@ -332,8 +332,8 @@ function getpcsriderpts(
         fetch_rider_pts,
         pageurl,
         params;
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 end
 
@@ -352,11 +352,11 @@ Returns an empty DataFrame if `market_id` is empty or the API call fails.
 """
 function getodds(
     market_id::String;
-    force_refresh::Bool = false,
-    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
 )
     if isempty(market_id)
-        return DataFrame(rider = String[], odds = Float64[], riderkey = String[])
+        return DataFrame(rider=String[], odds=Float64[], riderkey=String[])
     end
 
     function fetch_betfair_odds(_url, params)
@@ -367,8 +367,8 @@ function getodds(
         fetch_betfair_odds,
         "betfair://market/$market_id",
         Dict("market_id" => market_id);
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 end
 
@@ -457,7 +457,7 @@ function parse_oddschecker_odds(text::String)
             if !isempty(name_line) && any(isletter, name_line)
                 # Look ahead up to 4 lines for a single odds token
                 found = false
-                for j in (i+1):min(i+4, length(lines))
+                for j in (i+1):min(i + 4, length(lines))
                     candidate = strip(lines[j])
                     dec = to_decimal(candidate)
                     # Must be a bare odds token (no spaces) and plausible
@@ -478,10 +478,10 @@ function parse_oddschecker_odds(text::String)
 
     if isempty(riders)
         @warn "parse_oddschecker_odds: no rider/odds pairs found — check the pasted text"
-        return DataFrame(rider = String[], odds = Float64[], riderkey = String[])
+        return DataFrame(rider=String[], odds=Float64[], riderkey=String[])
     end
 
-    df = DataFrame(rider = riders, odds = best_odds)
+    df = DataFrame(rider=riders, odds=best_odds)
     df.riderkey = createkey.(df.rider)
     @info "Parsed bookmaker odds for $(nrow(df)) riders"
     return df
@@ -501,11 +501,11 @@ Returns an empty DataFrame if the URL is empty or parsing fails.
 """
 function get_cycling_oracle(
     prediction_url::String;
-    force_refresh::Bool = false,
-    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
 )
     if isempty(prediction_url)
-        return DataFrame(rider = String[], win_prob = Float64[], riderkey = String[])
+        return DataFrame(rider=String[], win_prob=Float64[], riderkey=String[])
     end
 
     function fetch_oracle(_url, params)
@@ -517,7 +517,7 @@ function get_cycling_oracle(
         m = match(r"var riders2D = JSON\.parse\(`(.*?)`\)", html)
         if m === nothing
             @warn "Could not find prediction data in Cycling Oracle page: $url"
-            return DataFrame(rider = String[], win_prob = Float64[], riderkey = String[])
+            return DataFrame(rider=String[], win_prob=Float64[], riderkey=String[])
         end
 
         data = JSON3.read(m.captures[1])
@@ -541,7 +541,7 @@ function get_cycling_oracle(
 
         if isempty(names_out)
             @warn "No predictions found in Cycling Oracle page: $url"
-            return DataFrame(rider = String[], win_prob = Float64[], riderkey = String[])
+            return DataFrame(rider=String[], win_prob=Float64[], riderkey=String[])
         end
 
         # Normalise to sum to 1 (they should already be close)
@@ -550,7 +550,7 @@ function get_cycling_oracle(
             probs_out .= probs_out ./ total
         end
 
-        df = DataFrame(rider = names_out, win_prob = probs_out)
+        df = DataFrame(rider=names_out, win_prob=probs_out)
         df.riderkey = map(createkey, df.rider)
 
         @info "Fetched Cycling Oracle predictions for $(nrow(df)) riders"
@@ -561,8 +561,8 @@ function get_cycling_oracle(
         fetch_oracle,
         prediction_url,
         Dict("prediction_url" => prediction_url);
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 end
 
@@ -575,8 +575,8 @@ Returns a DataFrame with cached data retrieval.
 """
 function getvgracepoints(
     pageurl::String;
-    force_refresh::Bool = false,
-    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
 )
 
     function fetch_race_points(url, params)
@@ -607,7 +607,7 @@ function getvgracepoints(
             push!(scores, points)
         end
 
-        resultsdf = DataFrame(rider = riders, team = teams, score = scores)
+        resultsdf = DataFrame(rider=riders, team=teams, score=scores)
         resultsdf.riderkey = createkey.(resultsdf.rider)
         return resultsdf
     end
@@ -616,8 +616,8 @@ function getvgracepoints(
         fetch_race_points,
         pageurl,
         Dict();
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 end
 
@@ -648,8 +648,8 @@ normalised name for matching).
 """
 function getvgracelist(
     year::Int;
-    cache_config::CacheConfig = DEFAULT_CACHE,
-    force_refresh::Bool = false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool=false,
 )
     slug = vg_classics_slug(year)
     url = "https://www.velogames.com/$slug/$year/races.php"
@@ -685,10 +685,10 @@ function getvgracelist(
         end
 
         df = DataFrame(
-            race_number = race_numbers,
-            deadline = deadlines,
-            name = race_names,
-            category_str = category_strs,
+            race_number=race_numbers,
+            deadline=deadlines,
+            name=race_names,
+            category_str=category_strs,
         )
 
         # Parse category from strings like "Cat 1", "Cat 2", "Cat 3"
@@ -710,8 +710,8 @@ function getvgracelist(
         fetch_racelist,
         url,
         Dict();
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 end
 
@@ -749,14 +749,53 @@ Returns DataFrame(rider, team, score, riderkey).
 function getvgraceresults(
     year::Int,
     race_number::Int;
-    cache_config::CacheConfig = DEFAULT_CACHE,
-    force_refresh::Bool = false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool=false,
 )
     slug = vg_classics_slug(year)
     game_id = vg_classics_game_id(year)
     url = "https://www.velogames.com/$slug/$year/ridescore.php?ga=$game_id&st=$race_number"
-    return getvgracepoints(url; cache_config = cache_config, force_refresh = force_refresh)
+    return getvgracepoints(url; cache_config=cache_config, force_refresh=force_refresh)
 end
+
+
+"""
+    getvg_stage_results(year, vg_slug, stage_number; cache_config, force_refresh) -> DataFrame
+
+Fetch VG points for a single stage of a grand tour.
+
+URL: `https://www.velogames.com/{vg_slug}/{year}/ridescore.php?ga=1&st={stage_number}`
+
+Returns DataFrame with `rider`, `team`, `score`, `riderkey`.
+"""
+function getvg_stage_results(
+    year::Int,
+    vg_slug::String,
+    stage_number::Int;
+    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool=false,
+)
+    url = "https://www.velogames.com/$vg_slug/$year/ridescore.php?ga=1&st=$stage_number"
+    return getvgracepoints(url; cache_config=cache_config, force_refresh=force_refresh)
+end
+
+"""
+    getvg_stage_race_totals(year, vg_slug; cache_config, force_refresh) -> DataFrame
+
+Fetch overall VG totals for a grand tour (st=0).
+
+Returns DataFrame with `rider`, `team`, `score`, `riderkey`.
+"""
+function getvg_stage_race_totals(
+    year::Int,
+    vg_slug::String;
+    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool=false,
+)
+    url = "https://www.velogames.com/$vg_slug/$year/ridescore.php?ga=1&st=0"
+    return getvgracepoints(url; cache_config=cache_config, force_refresh=force_refresh)
+end
+
 
 """
 ## `getpcsriderpts_batch`
@@ -766,9 +805,9 @@ Returns a DataFrame with all riders' points, including rows with missing values 
 """
 function getpcsriderpts_batch(
     ridernames::Vector{String};
-    slug_map::Dict{String,String} = Dict{String,String}(),
-    force_refresh::Bool = false,
-    cache_config::CacheConfig = DEFAULT_CACHE,
+    slug_map::Dict{String,String}=Dict{String,String}(),
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
 )
 
     dfs = DataFrame[]
@@ -779,9 +818,9 @@ function getpcsriderpts_batch(
             slug = get(slug_map, createkey(rider), "")
             rider_pts = getpcsriderpts(
                 rider;
-                pcs_slug = slug,
-                force_refresh = force_refresh,
-                cache_config = cache_config,
+                pcs_slug=slug,
+                force_refresh=force_refresh,
+                cache_config=cache_config,
             )
             push!(dfs, rider_pts)
         catch _e
@@ -790,19 +829,19 @@ function getpcsriderpts_batch(
             push!(
                 dfs,
                 DataFrame(
-                    rider = [rider],
-                    oneday = [missing],
-                    gc = [missing],
-                    tt = [missing],
-                    sprint = [missing],
-                    climber = [missing],
-                    riderkey = [createkey(rider)],
+                    rider=[rider],
+                    oneday=[missing],
+                    gc=[missing],
+                    tt=[missing],
+                    sprint=[missing],
+                    climber=[missing],
+                    riderkey=[createkey(rider)],
                 ),
             )
         end
     end
 
-    all_pts = isempty(dfs) ? DataFrame() : vcat(dfs...; cols = :union)
+    all_pts = isempty(dfs) ? DataFrame() : vcat(dfs...; cols=:union)
 
     if !isempty(failed_riders)
         @warn "PCS fetch failed for $(length(failed_riders))/$(length(ridernames)) riders (network/parse errors)" failed_riders
