@@ -13,7 +13,7 @@ probability distributions over finishing positions.
 """
     ScoringTable
 
-Holds the Velogames scoring rules for a single race category.
+Holds the Velogames scoring rules for a single one-day race category.
 
 Fields:
 - `finish_points::Vector{Int}` – points for positions 1st through 30th (length 30)
@@ -24,6 +24,42 @@ struct ScoringTable
     finish_points::Vector{Int}
     assist_points::Vector{Int}
     breakaway_points::Int
+end
+
+"""
+    StageRaceScoringTable
+
+Holds the Velogames scoring rules for grand tour stage races (TDF, Giro, Vuelta).
+Scoring is identical across all three grand tours.
+
+VG uses a single scoring table for ALL stage types — no variation by flat/mountain/ITT.
+"""
+struct StageRaceScoringTable
+    # Per-stage scoring (applied every stage)
+    stage_finish_points::Vector{Int}         # length 20: positions 1-20
+    daily_gc_points::Vector{Int}             # length 20: GC positions 1-20
+    daily_points_class::Vector{Int}          # length 6: points classification top 6
+    daily_mountains_class::Vector{Int}       # length 6: mountains classification top 6
+
+    # In-stage bonuses
+    intermediate_sprint_points::Vector{Int}  # length 10: sprint positions 1-10
+    hc_climb_points::Vector{Int}             # length 8: HC climb positions 1-8
+    cat1_climb_points::Vector{Int}           # length 5: Cat 1 climb positions 1-5
+    breakaway_points::Int                    # points per rider in break at 50%
+
+    # Assist points (stage finish, GC, team classification)
+    stage_assist_points::Vector{Int}         # length 3: teammate in stage top 3
+    gc_assist_points::Vector{Int}            # length 3: teammate in GC top 3
+    team_class_assist_points::Vector{Int}    # length 3: team in team class top 3
+
+    # Final classification bonuses (end of race)
+    final_gc_points::Vector{Int}             # length 30: final GC positions 1-30
+    final_points_class::Vector{Int}          # length 10: final points classification
+    final_mountains_class::Vector{Int}       # length 10: final mountains classification
+    final_team_class::Vector{Int}            # length 5: final team classification
+
+    # TTT stage scoring (if applicable)
+    ttt_team_points::Vector{Int}             # length 8: TTT team positions 1-8
 end
 
 # ---------------------------------------------------------------------------
@@ -191,6 +227,70 @@ const SCORING_STAGE = ScoringTable(
     0,
 )
 
+const SCORING_GRAND_TOUR = StageRaceScoringTable(
+    # Stage finish (positions 1-20)
+    [220, 180, 160, 140, 120, 110, 95, 80, 70, 60, 50, 40, 35, 30, 25, 20, 16, 12, 8, 4],
+    # Daily GC (positions 1-20)
+    [30, 26, 22, 18, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1],
+    # Daily points classification (top 6)
+    [12, 8, 6, 4, 2, 1],
+    # Daily mountains classification (top 6)
+    [12, 8, 6, 4, 2, 1],
+    # Intermediate sprints (top 10)
+    [20, 16, 12, 8, 6, 5, 4, 3, 2, 1],
+    # HC climbs (top 8)
+    [30, 25, 20, 15, 10, 6, 4, 2],
+    # Cat 1 climbs (top 5)
+    [15, 10, 6, 4, 2],
+    # Breakaway at 50% distance
+    20,
+    # Stage assists (teammate in stage top 3)
+    [8, 4, 2],
+    # GC assists (teammate in GC top 3)
+    [8, 4, 2],
+    # Team classification assists (team in top 3)
+    [8, 4, 2],
+    # Final GC (positions 1-30)
+    [600, 500, 400, 350, 300, 260, 220, 200, 180, 160, 140, 130, 120, 110, 100, 90, 80, 70, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10, 5],
+    # Final points classification (top 10)
+    [120, 100, 80, 60, 40, 30, 20, 15, 10, 5],
+    # Final mountains classification (top 10)
+    [120, 100, 80, 60, 40, 30, 20, 15, 10, 5],
+    # Final team classification (top 5)
+    [50, 40, 30, 20, 10],
+    # TTT team (top 8)
+    [50, 40, 30, 25, 20, 15, 10, 5],
+)
+
+get_stage_race_scoring() = SCORING_GRAND_TOUR
+
+"""
+    stage_finish_points_for_position(position, scoring) -> Int
+
+Return stage finish points for a given position. Positions outside 1-20 score 0.
+"""
+function stage_finish_points_for_position(position::Int, scoring::StageRaceScoringTable)
+    1 <= position <= length(scoring.stage_finish_points) ? scoring.stage_finish_points[position] : 0
+end
+
+"""
+    daily_gc_points_for_position(position, scoring) -> Int
+
+Return daily GC classification points for a given GC position. Positions outside 1-20 score 0.
+"""
+function daily_gc_points_for_position(position::Int, scoring::StageRaceScoringTable)
+    1 <= position <= length(scoring.daily_gc_points) ? scoring.daily_gc_points[position] : 0
+end
+
+"""
+    final_gc_points_for_position(position, scoring) -> Int
+
+Return final GC classification bonus for a given position. Positions outside 1-30 score 0.
+"""
+function final_gc_points_for_position(position::Int, scoring::StageRaceScoringTable)
+    1 <= position <= length(scoring.final_gc_points) ? scoring.final_gc_points[position] : 0
+end
+
 """
     get_scoring(category::Union{Int, Symbol}) -> ScoringTable
 
@@ -279,9 +379,9 @@ Other riders' rates are proportional to their average annual breakaway km.
 function compute_breakaway_rates(
     breakaway_df::DataFrame,
     startlist_keys::AbstractVector{<:AbstractString};
-    history_years::Int = 3,
-    max_rate::Float64 = 0.35,
-    mean_sectors::Float64 = 2.0,
+    history_years::Int=3,
+    max_rate::Float64=0.35,
+    mean_sectors::Float64=2.0,
 )
     # Filter to recent years and compute average annual km per rider
     max_year = maximum(breakaway_df.year)
