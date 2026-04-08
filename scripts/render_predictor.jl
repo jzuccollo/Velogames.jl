@@ -28,9 +28,9 @@ racehash = _cfg["race"]["racehash"]
 
 betfair_market_id = _cfg["data_sources"]["betfair_market_id"]
 oracle_url = _cfg["data_sources"]["oracle_url"]
-qualitative_youtube_url = _cfg["data_sources"]["qualitative_youtube_url"]
-qualitative_article_url = _cfg["data_sources"]["qualitative_article_url"]
-qualitative_json_file = _cfg["data_sources"]["qualitative_json_file"]
+qualitative_youtube_url = get(_cfg["data_sources"], "qualitative_youtube_url", "")
+qualitative_article_url = get(_cfg["data_sources"], "qualitative_article_url", "")
+qualitative_json_file = get(_cfg["data_sources"], "qualitative_json_file", "")
 
 odds_df = if get(_cfg["data_sources"], "use_oddschecker", false)
     try

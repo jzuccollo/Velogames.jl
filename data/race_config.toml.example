@@ -1,8 +1,8 @@
-# Race configuration — shared between oneday_predictor and team_assessor
+# Race configuration — shared between render scripts (predictor, stagerace, assessor)
 # Copy to race_config.toml and edit for each race. race_config.toml is gitignored.
 
 [race]
-name = "e3-harelbeke"
+name = "e3-harelbeke"        # Race identifier (PCS slug or alias like "tdf", "giro", "vuelta")
 year = 2026
 racehash = "#E3SaxoClassic"  # VG startlist hash filter (leave empty for all riders)
 
@@ -25,6 +25,11 @@ risk_aversion = 0.5          # Penalise volatile riders via downside CV (0 = off
 max_per_team = 2             # Max riders from any single team (0 = no limit)
 simulation_df = 5            # Student's t degrees of freedom (use "" for Gaussian)
 excluded_riders = []
+
+# Stage race options (only used by render_stagerace.jl)
+cross_stage_alpha = 0.7      # Cross-stage noise correlation (0 = independent, 1 = identical)
+modifier_scale = 0.5         # Stage-type strength differentiation scale
+pcs_stage_scrape = true      # Scrape stage profiles from PCS (false = use manual stages below)
 
 [team_assessor]
 vg_race_number = 0           # 0 = auto-detect, -1 = skip, or set manually (e.g. 3)
