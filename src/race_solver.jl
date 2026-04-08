@@ -83,17 +83,17 @@ after each race to build the prospective validation dataset.
 function archive_race_results(
     pcs_slug::String,
     year::Int;
-    vg_race_number::Int = 0,
-    cache_config::CacheConfig = DEFAULT_CACHE,
-    force_refresh::Bool = false,
+    vg_race_number::Int=0,
+    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool=false,
 )
     # Archive PCS race results
     try
         pcs_results = getpcsraceresults(
             pcs_slug,
             year;
-            cache_config = cache_config,
-            force_refresh = force_refresh,
+            cache_config=cache_config,
+            force_refresh=force_refresh,
         )
         if nrow(pcs_results) > 0
             save_race_snapshot(pcs_results, "pcs_results", pcs_slug, year)
@@ -108,8 +108,8 @@ function archive_race_results(
             vg_results = getvgraceresults(
                 year,
                 vg_race_number;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
+                cache_config=cache_config,
+                force_refresh=force_refresh,
             )
             if nrow(vg_results) > 0
                 save_race_snapshot(vg_results, "vg_results", pcs_slug, year)
@@ -150,17 +150,17 @@ function _prepare_rider_data(
     min_riders::Int,
     cache_config::CacheConfig,
     force_refresh::Bool;
-    pcs_check_col::Symbol = :oneday,
-    filter_startlist::Bool = true,
-    qualitative_df::Union{DataFrame,Nothing} = nothing,
-    odds_df::Union{DataFrame,Nothing} = nothing,
+    pcs_check_col::Symbol=:oneday,
+    filter_startlist::Bool=true,
+    qualitative_df::Union{DataFrame,Nothing}=nothing,
+    odds_df::Union{DataFrame,Nothing}=nothing,
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
     riderdf = getvgriders(
         config.current_url;
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 
     # Filter by startlist hash if provided
@@ -191,12 +191,12 @@ function _prepare_rider_data(
             startlist_df = getpcsracestartlist(
                 config.pcs_slug,
                 config.year;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
+                cache_config=cache_config,
+                force_refresh=force_refresh,
             )
             if nrow(startlist_df) > 0 && :riderkey in propertynames(startlist_df)
                 before = nrow(riderdf)
-                riderdf = semijoin(riderdf, startlist_df[:, [:riderkey]], on = :riderkey)
+                riderdf = semijoin(riderdf, startlist_df[:, [:riderkey]], on=:riderkey)
                 @info "Filtered to $(nrow(riderdf)) riders confirmed on PCS startlist (removed $(before - nrow(riderdf)))"
 
                 # Build riderkey → PCS slug mapping from startlist
@@ -227,9 +227,9 @@ function _prepare_rider_data(
     rider_names = String.(riderdf.rider)
     pcsriderpts = getpcsriderpts_batch(
         rider_names;
-        slug_map = pcs_slug_map,
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        slug_map=pcs_slug_map,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 
     riderdf = join_pcs_specialty!(riderdf, pcsriderpts)
@@ -251,9 +251,9 @@ function _prepare_rider_data(
         config.pcs_slug,
         config.year,
         history_years;
-        race_date = race_date,
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        race_date=race_date,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 
     # --- 3b. Fetch VG race history (automatic) ---
@@ -263,9 +263,9 @@ function _prepare_rider_data(
         config.pcs_slug,
         config.year,
         history_years;
-        race_date = race_date,
-        cache_config = cache_config,
-        force_refresh = force_refresh,
+        race_date=race_date,
+        cache_config=cache_config,
+        force_refresh=force_refresh,
     )
 
     # --- 3c. Fetch PCS form scores (automatic) ---
@@ -275,8 +275,8 @@ function _prepare_rider_data(
             form_df = getpcsraceform(
                 config.pcs_slug,
                 config.year;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
+                cache_config=cache_config,
+                force_refresh=force_refresh,
             )
             if nrow(form_df) > 0
                 @info "Got PCS form scores for $(nrow(form_df)) riders"
@@ -305,8 +305,8 @@ function _prepare_rider_data(
         try
             seasons_df = getpcsriderseasons_batch(
                 pcs_slug_map;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
+                cache_config=cache_config,
+                force_refresh=force_refresh,
             )
             if nrow(seasons_df) > 0
                 n_riders_with_seasons = length(unique(seasons_df.riderkey))
@@ -336,8 +336,8 @@ function _prepare_rider_data(
         try
             df = getodds(
                 betfair_market_id;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
+                cache_config=cache_config,
+                force_refresh=force_refresh,
             )
             if nrow(df) > 0
                 @info "Got Betfair odds for $(nrow(df)) riders"
@@ -367,8 +367,8 @@ function _prepare_rider_data(
         try
             oracle_df = get_cycling_oracle(
                 oracle_url;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
+                cache_config=cache_config,
+                force_refresh=force_refresh,
             )
             if nrow(oracle_df) > 0
                 @info "Got Cycling Oracle predictions for $(nrow(oracle_df)) riders"
@@ -494,22 +494,22 @@ the top alternative teams, and `sim_vg_points` is a Matrix{Float64}
 """
 function solve_oneday(
     config::RaceConfig;
-    racehash::String = "",
-    history_years::Int = 5,
-    betfair_market_id::String = "",
-    oracle_url::String = "",
-    n_resamples::Int = 500,
-    excluded_riders::Vector{String} = String[],
-    filter_startlist::Bool = true,
-    cache_config::CacheConfig = config.cache,
-    force_refresh::Bool = false,
-    qualitative_df::Union{DataFrame,Nothing} = nothing,
-    odds_df::Union{DataFrame,Nothing} = nothing,
-    domestique_discount::Float64 = 0.0,
-    max_per_team::Int = 0,
-    risk_aversion::Float64 = 0.5,
-    breakaway_dir::String = "",
-    simulation_df::Union{Int,Nothing} = nothing,
+    racehash::String="",
+    history_years::Int=5,
+    betfair_market_id::String="",
+    oracle_url::String="",
+    n_resamples::Int=500,
+    excluded_riders::Vector{String}=String[],
+    filter_startlist::Bool=true,
+    cache_config::CacheConfig=config.cache,
+    force_refresh::Bool=false,
+    qualitative_df::Union{DataFrame,Nothing}=nothing,
+    odds_df::Union{DataFrame,Nothing}=nothing,
+    domestique_discount::Float64=0.0,
+    max_per_team::Int=0,
+    risk_aversion::Float64=0.5,
+    breakaway_dir::String="",
+    simulation_df::Union{Int,Nothing}=nothing,
 )
     data = _prepare_rider_data(
         config,
@@ -521,10 +521,10 @@ function solve_oneday(
         config.team_size,
         cache_config,
         force_refresh;
-        pcs_check_col = :oneday,
-        filter_startlist = filter_startlist,
-        qualitative_df = qualitative_df,
-        odds_df = odds_df,
+        pcs_check_col=:oneday,
+        filter_startlist=filter_startlist,
+        qualitative_df=qualitative_df,
+        odds_df=odds_df,
     )
     if data === nothing
         return DataFrame(), DataFrame(), DataFrame[], Matrix{Float64}(undef, 0, 0)
@@ -536,8 +536,8 @@ function solve_oneday(
     @info "Estimating rider strengths (Cat $(config.category))..."
     predicted = estimate_strengths(
         data;
-        race_year = config.year,
-        domestique_discount = domestique_discount,
+        race_year=config.year,
+        domestique_discount=domestique_discount,
     )
 
     # Archive predictions for prospective evaluation
@@ -552,13 +552,13 @@ function solve_oneday(
         predicted,
         scoring,
         build_model_oneday;
-        team_size = config.team_size,
-        n_resamples = n_resamples,
-        max_per_team = max_per_team,
-        risk_aversion = risk_aversion,
-        breakaway_rates = b_rates,
-        breakaway_mean_sectors = b_sectors,
-        simulation_df = simulation_df,
+        team_size=config.team_size,
+        n_resamples=n_resamples,
+        max_per_team=max_per_team,
+        risk_aversion=risk_aversion,
+        breakaway_rates=b_rates,
+        breakaway_mean_sectors=b_sectors,
+        simulation_df=simulation_df,
     )
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
@@ -572,6 +572,10 @@ end
 
 Construct an optimal team for a stage race using resampled optimisation.
 
+When `stages` is non-empty, uses per-stage simulation with stage-type strength
+modifiers (the new pipeline). When empty, falls back to the aggregate GC-position
+approach.
+
 Uses class-aware strength estimation and enforces VG classification constraints
 (all-rounders, climbers, sprinters, unclassed) during optimisation.
 
@@ -580,22 +584,25 @@ A tuple `(predicted, chosenteam, top_teams, sim_vg_points)`.
 """
 function solve_stage(
     config::RaceConfig;
-    racehash::String = "",
-    history_years::Int = 3,
-    betfair_market_id::String = "",
-    oracle_url::String = "",
-    n_resamples::Int = 500,
-    excluded_riders::Vector{String} = String[],
-    filter_startlist::Bool = true,
-    cache_config::CacheConfig = config.cache,
-    force_refresh::Bool = false,
-    qualitative_df::Union{DataFrame,Nothing} = nothing,
-    odds_df::Union{DataFrame,Nothing} = nothing,
-    domestique_discount::Float64 = 0.0,
-    max_per_team::Int = 0,
-    risk_aversion::Float64 = 0.5,
-    breakaway_dir::String = "",
-    simulation_df::Union{Int,Nothing} = nothing,
+    stages::Vector{StageProfile}=StageProfile[],
+    racehash::String="",
+    history_years::Int=3,
+    betfair_market_id::String="",
+    oracle_url::String="",
+    n_resamples::Int=500,
+    excluded_riders::Vector{String}=String[],
+    filter_startlist::Bool=true,
+    cache_config::CacheConfig=config.cache,
+    force_refresh::Bool=false,
+    qualitative_df::Union{DataFrame,Nothing}=nothing,
+    odds_df::Union{DataFrame,Nothing}=nothing,
+    domestique_discount::Float64=0.0,
+    max_per_team::Int=0,
+    risk_aversion::Float64=0.5,
+    breakaway_dir::String="",
+    simulation_df::Union{Int,Nothing}=nothing,
+    cross_stage_alpha::Float64=0.7,
+    modifier_scale::Float64=0.5,
 )
     data = _prepare_rider_data(
         config,
@@ -607,42 +614,91 @@ function solve_stage(
         config.team_size,
         cache_config,
         force_refresh;
-        pcs_check_col = :gc,
-        filter_startlist = filter_startlist,
-        qualitative_df = qualitative_df,
-        odds_df = odds_df,
+        pcs_check_col=:gc,
+        filter_startlist=filter_startlist,
+        qualitative_df=qualitative_df,
+        odds_df=odds_df,
     )
     if data === nothing
         return DataFrame(), DataFrame(), DataFrame[], Matrix{Float64}(undef, 0, 0)
     end
 
-    scoring = get_scoring(:stage)
-
     @info "Estimating rider strengths (stage race)..."
     predicted = estimate_strengths(
         data;
-        race_type = :stage,
-        race_year = config.year,
-        domestique_discount = domestique_discount,
+        race_type=:stage,
+        race_year=config.year,
+        domestique_discount=domestique_discount,
     )
 
     _archive_predictions(predicted, config)
 
-    b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
+    if !isempty(stages)
+        # --- Per-stage pipeline ---
+        @info "Computing stage-type strength modifiers ($(length(stages)) stages)..."
+        stage_strengths = compute_stage_type_modifiers(
+            predicted, Float64.(predicted.strength);
+            modifier_scale=modifier_scale,
+        )
 
-    @info "Running resampled optimisation ($n_resamples resamples, class constraints)..."
-    predicted, top_teams, sim_vg_points = resample_optimise(
-        predicted,
-        scoring,
-        build_model_stage;
-        team_size = config.team_size,
-        n_resamples = n_resamples,
-        max_per_team = max_per_team,
-        risk_aversion = risk_aversion,
-        breakaway_rates = b_rates,
-        breakaway_mean_sectors = b_sectors,
-        simulation_df = simulation_df,
-    )
+        # Add per-stage-type strengths to the DataFrame for reporting
+        for stype in [:flat, :hilly, :mountain, :itt]
+            col = Symbol("stage_strength_$stype")
+            predicted[!, col] = round.(stage_strengths[stype], digits=3)
+        end
+
+        # Archive stage profiles
+        if !isempty(config.pcs_slug)
+            try
+                stage_df = DataFrame(
+                    stage_number=[s.stage_number for s in stages],
+                    stage_type=[String(s.stage_type) for s in stages],
+                    distance_km=[s.distance_km for s in stages],
+                    profile_score=[s.profile_score for s in stages],
+                    vertical_meters=[s.vertical_meters for s in stages],
+                    n_hc_climbs=[s.n_hc_climbs for s in stages],
+                    n_cat1_climbs=[s.n_cat1_climbs for s in stages],
+                    is_summit_finish=[s.is_summit_finish for s in stages],
+                )
+                save_race_snapshot(stage_df, "stage_profiles", config.pcs_slug, config.year)
+            catch e
+                @debug "Failed to archive stage profiles: $e"
+            end
+        end
+
+        @info "Running per-stage resampled optimisation ($n_resamples resamples, $(length(stages)) stages)..."
+        predicted, top_teams, sim_vg_points = resample_optimise_stage(
+            predicted,
+            stages,
+            stage_strengths,
+            SCORING_GRAND_TOUR,
+            build_model_stage;
+            team_size=config.team_size,
+            n_resamples=n_resamples,
+            cross_stage_alpha=cross_stage_alpha,
+            max_per_team=max_per_team,
+            risk_aversion=risk_aversion,
+        )
+    else
+        # --- Aggregate fallback ---
+        scoring = get_scoring(:stage)
+
+        b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
+
+        @info "Running aggregate resampled optimisation ($n_resamples resamples, class constraints)..."
+        predicted, top_teams, sim_vg_points = resample_optimise(
+            predicted,
+            scoring,
+            build_model_stage;
+            team_size=config.team_size,
+            n_resamples=n_resamples,
+            max_per_team=max_per_team,
+            risk_aversion=risk_aversion,
+            breakaway_rates=b_rates,
+            breakaway_mean_sectors=b_sectors,
+            simulation_df=simulation_df,
+        )
+    end
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
 

@@ -21,7 +21,12 @@ export getvgriders,
     getpcsracehistory,
     getpcsriderseasons,
     getpcsriderseasons_batch,
-    load_pcs_breakaway_stats
+    load_pcs_breakaway_stats,
+    getpcs_stage_profiles,
+    getpcs_stage_results,
+    getpcs_all_stage_results,
+    getvg_stage_results,
+    getvg_stage_race_totals
 
 # Betfair API
 export betfair_login, betfair_get_market_odds
@@ -59,17 +64,31 @@ export setup_race,
     SIMILAR_RACES,
     vg_classics_slug,
     vg_classics_url,
-    vg_classics_game_id
+    vg_classics_game_id,
+    StageProfile,
+    StageRaceConfig,
+    setup_stage_race,
+    flat_stage,
+    mountain_stage,
+    hilly_stage,
+    itt_stage,
+    ttt_stage
 
 # Scoring
 export ScoringTable,
+    StageRaceScoringTable,
     SCORING_CAT1,
     SCORING_CAT2,
     SCORING_CAT3,
     SCORING_STAGE,
+    SCORING_GRAND_TOUR,
     get_scoring,
+    get_stage_race_scoring,
     expected_finish_points,
     finish_points_for_position,
+    stage_finish_points_for_position,
+    daily_gc_points_for_position,
+    final_gc_points_for_position,
     compute_breakaway_rates
 
 # Solvers and optimisation
@@ -85,7 +104,8 @@ export solve_oneday,
     build_model_oneday,
     build_model_stage,
     minimise_cost_stage,
-    resample_optimise
+    resample_optimise,
+    resample_optimise_stage
 
 # Simulation and prediction (public API)
 export BayesianConfig,
@@ -110,6 +130,8 @@ export BayesianConfig,
     expected_vg_points,
     simulate_vg_points,
     compute_stage_race_pcs_score,
+    compute_stage_type_modifiers,
+    simulate_stage_race,
     breakaway_sectors_from_km
 
 # Prior predictive checks and calibration
