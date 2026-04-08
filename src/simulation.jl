@@ -325,9 +325,9 @@ function estimate_rider_strength(
     race_has_market::Bool=false,
 )
     (; pcs_score, has_pcs, race_history, race_history_years_ago,
-       race_history_variance_penalties, vg_points,
-       odds_implied_prob, oracle_implied_prob,
-       odds_floor_strength, oracle_floor_strength) = signals
+        race_history_variance_penalties, vg_points,
+        odds_implied_prob, oracle_implied_prob,
+        odds_floor_strength, oracle_floor_strength) = signals
     # --- Uninformative prior ---
     # Start from a diffuse prior (mean=0, large variance). All signals,
     # including PCS specialty, update this as observations.
@@ -477,8 +477,8 @@ function estimate_rider_strength(
         # Within-cluster discount, then collect active clusters
         cluster_precs = Float64[]
         for (n_k, obs_prec_k) in [(n_ability, ability_obs_prec),
-                                   (n_history, history_obs_prec),
-                                   (n_market,  market_obs_prec)]
+            (n_history, history_obs_prec),
+            (n_market, market_obs_prec)]
             n_k == 0 && continue
             discount_k = n_k > 1 ? 1.0 + ρ_w * (n_k - 1) : 1.0
             push!(cluster_precs, obs_prec_k / discount_k)
@@ -608,6 +608,205 @@ function position_probabilities(sim_positions::Matrix{Int}; max_position::Int=30
 
     return probs
 end
+
+# ---------------------------------------------------------------------------
+# Per-stage grand tour simulation
+# ---------------------------------------------------------------------------
+
+"""
+    simulate_stage_race(stages, stage_strengths, uncertainties, teams, scoring;
+                        n_sims=500, cross_stage_alpha=0.7, rng) -> Matrix{Float64}
+
+Simulate a full grand tour stage by stage and return total VG points per rider
+per simulation draw (n_riders × n_sims matrix).
+
+Each draw has persistent rider noise (correlated across stages via `cross_stage_alpha`)
+and independent per-stage noise. For each stage, riders are ranked by noisy strength,
+scored for stage finish, assists, and daily GC classification. After all stages,
+final classification bonuses are awarded.
+
+## v1 simplifications
+- In-stage bonuses (HC/Cat1 climb points, intermediate sprints) are skipped
+- Breakaway modelling is skipped
+- All riders complete all stages (no abandonment)
+- Gaussian noise only (Student's t can be added later)
+"""
+function simulate_stage_race(
+    stages::Vector{StageProfile},
+    stage_strengths::Dict{Symbol,Vector{Float64}},
+    uncertainties::Vector{Float64},
+    teams::Vector{String},
+    scoring::StageRaceScoringTable;
+    n_sims::Int=500,
+    cross_stage_alpha::Float64=0.7,
+    rng::AbstractRNG=Random.default_rng(),
+)
+    n_riders = length(uncertainties)
+    alpha = cross_stage_alpha
+    beta = sqrt(1.0 - alpha^2)  # ensures total noise variance = uncertainty²
+
+    sim_vg_points = zeros(Float64, n_riders, n_sims)
+
+    # Pre-allocate working arrays
+    noisy = Vector{Float64}(undef, n_riders)
+    positions = Vector{Int}(undef, n_riders)
+    rider_noise = Vector{Float64}(undef, n_riders)
+    stage_noise = Vector{Float64}(undef, n_riders)
+    cumulative_positions = Vector{Int}(undef, n_riders)
+    gc_positions = Vector{Int}(undef, n_riders)
+    stage_pts = Vector{Float64}(undef, n_riders)
+
+    # Track sprint/KOM classification approximations
+    flat_top5_counts = Vector{Int}(undef, n_riders)
+    mountain_top5_counts = Vector{Int}(undef, n_riders)
+
+    for sim in 1:n_sims
+        # Draw persistent rider noise for this simulation
+        for i in 1:n_riders
+            rider_noise[i] = randn(rng)
+        end
+
+        fill!(cumulative_positions, 0)
+        fill!(flat_top5_counts, 0)
+        fill!(mountain_top5_counts, 0)
+
+        rider_total_pts = zeros(Float64, n_riders)
+
+        for stage in stages
+            stype = stage.stage_type
+            strengths = get(stage_strengths, stype, stage_strengths[:hilly])
+
+            # Draw stage-specific noise
+            for i in 1:n_riders
+                stage_noise[i] = randn(rng)
+                noisy[i] = strengths[i] + uncertainties[i] * (alpha * rider_noise[i] + beta * stage_noise[i])
+            end
+
+            # Rank by noisy strength (descending) → positions
+            order = sortperm(noisy, rev=true)
+            for (pos, rider_idx) in enumerate(order)
+                positions[rider_idx] = pos
+            end
+
+            # Score stage finish points (positions 1-20)
+            fill!(stage_pts, 0.0)
+            for i in 1:n_riders
+                stage_pts[i] = Float64(stage_finish_points_for_position(positions[i], scoring))
+            end
+
+            # Stage assist points (teammates of top-3 finishers; skip on ITT/TTT)
+            if stype != :itt && stype != :ttt
+                for i in 1:n_riders
+                    if positions[i] <= 3
+                        for j in 1:n_riders
+                            if j != i && teams[j] == teams[i]
+                                stage_pts[j] += scoring.stage_assist_points[positions[i]]
+                            end
+                        end
+                    end
+                end
+            end
+
+            # Track cumulative GC standings (sum of positions)
+            for i in 1:n_riders
+                cumulative_positions[i] += positions[i]
+            end
+
+            # Rank by cumulative positions (ascending = lower is better)
+            gc_order = sortperm(cumulative_positions)
+            for (gc_pos, rider_idx) in enumerate(gc_order)
+                gc_positions[rider_idx] = gc_pos
+            end
+
+            # Award daily GC points
+            for i in 1:n_riders
+                stage_pts[i] += daily_gc_points_for_position(gc_positions[i], scoring)
+            end
+
+            # GC assist points (teammates of GC top 3; skip on ITT)
+            if stype != :itt && stype != :ttt
+                for i in 1:n_riders
+                    if gc_positions[i] <= 3
+                        for j in 1:n_riders
+                            if j != i && teams[j] == teams[i]
+                                stage_pts[j] += scoring.gc_assist_points[gc_positions[i]]
+                            end
+                        end
+                    end
+                end
+            end
+
+            # Track sprint/KOM classification approximations
+            for i in 1:n_riders
+                if positions[i] <= 5
+                    if stype == :flat || stype == :hilly
+                        flat_top5_counts[i] += 1
+                    end
+                    if stype == :mountain
+                        mountain_top5_counts[i] += 1
+                    end
+                end
+            end
+
+            # Accumulate stage points
+            for i in 1:n_riders
+                rider_total_pts[i] += stage_pts[i]
+            end
+        end
+
+        # --- Final classification bonuses ---
+
+        # Final GC
+        for i in 1:n_riders
+            rider_total_pts[i] += final_gc_points_for_position(gc_positions[i], scoring)
+        end
+
+        # Final points classification (approximate: most top-5 flat/hilly finishes)
+        sprint_order = sortperm(flat_top5_counts, rev=true)
+        for rank in 1:min(10, n_riders)
+            rider_idx = sprint_order[rank]
+            if flat_top5_counts[rider_idx] > 0
+                rider_total_pts[rider_idx] += scoring.final_points_class[rank]
+            end
+        end
+
+        # Final mountains classification (approximate: most top-5 mountain finishes)
+        kom_order = sortperm(mountain_top5_counts, rev=true)
+        for rank in 1:min(10, n_riders)
+            rider_idx = kom_order[rank]
+            if mountain_top5_counts[rider_idx] > 0
+                rider_total_pts[rider_idx] += scoring.final_mountains_class[rank]
+            end
+        end
+
+        # Final team classification (sum of top 3 riders' cumulative positions per team)
+        team_set = unique(teams)
+        team_cum_scores = Dict{String,Int}()
+        for t in team_set
+            team_idx = findall(==(t), teams)
+            # Sum the 3 lowest cumulative positions (best GC riders)
+            sorted_cum = sort(cumulative_positions[team_idx])
+            team_cum_scores[t] = sum(sorted_cum[1:min(3, length(sorted_cum))])
+        end
+        team_ranking = sort(collect(team_cum_scores), by=x -> x.second)
+        for rank in 1:min(length(scoring.final_team_class), length(team_ranking))
+            t = team_ranking[rank].first
+            for i in 1:n_riders
+                if teams[i] == t
+                    rider_total_pts[i] += scoring.final_team_class[rank]
+                end
+            end
+        end
+
+        # Store total points for this simulation
+        for i in 1:n_riders
+            sim_vg_points[i, sim] = rider_total_pts[i]
+        end
+    end
+
+    return sim_vg_points
+end
+
 
 # ---------------------------------------------------------------------------
 # Expected VG points from simulations
@@ -840,6 +1039,140 @@ function compute_stage_race_pcs_score(row, class::String)
     end
     return score
 end
+
+# ---------------------------------------------------------------------------
+# Stage-type strength modifiers
+# ---------------------------------------------------------------------------
+
+"""
+Stage-type modifier weights by rider classification.
+
+For each stage type, a class-aware blend of log-transformed, z-scored PCS specialty
+columns determines how much a rider's strength is shifted relative to their base
+(overall GC) strength. The base strength already incorporates odds, oracle, and all
+other Bayesian signals — these modifiers only differentiate by stage type.
+"""
+const STAGE_TYPE_MODIFIER_WEIGHTS = Dict{Symbol,Dict{String,Vector{Pair{Symbol,Float64}}}}(
+    :flat => Dict(
+        "allrounder" => [:gc => 0.2, :sprint => 0.4, :oneday => 0.3, :tt => 0.1],
+        "climber" => [:gc => 0.3, :sprint => 0.1, :oneday => 0.3, :climber => 0.3],
+        "sprinter" => [:gc => 0.05, :sprint => 0.7, :oneday => 0.2, :tt => 0.05],
+        "unclassed" => [:gc => 0.2, :sprint => 0.3, :oneday => 0.4, :tt => 0.1],
+    ),
+    :hilly => Dict(
+        "allrounder" => [:gc => 0.3, :sprint => 0.1, :oneday => 0.3, :tt => 0.1, :climber => 0.2],
+        "climber" => [:gc => 0.2, :sprint => 0.05, :oneday => 0.2, :tt => 0.1, :climber => 0.45],
+        "sprinter" => [:gc => 0.1, :sprint => 0.3, :oneday => 0.35, :tt => 0.1, :climber => 0.15],
+        "unclassed" => [:gc => 0.25, :sprint => 0.15, :oneday => 0.35, :tt => 0.1, :climber => 0.15],
+    ),
+    :mountain => Dict(
+        "allrounder" => [:gc => 0.25, :climber => 0.5, :tt => 0.15, :oneday => 0.1],
+        "climber" => [:gc => 0.15, :climber => 0.7, :tt => 0.1, :oneday => 0.05],
+        "sprinter" => Symbol[],  # fixed penalty, not PCS-derived
+        "unclassed" => [:gc => 0.2, :climber => 0.4, :tt => 0.15, :oneday => 0.25],
+    ),
+    :itt => Dict(
+        "allrounder" => [:gc => 0.2, :tt => 0.7, :oneday => 0.1],
+        "climber" => [:gc => 0.15, :tt => 0.35, :climber => 0.35, :oneday => 0.15],
+        "sprinter" => [:gc => 0.1, :tt => 0.5, :sprint => 0.25, :oneday => 0.15],
+        "unclassed" => [:gc => 0.2, :tt => 0.5, :oneday => 0.15, :climber => 0.15],
+    ),
+)
+
+"""Sprinter fixed penalty on mountain stages (instead of PCS-derived blend)."""
+const SPRINTER_MOUNTAIN_PENALTY = -0.5
+
+"""
+    compute_stage_type_modifiers(rider_df, base_strengths; modifier_scale=0.5)
+        -> Dict{Symbol, Vector{Float64}}
+
+Compute per-stage-type adjusted strengths from base (overall GC) strengths
+and PCS specialty profiles.
+
+The base strengths already incorporate odds, oracle, and all Bayesian signals
+via `estimate_strengths`. This function differentiates riders by stage type
+using their PCS specialty columns (gc, tt, sprint, climber, oneday).
+
+Returns a Dict mapping each stage type to a vector of adjusted strengths
+(same length as `base_strengths`).
+"""
+function compute_stage_type_modifiers(
+    rider_df::DataFrame,
+    base_strengths::Vector{Float64};
+    modifier_scale::Float64=0.5,
+)
+    n_riders = length(base_strengths)
+    specialty_cols = [:gc, :tt, :sprint, :climber, :oneday]
+
+    # Determine which riders have PCS data
+    has_pcs = if :has_pcs_data in propertynames(rider_df)
+        Bool.(rider_df.has_pcs_data)
+    elseif :has_pcs in propertynames(rider_df)
+        Bool.(rider_df.has_pcs)
+    else
+        available = intersect(propertynames(rider_df), specialty_cols)
+        [any(rider_df[i, col] != 0 for col in available) for i in 1:n_riders]
+    end
+
+    # Log-transform and z-score each PCS specialty column
+    # (following the one-day pattern: raw scores are heavily right-skewed)
+    z_scores = Dict{Symbol,Vector{Float64}}()
+    for col in specialty_cols
+        if col in propertynames(rider_df)
+            raw = Float64.(coalesce.(rider_df[!, col], 0.0))
+            logged = log1p.(max.(raw, 0.0))
+            μ = mean(logged)
+            σ = std(logged)
+            z_scores[col] = σ > 0 ? (logged .- μ) ./ σ : zeros(n_riders)
+        else
+            z_scores[col] = zeros(n_riders)
+        end
+    end
+
+    # Determine rider classifications
+    class_col = :classraw in propertynames(rider_df) ? :classraw :
+                :class in propertynames(rider_df) ? :class : nothing
+    classes = if class_col !== nothing
+        [lowercase(string(rider_df[i, class_col])) for i in 1:n_riders]
+    else
+        fill("unclassed", n_riders)
+    end
+
+    # Compute modifier for each stage type
+    result = Dict{Symbol,Vector{Float64}}()
+    for stage_type in [:flat, :hilly, :mountain, :itt]
+        modifiers = zeros(n_riders)
+        weights_for_type = STAGE_TYPE_MODIFIER_WEIGHTS[stage_type]
+
+        for i in 1:n_riders
+            !has_pcs[i] && continue
+            cls = classes[i]
+            rider_weights = get(weights_for_type, cls, weights_for_type["unclassed"])
+
+            # Sprinter mountain penalty: fixed value, not PCS-derived
+            if stage_type == :mountain && cls == "sprinter"
+                modifiers[i] = SPRINTER_MOUNTAIN_PENALTY
+                continue
+            end
+
+            isempty(rider_weights) && continue
+
+            blend = 0.0
+            for (col, w) in rider_weights
+                blend += w * z_scores[col][i]
+            end
+            modifiers[i] = blend
+        end
+
+        result[stage_type] = base_strengths .+ modifier_scale .* modifiers
+    end
+
+    # TTT uses ITT modifiers (TT specialists are likely on strong TTT teams)
+    result[:ttt] = copy(result[:itt])
+
+    return result
+end
+
 
 # ---------------------------------------------------------------------------
 # High-level prediction pipeline
