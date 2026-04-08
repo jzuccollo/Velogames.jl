@@ -134,7 +134,8 @@ export BacktestRace,
     tune_domestique_discount,
     build_race_catalogue,
     prefetch_race_data,
-    prefetch_all_races
+    prefetch_all_races,
+    spearman_correlation
 
 # Utilities
 export createkey,

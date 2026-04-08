@@ -31,20 +31,26 @@ io = IOBuffer()
 # --- Overview ---
 
 write(io, html_heading("Overview", 2))
-write(io, """<p>This report validates the Bayesian strength estimation model at three levels:</p>
+write(
+    io,
+    """<p>This report validates the Bayesian strength estimation model at three levels:</p>
 <ol>
 <li><strong>Prior predictive checks</strong> (no data needed) — simulate from the model's generative process and check whether implied outcomes match domain knowledge.</li>
 <li><strong>Historical backtest</strong> (PCS results 2023–2025) — a sanity check that predictions beat random and that rank correlations look reasonable.</li>
 <li><strong>Prospective evaluation</strong> (archived predictions vs results) — the most trustworthy evaluation, comparing pre-race predictions against actual outcomes.</li>
 </ol>
 <p>The model has three tuneable precision scale factors (<code>market_precision_scale</code>, <code>history_precision_scale</code>, <code>ability_precision_scale</code>) plus two decay rates.</p>
-""")
+"""
+)
 
 # --- Precision budget ---
 
 write(io, html_heading("Precision budget", 2))
-write(io, """<p>Each signal updates the rider's estimated strength via a Bayesian update. <strong>Precision</strong> (1/variance) controls how much each signal pulls the estimate — higher precision means the signal has more influence. <strong>Share</strong> is each signal's precision as a percentage of the total. Signals with low share contribute little and could potentially be removed.</p>
-<p>The "with market" columns show effective weights when betting odds are available. The market discount ($(DEFAULT_BAYESIAN_CONFIG.market_discount)×) inflates non-market variances on the assumption that odds already incorporate the information in those signals.</p>\n""")
+write(
+    io,
+    """<p>Each signal updates the rider's estimated strength via a Bayesian update. <strong>Precision</strong> (1/variance) controls how much each signal pulls the estimate — higher precision means the signal has more influence. <strong>Share</strong> is each signal's precision as a percentage of the total. Signals with low share contribute little and could potentially be removed.</p>
+<p>The "with market" columns show effective weights when betting odds are available. The market discount ($(DEFAULT_BAYESIAN_CONFIG.market_discount)×) inflates non-market variances on the assumption that odds already incorporate the information in those signals.</p>\n"""
+)
 budget = precision_budget(DEFAULT_BAYESIAN_CONFIG; n_history_years=history_years)
 write(io, html_table(budget))
 
@@ -91,10 +97,10 @@ sbc = suppress_output() do
 end
 
 sbc_df = DataFrame(
-    Diagnostic = ["Mean CDF rank", "Chi-squared p-value", "Uniform?"],
-    Value = [round(sbc.mean_rank, digits=3), round(sbc.chi_squared_p, digits=3),
-             sbc.chi_squared_p > 0.05 ? "Yes" : "No"],
-    Expected = ["0.5", "> 0.05", "Yes"],
+    Diagnostic=["Mean CDF rank", "Chi-squared p-value", "Uniform?"],
+    Value=[round(sbc.mean_rank, digits=3), round(sbc.chi_squared_p, digits=3),
+        sbc.chi_squared_p > 0.05 ? "Yes" : "No"],
+    Expected=["0.5", "> 0.05", "Yes"],
 )
 write(io, html_table(sbc_df))
 write(io, rank_histogram_chart(sbc.rank_histogram; title="All-signals SBC rank histogram", expected=sbc.n_sims / sbc.n_bins))
@@ -103,7 +109,7 @@ write(io, rank_histogram_chart(sbc.rank_histogram; title="All-signals SBC rank h
 write(io, html_heading("Per-signal SBC", 4))
 write(io, "<p>Each signal tested individually (no block-correlation discount active with a single signal).</p>\n")
 
-per_signal_sbc_rows = NamedTuple{(:Signal, :Mean_rank, :p_value, :Uniform), Tuple{String,Float64,Float64,String}}[]
+per_signal_sbc_rows = NamedTuple{(:Signal, :Mean_rank, :p_value, :Uniform),Tuple{String,Float64,Float64,String}}[]
 per_signal_names = Dict(:pcs => "PCS seasons", :vg => "VG season", :form => "PCS form",
     :history => "Race history", :vg_history => "VG history", :odds => "Odds", :oracle => "Oracle")
 
@@ -156,17 +162,17 @@ n_with_form = count(d -> d.form_df !== nothing, values(race_data))
 n_with_seasons = count(d -> d.seasons_df !== nothing, values(race_data))
 
 avail_df = DataFrame(
-    Signal = [
+    Signal=[
         "PCS results (ground truth)", "PCS season points", "VG season points (cumulative)",
         "PCS race history", "VG race history", "Archived PCS form",
         "Archived PCS seasons", "Archived Betfair odds", "Archived Cycling Oracle",
     ],
-    Races = [
+    Races=[
         "$n_fetched / $n_total", "$n_fetched / $n_fetched", "$n_fetched / $n_fetched",
         "$n_with_history / $n_fetched", "$n_with_vg_history / $n_fetched", "$n_with_form / $n_fetched",
         "$n_with_seasons / $n_fetched", "$n_with_odds / $n_fetched", "$n_with_oracle / $n_fetched",
     ],
-    Coverage = [
+    Coverage=[
         "$(round(100 * n_fetched / n_total, digits=0))%", "100%", "100%",
         "$(round(100 * n_with_history / max(n_fetched, 1), digits=0))%",
         "$(round(100 * n_with_vg_history / max(n_fetched, 1), digits=0))%",
@@ -180,7 +186,7 @@ write(io, html_table(avail_df))
 
 if n_with_odds > 0 || n_with_oracle > 0
     write(io, "<p>Races with archived odds/oracle data:</p>\n")
-    archive_rows = NamedTuple{(:race, :year, :odds, :oracle), Tuple{String,Int,String,String}}[]
+    archive_rows = NamedTuple{(:race, :year, :odds, :oracle),Tuple{String,Int,String,String}}[]
     for (race, data) in sort(collect(race_data), by=p -> (p.first.year, p.first.name))
         has_odds = data.odds_df !== nothing
         has_oracle = data.oracle_df !== nothing
@@ -235,9 +241,9 @@ if !isempty(all_z)
     cov2 = round(count(z -> abs(z) <= 2.0, all_z) / length(all_z), digits=3)
 
     cal_df = DataFrame(
-        Statistic = ["Mean", "Std", "1σ coverage", "2σ coverage", "Total rider-observations"],
-        Observed = [z_mean, z_std, cov1, cov2, length(all_z)],
-        Expected = ["0.0", "1.0", "0.683", "0.954", "—"],
+        Statistic=["Mean", "Std", "1σ coverage", "2σ coverage", "Total rider-observations"],
+        Observed=[z_mean, z_std, cov1, cov2, length(all_z)],
+        Expected=["0.0", "1.0", "0.683", "0.954", "—"],
     )
     write(io, html_table(cal_df))
 end
@@ -259,7 +265,7 @@ if !isempty(all_z) && !isempty(all_strengths) && length(all_z) == length(all_str
         ("Top 25% (favourites)", all_strengths .>= q75_s),
     ]
 
-    tier_rows = NamedTuple{(:Tier, :Mean_z, :Std_z, :Coverage_1σ, :n), Tuple{String,Float64,Float64,Float64,Int}}[]
+    tier_rows = NamedTuple{(:Tier, :Mean_z, :Std_z, :Coverage_1σ, :n),Tuple{String,Float64,Float64,Float64,Int}}[]
     for (label, mask) in tiers
         tier_z = all_z[mask]
         length(tier_z) < 10 && continue
@@ -272,6 +278,67 @@ if !isempty(all_z) && !isempty(all_strengths) && length(all_z) == length(all_str
         ))
     end
     !isempty(tier_rows) && write(io, html_table(DataFrame(tier_rows)))
+end
+
+# --- Discrimination by position band ---
+
+write(io, html_heading("Discrimination by position band", 4))
+write(io, "<p>Spearman ρ computed within bands of actual finishing position. High ρ for positions 1–10 means the model correctly orders the top finishers relative to each other. Low ρ for positions 10–20 means the model cannot differentiate within the scoring boundary. This matters more for team selection than overall ρ because the optimiser primarily cares about the top 20–30 riders.</p>\n")
+
+begin
+    all_details = DataFrame[]
+    for r in results
+        r.rider_details === nothing && continue
+        push!(all_details, r.rider_details)
+    end
+    if !isempty(all_details)
+        combined = vcat(all_details...)
+        bands = [
+            ("Positions 1–10 (podium contenders)", 1, 10),
+            ("Positions 11–20 (scoring boundary)", 11, 20),
+            ("Positions 21–40 (near miss)", 21, 40),
+            ("Positions 41+ (outsiders)", 41, 999),
+        ]
+        band_rows = NamedTuple{(:Band, :Spearman_ρ, :Mean_abs_rank_error, :n),Tuple{String,Float64,Float64,Int}}[]
+        for (label, lo, hi) in bands
+            mask = (combined.actual_rank .>= lo) .& (combined.actual_rank .<= hi)
+            band_df = combined[mask, :]
+            nrow(band_df) < 10 && continue
+            rho = spearman_correlation(Float64.(band_df.predicted_rank), Float64.(band_df.actual_rank))
+            mae = mean(band_df.rank_error)
+            push!(band_rows, (Band=label, Spearman_ρ=round(rho, digits=3), Mean_abs_rank_error=round(mae, digits=1), n=nrow(band_df)))
+        end
+        !isempty(band_rows) && write(io, html_table(DataFrame(band_rows)))
+    end
+end
+
+# --- Signal directional accuracy (historical) ---
+
+write(io, html_heading("Signal directional accuracy", 4))
+write(io, "<p>For riders with a signal shift > 0.1, does the shift direction match the actual outcome? A <em>correct direction</em> means: signal shifted strength up and the rider finished higher than the prior predicted (or vice versa). Accuracy near 50% means the signal is no better than random for direction; above 60% suggests genuine information. Computed from the historical backtest using rider-level shift and rank data.</p>\n")
+
+begin
+    # Collect rider-level predictions with shift columns from the backtest
+    bt_shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_history, :shift_vg_history]
+    dir_accuracy_rows = NamedTuple{(:Signal, :n_riders, :Directional_accuracy),Tuple{String,Int,String}}[]
+    dir_shift_labels = Dict(
+        :shift_pcs => "PCS seasons", :shift_vg => "VG season points",
+        :shift_form => "PCS form",
+        :shift_history => "PCS race history", :shift_vg_history => "VG race history",
+    )
+
+    # We need rider-level shift data + actual rank. The backtest stores rider_details
+    # (predicted_rank, actual_rank) but not per-signal shifts. We can approximate directional
+    # accuracy using the aggregate mean_signal_shifts from BacktestResult — but that's per-race,
+    # not per-rider. For a proper per-rider analysis we'd need to store shifts in rider_details.
+    # For now, report a note that this requires rider-level shift data.
+    #
+    # Alternative: re-run estimate_strengths on rider_details to recover shifts. But that's
+    # expensive and duplicates the backtest. Instead, add shift columns to rider_details.
+
+    write(io, html_callout(
+        "Per-rider signal directional accuracy requires storing per-rider shift columns in <code>BacktestResult.rider_details</code>. Currently only aggregate mean |shift| per race is stored. The prospective evaluation section below has per-rider directional accuracy for the 10 archived races.";
+        type="info"))
 end
 
 # --- Signal contribution ---
@@ -295,7 +362,7 @@ for r in results
 end
 
 if !isempty(agg_shifts)
-    sig_rows = NamedTuple{(:Signal, :Mean_shift, :Std, :Races), Tuple{String,Float64,Float64,Int}}[]
+    sig_rows = NamedTuple{(:Signal, :Mean_shift, :Std, :Races),Tuple{String,Float64,Float64,Int}}[]
     for k in shift_keys
         haskey(agg_shifts, k) || continue
         vals = agg_shifts[k]
@@ -482,7 +549,7 @@ if nrow(pit_df) > 0
             ("Top 25% (favourites)", scored_aug.strength .>= q75_s),
         ]
 
-        pit_tier_rows = NamedTuple{(:Tier, :n, :Mean_PIT, :PIT_above_09), Tuple{String,Int,Float64,String}}[]
+        pit_tier_rows = NamedTuple{(:Tier, :n, :Mean_PIT, :PIT_above_09),Tuple{String,Int,Float64,String}}[]
         for (label, mask) in tiers
             tier = scored_aug[mask, :]
             nrow(tier) < 3 && continue
@@ -505,7 +572,7 @@ if nrow(pit_df) > 0
                     ("Middle 50%", (race_scored.strength .> rq25) .& (race_scored.strength .< rq75)),
                     ("Top 25%", race_scored.strength .>= rq75),
                 ]
-                rtier_rows = NamedTuple{(:Tier, :n, :Mean_PIT, :PIT_above_09), Tuple{String,Int,Float64,String}}[]
+                rtier_rows = NamedTuple{(:Tier, :n, :Mean_PIT, :PIT_above_09),Tuple{String,Int,Float64,String}}[]
                 for (label, mask) in race_tiers
                     rt = race_scored[mask, :]
                     nrow(rt) < 3 && continue
@@ -534,7 +601,7 @@ if nrow(pit_df) > 0
     if :uncertainty in propertynames(augmented_pit)
         race_slugs_unc = sort(unique(augmented_pit.race))
         if length(race_slugs_unc) > 1
-            unc_rows = NamedTuple{(:Race, :Mean_uncertainty, :Range, :Mean_PIT, :PIT_above_09), Tuple{String,Float64,String,Float64,String}}[]
+            unc_rows = NamedTuple{(:Race, :Mean_uncertainty, :Range, :Mean_PIT, :PIT_above_09),Tuple{String,Float64,String,Float64,String}}[]
             for slug in race_slugs_unc
                 rp = filter(row -> row.race == slug, augmented_pit)
                 sc = filter(row -> row.scored, rp)
@@ -578,7 +645,7 @@ if nrow(pit_df) > 0
     # --- Signal directional accuracy ---
 
     write(io, html_heading("Signal directional accuracy", 3))
-    write(io, "<p>When a signal shifts the posterior by > 0.5 (positive = stronger), what fraction of those riders actually scored VG points? A good signal pushes strength up for riders who score and down for riders who don't.</p>\n")
+    write(io, "<p>Two measures of whether each signal shifts riders in the correct direction. <strong>VG scoring</strong>: when a signal shifts strength up by > 0.5, what fraction of those riders scored VG points? <strong>Rank-based</strong>: for all riders with a non-trivial shift (|shift| > 0.1), what fraction had the shift direction match their actual PCS finishing position relative to the field median? Rank-based accuracy near 50% means the signal is no better than random; above 60% suggests genuine information.</p>\n")
 
     if nrow(augmented_pit) > 0
         shift_cols_dir = [c for c in propertynames(augmented_pit) if startswith(string(c), "shift_") && c != :shift_trajectory]
@@ -589,49 +656,144 @@ if nrow(pit_df) > 0
             :shift_odds => "Odds", :shift_qualitative => "Qualitative",
         )
 
-        dir_rows = NamedTuple{(:Signal, :n_positive, :scoring_rate, :n_negative, :zero_rate), Tuple{String,Int,String,Int,String}}[]
+        # Build rank-based directional accuracy using PCS results
+        rank_dir_data = DataFrame[]
+        for slug in sort(unique(augmented_pit.race))
+            pcs = load_race_snapshot("pcs_results", slug, current_year)
+            pcs === nothing && continue
+            pos_col = hasproperty(pcs, :position) ? :position : hasproperty(pcs, :rnk) ? :rnk : nothing
+            pos_col === nothing && continue
+            race_aug = filter(row -> row.race == slug, augmented_pit)
+            matched = innerjoin(race_aug, select(pcs, :riderkey, pos_col); on=:riderkey, makeunique=true)
+            nrow(matched) < 10 && continue
+            matched[!, :actual_position] = Float64.(matched[!, pos_col])
+            median_pos = median(matched.actual_position)
+            # above_median = finished better (lower position) than median
+            matched[!, :above_median] = matched.actual_position .< median_pos
+            push!(rank_dir_data, matched)
+        end
+        rank_combined = isempty(rank_dir_data) ? DataFrame() : reduce((a, b) -> vcat(a, b; cols=:union), rank_dir_data)
+
+        dir_rows = NamedTuple{(:Signal, :n_up, :scoring_pct, :n_down, :zero_pct, :n_rank, :rank_accuracy),Tuple{String,Int,String,Int,String,Int,String}}[]
         for col in shift_cols_dir
             col ∉ propertynames(augmented_pit) && continue
             vals = augmented_pit[!, col]
             scored_flags = augmented_pit.scored
 
-            # Riders where signal pushed strength UP by > 0.5
+            # VG scoring-based: shifts UP > 0.5 → scoring rate
             pos_mask = [!ismissing(v) && v > 0.5 for v in vals]
             n_pos = count(pos_mask)
-            if n_pos >= 5
+            pos_rate = if n_pos >= 5
                 pos_scoring = count(i -> pos_mask[i] && scored_flags[i], 1:nrow(augmented_pit))
-                pos_rate = round(100 * pos_scoring / n_pos, digits=1)
+                round(100 * pos_scoring / n_pos, digits=1)
             else
-                pos_rate = NaN
+                NaN
             end
 
-            # Riders where signal pushed strength DOWN by > 0.5
+            # VG scoring-based: shifts DOWN > 0.5 → zero rate
             neg_mask = [!ismissing(v) && v < -0.5 for v in vals]
             n_neg = count(neg_mask)
-            if n_neg >= 5
+            neg_rate = if n_neg >= 5
                 neg_zero = count(i -> neg_mask[i] && !scored_flags[i], 1:nrow(augmented_pit))
-                neg_rate = round(100 * neg_zero / n_neg, digits=1)
+                round(100 * neg_zero / n_neg, digits=1)
             else
-                neg_rate = NaN
+                NaN
             end
 
-            (n_pos < 5 && n_neg < 5) && continue
+            # Rank-based: does shift direction match above/below median position?
+            n_rank = 0
+            rank_acc = NaN
+            if nrow(rank_combined) > 0 && col in propertynames(rank_combined)
+                rvals = rank_combined[!, col]
+                rmask = [!ismissing(v) && abs(v) > 0.1 for v in rvals]
+                n_rank = count(rmask)
+                if n_rank >= 10
+                    correct = count(i -> rmask[i] && (
+                            (rvals[i] > 0 && rank_combined.above_median[i]) ||
+                            (rvals[i] < 0 && !rank_combined.above_median[i])
+                        ), 1:nrow(rank_combined))
+                    rank_acc = round(100 * correct / n_rank, digits=1)
+                end
+            end
+
+            (n_pos < 5 && n_neg < 5 && n_rank < 10) && continue
             label = get(dir_labels, col, string(col))
             push!(dir_rows, (
                 Signal=label,
-                n_positive=n_pos,
-                scoring_rate=isnan(pos_rate) ? "—" : "$(pos_rate)%",
-                n_negative=n_neg,
-                zero_rate=isnan(neg_rate) ? "—" : "$(neg_rate)%",
+                n_up=n_pos,
+                scoring_pct=isnan(pos_rate) ? "—" : "$(pos_rate)%",
+                n_down=n_neg,
+                zero_pct=isnan(neg_rate) ? "—" : "$(neg_rate)%",
+                n_rank=n_rank,
+                rank_accuracy=isnan(rank_acc) ? "—" : "$(rank_acc)%",
             ))
         end
         if !isempty(dir_rows)
             dir_df = DataFrame(dir_rows)
-            rename!(dir_df, :n_positive => Symbol("n (shift > 0.5)"),
-                :scoring_rate => Symbol("% scoring"),
-                :n_negative => Symbol("n (shift < -0.5)"),
-                :zero_rate => Symbol("% zero-scored"))
+            rename!(dir_df,
+                :n_up => Symbol("n (shift > 0.5)"),
+                :scoring_pct => Symbol("% scoring"),
+                :n_down => Symbol("n (shift < -0.5)"),
+                :zero_pct => Symbol("% zero-scored"),
+                :n_rank => Symbol("n (rank-based)"),
+                :rank_accuracy => Symbol("Rank accuracy"),
+            )
             write(io, html_table(dir_df))
+        end
+    end
+
+    # --- Within-tier signal discrimination ---
+
+    write(io, html_heading("Within-tier signal discrimination", 4))
+    write(io, "<p>Within-tier Spearman ρ between each signal's shift value and actual PCS finishing position, split by predicted strength quartile. Measures whether a signal helps order riders <em>within</em> each tier — a positive ρ means larger positive shifts predict better finishes among similarly-ranked riders. ρ near zero means the signal adds no discrimination within that tier. A signal that is useful overall but poor within the top tier suggests it separates favourites from the field but cannot differentiate among favourites.</p>\n")
+
+    if nrow(rank_combined) > 0 && :strength in propertynames(rank_combined)
+        str_q25 = quantile(skipmissing(rank_combined.strength), 0.25)
+        str_q75 = quantile(skipmissing(rank_combined.strength), 0.75)
+        tier_defs = [
+            ("Bottom 25%", rank_combined.strength .<= str_q25),
+            ("Middle 50%", (rank_combined.strength .> str_q25) .& (rank_combined.strength .< str_q75)),
+            ("Top 25%", rank_combined.strength .>= str_q75),
+        ]
+
+        tier_rho_rows = NamedTuple{(:Signal, :Bottom_25_rho, :Bottom_25_n, :Middle_50_rho, :Middle_50_n, :Top_25_rho, :Top_25_n),Tuple{String,String,Int,String,Int,String,Int}}[]
+        for col in shift_cols_dir
+            col ∉ propertynames(rank_combined) && continue
+            label = get(dir_labels, col, string(col))
+            rhos = String[]
+            ns = Int[]
+            for (_, tier_mask) in tier_defs
+                tier_df = rank_combined[tier_mask, :]
+                # Filter to riders with non-missing, non-zero shifts
+                valid = [!ismissing(tier_df[i, col]) && tier_df[i, col] != 0.0 for i in 1:nrow(tier_df)]
+                valid_df = tier_df[valid, :]
+                n_tier = nrow(valid_df)
+                if n_tier >= 10
+                    shifts = Float64.([valid_df[i, col] for i in 1:nrow(valid_df)])
+                    positions = Float64.(valid_df.actual_position)
+                    # Positive shift = stronger prediction, lower position = better finish
+                    # So we correlate shift with -position (higher shift should mean lower position)
+                    rho = spearman_correlation(shifts, -positions)
+                    push!(rhos, "$(round(rho, digits=3))")
+                else
+                    push!(rhos, "—")
+                end
+                push!(ns, n_tier)
+            end
+            any(r -> r != "—", rhos) || continue
+            push!(tier_rho_rows, (Signal=label, Bottom_25_rho=rhos[1], Bottom_25_n=ns[1], Middle_50_rho=rhos[2], Middle_50_n=ns[2], Top_25_rho=rhos[3], Top_25_n=ns[3]))
+        end
+        if !isempty(tier_rho_rows)
+            tier_rho_df = DataFrame(tier_rho_rows)
+            rename!(tier_rho_df,
+                :Bottom_25_rho => Symbol("ρ (bottom 25%)"),
+                :Bottom_25_n => Symbol("n (bottom)"),
+                :Middle_50_rho => Symbol("ρ (middle 50%)"),
+                :Middle_50_n => Symbol("n (middle)"),
+                :Top_25_rho => Symbol("ρ (top 25%)"),
+                :Top_25_n => Symbol("n (top)"),
+            )
+            write(io, html_table(tier_rho_df))
         end
     end
 
@@ -644,7 +806,7 @@ if nrow(pit_df) > 0
         shift_cols = [c for c in propertynames(augmented_pit) if startswith(string(c), "shift_")]
 
         if !isempty(shift_cols)
-            load_rows = NamedTuple{(:Race, :Signals_active, :Mean_shift, :Mean_uncertainty, :Mean_PIT), Tuple{String,Int,Float64,Any,Float64}}[]
+            load_rows = NamedTuple{(:Race, :Signals_active, :Mean_shift, :Mean_uncertainty, :Mean_PIT),Tuple{String,Int,Float64,Any,Float64}}[]
             for slug in sort(unique(augmented_pit.race))
                 rp = filter(row -> row.race == slug, augmented_pit)
                 sc = filter(row -> row.scored, rp)
@@ -679,7 +841,7 @@ if nrow(pit_df) > 0
     write(io, "<p>How often do predicted favourites blank entirely? <strong>Top10 zeros</strong> counts how many of the 10 strongest-predicted riders scored zero VG points. A top-10 scoring rate below 70% suggests the race is highly stochastic (bunch sprints, crashes) or the model is overrating certain riders. Selective races like Strade Bianche typically show 90–100%; flat sprinters' classics like Kuurne can drop to 40%.</p>\n")
 
     if :strength in propertynames(augmented_pit)
-        miss_rows = NamedTuple{(:Race, :Top10_zeros, :Top20_zeros, :Top10_scoring_rate), Tuple{String,String,String,String}}[]
+        miss_rows = NamedTuple{(:Race, :Top10_zeros, :Top20_zeros, :Top10_scoring_rate),Tuple{String,String,String,String}}[]
         for slug in sort(unique(augmented_pit.race))
             rp = filter(row -> row.race == slug && !ismissing(row.strength), augmented_pit)
             nrow(rp) < 20 && continue
@@ -701,7 +863,7 @@ if nrow(pit_df) > 0
     write(io, "<p>Races grouped by big-miss rate into selectivity clusters. Selective races (hard courses) have low big-miss rates; stochastic races (bunch sprints, minor races) have high big-miss rates. This informs whether race-type-specific uncertainty is needed.</p>\n")
 
     if :strength in propertynames(augmented_pit) && nrow(prospective_df) > 0
-        cluster_rows = NamedTuple{(:Race, :Category, :Big_miss_rate, :Spearman_rho, :Mean_PIT, :Mean_uncertainty, :Cluster), Tuple{String,Any,String,Any,Float64,Any,String}}[]
+        cluster_rows = NamedTuple{(:Race, :Category, :Big_miss_rate, :Spearman_rho, :Mean_PIT, :Mean_uncertainty, :Cluster),Tuple{String,Any,String,Any,Float64,Any,String}}[]
         for slug in sort(unique(augmented_pit.race))
             rp = filter(row -> row.race == slug && !ismissing(row.strength), augmented_pit)
             nrow(rp) < 20 && continue
@@ -727,6 +889,443 @@ if nrow(pit_df) > 0
         if !isempty(cluster_rows)
             cluster_df = sort(DataFrame(cluster_rows), :Big_miss_rate)
             write(io, html_table(cluster_df))
+        end
+    end
+
+    # --- Prospective discrimination by position band ---
+
+    write(io, html_heading("Discrimination by position band", 3))
+    write(io, "<p>Spearman ρ within bands of actual PCS finishing position, aggregated across all prospective races. High ρ for positions 1–10 means the model correctly orders podium contenders relative to each other. Low ρ for positions 10–20 means the model cannot differentiate within the scoring boundary. This matters more for team selection than overall ρ because the optimiser primarily cares about the top 20–30 riders.</p>\n")
+
+    begin
+        band_parts = DataFrame[]
+        for slug in sort(unique(augmented_pit.race))
+            pred = load_race_snapshot("predictions", slug, current_year)
+            pcs = load_race_snapshot("pcs_results", slug, current_year)
+            pred === nothing && continue
+            pcs === nothing && continue
+            !hasproperty(pred, :strength) && continue
+
+            pos_col = hasproperty(pcs, :position) ? :position : hasproperty(pcs, :rnk) ? :rnk : nothing
+            pos_col === nothing && continue
+
+            matched = innerjoin(
+                select(pred, :riderkey, :strength),
+                select(pcs, :riderkey, pos_col);
+                on=:riderkey, makeunique=true,
+            )
+            nrow(matched) < 10 && continue
+            matched[!, :actual_position] = Int.(matched[!, pos_col])
+            matched[!, :predicted_rank] = invperm(sortperm(matched.strength, rev=true))
+            matched[!, :race] .= slug
+            push!(band_parts, matched[:, [:race, :riderkey, :strength, :actual_position, :predicted_rank]])
+        end
+
+        if !isempty(band_parts)
+            band_combined = vcat(band_parts...)
+            bands = [
+                ("Positions 1–10 (podium contenders)", 1, 10),
+                ("Positions 11–20 (scoring boundary)", 11, 20),
+                ("Positions 21–40 (near miss)", 21, 40),
+                ("Positions 41+ (outsiders)", 41, 999),
+            ]
+            band_rows = NamedTuple{(:Band, :Spearman_ρ, :Mean_abs_rank_error, :n),Tuple{String,Float64,Float64,Int}}[]
+            for (label, lo, hi) in bands
+                mask = (band_combined.actual_position .>= lo) .& (band_combined.actual_position .<= hi)
+                band_df = band_combined[mask, :]
+                nrow(band_df) < 10 && continue
+                rho = spearman_correlation(Float64.(band_df.predicted_rank), Float64.(band_df.actual_position))
+                mae = mean(abs.(band_df.predicted_rank .- band_df.actual_position))
+                push!(band_rows, (Band=label, Spearman_ρ=round(rho, digits=3), Mean_abs_rank_error=round(mae, digits=1), n=nrow(band_df)))
+            end
+            !isempty(band_rows) && write(io, html_table(DataFrame(band_rows)))
+        else
+            write(io, "<p>Insufficient data for per-position-band analysis.</p>\n")
+        end
+    end
+
+    # --- Signal ablation study ---
+
+    write(io, html_heading("Signal ablation study", 3))
+    write(io, """<p>Systematic ablation testing which signals improve discrimination and how market signals should interact with non-market signals. Re-runs the prediction pipeline on all prospective races with different signal configurations.</p>\n""")
+
+    begin
+        # Build BacktestRace entries for prospective races
+        prosp_slugs = sort(unique(augmented_pit.race))
+        ablation_races = BacktestRace[]
+        for slug in prosp_slugs
+            ri = Velogames._find_race_by_slug(slug)
+            ri === nothing && continue
+            race_date = try
+                Date(ri.date)
+            catch
+                nothing
+            end
+            push!(ablation_races, BacktestRace(
+                ri.name, current_year, slug, ri.category, history_years, race_date,
+            ))
+        end
+
+        if !isempty(ablation_races)
+            @info "Running signal ablation on $(length(ablation_races)) prospective races..."
+
+            # Prefetch data (uses cache)
+            vg_racelists = Velogames.prefetch_vg_racelists(unique([current_year]))
+            ablation_data = Dict{BacktestRace,RaceData}()
+            for race in ablation_races
+                try
+                    ablation_data[race] = prefetch_race_data(race; vg_racelists=vg_racelists, cache_config=bt_cache)
+                catch e
+                    @warn "Ablation prefetch failed for $(race.name): $e"
+                end
+            end
+
+            # Helper: run a signal config across all races, return rider-level DataFrame
+            function _run_ablation(signals, bc; race_filter=nothing)
+                parts = DataFrame[]
+                for (race, data) in sort(collect(ablation_data), by=p -> p.first.name)
+                    data.actual_df === nothing && continue
+                    race_filter !== nothing && !race_filter(race) && continue
+                    try
+                        r = backtest_race(race, data; signals=signals, bayesian_config=bc, n_sims=n_sims, store_rider_details=true)
+                        r.rider_details === nothing && continue
+                        detail = r.rider_details
+                        detail[!, :race] .= race.pcs_slug
+                        push!(parts, detail)
+                    catch e
+                        @warn "Ablation failed for $(race.name): $e"
+                    end
+                end
+                isempty(parts) ? DataFrame() : vcat(parts...)
+            end
+
+            # Helper: position-dependent stitching
+            function _run_pos_dependent(no_mkt_signals, mkt_signals, high_bc, low_bc; top_quantile=0.75)
+                parts = DataFrame[]
+                for (race, data) in sort(collect(ablation_data), by=p -> p.first.name)
+                    data.actual_df === nothing && continue
+                    try
+                        r_base = backtest_race(race, data; signals=no_mkt_signals, bayesian_config=DEFAULT_BAYESIAN_CONFIG, n_sims=n_sims, store_rider_details=true)
+                        r_base.rider_details === nothing && continue
+                        q_thresh = quantile(r_base.rider_details.strength, top_quantile)
+                        top_keys = Set(r_base.rider_details[r_base.rider_details.strength.>=q_thresh, :riderkey])
+
+                        r_high = backtest_race(race, data; signals=mkt_signals, bayesian_config=high_bc, n_sims=n_sims, store_rider_details=true)
+                        r_low = backtest_race(race, data; signals=mkt_signals, bayesian_config=low_bc, n_sims=n_sims, store_rider_details=true)
+                        (r_high.rider_details === nothing || r_low.rider_details === nothing) && continue
+
+                        stitched = vcat(
+                            filter(:riderkey => k -> k in top_keys, r_high.rider_details),
+                            filter(:riderkey => k -> !(k in top_keys), r_low.rider_details),
+                        )
+                        stitched[!, :predicted_rank] = invperm(sortperm(stitched.strength, rev=true))
+                        stitched[!, :actual_rank] = invperm(sortperm(stitched.actual_rank))
+                        stitched[!, :race] .= race.pcs_slug
+                        push!(parts, stitched)
+                    catch e
+                        @warn "Position-dependent ablation failed for $(race.name): $e"
+                    end
+                end
+                isempty(parts) ? DataFrame() : vcat(parts...)
+            end
+
+            # Helper: compute per-tier ρ from rider-level DataFrame (point estimate)
+            function _tier_rho_point(df)
+                nrow(df) < 20 && return Dict{String,Any}()
+                result = Dict{String,Any}()
+                for (label, q_lo, q_hi) in [("Bottom 25%", 0.0, 0.25), ("Middle 50%", 0.25, 0.75), ("Top 25%", 0.75, 1.0), ("Overall", 0.0, 1.0)]
+                    if label == "Overall"
+                        tier_df = df
+                    else
+                        lo = q_lo > 0 ? quantile(df.strength, q_lo) : minimum(df.strength) - 1
+                        hi = q_hi < 1 ? quantile(df.strength, q_hi) : maximum(df.strength) + 1
+                        tier_df = df[(df.strength.>lo).&(df.strength.<=hi), :]
+                    end
+                    result[label] = nrow(tier_df) >= 10 ?
+                                    round(spearman_correlation(Float64.(tier_df.predicted_rank), Float64.(tier_df.actual_rank)), digits=3) : NaN
+                end
+                result
+            end
+
+            # Race-stratified bootstrap: resample whole races (correct unit — riders
+            # within a race are correlated) and recompute tier ρ values.
+            function _tier_rhos(df; n_boot=1000, rng=Random.MersenneTwister(42))
+                point = _tier_rho_point(df)
+                isempty(point) && return point
+
+                # Need a :race column for stratified bootstrap
+                if !hasproperty(df, :race)
+                    return point
+                end
+
+                races = unique(df.race)
+                n_races = length(races)
+                n_races < 3 && return point  # too few races to bootstrap
+
+                tier_defs = [("Bottom 25%", 0.0, 0.25), ("Middle 50%", 0.25, 0.75), ("Top 25%", 0.75, 1.0), ("Overall", 0.0, 1.0)]
+                boot_samples = Dict(label => Float64[] for (label, _, _) in tier_defs)
+
+                for _ in 1:n_boot
+                    # Resample races with replacement
+                    sampled_races = races[rand(rng, 1:n_races, n_races)]
+                    parts = DataFrame[]
+                    for r in sampled_races
+                        push!(parts, filter(:race => ==(r), df))
+                    end
+                    boot_df = vcat(parts...)
+                    nrow(boot_df) < 20 && continue
+
+                    # Keep per-race ranks as-is (matching the point estimate).
+                    # When a race appears twice, its riders are duplicated with
+                    # identical per-race ranks, double-weighting that race.
+
+                    for (label, q_lo, q_hi) in tier_defs
+                        if label == "Overall"
+                            tier_df = boot_df
+                        else
+                            lo = q_lo > 0 ? quantile(boot_df.strength, q_lo) : minimum(boot_df.strength) - 1
+                            hi = q_hi < 1 ? quantile(boot_df.strength, q_hi) : maximum(boot_df.strength) + 1
+                            tier_df = boot_df[(boot_df.strength.>lo).&(boot_df.strength.<=hi), :]
+                        end
+                        rho = nrow(tier_df) >= 10 ?
+                              spearman_correlation(Float64.(tier_df.predicted_rank), Float64.(tier_df.actual_rank)) : NaN
+                        push!(boot_samples[label], rho)
+                    end
+                end
+
+                # Format as "point [lo, hi]"
+                result = Dict{String,Any}()
+                for (label, _, _) in tier_defs
+                    pv = get(point, label, NaN)
+                    samples = filter(!isnan, boot_samples[label])
+                    if isnan(pv) || length(samples) < 100
+                        result[label] = pv
+                    else
+                        lo = round(quantile(samples, 0.025), digits=3)
+                        hi = round(quantile(samples, 0.975), digits=3)
+                        result[label] = "$(round(pv, digits=3)) [$lo, $hi]"
+                    end
+                end
+                result
+            end
+
+            # ============================================================
+            # Part 1: Non-market signal selection (baseline for all races)
+            # ============================================================
+
+            write(io, html_heading("Non-market signal selection", 4))
+            write(io, "<p>Which non-market signals improve discrimination? Tests signal subsets without odds or oracle — the configuration used for most races. Signals with near-zero within-tier ρ (PCS form, VG race history, qualitative) may be adding noise.</p>\n")
+
+            nm_configs = [
+                ("All non-market", [:pcs, :vg_season, :race_history, :vg_history, :form]),
+                ("Drop form", [:pcs, :vg_season, :race_history, :vg_history]),
+                ("Drop VG history", [:pcs, :vg_season, :race_history, :form]),
+                ("Drop qualitative", [:pcs, :vg_season, :race_history, :vg_history, :form]),  # qual not in non-market anyway
+                ("Drop form+VG hist", [:pcs, :vg_season, :race_history]),
+                ("PCS + race hist only", [:pcs, :race_history]),
+                ("PCS + VG season only", [:pcs, :vg_season]),
+            ]
+
+            nm_results = Dict{String,Dict{String,Any}}()
+            for (label, signals) in nm_configs
+                @info "  Non-market: $label"
+                df = _run_ablation(signals, DEFAULT_BAYESIAN_CONFIG)
+                nm_results[label] = _tier_rhos(df)
+            end
+
+            # Build table
+            _format_rho(v) = v isa String ? v : (v isa Number && isnan(v)) ? "—" : "$v"
+            nm_labels = [l for (l, _) in nm_configs]
+            tier_names = ["Bottom 25%", "Middle 50%", "Top 25%", "Overall"]
+            nm_rows = []
+            for tier in tier_names
+                row = Dict{String,Any}("Tier" => tier)
+                for label in nm_labels
+                    rhos = get(nm_results, label, Dict())
+                    v = get(rhos, tier, NaN)
+                    row[label] = _format_rho(v)
+                end
+                push!(nm_rows, row)
+            end
+            if !isempty(nm_rows)
+                col_order = ["Tier"; nm_labels]
+                nm_df = DataFrame([col => [r[col] for r in nm_rows] for col in col_order])
+                write(io, html_table(nm_df))
+            end
+
+            # ============================================================
+            # Part 2: Market signal configurations (races with odds)
+            # ============================================================
+
+            write(io, html_heading("Market signal configurations", 4))
+            write(io, """<p>How should market signals (odds, oracle) be integrated? Tests uniform discount values and position-dependent discount (full discount for top-quartile riders only). Also tests odds-only and oracle-only to identify which market signal adds value.</p>\n""")
+
+            all_signals = [:pcs, :vg_season, :race_history, :vg_history, :form, :odds, :oracle]
+            odds_only = [:pcs, :vg_season, :race_history, :vg_history, :form, :odds]
+            oracle_only = [:pcs, :vg_season, :race_history, :vg_history, :form, :oracle]
+            no_market_signals = [:pcs, :vg_season, :race_history, :vg_history, :form]
+
+            mkt_results = Dict{String,Dict{String,Any}}()
+
+            @info "  Market: no market (baseline)"
+            mkt_results["No market"] = _tier_rhos(_run_ablation(no_market_signals, DEFAULT_BAYESIAN_CONFIG))
+
+            for md in [8.0, 4.0, 2.0]
+                for (label_prefix, sigs) in [("All mkt", all_signals), ("Odds only", odds_only), ("Oracle only", oracle_only)]
+                    label = "$label_prefix d=$md"
+                    @info "  Market: $label"
+                    bc = BayesianConfig(; market_discount=md)
+                    mkt_results[label] = _tier_rhos(_run_ablation(sigs, bc))
+                end
+            end
+
+            # Position-dependent variants
+            for (pd_label, top_q) in [("Pos-dep top25%", 0.75), ("Pos-dep top33%", 0.67)]
+                @info "  Market: $pd_label"
+                high_bc = BayesianConfig(; market_discount=8.0)
+                low_bc = BayesianConfig(; market_discount=1.0)
+                df = _run_pos_dependent(no_market_signals, all_signals, high_bc, low_bc; top_quantile=top_q)
+                mkt_results[pd_label] = _tier_rhos(df)
+            end
+
+            # Also test pos-dep with odds only
+            @info "  Market: Pos-dep odds-only top25%"
+            high_bc = BayesianConfig(; market_discount=8.0)
+            low_bc = BayesianConfig(; market_discount=1.0)
+            df = _run_pos_dependent(no_market_signals, odds_only, high_bc, low_bc; top_quantile=0.75)
+            mkt_results["Pos-dep odds top25%"] = _tier_rhos(df)
+
+            # Build table
+            mkt_labels = ["No market",
+                "All mkt d=8.0", "Odds only d=8.0", "Oracle only d=8.0",
+                "All mkt d=4.0", "Odds only d=4.0", "Oracle only d=4.0",
+                "All mkt d=2.0", "Odds only d=2.0", "Oracle only d=2.0",
+                "Pos-dep top25%", "Pos-dep top33%", "Pos-dep odds top25%",
+            ]
+            mkt_rows = []
+            for tier in tier_names
+                row = Dict{String,Any}("Tier" => tier)
+                for label in mkt_labels
+                    rhos = get(mkt_results, label, Dict())
+                    v = get(rhos, tier, NaN)
+                    row[label] = _format_rho(v)
+                end
+                push!(mkt_rows, row)
+            end
+            if !isempty(mkt_rows)
+                col_order = ["Tier"; mkt_labels]
+                mkt_df = DataFrame([col => [r[col] for r in mkt_rows] for col in col_order])
+                write(io, html_table(mkt_df))
+            end
+
+            # ============================================================
+            # Part 3: Per-race breakdown (best configs only)
+            # ============================================================
+
+            write(io, html_heading("Per-race ablation (best configs)", 4))
+            write(io, "<p>Per-race Spearman ρ for the most promising configurations, to check whether results are consistent across selective vs stochastic races.</p>\n")
+
+            best_configs = [
+                ("No market", no_market_signals, DEFAULT_BAYESIAN_CONFIG),
+                ("All mkt d=8.0", all_signals, BayesianConfig(; market_discount=8.0)),
+                ("Odds only d=8.0", odds_only, BayesianConfig(; market_discount=8.0)),
+            ]
+
+            per_race_rows = []
+            for (race, data) in sort(collect(ablation_data), by=p -> p.first.name)
+                data.actual_df === nothing && continue
+                row = Dict{String,Any}("Race" => race.name)
+                # Check if race has market data
+                has_odds = data.odds_df !== nothing && nrow(data.odds_df) > 0
+                has_oracle = data.oracle_df !== nothing && nrow(data.oracle_df) > 0
+                row["Has odds"] = has_odds ? "✓" : "—"
+                row["Has oracle"] = has_oracle ? "✓" : "—"
+
+                for (label, signals, bc) in best_configs
+                    try
+                        r = backtest_race(race, data; signals=signals, bayesian_config=bc, n_sims=n_sims, store_rider_details=false)
+                        row["ρ ($label)"] = "$(round(r.spearman_rho, digits=3))"
+                    catch
+                        row["ρ ($label)"] = "—"
+                    end
+                end
+                push!(per_race_rows, row)
+            end
+
+            if !isempty(per_race_rows)
+                pr_col_order = vcat(["Race", "Has odds", "Has oracle"], ["ρ ($l)" for (l, _, _) in best_configs])
+                pr_df = DataFrame([col => [r[col] for r in per_race_rows] for col in pr_col_order])
+                write(io, html_table(pr_df))
+            end
+
+            # ============================================================
+            # Part 4: Combined configuration test
+            # ============================================================
+            # Tests findings 1-3 together (drop form + VG history + oracle +
+            # qualitative) rather than assuming individual improvements are
+            # additive. The block-correlation discount changes when signals are
+            # removed, so the combined effect may differ from the sum of parts.
+
+            write(io, html_heading("Combined configuration test", 4))
+            write(io, "<p>Tests the proposed signal set (PCS seasons + VG season + PCS race history + odds) against the current default, with bootstrap 95% CIs. Individual ablation improvements interact through the block-correlation discount, so the combined effect is not necessarily the sum of individual improvements.</p>\n")
+
+            combined_configs = [
+                ("Current default (no market)", [:pcs, :vg_season, :race_history, :vg_history, :form], DEFAULT_BAYESIAN_CONFIG),
+                ("Proposed (no market)", [:pcs, :vg_season, :race_history], DEFAULT_BAYESIAN_CONFIG),
+                ("Current default + odds d=8", [:pcs, :vg_season, :race_history, :vg_history, :form, :odds, :oracle], BayesianConfig(; market_discount=8.0)),
+                ("Proposed + odds d=8", [:pcs, :vg_season, :race_history, :odds], BayesianConfig(; market_discount=8.0)),
+            ]
+
+            combined_results = Dict{String,Dict{String,Any}}()
+            for (label, signals, bc) in combined_configs
+                @info "  Combined: $label"
+                combined_results[label] = _tier_rhos(_run_ablation(signals, bc))
+            end
+
+            combined_labels = [l for (l, _, _) in combined_configs]
+            combined_rows = []
+            for tier in tier_names
+                row = Dict{String,Any}("Tier" => tier)
+                for label in combined_labels
+                    rhos = get(combined_results, label, Dict())
+                    v = get(rhos, tier, NaN)
+                    row[label] = _format_rho(v)
+                end
+                push!(combined_rows, row)
+            end
+            if !isempty(combined_rows)
+                col_order = ["Tier"; combined_labels]
+                combined_df = DataFrame([col => [r[col] for r in combined_rows] for col in col_order])
+                write(io, html_table(combined_df))
+            end
+
+            # Per-race breakdown for combined configs
+            write(io, html_heading("Per-race combined comparison", 4))
+            write(io, "<p>Per-race Spearman ρ for current vs proposed signal sets. Improvement sign consistency across races is more informative than the pooled average.</p>\n")
+
+            combined_race_rows = []
+            for (race, data) in sort(collect(ablation_data), by=p -> p.first.name)
+                data.actual_df === nothing && continue
+                row = Dict{String,Any}("Race" => race.name)
+                has_odds = data.odds_df !== nothing && nrow(data.odds_df) > 0
+                row["Has odds"] = has_odds ? "✓" : "—"
+
+                for (label, signals, bc) in combined_configs
+                    try
+                        r = backtest_race(race, data; signals=signals, bayesian_config=bc, n_sims=n_sims, store_rider_details=false)
+                        row["ρ ($label)"] = "$(round(r.spearman_rho, digits=3))"
+                    catch
+                        row["ρ ($label)"] = "—"
+                    end
+                end
+                push!(combined_race_rows, row)
+            end
+
+            if !isempty(combined_race_rows)
+                cr_col_order = vcat(["Race", "Has odds"], ["ρ ($l)" for (l, _, _) in combined_configs])
+                cr_df = DataFrame([col => [r[col] for r in combined_race_rows] for col in cr_col_order])
+                write(io, html_table(cr_df))
+            end
         end
     end
 
@@ -763,13 +1362,13 @@ if nrow(pit_df) > 0 && nrow(prospective_df) > 0
 
     # Config hash for tracking parameter changes
     config_hash = string(hash((
-        DEFAULT_BAYESIAN_CONFIG.market_precision_scale,
-        DEFAULT_BAYESIAN_CONFIG.history_precision_scale,
-        DEFAULT_BAYESIAN_CONFIG.ability_precision_scale,
-        DEFAULT_BAYESIAN_CONFIG._odds_to_oracle_ratio,
-        DEFAULT_BAYESIAN_CONFIG.vg_hist_decay_rate,
-        DEFAULT_BAYESIAN_CONFIG.market_discount,
-    )), base=16)[1:8]
+            DEFAULT_BAYESIAN_CONFIG.market_precision_scale,
+            DEFAULT_BAYESIAN_CONFIG.history_precision_scale,
+            DEFAULT_BAYESIAN_CONFIG.ability_precision_scale,
+            DEFAULT_BAYESIAN_CONFIG._odds_to_oracle_ratio,
+            DEFAULT_BAYESIAN_CONFIG.vg_hist_decay_rate,
+            DEFAULT_BAYESIAN_CONFIG.market_discount,
+        )), base=16)[1:8]
 
     # Append to history CSV
     new_row = "$(today()),$(nrow(prospective_df)),$(run_mean_pit),$(run_mean_rho),$(run_big_miss),$(config_hash)\n"
