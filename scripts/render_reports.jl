@@ -195,8 +195,8 @@ function report_html(;
             line=attr(color="#666666", dash="dash", width=1.5), hoverinfo="skip"))
 
         write(io, plotly_html(traces, Layout(
-            xaxis_title="Cost (credits)", yaxis_title="Points scored",
-            hovermode="closest", template="plotly_white"); id="plot-pts"))
+                xaxis_title="Cost (credits)", yaxis_title="Points scored",
+                hovermode="closest", template="plotly_white"); id="plot-pts"))
     end
 
     # Top scorers
@@ -246,8 +246,8 @@ function report_html(;
             line=attr(color="#666666", dash="dash", width=1.5), hoverinfo="skip"))
 
         write(io, plotly_html(traces2, Layout(
-            xaxis_title="Cost (credits)", yaxis_title="Value (points per credit)",
-            hovermode="closest", template="plotly_white"); id="plot-val"))
+                xaxis_title="Cost (credits)", yaxis_title="Value (points per credit)",
+                hovermode="closest", template="plotly_white"); id="plot-val"))
     end
 
     # Best value picks
@@ -336,7 +336,7 @@ function index_html(; reports_dir)
             year_races = filter(r -> r.year == yr, races)
             write(io, html_heading("$yr season", 2))
             rows = [(Race="<a href=\"reports/$(r.filename)\">$(r.name)</a>",
-                      Date=Dates.format(Date(r.date), "d U")) for r in year_races]
+                Date=Dates.format(Date(r.date), "d U")) for r in year_races]
             # Build a simple table
             write(io, "<table class=\"table table-sm\">\n<thead><tr><th>Race</th><th>Date</th></tr></thead>\n<tbody>\n")
             for r in rows

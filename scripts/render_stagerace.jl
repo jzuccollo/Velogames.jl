@@ -23,7 +23,7 @@ const _cfg = TOML.parsefile(joinpath(@__DIR__, "..", "data", "race_config.toml")
 
 race_name = _cfg["race"]["name"]
 race_year = _cfg["race"]["year"]
-@info "Configuration" race=race_name year=race_year
+@info "Configuration" race = race_name year = race_year
 racehash = _cfg["race"]["racehash"]
 
 betfair_market_id = _cfg["data_sources"]["betfair_market_id"]
@@ -85,12 +85,12 @@ similar_races = get(SIMILAR_RACES, config.pcs_slug, String[])
 similar_str = isempty(similar_races) ? "None configured" : join(similar_races, ", ")
 
 sources_df = DataFrame(
-    Source = [
+    Source=[
         "PCS season points (class-blended)", "VG season points",
         "PCS race history ($(history_years) yrs)", "Similar races", "VG race history",
         "Cycling Oracle", "Betfair odds",
     ],
-    Coverage = [
+    Coverage=[
         "$(n_pcs)/$(n_total) ($(pct(n_pcs))%)", "$(n_total)/$(n_total) (100%)",
         "$(n_history)/$(n_total) ($(pct(n_history))%)", similar_str,
         "$(n_vg_hist)/$(n_total) ($(pct(n_vg_hist))%)",
@@ -112,9 +112,9 @@ affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
 
 impact_df = DataFrame(
-    Signal = signal_names,
-    Riders_affected = affected_counts,
-    RMS_shift = round.(rms_shifts, digits=3),
+    Signal=signal_names,
+    Riders_affected=affected_counts,
+    RMS_shift=round.(rms_shifts, digits=3),
 )
 write(io, html_callout(
     "<p>How much each source shifted rider strength estimates from the uninformative prior.</p>\n" * html_table(impact_df);

@@ -21,7 +21,7 @@ const _cfg = TOML.parsefile(joinpath(@__DIR__, "..", "data", "race_config.toml")
 
 race_name = _cfg["race"]["name"]
 race_year = _cfg["race"]["year"]
-@info "Configuration" race=race_name year=race_year
+@info "Configuration" race = race_name year = race_year
 racehash = _cfg["race"]["racehash"]
 betfair_market_id = _cfg["data_sources"]["betfair_market_id"]
 oracle_url = _cfg["data_sources"]["oracle_url"]
@@ -198,10 +198,10 @@ if prediction_ok && nrow(my_selection) > 0 && nrow(optimal_team) > 0
     opt_cost = sum(optimal_team.cost)
 
     comp_df = DataFrame(
-        Metric = ["Expected VG points", "Total cost", "Budget remaining", "Riders"],
-        Your_team = ["$(round(my_evg, digits=1))", "$my_cost", "$(100 - my_cost)", "$(nrow(my_selection))"],
-        Optimal_team = ["$(round(opt_evg, digits=1))", "$opt_cost", "$(100 - opt_cost)", "$(nrow(optimal_team))"],
-        Difference = ["$(round(diff, digits=1)) ($(pct_diff)%)", "$(my_cost - opt_cost)", "$(opt_cost - my_cost)", ""],
+        Metric=["Expected VG points", "Total cost", "Budget remaining", "Riders"],
+        Your_team=["$(round(my_evg, digits=1))", "$my_cost", "$(100 - my_cost)", "$(nrow(my_selection))"],
+        Optimal_team=["$(round(opt_evg, digits=1))", "$opt_cost", "$(100 - opt_cost)", "$(nrow(optimal_team))"],
+        Difference=["$(round(diff, digits=1)) ($(pct_diff)%)", "$(my_cost - opt_cost)", "$(opt_cost - my_cost)", ""],
     )
     write(io, html_table(comp_df))
 
@@ -231,15 +231,15 @@ if prediction_ok && nrow(my_selection) > 0 && nrow(optimal_team) > 0
         my_unique = sort(filter(row -> row.riderkey in only_mine, predicted), :expected_vg_points, rev=true)
         opt_unique = sort(filter(row -> row.riderkey in only_optimal, predicted), :expected_vg_points, rev=true)
 
-        swap_rows = NamedTuple{(:Your_rider, :Exp_pts, :Cost, :Optimal_rider, :Opt_pts, :Opt_cost), Tuple{String,Any,Any,String,Any,Any}}[]
+        swap_rows = NamedTuple{(:Your_rider, :Exp_pts, :Cost, :Optimal_rider, :Opt_pts, :Opt_cost),Tuple{String,Any,Any,String,Any,Any}}[]
         for i in 1:max(nrow(my_unique), nrow(opt_unique))
             push!(swap_rows, (
-                Your_rider = i <= nrow(my_unique) ? String(my_unique[i, :rider]) : "",
-                Exp_pts = i <= nrow(my_unique) ? round(my_unique[i, :expected_vg_points], digits=1) : "",
-                Cost = i <= nrow(my_unique) ? my_unique[i, :cost] : "",
-                Optimal_rider = i <= nrow(opt_unique) ? String(opt_unique[i, :rider]) : "",
-                Opt_pts = i <= nrow(opt_unique) ? round(opt_unique[i, :expected_vg_points], digits=1) : "",
-                Opt_cost = i <= nrow(opt_unique) ? opt_unique[i, :cost] : "",
+                Your_rider=i <= nrow(my_unique) ? String(my_unique[i, :rider]) : "",
+                Exp_pts=i <= nrow(my_unique) ? round(my_unique[i, :expected_vg_points], digits=1) : "",
+                Cost=i <= nrow(my_unique) ? my_unique[i, :cost] : "",
+                Optimal_rider=i <= nrow(opt_unique) ? String(opt_unique[i, :rider]) : "",
+                Opt_pts=i <= nrow(opt_unique) ? round(opt_unique[i, :expected_vg_points], digits=1) : "",
+                Opt_cost=i <= nrow(opt_unique) ? opt_unique[i, :cost] : "",
             ))
         end
         write(io, html_table(DataFrame(swap_rows)))
@@ -359,14 +359,14 @@ else
             write(io, html_heading("Summary", 3))
 
             summary_comp = DataFrame(
-                Metric = ["Actual VG points", "Expected VG points", "Points captured", "Total cost"],
-                Your_team = ["$my_actual", sum_or_na(my_retro, :expected_vg_points), "$(my_pcr)%",
-                             nrow(my_retro) > 0 ? string(sum(my_retro.cost)) : "—"],
-                Models_team = [model_actual > 0 ? "$model_actual" : "—", sum_or_na(model_retro, :expected_vg_points),
-                               model_pcr isa Number ? "$(model_pcr)%" : string(model_pcr),
-                               nrow(model_retro) > 0 ? string(sum(model_retro.cost)) : "—"],
-                Hindsight_optimal = ["$hindsight_actual", "—", "100%",
-                                     nrow(hindsight_team) > 0 ? string(sum(hindsight_team.cost)) : "—"],
+                Metric=["Actual VG points", "Expected VG points", "Points captured", "Total cost"],
+                Your_team=["$my_actual", sum_or_na(my_retro, :expected_vg_points), "$(my_pcr)%",
+                    nrow(my_retro) > 0 ? string(sum(my_retro.cost)) : "—"],
+                Models_team=[model_actual > 0 ? "$model_actual" : "—", sum_or_na(model_retro, :expected_vg_points),
+                    model_pcr isa Number ? "$(model_pcr)%" : string(model_pcr),
+                    nrow(model_retro) > 0 ? string(sum(model_retro.cost)) : "—"],
+                Hindsight_optimal=["$hindsight_actual", "—", "100%",
+                    nrow(hindsight_team) > 0 ? string(sum(hindsight_team.cost)) : "—"],
             )
             write(io, html_table(summary_comp))
 
@@ -493,10 +493,10 @@ else
                     write(io, html_heading("Model evaluation", 3))
                     write(io, "<p>Comparing archived pre-race predictions against actual PCS results.</p>\n")
                     eval_df = DataFrame(
-                        Metric = ["Matched riders", "Spearman rho", "Top-5 overlap", "Top-10 overlap", "Mean abs rank error"],
-                        Value = [prosp.n_matched, round(prosp.spearman_rho, digits=3),
-                                 "$(prosp.top5_overlap) / 5", "$(prosp.top10_overlap) / 10",
-                                 round(prosp.mean_abs_rank_error, digits=1)],
+                        Metric=["Matched riders", "Spearman rho", "Top-5 overlap", "Top-10 overlap", "Mean abs rank error"],
+                        Value=[prosp.n_matched, round(prosp.spearman_rho, digits=3),
+                            "$(prosp.top5_overlap) / 5", "$(prosp.top10_overlap) / 10",
+                            round(prosp.mean_abs_rank_error, digits=1)],
                     )
                     write(io, html_table(eval_df))
                 end
