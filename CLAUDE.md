@@ -106,6 +106,66 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `tune_domestique_discount(races; discounts, ...)` - Grid search over domestique discount values, optimising points_captured_ratio via backtest_season
 - `BacktestResult` includes: rank metrics (Spearman ρ, top-N overlap), VG team metrics (actual scoring tables), and calibration diagnostics (z-scores, coverage rates)
 
+## Prediction model
+
+### Signal inventory
+
+The strength model combines multiple signals grouped into three precision families. Effective variances are computed from base values, fixed within-group ratios, and tuneable scale factors. Accessor functions (e.g. `pcs_variance(config)`) compute the effective variance from the config.
+
+**Active signals (after April 2026 ablation):**
+
+| Signal | Source | Group | Base variance | Notes |
+| ------ | ------ | ----- | ------------- | ----- |
+| PCS seasons | `getpcsriderpts_batch()` | Ability | 7.9 | Z-scored across field. Best discriminator across all tiers (ρ=0.16–0.34). For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS` |
+| VG season points | `getvgriders()` | Ability | 1.4×scale | Season-adaptive: `effective = vg_var * (1 + penalty * (1 - frac_nonzero))`. Strong for top-tier discrimination (ρ=0.287) |
+| PCS race history | `getpcsracehistory()` | History | 3.0+decay/yr | Recency-weighted. Strong for bottom/middle tiers (ρ=0.23–0.25), weak for top (ρ=0.004) |
+| Similar-race history | `getpcsracehistory()` | History | +penalty | Same as race history but with variance penalty. Races from `SIMILAR_RACES` terrain mapping |
+| Betting odds | `getodds()` | Market | 0.3 | Strongest top-tier signal (ρ=0.464 for top 25%). Applied uniformly when odds are present |
+| Odds floor | Derived (absence signal) | Market | var × 2.0 | When odds data exists but rider absent, floor observation from residual probability mass |
+| Cycling Oracle | `get_cycling_oracle()` | Market | `_odds_to_oracle_ratio`/scale | Broader coverage than Betfair. Removal deferred: degrades middle-tier discrimination when combined with other changes. |
+
+**Signals disabled by April 2026 ablation** (code retained for backtesting; data collection continues): PCS form score, VG race history, qualitative intelligence, trajectory.
+
+Odds are converted to strength via log-odds relative to a uniform baseline. When odds are present for a race, non-market signal variances are inflated by `market_discount` (default 8.0) to prevent double-counting. Riders absent from the market receive a floor observation.
+
+### Bayesian updating
+
+Normal-normal conjugate model (`estimate_rider_strength()`). Each signal updates the posterior mean and variance. Missing data leaves the prior unchanged. Output: posterior mean (strength) and variance (uncertainty).
+
+### Monte Carlo simulation
+
+`simulate_race()` adds Student's t noise (df=5) scaled by posterior uncertainty to each rider's strength, then ranks to get finishing positions. Gaussian noise also supported via `simulation_df=nothing`.
+
+### One-day vs stage race differences
+
+| Aspect | One-day | Stage race |
+| ------ | ------- | ---------- |
+| PCS blending | Single specialty (e.g. one-day points) | Class-aware blend via `STAGE_RACE_PCS_WEIGHTS` |
+| Scoring table | Cat 1/2/3 (finish + assist + breakaway) | `SCORING_GRAND_TOUR` (per-stage scoring) or `SCORING_STAGE` (aggregate fallback) |
+| Simulation | Single race simulation | Per-stage simulation with cross-stage correlated noise (α=0.7) and stage-type strength modifiers |
+| Breakaway points | Heuristic estimate | Not modelled (~6 pts/stage gap from sprint/climb/breakaway bonuses) |
+| Team size | 6 riders | 9 riders |
+| Constraints | Cost only | Cost + classification (grand tours) or cost only (week-long races without VG class data) |
+
+### Parameter settings
+
+| Parameter | Value | Rationale |
+| --------- | ----- | --------- |
+| `market_precision_scale` | 4.0 | Odds are the best single predictor for top-quartile riders |
+| `history_precision_scale` | 2.0 | Controls PCS race history only (form and VG history removed by ablation) |
+| `ability_precision_scale` | 1.0 | PCS seasons and VG season points are broad career/season aggregates |
+| `within_cluster_correlation` | 0.5 | Prevents false certainty from correlated history observations |
+| `between_cluster_correlation` | 0.15 | Modest discount across 2–3 active clusters |
+| `hist_decay_rate` | 3.2 | Aggressive: 3-year-old result has variance 11.1 vs 1.5 for current year |
+| `market_discount` | 8.0 (uniform) | Applied uniformly when odds are present |
+
+### Data sources
+
+- **Velogames** (velogames.com) — rider rosters, costs, season points, classifications, ownership %, historical race results, per-stage results
+- **ProCyclingStats** (procyclingstats.com) — specialty ratings, rankings, race results, startlist quality, form scores, stage profiles (ProfileScore, vertical metres, gradient)
+- **Betfair Exchange** (betfair.com) — betting odds for win markets via Exchange API (optional, requires credentials)
+- **Cycling Oracle** (cyclingoracle.com) — race predictions with win probabilities (optional, broader coverage than Betfair)
+
 ## Key patterns
 
 - Per-race config in `data/race_config.toml` (gitignored, shared by render_predictor and render_assessor); `race_config.toml.example` is the committed template
@@ -156,4 +216,4 @@ This is a small, personal package. Avoid overengineering:
 
 ## Roadmap
 
-See `roadmap.md` for future plans: recent form, course profiles, ownership-adjusted optimisation, backtesting, ML models, stage-by-stage simulation.
+See `roadmap.md` for known issues, planned improvements, ablation findings, and evidence base.
