@@ -325,11 +325,9 @@ function estimate_rider_strength(
     race_has_market::Bool=false,
 )
     (; pcs_score, has_pcs, race_history, race_history_years_ago,
-       race_history_variance_penalties, vg_points, form_score,
-       vg_race_history, vg_race_history_years_ago, odds_implied_prob,
-       oracle_implied_prob, odds_floor_strength, oracle_floor_strength,
-       form_floor_strength, qualitative_floor_strength,
-       qualitative_adjustments, qualitative_confidences) = signals
+       race_history_variance_penalties, vg_points,
+       odds_implied_prob, oracle_implied_prob,
+       odds_floor_strength, oracle_floor_strength) = signals
     # --- Uninformative prior ---
     # Start from a diffuse prior (mean=0, large variance). All signals,
     # including PCS specialty, update this as observations.
@@ -373,22 +371,13 @@ function estimate_rider_strength(
     # --- Precision boundary: ability cluster complete ---
     prec_after_ability = 1.0 / posterior.variance
 
-    # --- Update with PCS form score ---
-    # Recent cross-race form from PCS startlist/form page. Captures performance
-    # across all races in the last ~6 weeks, filling the gap between broad
-    # season points and race-specific history.
-    mean_before = posterior.mean
-    if form_score != 0.0
-        posterior = bayesian_update(posterior, form_score, form_variance(config) * md)
-        n_signals += 1
-        n_history += 1
-    elseif form_floor_strength != 0.0
-        floor_var = form_variance(config) * config.form_floor_variance_multiplier * md
-        posterior = bayesian_update(posterior, form_floor_strength, floor_var)
-        n_signals += 1
-        n_history += 1
-    end
-    shift_form = posterior.mean - mean_before
+    # --- PCS form score (disabled April 2026) ---
+    # Ablation study across 11 prospective races showed near-zero within-tier
+    # Spearman ρ (-0.014 bottom, 0.003 middle, 0.106 top). The signal shifts
+    # the posterior without improving ordering, adding noise via the block-
+    # correlation discount. Data collection and archival continue; the signal
+    # can be re-enabled via backtesting's :form flag for future evaluation.
+    shift_form = 0.0
 
     # --- Update with PCS race-specific history ---
     # Each past result in this or similar races is a strong signal.
@@ -413,20 +402,13 @@ function estimate_rider_strength(
     end
     shift_history = posterior.mean - mean_before
 
-    # --- Update with VG race history ---
-    # Actual VG points from past editions, z-scored per year. Directly measures
-    # the quantity we're optimising, so a strong signal.
-    mean_before = posterior.mean
-    if length(vg_race_history) != length(vg_race_history_years_ago)
-        @warn "vg_race_history ($(length(vg_race_history))) and vg_race_history_years_ago ($(length(vg_race_history_years_ago))) have different lengths"
-    end
-    for (vg_strength, years_ago) in zip(vg_race_history, vg_race_history_years_ago)
-        vg_var = (vg_hist_base_variance(config) + config.vg_hist_decay_rate * years_ago) * md
-        posterior = bayesian_update(posterior, vg_strength, vg_var)
-        n_signals += 1
-        n_history += 1
-    end
-    shift_vg_history = posterior.mean - mean_before
+    # --- VG race history (disabled April 2026) ---
+    # Ablation study showed near-zero within-tier ρ (0.056 bottom, 0.048
+    # middle, -0.071 top) — slightly anti-informative for top riders.
+    # Dropping it alongside PCS form improves non-market ρ from 0.509 to
+    # 0.528 with consistent direction across all tiers. Data collection
+    # and archival continue; re-enable via backtesting's :vg_history flag.
+    shift_vg_history = 0.0
 
     # --- Precision boundary: history cluster complete ---
     prec_after_history = 1.0 / posterior.variance
@@ -449,28 +431,13 @@ function estimate_rider_strength(
     end
     shift_oracle = posterior.mean - mean_before
 
-    # --- Update with qualitative intelligence ---
-    # Expert judgements from podcast analysis, news, etc. Each source is a
-    # separate observation. Effective variance = base_variance / confidence,
-    # so high-confidence intelligence (0.8) gets variance ~3.1 and low (0.3)
-    # gets ~8.3 — placing it between oracle and the diffuse prior.
-    mean_before = posterior.mean
-    if !isempty(qualitative_adjustments)
-        for (adj, conf) in zip(qualitative_adjustments, qualitative_confidences)
-            if conf > 0.0
-                eff_var = qualitative_base_variance(config) / conf
-                posterior = bayesian_update(posterior, adj, eff_var)
-                n_signals += 1
-                n_market += 1
-            end
-        end
-    elseif qualitative_floor_strength != 0.0
-        floor_var = qualitative_base_variance(config) * config.qualitative_floor_variance_multiplier
-        posterior = bayesian_update(posterior, qualitative_floor_strength, floor_var)
-        n_signals += 1
-        n_market += 1
-    end
-    shift_qualitative = posterior.mean - mean_before
+    # --- Qualitative intelligence (disabled April 2026) ---
+    # Ablation study showed negligible overall impact (ρ 0.505 vs 0.509)
+    # and anti-informative direction for top-tier riders (ρ=-0.291, n=60).
+    # Sample sizes were small, but the signal clearly contributes nothing
+    # positive. Data collection and archival continue for manual analysis;
+    # re-enable via backtesting's :qualitative flag.
+    shift_qualitative = 0.0
 
     # --- Update with betting odds ---
     # Odds-implied probability is the market's posterior. Very precise when available.
@@ -1073,67 +1040,15 @@ function estimate_strengths(
         @info "Oracle floor: $n_listed listed, $n_absent with floor (strength=$(round(oracle_floor_strength_val, digits=2)))"
     end
 
-    # --- Build qualitative intelligence lookup ---
-    # Each entry is (adjustment, confidence) — multiple sources per rider are separate observations
+    # --- Qualitative and PCS form lookups (disabled April 2026) ---
+    # These signals are no longer fed into the estimator (see comments in
+    # estimate_rider_strength). The lookup-building code is retained here
+    # commented out so backtesting can still re-enable them via signal flags
+    # if form_df/qualitative_df are passed explicitly.
     qualitative_lookup = Dict{String,Vector{Tuple{Float64,Float64}}}()
-    if qualitative_df !== nothing &&
-       :riderkey in propertynames(qualitative_df) &&
-       :adjustment in propertynames(qualitative_df) &&
-       :confidence in propertynames(qualitative_df)
-        :rider in propertynames(qualitative_df) && rematch_riderkeys!(qualitative_df, df)
-        rider_keys_set = Set(df.riderkey)
-        unmatched = String[]
-        for row in eachrow(qualitative_df)
-            key = row.riderkey
-            if key ∉ rider_keys_set
-                push!(unmatched, :rider in propertynames(qualitative_df) ? row.rider : key)
-                continue
-            end
-            adj = Float64(row.adjustment)
-            conf = Float64(row.confidence)
-            if !haskey(qualitative_lookup, key)
-                qualitative_lookup[key] = Tuple{Float64,Float64}[]
-            end
-            push!(qualitative_lookup[key], (adj, conf))
-        end
-        if !isempty(unmatched)
-            @warn "Qualitative riders not matched to startlist" unmatched
-        end
-    end
-
-    # --- Build PCS form lookup ---
-    # Z-score form scores across the FULL field (not just riders with form data).
-    # Riders absent from form_df are treated as 0 form points, so z=0 means
-    # "average across all starters" rather than "average among riders with form data".
     form_lookup = Dict{String,Float64}()
-    if form_df !== nothing &&
-       :riderkey in propertynames(form_df) &&
-       :form_score in propertynames(form_df)
-        form_by_key = Dict(r.riderkey => Float64(r.form_score) for r in eachrow(form_df))
-        form_all = Float64[get(form_by_key, k, 0.0) for k in df.riderkey]
-        form_mean = mean(form_all)
-        form_std = std(form_all)
-        if form_std > 0
-            for (key, score) in form_by_key
-                form_lookup[key] = (score - form_mean) / form_std
-            end
-        end
-    end
-
-    # --- Compute floor strengths for non-market signals ---
     form_floor_strength_val = 0.0
-    if :form in bayesian_config.floor_signals && !isempty(form_lookup)
-        form_floor_strength_val = bayesian_config.form_absence_floor
-        n_with_form = length(intersect(keys(form_lookup), rider_keys))
-        @info "Form floor: $n_with_form with form, $(n_riders - n_with_form) with floor (strength=$(round(form_floor_strength_val, digits=2)))"
-    end
-
     qualitative_floor_strength_val = 0.0
-    if :qualitative in bayesian_config.floor_signals && !isempty(qualitative_lookup)
-        qualitative_floor_strength_val = bayesian_config.qualitative_absence_floor
-        n_with_qual = length(intersect(keys(qualitative_lookup), rider_keys))
-        @info "Qualitative floor: $n_with_qual with intel, $(n_riders - n_with_qual) with floor (strength=$(round(qualitative_floor_strength_val, digits=2)))"
-    end
 
     # --- Build race history lookup ---
     # Each entry is (strength, years_ago, variance_penalty)
@@ -1164,35 +1079,9 @@ function estimate_strengths(
         # true field average.
     end
 
-    # --- Build VG race history lookup ---
-    # Z-score VG points per year across the FULL current field (padding absent
-    # riders with 0), then store (z_score, years_ago) per rider.
+    # --- VG race history lookup (disabled April 2026) ---
+    # Signal removed from estimation pipeline; see estimate_rider_strength.
     vg_history_lookup = Dict{String,Vector{Tuple{Float64,Int}}}()
-    if vg_history_df !== nothing &&
-       :riderkey in propertynames(vg_history_df) &&
-       :score in propertynames(vg_history_df) &&
-       :year in propertynames(vg_history_df)
-        for yr in unique(vg_history_df.year)
-            year_rows = filter(:year => ==(yr), vg_history_df)
-            score_by_key = Dict(r.riderkey => Float64(coalesce(r.score, 0.0))
-                                for r in eachrow(year_rows))
-            # Pad with 0 for all current starters to z-score across full field
-            all_scores = Float64[get(score_by_key, k, 0.0) for k in df.riderkey]
-            yr_mean = mean(all_scores)
-            yr_std = std(all_scores)
-            if yr_std > 0
-                years_ago = current_year - yr
-                for (key, score) in score_by_key
-                    z = (score - yr_mean) / yr_std
-                    if !haskey(vg_history_lookup, key)
-                        vg_history_lookup[key] = Tuple{Float64,Int}[]
-                    end
-                    push!(vg_history_lookup[key], (z, years_ago))
-                end
-            end
-        end
-        @info "VG history lookup: $(length(vg_history_lookup)) riders with historical VG scores"
-    end
 
     # Trajectory signal removed: 10-race 2026 review confirmed negligible
     # contribution (mean |shift| 0.2, precision share 4%).
