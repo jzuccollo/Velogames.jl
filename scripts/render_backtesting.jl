@@ -165,7 +165,7 @@ avail_df = DataFrame(
     Signal=[
         "PCS results (ground truth)", "PCS season points", "VG season points (cumulative)",
         "PCS race history", "VG race history", "Archived PCS form",
-        "Archived PCS seasons", "Archived Betfair odds", "Archived Cycling Oracle",
+        "Archived PCS seasons", "Archived odds", "Archived Cycling Oracle",
     ],
     Races=[
         "$n_fetched / $n_total", "$n_fetched / $n_fetched", "$n_fetched / $n_fetched",
@@ -201,7 +201,7 @@ if n_with_odds > 0 || n_with_oracle > 0
     !isempty(archive_rows) && write(io, html_table(DataFrame(archive_rows)))
 else
     write(io, html_callout(
-        "No archived odds or oracle data found. Run <code>solve_oneday</code> with <code>betfair_market_id</code> or <code>oracle_url</code> for upcoming races to start building the archive.";
+        "No archived odds or oracle data found. Run <code>solve_oneday</code> with <code>odds_df</code> or <code>oracle_url</code> for upcoming races to start building the archive.";
         type="warning"))
 end
 
@@ -351,7 +351,7 @@ shift_labels = Dict(
     :shift_pcs => "PCS seasons", :shift_vg => "VG season points",
     :shift_form => "PCS form",
     :shift_history => "PCS race history", :shift_vg_history => "VG race history",
-    :shift_oracle => "Cycling Oracle", :shift_odds => "Betfair odds",
+    :shift_oracle => "Cycling Oracle", :shift_odds => "Odds",
 )
 
 agg_shifts = Dict{Symbol,Vector{Float64}}()

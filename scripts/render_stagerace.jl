@@ -30,7 +30,6 @@ race_year = _cfg["race"]["year"]
 @info "Configuration" race = race_name year = race_year
 racehash = _cfg["race"]["racehash"]
 
-betfair_market_id = _cfg["data_sources"]["betfair_market_id"]
 oracle_url = _cfg["data_sources"]["oracle_url"]
 
 n_resamples = _cfg["optimisation"]["n_resamples"]
@@ -69,6 +68,14 @@ end
 
 using_per_stage = !isempty(stages)
 
+# Scrape race-specific scoring from VG
+stage_scoring = try
+    getvg_scoring(config.slug, config.year; pcs_slug=config.pcs_slug)
+catch e
+    @warn "Failed to scrape VG scoring, using grand tour defaults: $e"
+    nothing
+end
+
 # ---------------------------------------------------------------------------
 # Run prediction
 # ---------------------------------------------------------------------------
@@ -77,7 +84,6 @@ predicted, chosenteam, top_teams, sim_vg_points = solve_stage(config;
     stages=stages,
     racehash=racehash,
     history_years=history_years,
-    betfair_market_id=betfair_market_id,
     oracle_url=oracle_url,
     n_resamples=n_resamples,
     excluded_riders=excluded_riders,
@@ -86,7 +92,8 @@ predicted, chosenteam, top_teams, sim_vg_points = solve_stage(config;
     max_per_team=max_per_team,
     simulation_df=simulation_df,
     cross_stage_alpha=cross_stage_alpha,
-    modifier_scale=modifier_scale)
+    modifier_scale=modifier_scale,
+    stage_scoring=stage_scoring)
 
 if nrow(predicted) == 0
     error("No riders found — check race name, year, and startlist hash filter.")
@@ -145,7 +152,7 @@ sources_df = DataFrame(
     Source=[
         "PCS season points (class-blended)", "VG season points",
         "PCS race history ($(history_years) yrs)", "Similar races", "VG race history",
-        "Cycling Oracle", "Betfair odds",
+        "Cycling Oracle", "Odds",
     ],
     Coverage=[
         "$(n_pcs)/$(n_total) ($(pct(n_pcs))%)", "$(n_total)/$(n_total) (100%)",
@@ -163,7 +170,7 @@ write(io, html_callout(sources_html; title="Data sources", collapsed=false))
 # --- Signal impact ---
 
 rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["PCS seasons", "VG season points", "PCS form", "PCS race history", "VG race history", "Cycling Oracle", "Betfair odds"]
+signal_names = ["PCS seasons", "VG season points", "PCS form", "PCS race history", "VG race history", "Cycling Oracle", "Odds"]
 shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
 affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
 rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
