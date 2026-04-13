@@ -9,7 +9,6 @@ export getvgriders,
     getpcsriderpts,
     getpcsriderpts_batch,
     getpcsraceranking,
-    getodds,
     parse_oddschecker_odds,
     get_cycling_oracle,
     getvgracelist,
@@ -26,10 +25,8 @@ export getvgriders,
     getpcs_stage_results,
     getpcs_all_stage_results,
     getvg_stage_results,
-    getvg_stage_race_totals
-
-# Betfair API
-export betfair_login, betfair_get_market_odds
+    getvg_stage_race_totals,
+    getvg_scoring
 
 # Qualitative intelligence
 export get_qualitative_auto,
@@ -190,7 +187,6 @@ export html_page,
 # Include all modules (order matters for dependencies)
 include("cache_utils.jl")
 include("utilities.jl")
-include("betfair.jl")
 include("scoring.jl")
 include("race_helpers.jl")
 include("build_model.jl")

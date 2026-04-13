@@ -340,39 +340,6 @@ end
 
 
 """
-    getodds(market_id; force_refresh=false, cache_config=DEFAULT_CACHE)
-
-Retrieve betting odds from the Betfair Exchange API for a given market ID.
-
-Find the market ID on the Betfair Exchange website: navigate to cycling, find
-the race, and extract the market ID from the URL (e.g. "1.127771425").
-
-Returns a DataFrame with columns: `rider`, `odds`, `riderkey`.
-Returns an empty DataFrame if `market_id` is empty or the API call fails.
-"""
-function getodds(
-    market_id::String;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
-)
-    if isempty(market_id)
-        return DataFrame(rider=String[], odds=Float64[], riderkey=String[])
-    end
-
-    function fetch_betfair_odds(_url, params)
-        return betfair_get_market_odds(params["market_id"])
-    end
-
-    return cached_fetch(
-        fetch_betfair_odds,
-        "betfair://market/$market_id",
-        Dict("market_id" => market_id);
-        cache_config=cache_config,
-        force_refresh=force_refresh,
-    )
-end
-
-"""
     parse_oddschecker_odds(text::String) -> DataFrame
 
 Parse odds copied from a bookmaker winner market page into the standard odds
@@ -390,8 +357,7 @@ DataFrame schema. Handles two formats automatically:
 
 Fractional odds `"8/1"` → 9.0 decimal; integers like `"9"` mean 9/1 → 10.0.
 
-Returns `DataFrame(rider, odds, riderkey)`. Identical schema to
-`betfair_get_market_odds()`.
+Returns `DataFrame(rider, odds, riderkey)`.
 """
 function parse_oddschecker_odds(text::String)
     # Convert a fractional odds token to decimal. Returns nothing on failure.
@@ -794,6 +760,99 @@ function getvg_stage_race_totals(
 )
     url = "https://www.velogames.com/$vg_slug/$year/ridescore.php?ga=1&st=0"
     return getvgracepoints(url; cache_config=cache_config, force_refresh=force_refresh)
+end
+
+
+const _SCORING_FIELDS = [
+    :stage_finish_points, :daily_gc_points, :daily_points_class,
+    :daily_mountains_class, :intermediate_sprint_points, :hc_climb_points,
+    :cat1_climb_points, :breakaway_points, :stage_assist_points,
+    :gc_assist_points, :team_class_assist_points, :final_gc_points,
+    :final_points_class, :final_mountains_class, :final_team_class,
+    :ttt_team_points,
+]
+
+function _scoring_to_df(s::StageRaceScoringTable)
+    rows = NamedTuple{(:field, :position, :points),Tuple{String,Int,Int}}[]
+    for fname in _SCORING_FIELDS
+        vals = getfield(s, fname)
+        if vals isa Int
+            push!(rows, (field=String(fname), position=1, points=vals))
+        else
+            for (i, v) in enumerate(vals)
+                push!(rows, (field=String(fname), position=i, points=v))
+            end
+        end
+    end
+    DataFrame(rows)
+end
+
+function _df_to_scoring(df::DataFrame)
+    fields = Dict{Symbol,Vector{Int}}()
+    for gdf in groupby(df, :field)
+        fname = Symbol(gdf.field[1])
+        sorted = sort(gdf, :position)
+        fields[fname] = Int.(sorted.points)
+    end
+    get_vec(f) = get(fields, f, Int[])
+    bp = haskey(fields, :breakaway_points) ? fields[:breakaway_points][1] : 0
+    StageRaceScoringTable(
+        get_vec(:stage_finish_points), get_vec(:daily_gc_points),
+        get_vec(:daily_points_class), get_vec(:daily_mountains_class),
+        get_vec(:intermediate_sprint_points), get_vec(:hc_climb_points),
+        get_vec(:cat1_climb_points), bp,
+        get_vec(:stage_assist_points), get_vec(:gc_assist_points),
+        get_vec(:team_class_assist_points), get_vec(:final_gc_points),
+        get_vec(:final_points_class), get_vec(:final_mountains_class),
+        get_vec(:final_team_class), get_vec(:ttt_team_points),
+    )
+end
+
+"""
+    getvg_scoring(vg_slug, year; pcs_slug) -> StageRaceScoringTable
+
+Scrape the VG scoring rules from scores.php for a stage race.
+Archives the result if `pcs_slug` is provided. Loads from archive if available.
+"""
+function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String="")
+    if !isempty(pcs_slug)
+        archived = load_race_snapshot("vg_scoring", pcs_slug, year)
+        if archived !== nothing && nrow(archived) > 0
+            return _df_to_scoring(archived)
+        end
+    end
+
+    url = "https://www.velogames.com/$vg_slug/$year/scores.php"
+    tables = scrape_html_tables(url)
+
+    _pts(df) = [parse(Int, replace(string(row.Points), r"[^0-9]" => ""))
+                for row in eachrow(df)]
+
+    get_table(i) = i <= length(tables) ? _pts(tables[i]) : Int[]
+
+    breakaway = if 8 <= length(tables) && nrow(tables[8]) > 0
+        parse(Int, replace(string(tables[8][1, :Points]), r"[^0-9]" => ""))
+    else
+        0
+    end
+
+    scoring = StageRaceScoringTable(
+        get_table(1), get_table(2), get_table(3), get_table(4),
+        get_table(5), get_table(6), get_table(7), breakaway,
+        get_table(9), get_table(10), get_table(11), get_table(12),
+        get_table(13), get_table(14), get_table(15),
+        length(tables) >= 16 ? get_table(16) : Int[],
+    )
+
+    if !isempty(pcs_slug)
+        try
+            save_race_snapshot(_scoring_to_df(scoring), "vg_scoring", pcs_slug, year)
+        catch e
+            @debug "Failed to archive VG scoring: $e"
+        end
+    end
+
+    scoring
 end
 
 

@@ -48,6 +48,10 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :shift_oracle,
             :shift_qualitative,
             :shift_odds,
+            :stage_strength_flat,
+            :stage_strength_hilly,
+            :stage_strength_mountain,
+            :stage_strength_itt,
         ],
     )
     try
@@ -126,7 +130,7 @@ end
 
 """
     _prepare_rider_data(config, racehash, excluded_riders, history_years,
-                        betfair_market_id, oracle_url, min_riders, cache_config,
+                        oracle_url, min_riders, cache_config,
                         force_refresh; pcs_check_col=:oneday,
                         filter_startlist=true)
 
@@ -135,7 +139,8 @@ Shared data-fetching pipeline for `solve_oneday` and `solve_stage`.
 Fetches VG riders, filters by startlist hash and exclusions, optionally filters
 against PCS confirmed startlist, joins PCS specialty ratings, fetches race history
 (including similar races), VG historical race points, odds, and Cycling Oracle
-predictions, and logs a data quality summary.
+predictions, and logs a data quality summary. Odds come from a pre-parsed
+DataFrame (e.g. Oddschecker paste) passed via the `odds_df` keyword.
 
 Returns a `RaceData` struct or `nothing` if fewer than `min_riders` remain
 after filtering.
@@ -145,7 +150,6 @@ function _prepare_rider_data(
     racehash::String,
     excluded_riders::Vector{String},
     history_years::Int,
-    betfair_market_id::String,
     oracle_url::String,
     min_riders::Int,
     cache_config::CacheConfig,
@@ -329,30 +333,8 @@ function _prepare_rider_data(
         end
     end
 
-    # --- 4. Odds (Betfair Exchange or pre-parsed Oddschecker) ---
-    final_odds_df = if odds_df !== nothing
-        odds_df
-    elseif !isempty(betfair_market_id)
-        try
-            df = getodds(
-                betfair_market_id;
-                cache_config=cache_config,
-                force_refresh=force_refresh,
-            )
-            if nrow(df) > 0
-                @info "Got Betfair odds for $(nrow(df)) riders"
-                df
-            else
-                @info "Betfair market returned no active runners"
-                nothing
-            end
-        catch e
-            @warn "Failed to fetch Betfair odds: $e"
-            nothing
-        end
-    else
-        nothing
-    end
+    # --- 4. Odds (pre-parsed, e.g. Oddschecker paste) ---
+    final_odds_df = odds_df
     if !isnothing(final_odds_df) && nrow(final_odds_df) > 0 && !isempty(config.pcs_slug)
         try
             save_race_snapshot(final_odds_df, "odds", config.pcs_slug, config.year)
@@ -481,7 +463,7 @@ optimisation of expected Velogames points.
 1. Fetch VG rider data (costs, season points, teams)
 2. Fetch PCS specialty ratings for each rider
 3. Fetch PCS race-specific history (past editions)
-4. Optionally fetch betting odds and Cycling Oracle predictions
+4. Optionally use pre-parsed odds and Cycling Oracle predictions
 5. Estimate rider strength via Bayesian updating
 6. Resampled optimisation: draw strengths, score, optimise, repeat
 
@@ -496,7 +478,6 @@ function solve_oneday(
     config::RaceConfig;
     racehash::String="",
     history_years::Int=5,
-    betfair_market_id::String="",
     oracle_url::String="",
     n_resamples::Int=500,
     excluded_riders::Vector{String}=String[],
@@ -516,7 +497,6 @@ function solve_oneday(
         racehash,
         excluded_riders,
         history_years,
-        betfair_market_id,
         oracle_url,
         config.team_size,
         cache_config,
@@ -587,7 +567,6 @@ function solve_stage(
     stages::Vector{StageProfile}=StageProfile[],
     racehash::String="",
     history_years::Int=3,
-    betfair_market_id::String="",
     oracle_url::String="",
     n_resamples::Int=500,
     excluded_riders::Vector{String}=String[],
@@ -603,13 +582,13 @@ function solve_stage(
     simulation_df::Union{Int,Nothing}=nothing,
     cross_stage_alpha::Float64=0.7,
     modifier_scale::Float64=0.5,
+    stage_scoring::Union{StageRaceScoringTable,Nothing}=nothing,
 )
     data = _prepare_rider_data(
         config,
         racehash,
         excluded_riders,
         history_years,
-        betfair_market_id,
         oracle_url,
         config.team_size,
         cache_config,
@@ -631,8 +610,6 @@ function solve_stage(
         domestique_discount=domestique_discount,
     )
 
-    _archive_predictions(predicted, config)
-
     if !isempty(stages)
         # --- Per-stage pipeline ---
         @info "Computing stage-type strength modifiers ($(length(stages)) stages)..."
@@ -646,6 +623,8 @@ function solve_stage(
             col = Symbol("stage_strength_$stype")
             predicted[!, col] = round.(stage_strengths[stype], digits=3)
         end
+
+        _archive_predictions(predicted, config)
 
         # Archive stage profiles
         if !isempty(config.pcs_slug)
@@ -666,12 +645,13 @@ function solve_stage(
             end
         end
 
+        scoring_table = stage_scoring !== nothing ? stage_scoring : SCORING_GRAND_TOUR
         @info "Running per-stage resampled optimisation ($n_resamples resamples, $(length(stages)) stages)..."
         predicted, top_teams, sim_vg_points = resample_optimise_stage(
             predicted,
             stages,
             stage_strengths,
-            SCORING_GRAND_TOUR,
+            scoring_table,
             build_model_stage;
             team_size=config.team_size,
             n_resamples=n_resamples,
@@ -681,6 +661,7 @@ function solve_stage(
         )
     else
         # --- Aggregate fallback ---
+        _archive_predictions(predicted, config)
         scoring = get_scoring(:stage)
 
         b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
