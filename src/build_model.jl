@@ -410,10 +410,7 @@ function minimise_cost_stage(
 )
     df = copy(inputdf)
 
-    if !ensure_classification_columns!(df)
-        @warn "Missing classification columns for cost minimisation"
-        return nothing
-    end
+    has_classes = ensure_classification_columns!(df)
 
     model = JuMP.Model(HiGHS.Optimizer)
     JuMP.set_silent(model)
@@ -421,10 +418,12 @@ function minimise_cost_stage(
     JuMP.@objective(model, Min, df[!, cost]' * x)
     JuMP.@constraint(model, df[!, points]' * x >= target_score + 1)
     JuMP.@constraint(model, sum(x) == n)
-    JuMP.@constraint(model, df[!, :allrounder]' * x >= 2)
-    JuMP.@constraint(model, df[!, :sprinter]' * x >= 1)
-    JuMP.@constraint(model, df[!, :climber]' * x >= 2)
-    JuMP.@constraint(model, df[!, :unclassed]' * x >= 3)
+    if has_classes
+        JuMP.@constraint(model, df[!, :allrounder]' * x >= 2)
+        JuMP.@constraint(model, df[!, :sprinter]' * x >= 1)
+        JuMP.@constraint(model, df[!, :climber]' * x >= 2)
+        JuMP.@constraint(model, df[!, :unclassed]' * x >= 3)
+    end
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The cost minimisation model was not solved correctly.")

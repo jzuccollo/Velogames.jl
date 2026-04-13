@@ -149,6 +149,24 @@
         @test sum(selected_team.class .== "Unclassed") >= 3
     end
 
+    @testset "minimise_cost_stage without classification columns" begin
+        test_data = DataFrame(
+            rider=["R$i" for i in 1:10],
+            riderkey=["r$i" for i in 1:10],
+            points=[500, 400, 300, 250, 200, 150, 100, 80, 60, 40],
+            cost=[18, 16, 14, 12, 10, 8, 6, 5, 4, 3],
+        )
+
+        result =
+            minimise_cost_stage(test_data, 1000, 9, :points, :cost; totalcost=100)
+        @test result !== nothing
+
+        chosen = [result[rk] > 0.5 for rk in test_data.riderkey]
+        selected_team = test_data[chosen, :]
+        @test nrow(selected_team) == 9
+        @test sum(selected_team.points) > 1000
+    end
+
     @testset "Insufficient data returns nothing" begin
         insufficient_data = DataFrame(
             rider=["Rider A", "Rider B"],
