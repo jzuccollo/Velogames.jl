@@ -23,10 +23,7 @@ race_name = _cfg["race"]["name"]
 race_year = _cfg["race"]["year"]
 @info "Configuration" race = race_name year = race_year
 racehash = _cfg["race"]["racehash"]
-betfair_market_id = _cfg["data_sources"]["betfair_market_id"]
 oracle_url = _cfg["data_sources"]["oracle_url"]
-qualitative_youtube_url = _cfg["data_sources"]["qualitative_youtube_url"]
-qualitative_json_file = _cfg["data_sources"]["qualitative_json_file"]
 n_resamples = _cfg["optimisation"]["n_resamples"]
 history_years = _cfg["optimisation"]["history_years"]
 domestique_discount = _cfg["optimisation"]["domestique_discount"]
@@ -49,7 +46,8 @@ race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), FRESH ? 0 : 6)
 # ---------------------------------------------------------------------------
 
 config = setup_race(race_name, race_year; cache_config=race_cache)
-scoring = get_scoring(config.category > 0 ? config.category : 2)
+is_stage = config.type == :stage
+scoring = get_scoring(is_stage ? :stage : (config.category > 0 ? config.category : 2))
 
 # Try loading archived prediction
 archived_prediction = !isempty(config.pcs_slug) ?
@@ -71,38 +69,43 @@ if archived_prediction !== nothing && nrow(archived_prediction) > 0
     optimal_team = if :chosen in propertynames(predicted)
         filter(:chosen => ==(true), predicted)
     else
-        sol = build_model_oneday(predicted, 6, :expected_vg_points, :cost; totalcost=100)
-        sol !== nothing ? filter(row -> sol[row.riderkey] > 0.5, predicted) : DataFrame()
+        nothing  # deferred until expected_vg_points is computed
     end
 else
     println("No archive found — running fresh prediction...")
-    local qualitative_df = nothing
-    if !isempty(qualitative_youtube_url)
-        try
-            riders_tmp = suppress_output() do
-                getvgriders(config.current_url; cache_config=race_cache)
-            end
-            qualitative_df = get_qualitative_auto(
-                qualitative_youtube_url, String.(riders_tmp.rider),
-                race_name, string(Dates.today()))
-        catch e
-            @warn "Failed to extract qualitative intelligence: $e"
-        end
-    elseif !isempty(qualitative_json_file)
-        try
-            qualitative_df = load_qualitative_file(qualitative_json_file)
-        catch e
-            @warn "Failed to load qualitative file: $e"
-        end
-    end
+    if is_stage
+        cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
+        modifier_scale = get(_cfg["optimisation"], "modifier_scale", 0.5)
+        pcs_stage_scrape = get(_cfg["optimisation"], "pcs_stage_scrape", true)
 
-    predicted, optimal_team, _ = solve_oneday(config;
-        racehash=racehash, history_years=history_years,
-        betfair_market_id=betfair_market_id, oracle_url=oracle_url,
-        n_resamples=n_resamples, excluded_riders=excluded_riders,
-        qualitative_df=qualitative_df, domestique_discount=domestique_discount,
-        risk_aversion=risk_aversion, max_per_team=max_per_team,
-        breakaway_dir=breakaway_dir, simulation_df=simulation_df)
+        stages = StageProfile[]
+        if pcs_stage_scrape && !isempty(config.pcs_slug)
+            stages = getpcs_stage_profiles(config.pcs_slug, race_year;
+                cache_config=race_cache, force_refresh=FRESH)
+        end
+
+        stage_scoring_fresh = try
+            getvg_scoring(config.slug, config.year; pcs_slug=config.pcs_slug)
+        catch; nothing; end
+
+        predicted, optimal_team, _ = solve_stage(config;
+            stages=stages, racehash=racehash, history_years=history_years,
+            oracle_url=oracle_url,
+            n_resamples=n_resamples, excluded_riders=excluded_riders,
+            domestique_discount=domestique_discount,
+            risk_aversion=risk_aversion, max_per_team=max_per_team,
+            breakaway_dir=breakaway_dir, simulation_df=simulation_df,
+            cross_stage_alpha=cross_stage_alpha, modifier_scale=modifier_scale,
+            stage_scoring=stage_scoring_fresh)
+    else
+        predicted, optimal_team, _ = solve_oneday(config;
+            racehash=racehash, history_years=history_years,
+            oracle_url=oracle_url,
+            n_resamples=n_resamples, excluded_riders=excluded_riders,
+            domestique_discount=domestique_discount,
+            risk_aversion=risk_aversion, max_per_team=max_per_team,
+            breakaway_dir=breakaway_dir, simulation_df=simulation_df)
+    end
 end
 
 prediction_ok = nrow(predicted) > 0
@@ -120,16 +123,61 @@ else
 end
 
 # Simulation draws
-sim_vg_points = if prediction_ok && :strength in propertynames(predicted) && :uncertainty in propertynames(predicted)
+sim_vg_points = if !prediction_ok || :strength ∉ propertynames(predicted) || :uncertainty ∉ propertynames(predicted)
+    nothing
+elseif is_stage && :stage_strength_flat in propertynames(predicted)
+    # Per-stage simulation using archived stage strengths
+    stage_profiles_df = load_race_snapshot("stage_profiles", config.pcs_slug, config.year)
+    if stage_profiles_df !== nothing && nrow(stage_profiles_df) > 0
+        stages_from_archive = [
+            StageProfile(
+                row.stage_number, Symbol(row.stage_type), row.distance_km,
+                row.profile_score, row.vertical_meters, 0.0,
+                row.n_hc_climbs, row.n_cat1_climbs, 0, row.is_summit_finish,
+            ) for row in eachrow(stage_profiles_df)
+        ]
+        stage_strengths = Dict{Symbol,Vector{Float64}}(
+            :flat => Float64.(predicted.stage_strength_flat),
+            :hilly => Float64.(predicted.stage_strength_hilly),
+            :mountain => Float64.(predicted.stage_strength_mountain),
+            :itt => Float64.(predicted.stage_strength_itt),
+        )
+        cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
+        stage_scoring = try
+            getvg_scoring(config.slug, config.year; pcs_slug=config.pcs_slug)
+        catch
+            SCORING_GRAND_TOUR
+        end
+        simulate_stage_race(
+            stages_from_archive, stage_strengths,
+            Float64.(predicted.uncertainty), String.(predicted.team),
+            stage_scoring; n_sims=n_resamples, cross_stage_alpha=cross_stage_alpha,
+        )
+    else
+        nothing
+    end
+else
     simulate_vg_draws(predicted, scoring; n_draws=n_resamples,
         breakaway_rates=b_rates, breakaway_mean_sectors=b_sectors,
         simulation_df=simulation_df)
-else
-    nothing
 end
 
 if sim_vg_points !== nothing && !hasproperty(predicted, :expected_vg_points)
     predicted[!, :expected_vg_points] = [mean(@view sim_vg_points[i, :]) for i in 1:nrow(predicted)]
+end
+
+# Compute optimal team from simulation if archive lacked :chosen
+if optimal_team === nothing && hasproperty(predicted, :expected_vg_points)
+    build_fn = is_stage ? build_model_stage : build_model_oneday
+    sol = build_fn(predicted, config.team_size, :expected_vg_points, :cost;
+        totalcost=100, max_per_team=max_per_team)
+    optimal_team = if sol !== nothing
+        filter(row -> sol[row.riderkey] > 0.5, predicted)
+    else
+        DataFrame()
+    end
+elseif optimal_team === nothing
+    optimal_team = DataFrame()
 end
 
 # ---------------------------------------------------------------------------
@@ -257,51 +305,62 @@ if !prediction_ok
 elseif vg_race_number == -1
     write(io, html_callout("Retrospective analysis skipped. Set <code>vg_race_number</code> to enable after the race."))
 else
-    # Auto-detect race number
-    local actual_race_number = vg_race_number
-    if actual_race_number == 0
-        try
-            vg_racelist = suppress_output() do
-                getvgracelist(race_year; cache_config=race_cache)
-            end
-            race_info = find_race(race_name)
-            detected = match_vg_race_number(
-                race_info !== nothing ? race_info.name : race_name, vg_racelist)
-            if detected !== nothing
-                actual_race_number = detected
+    # Fetch actual VG results
+    local actual_results = nothing
+    if is_stage
+        actual_results = try
+            suppress_output() do
+                getvg_stage_race_totals(race_year, config.slug; cache_config=race_cache)
             end
         catch e
-            @warn "Auto-detection failed: $e"
+            @warn "Failed to fetch VG stage race totals: $e"
+            nothing
+        end
+    else
+        # Auto-detect race number for one-day races
+        local actual_race_number = vg_race_number
+        if actual_race_number == 0
+            try
+                vg_racelist = suppress_output() do
+                    getvgracelist(race_year; cache_config=race_cache)
+                end
+                race_info = find_race(race_name)
+                detected = match_vg_race_number(
+                    race_info !== nothing ? race_info.name : race_name, vg_racelist)
+                if detected !== nothing
+                    actual_race_number = detected
+                end
+            catch e
+                @warn "Auto-detection failed: $e"
+            end
+        end
+
+        if actual_race_number > 0
+            actual_results = try
+                suppress_output() do
+                    getvgraceresults(race_year, actual_race_number; cache_config=race_cache)
+                end
+            catch e
+                @warn "Failed to fetch VG race results: $e"
+                nothing
+            end
+
+            # Archive one-day results
+            if !isempty(config.pcs_slug)
+                try
+                    suppress_output() do
+                        archive_race_results(config.pcs_slug, config.year;
+                            vg_race_number=actual_race_number, cache_config=race_cache)
+                    end
+                catch e
+                    @warn "Failed to archive race results: $e"
+                end
+            end
         end
     end
 
-    if actual_race_number <= 0
-        write(io, html_callout("Could not auto-detect VG race number. Set <code>vg_race_number</code> manually."; type="warning"))
-    else
-        # Fetch actual VG results
-        local actual_results = try
-            suppress_output() do
-                getvgraceresults(race_year, actual_race_number; cache_config=race_cache)
-            end
-        catch e
-            @warn "Failed to fetch VG race results: $e"
-            nothing
-        end
-
-        # Archive results
-        if !isempty(config.pcs_slug)
-            try
-                suppress_output() do
-                    archive_race_results(config.pcs_slug, config.year;
-                        vg_race_number=actual_race_number, cache_config=race_cache)
-                end
-            catch e
-                @warn "Failed to archive race results: $e"
-            end
-        end
-
-        if actual_results === nothing || nrow(actual_results) == 0
-            write(io, html_callout("No results available yet for race $actual_race_number. Re-render after the race finishes."))
+    if actual_results === nothing || nrow(actual_results) == 0
+        write(io, html_callout("No VG results available yet. Re-render after the race finishes."))
         else
             # Build full retrospective pool
             all_vg_riders = suppress_output() do
@@ -337,7 +396,8 @@ else
             end
 
             # Hindsight-optimal team
-            hindsight_sol = build_model_oneday(retro, 6, :actual_vg_points, :cost; totalcost=100)
+            build_fn = is_stage ? build_model_stage : build_model_oneday
+            hindsight_sol = build_fn(retro, config.team_size, :actual_vg_points, :cost; totalcost=100)
             hindsight_team = if hindsight_sol !== nothing
                 filter(row -> hindsight_sol[row.riderkey] > 0.5, retro)
             else
@@ -503,7 +563,6 @@ else
             end
         end
     end
-end
 
 # ---------------------------------------------------------------------------
 # Write output
