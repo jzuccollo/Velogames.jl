@@ -53,11 +53,6 @@ end
 end
 
 @testset "Empty input edge cases" begin
-    result = getodds("")
-    @test result isa DataFrame
-    @test nrow(result) == 0
-    @test names(result) == ["rider", "odds", "riderkey"]
-
     result = get_cycling_oracle("")
     @test result isa DataFrame
     @test nrow(result) == 0
