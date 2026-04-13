@@ -42,7 +42,7 @@ A signal ablation study (April 2026, 11 prospective races) led to pruning three 
 
 ### Active signal set (after April 2026 pruning)
 
-PCS seasons + VG season + PCS race history + Cycling Oracle + Betfair odds. Three signals were disabled:
+PCS seasons + VG season + PCS race history + Cycling Oracle + bookmaker odds. Three signals were disabled:
 
 | Signal removed | Evidence | Decision |
 | -------------- | -------- | -------- |
@@ -78,7 +78,7 @@ Code and data collection retained for backtesting re-evaluation.
 
 | Phase | Description | Key details |
 |-------|-------------|-------------|
-| 1. Odds integration | Betfair Exchange API + Cycling Oracle scraping as Bayesian signals | Strongest single predictor. Betfair coverage limited to major races; Oracle covers most European professional races. Both can be active simultaneously. |
+| 1. Odds integration | Oddschecker paste + Cycling Oracle scraping as Bayesian signals | Strongest single predictor. Odds pasted from any bookmaker; Oracle covers most European professional races. Both can be active simultaneously. |
 | 2. Calibration framework | Prior predictive checks, SBC, backtesting, prospective evaluation | `BayesianConfig` reparameterised to 3 scale factors + 2 decay rates. `render_backtesting.jl` serves as unified calibration frontend. |
 | 3. Course profile matching | Terrain-similar race history via `SIMILAR_RACES` | Manual curation of terrain groupings; automatic PCS profile scraping deferred as low priority. |
 | 4. Leader/domestique roles | Domestique strength discount + max-per-team constraint | Heuristic leader detection by estimated strength within the field. |

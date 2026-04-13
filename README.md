@@ -25,7 +25,7 @@ All scripts accept `--fresh` to bypass the cache and fetch everything from the w
 ## Features
 
 - **Monte Carlo prediction**: Bayesian strength estimation and race simulation to compute expected VG points per rider
-- **Multi-source data integration**: Combines VG costs/season points, PCS specialty ratings, race history, betting odds (Betfair API or Oddschecker paste), and qualitative intelligence from YouTube or web articles
+- **Multi-source data integration**: Combines VG costs/season points, PCS specialty ratings, race history, betting odds (Oddschecker paste), and qualitative intelligence from YouTube or web articles
 - **Qualitative intelligence**: YouTube transcripts and web articles fed to the Claude API to extract structured rider assessments, integrated as Bayesian signals
 - **Risk-adjusted optimisation**: `risk_aversion` parameter penalises high-variance riders; `domestique_discount` down-weights non-leaders relative to their strength gap
 - **One-day and stage race support**: `solve_oneday()` for Sixes Classics, `solve_stage()` for grand tours with classification constraints
