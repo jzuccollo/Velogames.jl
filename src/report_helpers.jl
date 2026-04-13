@@ -172,6 +172,8 @@ function list_completed_races(
         isdir(slug_dir) || continue
         pcs_slug = basename(slug_dir)
         ri = _find_race_by_slug(pcs_slug)
+        # Only include one-day classics (races in CLASSICS_RACES_2026)
+        ri === nothing && continue
         for f in readdir(slug_dir)
             m = match(r"^(\d{4})\.feather$", f)
             m === nothing && continue
