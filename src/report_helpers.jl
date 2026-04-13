@@ -15,7 +15,7 @@ end
 
 Return an HTML heading tag with an auto-slugified id for ToC linking.
 """
-function html_heading(text::String, level::Int = 2; id::String = _slugify(text))
+function html_heading(text::String, level::Int=2; id::String=_slugify(text))
     return "<h$level id=\"$id\">$text</h$level>\n"
 end
 
@@ -27,8 +27,8 @@ and cleans team name pipe characters automatically.
 """
 function html_table(
     df::DataFrame;
-    caption::String = "",
-    team_cols::Vector{Symbol} = [:team, :Team],
+    caption::String="",
+    team_cols::Vector{Symbol}=[:team, :Team],
 )
     display = copy(df)
     round_numeric_columns!(display)
@@ -67,9 +67,9 @@ Generate a Bootstrap-styled callout. Types: "note" (blue), "warning" (yellow),
 """
 function html_callout(
     content::String;
-    type::String = "note",
-    title::String = "",
-    collapsed::Bool = false,
+    type::String="note",
+    title::String="",
+    collapsed::Bool=false,
 )
     colour = type == "warning" ? "#856404" : type == "tip" ? "#155724" : "#004085"
     bg = type == "warning" ? "#fff3cd" : type == "tip" ? "#d4edda" : "#cce5ff"
@@ -101,10 +101,10 @@ Wrap body content in a complete, standalone HTML page with CSS and ToC.
 """
 function html_page(;
     title::String,
-    subtitle::String = "",
+    subtitle::String="",
     body::String,
-    include_plotly::Bool = false,
-    home_url::String = "",
+    include_plotly::Bool=false,
+    home_url::String="",
 )
     plotly_script = include_plotly ? "\n<script src=\"https://cdn.plot.ly/plotly-2.35.2.min.js\"></script>" : ""
     subtitle_html = isempty(subtitle) ? "" : "<p class=\"subtitle\">$subtitle</p>\n"
@@ -133,9 +133,9 @@ Serialise PlotlyBase traces and layout to an HTML block with a div and script ta
 function plotly_html(
     traces,
     layout;
-    id::String = "plot-" * string(rand(UInt32), base = 16),
-    width::String = "100%",
-    height::String = "500px",
+    id::String="plot-" * string(rand(UInt32), base=16),
+    width::String="100%",
+    height::String="500px",
 )
     spec = Dict(
         "data" => [JSON3.read(JSON3.write(t)) for t in traces],
@@ -158,8 +158,8 @@ Scan the VG results archive for completed races and cross-reference with
 pcs_slug, year, name, date, category.
 """
 function list_completed_races(
-    years::Vector{Int} = [2025, 2026];
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    years::Vector{Int}=[2025, 2026];
+    archive_dir::String=DEFAULT_ARCHIVE_DIR,
 )
     rows = NamedTuple{
         (:pcs_slug, :year, :name, :date, :category),
@@ -168,7 +168,7 @@ function list_completed_races(
     vg_dir = joinpath(archive_dir, "vg_results")
     isdir(vg_dir) || return DataFrame(rows)
 
-    for slug_dir in readdir(vg_dir; join = true)
+    for slug_dir in readdir(vg_dir; join=true)
         isdir(slug_dir) || continue
         pcs_slug = basename(slug_dir)
         ri = _find_race_by_slug(pcs_slug)
@@ -184,7 +184,7 @@ function list_completed_races(
             cat = ri !== nothing ? ri.category : 0
             push!(
                 rows,
-                (pcs_slug = pcs_slug, year = yr, name = name, date = date, category = cat),
+                (pcs_slug=pcs_slug, year=yr, name=name, date=date, category=cat),
             )
         end
     end
@@ -204,7 +204,7 @@ Returns `nothing` if no archived results exist.
 function load_report_data(
     pcs_slug::String,
     year::Int;
-    cache_config::CacheConfig = DEFAULT_CACHE,
+    cache_config::CacheConfig=DEFAULT_CACHE,
 )
     vg_results = load_race_snapshot("vg_results", pcs_slug, year)
     vg_results === nothing && return nothing
@@ -212,13 +212,13 @@ function load_report_data(
 
     # Load rider costs from the classics riders page
     riders_url = vg_classics_url(year)
-    riders = getvgriders(riders_url; cache_config = cache_config)
+    riders = getvgriders(riders_url; cache_config=cache_config)
 
     # Start from VG riders list and left-join results to get all riders with costs
     df = leftjoin(
         riders[:, [:rider, :team, :riderkey, :cost]],
         vg_results[:, [:riderkey, :score]];
-        on = :riderkey,
+        on=:riderkey,
     )
     # Fill missing scores (riders who didn't score) with 0
     df[!, :score] = coalesce.(df.score, 0)
@@ -229,7 +229,7 @@ function load_report_data(
         filter!(row -> row.riderkey in starter_keys, df)
     end
 
-    df[!, :value] = round.(df.score ./ max.(df.cost, 1), digits = 1)
+    df[!, :value] = round.(df.score ./ max.(df.cost, 1), digits=1)
     clean_team_names!(df, [:team])
     return df
 end
@@ -240,7 +240,7 @@ end
 Find the hindsight-optimal one-day team (6 riders, cost <= 100) from actual results.
 """
 function compute_optimal_team(df::DataFrame)
-    result = build_model_oneday(df, 6, :score, :cost; totalcost = 100)
+    result = build_model_oneday(df, 6, :score, :cost; totalcost=100)
     result === nothing && return nothing
     chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
     return filter(row -> row.riderkey in chosen_keys, df)
@@ -303,10 +303,10 @@ end
 Round all numeric columns in the DataFrame to the given number of digits.
 Returns the modified DataFrame for chaining.
 """
-function round_numeric_columns!(df::DataFrame; digits::Int = 1)
+function round_numeric_columns!(df::DataFrame; digits::Int=1)
     for col in names(df)
         if eltype(df[!, col]) <: Union{Missing,Number}
-            df[!, col] = round.(df[!, col]; digits = digits)
+            df[!, col] = round.(df[!, col]; digits=digits)
         end
     end
     return df
@@ -319,8 +319,8 @@ Compute per-signal precision contributions for the Bayesian model at the given
 config. Returns a DataFrame with columns: signal, variance, precision, share.
 """
 function precision_budget(
-    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG;
-    n_history_years::Int = 3,
+    config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG;
+    n_history_years::Int=3,
 )
     # (name, base_variance, is_market_signal)
     signals = [
@@ -346,20 +346,20 @@ function precision_budget(
             name in hist_names ? n_history_years / var : 1.0 / var,
             # With market discount: market signals unchanged, others inflated
             is_market ?
-                (name in hist_names ? n_history_years / var : 1.0 / var) :
-                (name in hist_names ? n_history_years / (var * md) : 1.0 / (var * md)),
+            (name in hist_names ? n_history_years / var : 1.0 / var) :
+            (name in hist_names ? n_history_years / (var * md) : 1.0 / (var * md)),
         ) for (name, var, is_market) in signals
     ]
     total = sum(p for (_, _, _, p, _) in precisions)
     total_md = sum(p for (_, _, _, _, p) in precisions)
 
     DataFrame(
-        signal = [name for (name, _, _, _, _) in precisions],
-        variance = [round(var, digits = 3) for (_, var, _, _, _) in precisions],
-        precision = [round(p, digits = 3) for (_, _, _, p, _) in precisions],
-        share = [string(round(Int, 100 * p / total), "%") for (_, _, _, p, _) in precisions],
-        precision_with_market = [round(p, digits = 3) for (_, _, _, _, p) in precisions],
-        share_with_market = [string(round(Int, 100 * p / total_md), "%") for (_, _, _, _, p) in precisions],
+        signal=[name for (name, _, _, _, _) in precisions],
+        variance=[round(var, digits=3) for (_, var, _, _, _) in precisions],
+        precision=[round(p, digits=3) for (_, _, _, p, _) in precisions],
+        share=[string(round(Int, 100 * p / total), "%") for (_, _, _, p, _) in precisions],
+        precision_with_market=[round(p, digits=3) for (_, _, _, _, p) in precisions],
+        share_with_market=[string(round(Int, 100 * p / total_md), "%") for (_, _, _, _, p) in precisions],
     )
 end
 
@@ -388,7 +388,7 @@ function _shift_cell_style(value::Float64, max_abs::Float64)
         return "text-align:right; color:#999"
     end
     intensity = clamp(abs(value) / max_abs, 0.0, 1.0)
-    alpha = round(intensity * 0.45, digits = 2)  # max 0.45 opacity for readability
+    alpha = round(intensity * 0.45, digits=2)  # max 0.45 opacity for readability
     colour = value > 0 ? "rgba(34,139,34,$alpha)" : "rgba(220,20,60,$alpha)"
     return "text-align:right; background:$colour"
 end
@@ -400,7 +400,7 @@ Generate an HTML table showing per-rider signal shifts with heatmap colouring.
 Positive shifts are green, negative are red, with intensity proportional to
 magnitude. Flags riders with few active signals or single-signal dominance.
 """
-function format_signal_waterfall(df::DataFrame; max_riders::Int = 10)
+function format_signal_waterfall(df::DataFrame; max_riders::Int=10)
     subset = df[1:min(max_riders, nrow(df)), :]
 
     # Find max absolute shift across all riders for consistent colour scaling
@@ -410,7 +410,7 @@ function format_signal_waterfall(df::DataFrame; max_riders::Int = 10)
             push!(all_shifts, abs(Float64(row[c])))
         end
     end
-    max_abs = maximum(all_shifts; init = 1.0)
+    max_abs = maximum(all_shifts; init=1.0)
 
     lines = String[]
     push!(lines, "<table style='border-collapse:collapse; font-size:0.85em; width:100%'>")
@@ -455,7 +455,7 @@ function format_signal_waterfall(df::DataFrame; max_riders::Int = 10)
 
         for shift in shifts
             style = _shift_cell_style(shift, max_abs)
-            display_val = shift == 0.0 ? "·" : string(round(shift, digits = 2))
+            display_val = shift == 0.0 ? "·" : string(round(shift, digits=2))
             push!(lines, "<td style='$style; padding:4px'>$display_val</td>")
         end
 
@@ -512,11 +512,11 @@ function compute_pit_values(
         rider_name = :rider in propertynames(actual_results) ? string(row.rider) :
                      idx <= nrow(predicted) ? string(predicted.rider[idx]) : ""
         push!(rows, (
-            riderkey = string(row.riderkey),
-            rider = rider_name,
-            actual_vg_points = actual_pts,
-            pit_value = pit,
-            scored = actual_pts > 0.0,
+            riderkey=string(row.riderkey),
+            rider=rider_name,
+            actual_vg_points=actual_pts,
+            pit_value=pit,
+            scored=actual_pts > 0.0,
         ))
     end
 
@@ -535,9 +535,9 @@ to include all riders.
 """
 function pit_histogram_chart(
     pit_values::DataFrame;
-    title::String = "PIT calibration histogram",
-    scored_only::Bool = true,
-    compact::Bool = false,
+    title::String="PIT calibration histogram",
+    scored_only::Bool=true,
+    compact::Bool=false,
 )
     subset = scored_only ? filter(:scored => identity, pit_values) : pit_values
     nrow(subset) == 0 && return ""
@@ -612,11 +612,11 @@ strings (one per point). When `reference_line=true`, a 45-degree y=x line is dra
 function scatter_chart(
     x::AbstractVector{<:Real},
     y::AbstractVector{<:Real};
-    title::String = "",
-    xlabel::String = "x",
-    ylabel::String = "y",
-    colours::Union{Vector{String},Nothing} = nothing,
-    reference_line::Bool = false,
+    title::String="",
+    xlabel::String="x",
+    ylabel::String="y",
+    colours::Union{Vector{String},Nothing}=nothing,
+    reference_line::Bool=false,
 )
     length(x) == 0 && return ""
     w, h = 420, 320
@@ -629,8 +629,10 @@ function scatter_chart(
     # Add 5% padding to ranges
     xrange = max(xmax - xmin, 1e-6)
     yrange = max(ymax - ymin, 1e-6)
-    xmin -= 0.05 * xrange; xmax += 0.05 * xrange
-    ymin -= 0.05 * yrange; ymax += 0.05 * yrange
+    xmin -= 0.05 * xrange
+    xmax += 0.05 * xrange
+    ymin -= 0.05 * yrange
+    ymax += 0.05 * yrange
 
     sx(v) = pad_l + plot_w * (v - xmin) / (xmax - xmin)
     sy(v) = pad_t + plot_h * (1.0 - (v - ymin) / (ymax - ymin))
@@ -691,8 +693,8 @@ under uniformity.
 """
 function rank_histogram_chart(
     counts::Vector{<:Real};
-    title::String = "Rank histogram",
-    expected::Union{Float64,Nothing} = nothing,
+    title::String="Rank histogram",
+    expected::Union{Float64,Nothing}=nothing,
 )
     n_bins = length(counts)
     n_bins == 0 && return ""
@@ -744,8 +746,8 @@ Generate an inline SVG line chart. `series` is a vector of (label, values) pairs
 function line_chart(
     x_labels::Vector{String},
     series::Vector{Tuple{String,Vector{Float64}}};
-    title::String = "",
-    ylabel::String = "",
+    title::String="",
+    ylabel::String="",
 )
     n = length(x_labels)
     n == 0 && return ""
@@ -806,8 +808,8 @@ function team_total_distribution_chart(
     team_keys::Vector{String},
     predicted::DataFrame,
     sim_vg_points::Matrix{Float64};
-    actual_total::Union{Float64,Nothing} = nothing,
-    title::String = "Simulated team total VG points",
+    actual_total::Union{Float64,Nothing}=nothing,
+    title::String="Simulated team total VG points",
 )
     key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
     idxs = [key_to_idx[k] for k in team_keys if haskey(key_to_idx, k)]
@@ -882,11 +884,11 @@ heavy-tailed noise (set `simulation_df=nothing` for Gaussian).
 function simulate_vg_draws(
     predicted::DataFrame,
     scoring::ScoringTable;
-    n_draws::Int = 500,
-    rng::AbstractRNG = Random.MersenneTwister(42),
-    breakaway_rates::Vector{Float64} = Float64[],
-    breakaway_mean_sectors::Vector{Float64} = Float64[],
-    simulation_df::Union{Int,Nothing} = nothing,
+    n_draws::Int=500,
+    rng::AbstractRNG=Random.MersenneTwister(42),
+    breakaway_rates::Vector{Float64}=Float64[],
+    breakaway_mean_sectors::Vector{Float64}=Float64[],
+    simulation_df::Union{Int,Nothing}=nothing,
 )
     n_riders = nrow(predicted)
     strengths = Float64.(predicted.strength)
@@ -902,7 +904,7 @@ function simulate_vg_draws(
             noisy_strengths[i] = strengths[i] + uncertainties[i] * noise
         end
 
-        order = sortperm(noisy_strengths, rev = true)
+        order = sortperm(noisy_strengths, rev=true)
         positions = Vector{Int}(undef, n_riders)
         for (pos, rider_idx) in enumerate(order)
             positions[rider_idx] = pos
@@ -950,17 +952,17 @@ function sim_distribution_chart(
     team_df::DataFrame,
     predicted::DataFrame,
     sim_vg_points::Matrix{Float64};
-    actual_results::Union{DataFrame,Nothing} = nothing,
-    title::String = "Simulated VG points distribution",
+    actual_results::Union{DataFrame,Nothing}=nothing,
+    title::String="Simulated VG points distribution",
 )
     key_to_idx = Dict(predicted.riderkey[i] => i for i in 1:nrow(predicted))
 
     sort_col = :expected_vg_points in propertynames(team_df) ? :expected_vg_points : :rider
-    team_sorted = sort(team_df, sort_col, rev = sort_col == :expected_vg_points)
+    team_sorted = sort(team_df, sort_col, rev=sort_col == :expected_vg_points)
 
     # Collect box plot stats for each rider
     riders = NamedTuple{(:name, :q0, :q25, :q50, :q75, :q100, :actual),
-                         Tuple{String,Float64,Float64,Float64,Float64,Float64,Union{Float64,Nothing}}}[]
+        Tuple{String,Float64,Float64,Float64,Float64,Float64,Union{Float64,Nothing}}}[]
     for row in eachrow(team_sorted)
         idx = get(key_to_idx, row.riderkey, nothing)
         idx === nothing && continue
@@ -989,7 +991,7 @@ function sim_distribution_chart(
     bar_h = min(18, plot_h / n - 4)
 
     y_max = max(maximum(r.q100 for r in riders),
-                maximum(something(r.actual, 0.0) for r in riders)) * 1.05
+        maximum(something(r.actual, 0.0) for r in riders)) * 1.05
     y_max = max(y_max, 1.0)
 
     val_to_x(v) = name_space + v / y_max * plot_w
@@ -1037,4 +1039,322 @@ function sim_distribution_chart(
 
     write(io, "</svg>")
     return String(take!(io))
+end
+
+# ---------------------------------------------------------------------------
+# Stage race (grand tour) report data assembly
+# ---------------------------------------------------------------------------
+
+"""
+    load_stage_race_report_data(pcs_slug, year; cache_config) -> Union{DataFrame, Nothing}
+
+Load VG grand tour totals and rider costs/classifications, join them, and compute value.
+Returns a DataFrame with columns: rider, team, cost, score, value, riderkey, class.
+"""
+function load_stage_race_report_data(
+    pcs_slug::String,
+    year::Int;
+    cache_config::CacheConfig=DEFAULT_CACHE,
+)
+    vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
+    isempty(vg_slug) && return nothing
+
+    # Try archived data first, then fetch live
+    totals = load_race_snapshot("vg_stage_totals", pcs_slug, year)
+    riders_df = load_race_snapshot("vg_stage_riders", pcs_slug, year)
+
+    if totals === nothing
+        try
+            totals = suppress_output() do
+                getvg_stage_race_totals(year, vg_slug; cache_config=cache_config)
+            end
+        catch e
+            @warn "Failed to fetch VG stage race totals for $pcs_slug $year: $e"
+            return nothing
+        end
+    end
+    totals === nothing && return nothing
+
+    if riders_df === nothing
+        try
+            riders_url = "https://www.velogames.com/$vg_slug/$year/riders.php"
+            riders_df = suppress_output() do
+                getvgriders(riders_url; cache_config=cache_config)
+            end
+        catch e
+            @warn "Failed to fetch VG riders for $pcs_slug $year: $e"
+            return nothing
+        end
+    end
+    riders_df === nothing && return nothing
+
+    # Select columns from riders (cost, class, team info)
+    rider_cols = [:rider, :team, :riderkey, :cost]
+    if hasproperty(riders_df, :class)
+        push!(rider_cols, :class)
+    elseif hasproperty(riders_df, :classraw)
+        riders_df[!, :class] = lowercase.(replace.(riders_df.classraw, " " => ""))
+        push!(rider_cols, :class)
+    end
+
+    df = leftjoin(
+        riders_df[:, rider_cols],
+        totals[:, [:riderkey, :score]];
+        on=:riderkey,
+    )
+    df[!, :score] = coalesce.(df.score, 0)
+    df[!, :value] = round.(df.score ./ max.(df.cost, 1), digits=1)
+    clean_team_names!(df, [:team])
+    return df
+end
+
+"""
+    load_stage_race_per_stage_data(pcs_slug, year, n_stages; cache_config) -> Union{DataFrame, Nothing}
+
+Load per-stage VG scores for all stages of a grand tour. Returns a long-format DataFrame
+with columns: rider, team, score, riderkey, stage.
+"""
+function load_stage_race_per_stage_data(
+    pcs_slug::String,
+    year::Int,
+    n_stages::Int;
+    cache_config::CacheConfig=DEFAULT_CACHE,
+)
+    # Try archived data first
+    archived = load_race_snapshot("vg_stage_results", pcs_slug, year)
+    if archived !== nothing
+        return archived
+    end
+
+    vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
+    isempty(vg_slug) && return nothing
+
+    dfs = DataFrame[]
+    for s in 1:n_stages
+        try
+            stage_df = suppress_output() do
+                getvg_stage_results(year, vg_slug, s; cache_config=cache_config)
+            end
+            stage_df[!, :stage] .= s
+            push!(dfs, stage_df)
+        catch e
+            @warn "Failed to fetch stage $s for $pcs_slug $year: $e"
+        end
+    end
+
+    isempty(dfs) && return nothing
+    return vcat(dfs...)
+end
+
+"""
+    compute_optimal_stage_team(df) -> Union{DataFrame, Nothing}
+
+Find the hindsight-optimal stage race team (9 riders, class constraints, cost <= 100).
+"""
+function compute_optimal_stage_team(df::DataFrame)
+    result = build_model_stage(df, 9, :score, :cost; totalcost=100)
+    result === nothing && return nothing
+    chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
+    return filter(row -> row.riderkey in chosen_keys, df)
+end
+
+"""
+    compute_cheapest_winning_stage_team(df, target_score) -> Union{DataFrame, Nothing}
+
+Find the minimum-cost 9-rider team that beats `target_score` with class constraints.
+"""
+function compute_cheapest_winning_stage_team(df::DataFrame, target_score::Real)
+    result = minimise_cost_stage(df, target_score, 9, :score, :cost)
+    result === nothing && return nothing
+    chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
+    return filter(row -> row.riderkey in chosen_keys, df)
+end
+
+"""
+    compute_cumulative_scores(per_stage, riderkeys; totals) -> DataFrame
+
+Compute cumulative score progression for a set of riders. Returns long-format DataFrame
+with columns: rider, riderkey, stage, cumulative_score, stage_score.
+
+When `totals` is provided (DataFrame with riderkey + score columns from the overall
+standings), any difference between the sum of per-stage scores and the overall total
+is added as a final pseudo-stage (stage = max_stage + 1) representing end-of-race
+classification bonuses.
+"""
+function compute_cumulative_scores(
+    per_stage::DataFrame,
+    riderkeys::Vector{String};
+    totals::Union{DataFrame,Nothing}=nothing,
+)
+    key_set = Set(riderkeys)
+    sub = filter(row -> row.riderkey in key_set, per_stage)
+    result_rows = NamedTuple{(:rider, :riderkey, :stage, :cumulative_score, :stage_score),
+        Tuple{String,String,Int,Int,Int}}[]
+    max_stage = maximum(per_stage.stage)
+    for key in riderkeys
+        rider_data = sort(filter(row -> row.riderkey == key, sub), :stage)
+        nrow(rider_data) == 0 && continue
+        cum = 0
+        rider_name = first(rider_data).rider
+        for row in eachrow(rider_data)
+            cum += row.score
+            push!(result_rows, (rider=rider_name, riderkey=key,
+                stage=row.stage, cumulative_score=cum, stage_score=row.score))
+        end
+        # Add final classification bonuses as pseudo-stage
+        if totals !== nothing
+            total_rows = filter(r -> r.riderkey == key, totals)
+            if nrow(total_rows) > 0
+                overall = first(total_rows).score
+                bonus = overall - cum
+                if bonus > 0
+                    cum += bonus
+                    push!(result_rows, (rider=rider_name, riderkey=key,
+                        stage=max_stage + 1, cumulative_score=cum,
+                        stage_score=bonus))
+                end
+            end
+        end
+    end
+    return DataFrame(result_rows)
+end
+
+"""
+    compute_stage_type_scores(per_stage, stages) -> DataFrame
+
+Aggregate per-stage scores by stage type for each rider. Returns DataFrame with columns:
+riderkey, rider, flat_score, hilly_score, mountain_score, itt_score.
+"""
+function compute_stage_type_scores(
+    per_stage::DataFrame,
+    stages::Vector{StageProfile},
+)
+    type_map = Dict(s.stage_number => s.stage_type for s in stages)
+    ps = copy(per_stage)
+    ps[!, :stage_type] = [get(type_map, s, :unknown) for s in ps.stage]
+
+    result = combine(
+        groupby(ps, [:riderkey, :rider]),
+        [:score, :stage_type] =>
+            ((sc, st) -> sum(sc[st.==:flat])) => :flat_score,
+        [:score, :stage_type] =>
+            ((sc, st) -> sum(sc[st.==:hilly])) => :hilly_score,
+        [:score, :stage_type] =>
+            ((sc, st) -> sum(sc[st.==:mountain])) => :mountain_score,
+        [:score, :stage_type] =>
+            ((sc, st) -> sum(sc[st.==:itt])) => :itt_score,
+    )
+    return result
+end
+
+"""
+    archive_stage_race_results(pcs_slug, year; n_stages, cache_config)
+
+Archive VG totals, rider costs/classes, per-stage scores, and PCS stage profiles
+for a completed grand tour. Idempotent (skips if already archived).
+"""
+function archive_stage_race_results(
+    pcs_slug::String,
+    year::Int;
+    n_stages::Int=21,
+    cache_config::CacheConfig=DEFAULT_CACHE,
+)
+    vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
+    if isempty(vg_slug)
+        @warn "Unknown stage race '$pcs_slug' — cannot archive"
+        return
+    end
+
+    # Archive VG totals
+    if load_race_snapshot("vg_stage_totals", pcs_slug, year) === nothing
+        try
+            totals = suppress_output() do
+                getvg_stage_race_totals(year, vg_slug; cache_config=cache_config)
+            end
+            save_race_snapshot(totals, "vg_stage_totals", pcs_slug, year)
+            @info "Archived vg_stage_totals for $pcs_slug $year"
+        catch e
+            @warn "Failed to archive VG totals for $pcs_slug $year: $e"
+        end
+    end
+
+    # Archive VG riders (costs + classifications)
+    if load_race_snapshot("vg_stage_riders", pcs_slug, year) === nothing
+        try
+            riders_url = "https://www.velogames.com/$vg_slug/$year/riders.php"
+            riders = suppress_output() do
+                getvgriders(riders_url; cache_config=cache_config)
+            end
+            save_race_snapshot(riders, "vg_stage_riders", pcs_slug, year)
+            @info "Archived vg_stage_riders for $pcs_slug $year"
+        catch e
+            @warn "Failed to archive VG riders for $pcs_slug $year: $e"
+        end
+    end
+
+    # Archive per-stage VG results
+    if load_race_snapshot("vg_stage_results", pcs_slug, year) === nothing
+        per_stage = load_stage_race_per_stage_data(pcs_slug, year, n_stages;
+            cache_config=cache_config)
+        if per_stage !== nothing
+            save_race_snapshot(per_stage, "vg_stage_results", pcs_slug, year)
+            @info "Archived vg_stage_results for $pcs_slug $year ($n_stages stages)"
+        end
+    end
+
+    # Archive PCS stage profiles
+    if load_race_snapshot("pcs_stage_profiles", pcs_slug, year) === nothing
+        try
+            profiles = suppress_output() do
+                getpcs_stage_profiles(pcs_slug, year; cache_config=cache_config)
+            end
+            if !isempty(profiles)
+                profiles_df = DataFrame(
+                    stage_number=[s.stage_number for s in profiles],
+                    stage_type=[string(s.stage_type) for s in profiles],
+                    distance_km=[s.distance_km for s in profiles],
+                    profile_score=[s.profile_score for s in profiles],
+                    vertical_meters=[s.vertical_meters for s in profiles],
+                    gradient_final_km=[s.gradient_final_km for s in profiles],
+                    n_hc_climbs=[s.n_hc_climbs for s in profiles],
+                    n_cat1_climbs=[s.n_cat1_climbs for s in profiles],
+                    n_intermediate_sprints=[s.n_intermediate_sprints for s in profiles],
+                    is_summit_finish=[s.is_summit_finish for s in profiles],
+                )
+                save_race_snapshot(profiles_df, "pcs_stage_profiles", pcs_slug, year)
+                @info "Archived pcs_stage_profiles for $pcs_slug $year"
+            end
+        catch e
+            @warn "Failed to archive PCS stage profiles for $pcs_slug $year: $e"
+        end
+    end
+end
+
+"""
+    load_stage_profiles(pcs_slug, year) -> Vector{StageProfile}
+
+Load archived PCS stage profiles and convert back to StageProfile structs.
+Returns empty vector if not archived.
+"""
+function load_stage_profiles(
+    pcs_slug::String,
+    year::Int,
+)
+    df = load_race_snapshot("pcs_stage_profiles", pcs_slug, year)
+    df === nothing && return StageProfile[]
+    return [
+        StageProfile(
+            row.stage_number,
+            Symbol(row.stage_type),
+            row.distance_km,
+            row.profile_score,
+            row.vertical_meters,
+            row.gradient_final_km,
+            row.n_hc_climbs,
+            row.n_cat1_climbs,
+            row.n_intermediate_sprints,
+            row.is_summit_finish,
+        )
+        for row in eachrow(df)
+    ]
 end
