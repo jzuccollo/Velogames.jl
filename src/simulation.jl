@@ -138,10 +138,10 @@ signal degrades rather than *how much* to trust the signal source.
 
     # --- Fixed ratios between signals within each group (domain knowledge, not tuned) ---
 
-    # Market: oracle is less precise than odds (increased from 2.0 after
-    # 10-race 2026 review showed oracle mean |shift| of 1.7 — disproportionate
-    # influence with no measurable rank-ordering benefit over the no-market backtest)
-    _odds_to_oracle_ratio::Float64 = 3.5
+    # Market: oracle is less precise than odds. Raised 2.0 → 3.5 (April 2026) then
+    # 3.5 → 5.0 (post 13-race review) as oracle's within-tier ρ stayed weakly anti-
+    # informative in the middle tier (−0.128) despite having the largest mean |shift|.
+    _odds_to_oracle_ratio::Float64 = 5.0
 
     # Historical: race history and VG history are noisier than recent form
     _form_to_hist_ratio::Float64 = 3.0
@@ -323,6 +323,7 @@ function estimate_rider_strength(
     config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
     effective_vg_variance::Float64=0.0,  # 0 = use vg_variance(config)
     race_has_market::Bool=false,
+    skip_block_correlation::Bool=false,
 )
     (; pcs_score, has_pcs, race_history, race_history_years_ago,
         race_history_variance_penalties, vg_points,
@@ -464,7 +465,7 @@ function estimate_rider_strength(
     ρ_b = config.between_cluster_correlation
     n_total = n_ability + n_history + n_market
 
-    if n_total > 1 && (ρ_w > 0 || ρ_b > 0)
+    if !skip_block_correlation && n_total > 1 && (ρ_w > 0 || ρ_b > 0)
         prior_prec = 1.0 / prior.variance
         post_prec = 1.0 / posterior.variance
         total_obs_prec = post_prec - prior_prec
@@ -1601,6 +1602,7 @@ function estimate_rider_strength(;
     config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
     effective_vg_variance::Float64=0.0,
     race_has_market::Bool=false,
+    skip_block_correlation::Bool=false,
     kwargs...
 )
     estimate_rider_strength(
@@ -1609,6 +1611,7 @@ function estimate_rider_strength(;
         config=config,
         effective_vg_variance=effective_vg_variance,
         race_has_market=race_has_market,
+        skip_block_correlation=skip_block_correlation,
     )
 end
 

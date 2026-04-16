@@ -55,7 +55,7 @@ function _generate_synthetic_signals(
     rng::AbstractRNG,
     true_strength::Float64,
     config::BayesianConfig;
-    available_signals::Set{Symbol} = Set([
+    available_signals::Set{Symbol}=Set([
         :pcs,
         :vg,
         :form,
@@ -64,8 +64,8 @@ function _generate_synthetic_signals(
         :odds,
         :oracle,
     ]),
-    n_history::Int = 3,
-    n_starters::Int = 150,
+    n_history::Int=3,
+    n_starters::Int=150,
 )
     # PCS specialty
     pcs_score, has_pcs = if :pcs in available_signals
@@ -76,11 +76,11 @@ function _generate_synthetic_signals(
 
     # VG season points
     vg_points = :vg in available_signals ?
-        true_strength + randn(rng) * sqrt(vg_variance(config)) : 0.0
+                true_strength + randn(rng) * sqrt(vg_variance(config)) : 0.0
 
     # Form
     form_score = :form in available_signals ?
-        true_strength + randn(rng) * sqrt(form_variance(config)) : 0.0
+                 true_strength + randn(rng) * sqrt(form_variance(config)) : 0.0
 
     # Race history
     race_history, race_history_years_ago, race_history_variance_penalties =
@@ -164,11 +164,11 @@ Simulate races from the model's generative process:
 `sparse_signals` controls which signals sparse riders have (default: pcs only).
 """
 function prior_predictive_check(
-    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG;
-    n_races::Int = 200,
-    n_riders::Int = 150,
-    rng::AbstractRNG = Random.default_rng(),
-    available_signals::Set{Symbol} = Set([
+    config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG;
+    n_races::Int=200,
+    n_riders::Int=150,
+    rng::AbstractRNG=Random.default_rng(),
+    available_signals::Set{Symbol}=Set([
         :pcs,
         :vg,
         :form,
@@ -177,7 +177,7 @@ function prior_predictive_check(
         :odds,
         :oracle,
     ]),
-    sparse_signals::Set{Symbol} = Set([:pcs]),
+    sparse_signals::Set{Symbol}=Set([:pcs]),
 )
     fav_wins = 0
     top5_from_top10_count = 0
@@ -202,10 +202,10 @@ function prior_predictive_check(
                 rng,
                 true_strengths[i],
                 config;
-                available_signals = signals,
-                n_starters = n_riders,
+                available_signals=signals,
+                n_starters=n_riders,
             )
-            est = estimate_rider_strength(signals; n_starters = n_riders, config = config)
+            est = estimate_rider_strength(signals; n_starters=n_riders, config=config)
             posterior_means[i] = est.mean
             posterior_vars[i] = est.variance
             sd = sqrt(est.variance)
@@ -263,8 +263,8 @@ Run `prior_predictive_check` and compare results against stylised fact ranges.
 Returns a DataFrame with fact name, expected range, observed value, and pass/fail.
 """
 function check_stylised_facts(
-    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG;
-    facts::StylisedFacts = DEFAULT_STYLISED_FACTS,
+    config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG;
+    facts::StylisedFacts=DEFAULT_STYLISED_FACTS,
     kwargs...,
 )
     result = prior_predictive_check(config; kwargs...)
@@ -283,11 +283,11 @@ function check_stylised_facts(
     ]
 
     DataFrame(
-        fact = [c[1] for c in checks],
-        lower = [c[2][1] for c in checks],
-        upper = [c[2][2] for c in checks],
-        observed = [round(c[3], digits = 3) for c in checks],
-        pass = [c[2][1] <= c[3] <= c[2][2] for c in checks],
+        fact=[c[1] for c in checks],
+        lower=[c[2][1] for c in checks],
+        upper=[c[2][2] for c in checks],
+        observed=[round(c[3], digits=3) for c in checks],
+        pass=[c[2][1] <= c[3] <= c[2][2] for c in checks],
     )
 end
 
@@ -304,7 +304,7 @@ Sweep a single BayesianConfig parameter across `values` and report diagnostics.
 function sensitivity_sweep(
     param::Symbol,
     values;
-    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
     kwargs...,
 )
     rows = []
@@ -317,15 +317,15 @@ function sensitivity_sweep(
         fields[param] = v
         test_config = BayesianConfig(; fields...)
 
-        result = prior_predictive_check(test_config; n_races = 100, kwargs...)
+        result = prior_predictive_check(test_config; n_races=100, kwargs...)
         push!(
             rows,
             (;
-                param_value = v,
-                favourite_win_rate = round(result.favourite_win_rate, digits = 3),
-                top5_from_top10 = round(result.top5_from_top10, digits = 3),
-                rank_correlation = round(result.rank_correlation, digits = 3),
-                posterior_sd = round(result.mean_posterior_sd, digits = 3),
+                param_value=v,
+                favourite_win_rate=round(result.favourite_win_rate, digits=3),
+                top5_from_top10=round(result.top5_from_top10, digits=3),
+                rank_correlation=round(result.rank_correlation, digits=3),
+                posterior_sd=round(result.mean_posterior_sd, digits=3),
             ),
         )
     end
@@ -357,11 +357,11 @@ If correctly calibrated, the CDF ranks should be Uniform(0, 1), so the
 histogram of ranks across bins should be approximately uniform.
 """
 function simulation_based_calibration(
-    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG;
-    n_sims::Int = 500,
-    n_bins::Int = 20,
-    rng::AbstractRNG = Random.default_rng(),
-    available_signals::Set{Symbol} = Set([
+    config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG;
+    n_sims::Int=500,
+    n_bins::Int=20,
+    rng::AbstractRNG=Random.default_rng(),
+    available_signals::Set{Symbol}=Set([
         :pcs,
         :vg,
         :form,
@@ -370,6 +370,7 @@ function simulation_based_calibration(
         :odds,
         :oracle,
     ]),
+    skip_block_correlation::Bool=false,
 )
     ranks = Float64[]
 
@@ -379,9 +380,13 @@ function simulation_based_calibration(
             rng,
             true_strength,
             config;
-            available_signals = available_signals,
+            available_signals=available_signals,
         )
-        est = estimate_rider_strength(signals; config = config)
+        est = estimate_rider_strength(
+            signals;
+            config=config,
+            skip_block_correlation=skip_block_correlation,
+        )
 
         # CDF rank: P(X <= true_strength) under Normal(est.mean, est.variance)
         z = (true_strength - est.mean) / sqrt(est.variance)

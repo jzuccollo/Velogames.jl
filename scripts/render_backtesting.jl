@@ -107,17 +107,18 @@ write(io, rank_histogram_chart(sbc.rank_histogram; title="All-signals SBC rank h
 
 # Per-signal SBC
 write(io, html_heading("Per-signal SBC", 4))
-write(io, "<p>Each signal tested individually (no block-correlation discount active with a single signal).</p>\n")
+write(io, "<p>Each signal tested individually with the block-correlation discount skipped, isolating the conjugate update. Signals disabled in production (PCS form, VG history) are excluded — the estimator no-ops them so SBC would test nothing.</p>\n")
 
 per_signal_sbc_rows = NamedTuple{(:Signal, :Mean_rank, :p_value, :Uniform),Tuple{String,Float64,Float64,String}}[]
-per_signal_names = Dict(:pcs => "PCS seasons", :vg => "VG season", :form => "PCS form",
-    :history => "Race history", :vg_history => "VG history", :odds => "Odds", :oracle => "Oracle")
+per_signal_names = Dict(:pcs => "PCS seasons", :vg => "VG season",
+    :history => "Race history", :odds => "Odds", :oracle => "Oracle")
 
 for (sig, label) in sort(collect(per_signal_names), by=last)
     sig_sbc = suppress_output() do
         simulation_based_calibration(DEFAULT_BAYESIAN_CONFIG;
             n_sims=500, rng=MersenneTwister(42),
-            available_signals=Set([sig]))
+            available_signals=Set([sig]),
+            skip_block_correlation=true)
     end
     push!(per_signal_sbc_rows, (
         Signal=label,
