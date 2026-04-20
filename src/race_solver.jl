@@ -20,16 +20,33 @@ function _extract_chosen_team(predicted::DataFrame, top_teams::Vector{DataFrame}
     return predicted, chosenteam
 end
 
+"""Return true if the race has already happened (so its archive should be protected)."""
+function _race_has_happened(config::RaceConfig)
+    today = Dates.today()
+    config.year < Dates.year(today) && return true
+    config.year > Dates.year(today) && return false
+    info = find_race(config.name)
+    info === nothing && return true  # unknown date — protect by default
+    race_date = try
+        Dates.Date(info.date)
+    catch
+        return true
+    end
+    return race_date < today
+end
+
 """Archive the predicted DataFrame for prospective evaluation."""
 function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     isempty(config.pcs_slug) && return
-    # Don't overwrite an existing prediction archive (protects pre-race snapshots
-    # from being clobbered by a post-race re-run). Set VELOGAMES_FORCE_ARCHIVE=1
-    # to override.
-    existing = load_race_snapshot("predictions", config.pcs_slug, config.year)
-    if existing !== nothing && get(ENV, "VELOGAMES_FORCE_ARCHIVE", "") != "1"
-        @warn "Prediction archive already exists for $(config.pcs_slug) $(config.year) — skipping. Set VELOGAMES_FORCE_ARCHIVE=1 to overwrite."
-        return
+    # Protect post-race archives from being clobbered (preserves the pre-race
+    # snapshot used for prospective evaluation). Pre-race re-runs always overwrite.
+    # Set VELOGAMES_FORCE_ARCHIVE=1 to override the post-race protection.
+    if _race_has_happened(config)
+        existing = load_race_snapshot("predictions", config.pcs_slug, config.year)
+        if existing !== nothing && get(ENV, "VELOGAMES_FORCE_ARCHIVE", "") != "1"
+            @warn "Race date has passed and prediction archive exists for $(config.pcs_slug) $(config.year) — skipping to preserve pre-race snapshot. Set VELOGAMES_FORCE_ARCHIVE=1 to overwrite."
+            return
+        end
     end
     cols = intersect(
         propertynames(predicted),
@@ -52,6 +69,9 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :stage_strength_hilly,
             :stage_strength_mountain,
             :stage_strength_itt,
+            :expected_vg_points,
+            :selection_frequency,
+            :chosen,
         ],
     )
     try
@@ -520,9 +540,6 @@ function solve_oneday(
         domestique_discount=domestique_discount,
     )
 
-    # Archive predictions for prospective evaluation
-    _archive_predictions(predicted, config)
-
     # --- 6. Breakaway rates ---
     b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
 
@@ -542,6 +559,9 @@ function solve_oneday(
     )
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
+
+    # Archive after optimisation so chosen / selection_frequency / expected_vg_points are persisted
+    _archive_predictions(predicted, config)
 
     return predicted, chosenteam, top_teams, sim_vg_points
 end
@@ -624,8 +644,6 @@ function solve_stage(
             predicted[!, col] = round.(stage_strengths[stype], digits=3)
         end
 
-        _archive_predictions(predicted, config)
-
         # Archive stage profiles
         if !isempty(config.pcs_slug)
             try
@@ -661,7 +679,6 @@ function solve_stage(
         )
     else
         # --- Aggregate fallback ---
-        _archive_predictions(predicted, config)
         scoring = get_scoring(:stage)
 
         b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
@@ -682,6 +699,9 @@ function solve_stage(
     end
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
+
+    # Archive after optimisation so chosen / selection_frequency / expected_vg_points are persisted
+    _archive_predictions(predicted, config)
 
     return predicted, chosenteam, top_teams, sim_vg_points
 end
