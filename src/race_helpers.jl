@@ -67,7 +67,7 @@ const CLASSICS_RACES_2026 = [
         "2026-03-07",
         2,
         "strade-bianche",
-        ["il-lombardia", "liege-bastogne-liege", "amstel-gold-race"],
+        ["il-lombardia", "liege-bastogne-liege", "amstel-gold-race", "dwars-door-het-hageland"],
         215.0,
     ),
     RaceInfo(
@@ -91,7 +91,7 @@ const CLASSICS_RACES_2026 = [
         "2026-03-25",
         2,
         "classic-brugge-de-panne",
-        ["gent-wevelgem", "omloop-het-nieuwsblad", "kuurne-brussel-kuurne"],
+        ["gent-wevelgem", "scheldeprijs", "kuurne-brussel-kuurne"],
         201.0,
     ),
     RaceInfo(
@@ -174,7 +174,7 @@ const CLASSICS_RACES_2026 = [
         "2026-04-22",
         2,
         "la-fleche-wallonne",
-        ["liege-bastogne-liege", "amstel-gold-race", "brabantse-pijl"],
+        ["amstel-gold-race", "brabantse-pijl"],
         202.0,
     ),
     RaceInfo(
@@ -215,7 +215,7 @@ const CLASSICS_RACES_2026 = [
         "2026-05-19",
         3,
         "quatre-jours-de-dunkerque",
-        ["gp-de-plumelec", "circuit-franco-belge"],
+        ["scheldeprijs", "paris-tours", "circuit-franco-belge"],
         200.0,
     ),
     # Belgian hilly
@@ -224,7 +224,7 @@ const CLASSICS_RACES_2026 = [
         "2026-06-07",
         3,
         "brussels-cycling-classic",
-        ["dwars-door-het-hageland", "omloop-het-nieuwsblad"],
+        ["kuurne-brussel-kuurne", "scheldeprijs"],
         201.0,
     ),
     RaceInfo(
@@ -240,7 +240,7 @@ const CLASSICS_RACES_2026 = [
         "2026-06-13",
         3,
         "dwars-door-het-hageland",
-        ["brussels-cycling-classic", "classic-brugge-de-panne"],
+        ["strade-bianche", "brussels-cycling-classic", "classic-brugge-de-panne"],
         205.0,
     ),
     # Flat sprint
@@ -266,7 +266,7 @@ const CLASSICS_RACES_2026 = [
         "2026-08-16",
         2,
         "cyclassics-hamburg",
-        ["eschborn-frankfurt", "gp-montreal"],
+        ["eschborn-frankfurt", "scheldeprijs", "paris-tours"],
         231.0,
     ),
     RaceInfo(
@@ -306,7 +306,7 @@ const CLASSICS_RACES_2026 = [
         "2026-09-13",
         2,
         "gp-montreal",
-        ["gp-quebec", "san-sebastian", "cyclassics-hamburg"],
+        ["gp-quebec", "san-sebastian", "amstel-gold-race"],
         224.0,
     ),
     RaceInfo(
