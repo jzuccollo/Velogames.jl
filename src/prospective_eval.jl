@@ -12,6 +12,7 @@ struct ProspectiveResult
     spearman_rho::Float64
     top5_overlap::Int
     top10_overlap::Int
+    top10_in_top20::Int
     mean_abs_rank_error::Float64
     mean_signal_shifts::Dict{Symbol,Float64}
 end
@@ -69,8 +70,10 @@ function evaluate_prospective(
     pred_top10 = Set(partialsortperm(-predicted_strengths, 1:min(10, n)))
     actual_top5 = Set(partialsortperm(actual_positions, 1:min(5, n)))
     actual_top10 = Set(partialsortperm(actual_positions, 1:min(10, n)))
+    actual_top20 = Set(partialsortperm(actual_positions, 1:min(20, n)))
     top5_overlap = length(intersect(pred_top5, actual_top5))
     top10_overlap = length(intersect(pred_top10, actual_top10))
+    top10_in_top20 = length(intersect(pred_top10, actual_top20))
 
     # Mean absolute rank error
     pred_ranks = _average_ranks(-predicted_strengths)
@@ -96,6 +99,7 @@ function evaluate_prospective(
         rho,
         top5_overlap,
         top10_overlap,
+        top10_in_top20,
         mare,
         mean_shifts,
     )
@@ -146,6 +150,7 @@ function prospective_season_summary(year::Int; archive_dir::String = DEFAULT_ARC
                 spearman_rho = round(result.spearman_rho, digits = 3),
                 top5_overlap = result.top5_overlap,
                 top10_overlap = result.top10_overlap,
+                top10_in_top20 = result.top10_in_top20,
                 mean_abs_rank_error = round(result.mean_abs_rank_error, digits = 1),
             ),
         )
@@ -366,5 +371,75 @@ function signal_value_analysis(year::Int; archive_dir::String = DEFAULT_ARCHIVE_
         ) for (k, v) in sort(collect(signal_totals); by = x -> -mean(x[2]))
     ]
 
+    DataFrame(rows)
+end
+
+# ---------------------------------------------------------------------------
+# External benchmark: Cycling Oracle 2026 spring classics
+# ---------------------------------------------------------------------------
+
+"""
+Cycling Oracle's reported top-10-in-top-20 hit rates from their 2026 spring
+classics review (https://www.cyclingoracle.com/en/blog/classics-2026-accuracy).
+
+Metric: percentage of their top-10 predicted riders who finished in the
+actual top 20. Aggregate: mean 60.5%, median 66.7%.
+"""
+const ORACLE_2026_BASELINE = Dict{String,Float64}(
+    "ronde-van-vlaanderen" => 93.8,
+    "strade-bianche" => 86.2,
+    "liege-bastogne-liege" => 85.3,
+    "paris-roubaix" => 77.8,
+    "e3-harelbeke" => 74.2,
+    "amstel-gold-race" => 67.1,
+    "kuurne-brussel-kuurne" => 23.6,
+    "brabantse-pijl" => 17.3,
+)
+
+"""
+    oracle_2026_comparison(year=2026; archive_dir) -> DataFrame
+
+Compare our prospective top-10-in-top-20 hit rate against Cycling Oracle's
+reported figures. One row per race in `ORACLE_2026_BASELINE`. Rows where we
+lack archived predictions or PCS results have `missing` in our columns.
+
+Caveat: Cycling Oracle is a signal in our model, so this measures
+"us-with-Oracle vs Oracle alone" rather than a clean head-to-head.
+"""
+function oracle_2026_comparison(
+    year::Int = 2026;
+    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+)
+    rows = []
+    for pcs_slug in sort(collect(keys(ORACLE_2026_BASELINE)))
+        oracle_pct = ORACLE_2026_BASELINE[pcs_slug]
+        result = evaluate_prospective(pcs_slug, year; archive_dir = archive_dir)
+        if result === nothing
+            push!(
+                rows,
+                (;
+                    race = pcs_slug,
+                    n_matched = missing,
+                    our_top10_in_top20 = missing,
+                    our_pct = missing,
+                    oracle_pct = oracle_pct,
+                    difference_pp = missing,
+                ),
+            )
+        else
+            our_pct = round(100 * result.top10_in_top20 / 10, digits = 1)
+            push!(
+                rows,
+                (;
+                    race = pcs_slug,
+                    n_matched = result.n_matched,
+                    our_top10_in_top20 = result.top10_in_top20,
+                    our_pct = our_pct,
+                    oracle_pct = oracle_pct,
+                    difference_pp = round(our_pct - oracle_pct, digits = 1),
+                ),
+            )
+        end
+    end
     DataFrame(rows)
 end

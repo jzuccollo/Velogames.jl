@@ -424,10 +424,42 @@ prospective_df = prospective_season_summary(current_year)
 
 if nrow(prospective_df) > 0
     write(io, html_heading("$current_year season", 3))
-    write(io, "<p>$(nrow(prospective_df)) races with archived predictions and results.</p>\n")
+    write(io, "<p>$(nrow(prospective_df)) races with archived predictions and results. <code>top10_overlap</code> counts our predicted top 10 in the actual top 10; <code>top10_in_top20</code> counts them in the actual top 20 (the metric Cycling Oracle reports).</p>\n")
     write(io, html_table(prospective_df))
 else
     write(io, "<p>No prospective evaluation data available for $current_year yet.</p>\n")
+end
+
+# --- Cycling Oracle comparison ---
+
+write(io, html_heading("Comparison vs Cycling Oracle ($current_year)", 3))
+write(
+    io,
+    """<p>Cycling Oracle published their 2026 spring classics accuracy at <a href="https://www.cyclingoracle.com/en/blog/classics-2026-accuracy">cyclingoracle.com/en/blog/classics-2026-accuracy</a>. Their metric is the percentage of their top-10 predicted riders who finish in the actual top 20. We compute the same metric from our archived $current_year predictions for the races they evaluated. Aggregate Oracle figures: mean 60.5%, median 66.7%.</p>
+<p><strong>Caveat:</strong> Cycling Oracle predictions are an input signal to our model, so this is not a clean head-to-head — it tests whether the combined model adds value over Oracle alone.</p>
+""",
+)
+
+oracle_cmp = oracle_2026_comparison(current_year)
+if nrow(oracle_cmp) > 0
+    write(io, html_table(oracle_cmp))
+    matched = filter(:our_pct => !ismissing, oracle_cmp)
+    if nrow(matched) > 0
+        our_mean = round(mean(skipmissing(matched.our_pct)), digits = 1)
+        oracle_mean = round(mean(matched.oracle_pct), digits = 1)
+        diff_mean = round(our_mean - oracle_mean, digits = 1)
+        write(
+            io,
+            "<p><strong>Across $(nrow(matched)) overlapping races:</strong> our mean = $(our_mean)%, Oracle mean = $(oracle_mean)% (difference: $(diff_mean) pp).</p>\n",
+        )
+    end
+    n_missing = nrow(oracle_cmp) - nrow(matched)
+    if n_missing > 0
+        write(
+            io,
+            "<p>$(n_missing) of $(nrow(oracle_cmp)) races lack archived predictions or PCS results — populate by running <code>solve_oneday</code> for the race and ensuring results are archived.</p>\n",
+        )
+    end
 end
 
 # --- VG points calibration (PIT) ---
@@ -1130,7 +1162,7 @@ if nrow(pit_df) > 0
             nm_results = Dict{String,Dict{String,Any}}()
             for (label, signals) in nm_configs
                 @info "  Non-market: $label"
-                df = _run_ablation(signals, DEFAULT_BAYESIAN_CONFIG)
+                local df = _run_ablation(signals, DEFAULT_BAYESIAN_CONFIG)
                 nm_results[label] = _tier_rhos(df)
             end
 
@@ -1183,9 +1215,9 @@ if nrow(pit_df) > 0
             # Position-dependent variants
             for (pd_label, top_q) in [("Pos-dep top25%", 0.75), ("Pos-dep top33%", 0.67)]
                 @info "  Market: $pd_label"
-                high_bc = BayesianConfig(; market_discount=8.0)
-                low_bc = BayesianConfig(; market_discount=1.0)
-                df = _run_pos_dependent(no_market_signals, all_signals, high_bc, low_bc; top_quantile=top_q)
+                local high_bc = BayesianConfig(; market_discount=8.0)
+                local low_bc = BayesianConfig(; market_discount=1.0)
+                local df = _run_pos_dependent(no_market_signals, all_signals, high_bc, low_bc; top_quantile=top_q)
                 mkt_results[pd_label] = _tier_rhos(df)
             end
 
