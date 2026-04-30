@@ -68,6 +68,18 @@ Code and data collection retained for backtesting re-evaluation.
 
 **4. ML augmentation.** ~3% above tuned baseline per Kholkine; requires 90+ race training set. Not started — prerequisites missing.
 
+**5. Profile-aware PCS specialty blend for one-day races.** Stage races already blend PCS specialty columns (`:gc`, `:climber`, `:sprint`, `:oneday`, `:tt`) by rider classification via `STAGE_RACE_PCS_WEIGHTS`. One-day races use the generic `:oneday` column for every classic from Roubaix to Scheldeprijs, so the prior does not distinguish cobbled, flat-sprint, puncheur, or Ardennes-style courses. Adding a per-race blend (e.g. Eschborn / Brabantse Pijl / Quebec: `:oneday` 0.5 + `:climber` 0.3 + `:sprint` 0.2) would give the prior some terrain awareness, particularly valuable for younger riders missing race-history coverage. Risk of double-counting with the `SIMILAR_RACES` signal, which already provides terrain matching from observed results. Implement as a small ablation on 3–4 puncheur races and reject if Spearman ρ does not improve relative to the current single-column setup.
+
+**6. Data-driven `SIMILAR_RACES` via latent-factor model.** The current similar-races list is hand-curated terrain guesswork (cobbled / Ardennes / sprint clusters). Neither Kholkine nor VeloRost actually defines similarity from rider results — Kholkine hand-picks related-race features, and VeloRost clusters by elevation and road surface attributes. A result-driven approach would be moderately novel relative to those baselines.
+
+Build a rider × race × year tensor of normalised finishing positions or PCS race points (PCS points preferred — it concentrates information at the top of the field where it matters). Residualise on rider × year mean to remove form/peaking effects, then fit probabilistic matrix factorisation with 5–10 latent factors and exponential recency weighting on race-year (handles course evolution like Eschborn pre/post-2023 automatically). Race similarity becomes cosine distance in factor space.
+
+Two qualitative wins over the manual list: (a) automatic adaptation to course changes via the recency weighting, (b) continuous similarity scores enable weighted history observations (a Quebec result counts 0.8 toward Eschborn evidence, a Roubaix result 0.1) rather than a hard top-k threshold. The continuous weighting is the bigger structural improvement; the top-k list itself is probably mostly right at the macro level.
+
+Validation: backtest with (a) manual `SIMILAR_RACES`, (b) factor-model top-k, (c) factor-model continuous-weighted. Reject if (b) and (c) do not beat (a) by more than the bootstrap CI.
+
+Sparsity is the main risk: cross-region race pairs share 15–30 common riders per year, so factors may be unstable. Mitigate by densifying with non-prediction-set races (Tour stages, lower-tier events). Cost ~1 week to prototype (scraping infrastructure exists; PMF in `MultivariateStats.jl` or hand-rolled Gibbs sampler), plus 2 days validation.
+
 ### Deprioritised (not planned)
 
 - **VG points calibration**: The PIT right-skew (mean 0.828 across 11 races) is real but roughly uniform across cheap riders. Correcting it changes budget allocation but not rider selection where signals are sparse. Second-order compared to correctly ranking top riders.

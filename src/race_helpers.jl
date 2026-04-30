@@ -51,7 +51,7 @@ const CLASSICS_RACES_2026 = [
         "2026-03-01",
         3,
         "kuurne-brussel-kuurne",
-        ["scheldeprijs", "classic-brugge-de-panne", "paris-tours", "eschborn-frankfurt"],
+        ["scheldeprijs", "classic-brugge-de-panne", "paris-tours"],
         197.0,
     ),
     RaceInfo(
@@ -141,7 +141,7 @@ const CLASSICS_RACES_2026 = [
         "2026-04-08",
         3,
         "scheldeprijs",
-        ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "eschborn-frankfurt", "cyclassics-hamburg"],
+        ["kuurne-brussel-kuurne", "classic-brugge-de-panne", "cyclassics-hamburg"],
         198.0,
     ),
     RaceInfo(
@@ -190,7 +190,7 @@ const CLASSICS_RACES_2026 = [
         "2026-05-01",
         2,
         "eschborn-frankfurt",
-        ["kuurne-brussel-kuurne", "scheldeprijs", "cyclassics-hamburg"],
+        ["cyclassics-hamburg", "gp-quebec", "bretagne-classic", "brabantse-pijl"],
         238.0,
     ),
     # French regional
