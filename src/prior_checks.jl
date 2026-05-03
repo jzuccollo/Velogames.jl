@@ -111,18 +111,21 @@ function _generate_synthetic_signals(
         Float64[], Int[]
     end
 
-    # Odds
+    # Odds and oracle: bypass the production [0.001, 0.99] clamp.
+    # SBC tests the conjugate update math; the clamp pins extreme strengths
+    # to a fixed decoded value, breaking the encode/decode round-trip and
+    # producing spurious non-uniform CDF ranks. We allow tiny epsilons only
+    # for numerical safety in the log step.
     odds_implied_prob = if :odds in available_signals
         odds_strength = true_strength + randn(rng) * sqrt(odds_variance(config))
-        clamp((1.0 / n_starters) * exp(odds_strength * config.odds_normalisation), 0.001, 0.99)
+        clamp((1.0 / n_starters) * exp(odds_strength * config.odds_normalisation), 1e-12, 1.0 - 1e-12)
     else
         0.0
     end
 
-    # Oracle
     oracle_implied_prob = if :oracle in available_signals
         oracle_strength = true_strength + randn(rng) * sqrt(oracle_variance(config))
-        clamp((1.0 / n_starters) * exp(oracle_strength * config.odds_normalisation), 0.001, 0.99)
+        clamp((1.0 / n_starters) * exp(oracle_strength * config.odds_normalisation), 1e-12, 1.0 - 1e-12)
     else
         0.0
     end

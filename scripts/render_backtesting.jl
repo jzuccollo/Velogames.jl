@@ -107,7 +107,7 @@ write(io, rank_histogram_chart(sbc.rank_histogram; title="All-signals SBC rank h
 
 # Per-signal SBC
 write(io, html_heading("Per-signal SBC", 4))
-write(io, "<p>Each signal tested individually with the block-correlation discount skipped, isolating the conjugate update. Signals disabled in production (PCS form, VG history) are excluded — the estimator no-ops them so SBC would test nothing.</p>\n")
+write(io, "<p>Each signal tested individually with the block-correlation discount skipped, isolating the conjugate update. Signals disabled in production (PCS form, VG history) are excluded — the estimator no-ops them so SBC would test nothing. Note: the synthetic oracle/odds generators bypass the production [0.001, 0.99] clamp on implied probabilities — the clamp pins extreme strengths to a fixed decoded value, breaking the encode/decode round-trip and producing spurious non-uniform CDF ranks. The per-signal test exercises only the listed-rider Bayesian update path; the oracle floor path (used for riders absent from oracle) is not tested here.</p>\n")
 
 per_signal_sbc_rows = NamedTuple{(:Signal, :Mean_rank, :p_value, :Uniform),Tuple{String,Float64,Float64,String}}[]
 per_signal_names = Dict(:pcs => "PCS seasons", :vg => "VG season",
