@@ -385,13 +385,18 @@ function prefetch_race_data(
         force_refresh = force_refresh,
     )
 
+    qualitative_df = load_race_snapshot("qualitative", race.pcs_slug, race.year)
+    if qualitative_df !== nothing
+        @info "Loaded archived qualitative for $(race.name) $(race.year): $(nrow(qualitative_df)) entries"
+    end
+
     return RaceData(
         riderdf,
         race_history_df,
         odds_df,
         oracle_df,
         vg_history_df,
-        nothing,
+        qualitative_df,
         form_df,
         seasons_df,
         actual_df,
