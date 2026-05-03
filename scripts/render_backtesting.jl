@@ -560,7 +560,7 @@ if nrow(pit_df) > 0
         pred === nothing && continue
         cols = Symbol[:riderkey, :strength, :uncertainty]
         for c in propertynames(pred)
-            startswith(string(c), "shift_") && push!(cols, c)
+            (startswith(string(c), "shift_") || startswith(string(c), "has_")) && push!(cols, c)
         end
         cols = intersect(cols, propertynames(pred))
         sub = pred[:, unique(cols)]
@@ -828,6 +828,65 @@ if nrow(pit_df) > 0
             )
             write(io, html_table(tier_rho_df))
         end
+
+        # --- Oracle: listed vs floor split ---
+        # The Oracle signal fires via two paths: a listed-rider Bayesian update
+        # using the published implied probability, and a floor observation for
+        # riders absent from Oracle's prediction. The aggregate within-tier ρ
+        # mixes these. Split here to identify whether Oracle's signal value
+        # lives in the listed-rider predictions or is being polluted by the
+        # floor path (or vice versa).
+        if :shift_oracle in propertynames(rank_combined) && :has_oracle in propertynames(rank_combined)
+            write(io, html_heading("Oracle: listed-rider vs floor-path discrimination", 5))
+            write(io, "<p>Same within-tier ρ table but for Oracle only, split by whether the rider had a listed Oracle prediction (true Bayesian update) vs received the residual floor observation. A listed-vs-floor gap would indicate the aggregate Oracle metric is mixing two structurally different signals.</p>\n")
+
+            oracle_rows = NamedTuple{(:Group, :Bottom_25_rho, :Bottom_25_n, :Middle_50_rho, :Middle_50_n, :Top_25_rho, :Top_25_n),Tuple{String,String,Int,String,Int,String,Int}}[]
+            for (group_label, group_mask) in [
+                ("Listed (real Oracle prediction)", coalesce.(rank_combined.has_oracle, false) .== true),
+                ("Floor (no Oracle prediction)", coalesce.(rank_combined.has_oracle, false) .== false),
+            ]
+                group_df = rank_combined[group_mask, :]
+                nrow(group_df) < 30 && continue
+                # Recompute tier quantiles within the group so split is fair
+                str_q25_g = quantile(skipmissing(group_df.strength), 0.25)
+                str_q75_g = quantile(skipmissing(group_df.strength), 0.75)
+                tier_defs_g = [
+                    ("Bottom 25%", group_df.strength .<= str_q25_g),
+                    ("Middle 50%", (group_df.strength .> str_q25_g) .& (group_df.strength .< str_q75_g)),
+                    ("Top 25%", group_df.strength .>= str_q75_g),
+                ]
+                rhos = String[]
+                ns = Int[]
+                for (_, tm) in tier_defs_g
+                    td = group_df[tm, :]
+                    valid = [!ismissing(td[i, :shift_oracle]) && td[i, :shift_oracle] != 0.0 for i in 1:nrow(td)]
+                    vd = td[valid, :]
+                    n_t = nrow(vd)
+                    if n_t >= 10
+                        shifts = Float64.(vd.shift_oracle)
+                        positions = Float64.(vd.actual_position)
+                        rho = spearman_correlation(shifts, -positions)
+                        push!(rhos, "$(round(rho, digits=3))")
+                    else
+                        push!(rhos, "—")
+                    end
+                    push!(ns, n_t)
+                end
+                push!(oracle_rows, (Group=group_label, Bottom_25_rho=rhos[1], Bottom_25_n=ns[1], Middle_50_rho=rhos[2], Middle_50_n=ns[2], Top_25_rho=rhos[3], Top_25_n=ns[3]))
+            end
+            if !isempty(oracle_rows)
+                oracle_df = DataFrame(oracle_rows)
+                rename!(oracle_df,
+                    :Bottom_25_rho => Symbol("ρ (bottom 25%)"),
+                    :Bottom_25_n => Symbol("n (bottom)"),
+                    :Middle_50_rho => Symbol("ρ (middle 50%)"),
+                    :Middle_50_n => Symbol("n (middle)"),
+                    :Top_25_rho => Symbol("ρ (top 25%)"),
+                    :Top_25_n => Symbol("n (top)"),
+                )
+                write(io, html_table(oracle_df))
+            end
+        end
     end
 
     # --- Signal load vs calibration ---
@@ -927,8 +986,8 @@ if nrow(pit_df) > 0
 
     # --- Prospective discrimination by position band ---
 
-    write(io, html_heading("Discrimination by position band", 3))
-    write(io, "<p>Spearman ρ within bands of actual PCS finishing position, aggregated across all prospective races. High ρ for positions 1–10 means the model correctly orders podium contenders relative to each other. Low ρ for positions 10–20 means the model cannot differentiate within the scoring boundary. This matters more for team selection than overall ρ because the optimiser primarily cares about the top 20–30 riders.</p>\n")
+    write(io, html_heading("Discrimination by position band", 3; id="prospective-discrimination-by-position-band"))
+    write(io, "<p>Spearman ρ within bands of actual PCS finishing position, aggregated across all prospective races. High ρ for positions 1–10 means the model correctly orders podium contenders relative to each other. Low ρ for positions 10–20 means the model cannot differentiate within the scoring boundary. This matters more for team selection than overall ρ because the optimiser primarily cares about the top 20–30 riders. DNF and unranked riders are excluded.</p>\n")
 
     begin
         band_parts = DataFrame[]
@@ -956,11 +1015,12 @@ if nrow(pit_df) > 0
 
         if !isempty(band_parts)
             band_combined = vcat(band_parts...)
+            band_combined = band_combined[band_combined.actual_position .< Velogames.DNF_POSITION, :]
             bands = [
                 ("Positions 1–10 (podium contenders)", 1, 10),
                 ("Positions 11–20 (scoring boundary)", 11, 20),
                 ("Positions 21–40 (near miss)", 21, 40),
-                ("Positions 41+ (outsiders)", 41, 999),
+                ("Positions 41+ (outsiders)", 41, 998),
             ]
             band_rows = NamedTuple{(:Band, :Spearman_ρ, :Mean_abs_rank_error, :n),Tuple{String,Float64,Float64,Int}}[]
             for (label, lo, hi) in bands
