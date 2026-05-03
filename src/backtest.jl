@@ -509,6 +509,13 @@ function backtest_race(
     # may still be used by estimate_strengths for PCS recency scaling)
     seasons_df = data.seasons_df
 
+    # Form, VG history, and qualitative are zeroed in production.
+    # The ablation re-enables them for evaluation by passing force_enable.
+    force_enable = Set{Symbol}()
+    :form in signals && push!(force_enable, :form)
+    :vg_history in signals && push!(force_enable, :vg_history)
+    :qualitative in signals && push!(force_enable, :qualitative)
+
     # --- Run prediction pipeline ---
     scoring = get_scoring(race.category > 0 ? race.category : 2)
     ri = _find_race_by_slug(race.pcs_slug)
@@ -531,6 +538,7 @@ function backtest_race(
         simulation_df = simulation_df,
         domestique_discount = domestique_discount,
         total_distance_km = race_distance_km,
+        force_enable = force_enable,
     )
 
     # --- Apply risk adjustment if risk_aversion > 0 ---

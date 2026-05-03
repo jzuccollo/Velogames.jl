@@ -324,11 +324,15 @@ function estimate_rider_strength(
     effective_vg_variance::Float64=0.0,  # 0 = use vg_variance(config)
     race_has_market::Bool=false,
     skip_block_correlation::Bool=false,
+    force_enable::Set{Symbol}=Set{Symbol}(),
 )
     (; pcs_score, has_pcs, race_history, race_history_years_ago,
-        race_history_variance_penalties, vg_points,
+        race_history_variance_penalties, vg_points, form_score,
+        vg_race_history, vg_race_history_years_ago,
         odds_implied_prob, oracle_implied_prob,
-        odds_floor_strength, oracle_floor_strength) = signals
+        odds_floor_strength, oracle_floor_strength,
+        form_floor_strength, qualitative_floor_strength,
+        qualitative_adjustments, qualitative_confidences) = signals
     # --- Uninformative prior ---
     # Start from a diffuse prior (mean=0, large variance). All signals,
     # including PCS specialty, update this as observations.
@@ -372,13 +376,28 @@ function estimate_rider_strength(
     # --- Precision boundary: ability cluster complete ---
     prec_after_ability = 1.0 / posterior.variance
 
-    # --- PCS form score (disabled April 2026) ---
+    # --- PCS form score (disabled April 2026; re-enable via force_enable=:form) ---
     # Ablation study across 11 prospective races showed near-zero within-tier
     # Spearman ρ (-0.014 bottom, 0.003 middle, 0.106 top). The signal shifts
     # the posterior without improving ordering, adding noise via the block-
     # correlation discount. Data collection and archival continue; the signal
     # can be re-enabled via backtesting's :form flag for future evaluation.
-    shift_form = 0.0
+    if :form in force_enable
+        mean_before = posterior.mean
+        if form_score != 0.0
+            posterior = bayesian_update(posterior, form_score, form_variance(config) * md)
+            n_signals += 1
+            n_history += 1
+        elseif form_floor_strength != 0.0
+            floor_var = form_variance(config) * config.form_floor_variance_multiplier * md
+            posterior = bayesian_update(posterior, form_floor_strength, floor_var)
+            n_signals += 1
+            n_history += 1
+        end
+        shift_form = posterior.mean - mean_before
+    else
+        shift_form = 0.0
+    end
 
     # --- Update with PCS race-specific history ---
     # Each past result in this or similar races is a strong signal.
@@ -403,13 +422,27 @@ function estimate_rider_strength(
     end
     shift_history = posterior.mean - mean_before
 
-    # --- VG race history (disabled April 2026) ---
+    # --- VG race history (disabled April 2026; re-enable via force_enable=:vg_history) ---
     # Ablation study showed near-zero within-tier ρ (0.056 bottom, 0.048
     # middle, -0.071 top) — slightly anti-informative for top riders.
     # Dropping it alongside PCS form improves non-market ρ from 0.509 to
     # 0.528 with consistent direction across all tiers. Data collection
     # and archival continue; re-enable via backtesting's :vg_history flag.
-    shift_vg_history = 0.0
+    if :vg_history in force_enable
+        mean_before = posterior.mean
+        if length(vg_race_history) != length(vg_race_history_years_ago)
+            @warn "vg_race_history ($(length(vg_race_history))) and vg_race_history_years_ago ($(length(vg_race_history_years_ago))) have different lengths"
+        end
+        for (vg_strength, years_ago) in zip(vg_race_history, vg_race_history_years_ago)
+            vg_var = (vg_hist_base_variance(config) + config.vg_hist_decay_rate * years_ago) * md
+            posterior = bayesian_update(posterior, vg_strength, vg_var)
+            n_signals += 1
+            n_history += 1
+        end
+        shift_vg_history = posterior.mean - mean_before
+    else
+        shift_vg_history = 0.0
+    end
 
     # --- Precision boundary: history cluster complete ---
     prec_after_history = 1.0 / posterior.variance
@@ -432,13 +465,33 @@ function estimate_rider_strength(
     end
     shift_oracle = posterior.mean - mean_before
 
-    # --- Qualitative intelligence (disabled April 2026) ---
+    # --- Qualitative intelligence (disabled April 2026; re-enable via force_enable=:qualitative) ---
     # Ablation study showed negligible overall impact (ρ 0.505 vs 0.509)
     # and anti-informative direction for top-tier riders (ρ=-0.291, n=60).
     # Sample sizes were small, but the signal clearly contributes nothing
     # positive. Data collection and archival continue for manual analysis;
     # re-enable via backtesting's :qualitative flag.
-    shift_qualitative = 0.0
+    if :qualitative in force_enable
+        mean_before = posterior.mean
+        if !isempty(qualitative_adjustments)
+            for (adj, conf) in zip(qualitative_adjustments, qualitative_confidences)
+                if conf > 0.0
+                    eff_var = qualitative_base_variance(config) / conf
+                    posterior = bayesian_update(posterior, adj, eff_var)
+                    n_signals += 1
+                    n_market += 1
+                end
+            end
+        elseif qualitative_floor_strength != 0.0
+            floor_var = qualitative_base_variance(config) * config.qualitative_floor_variance_multiplier
+            posterior = bayesian_update(posterior, qualitative_floor_strength, floor_var)
+            n_signals += 1
+            n_market += 1
+        end
+        shift_qualitative = posterior.mean - mean_before
+    else
+        shift_qualitative = 0.0
+    end
 
     # --- Update with betting odds ---
     # Odds-implied probability is the market's posterior. Very precise when available.
@@ -1210,6 +1263,7 @@ function estimate_strengths(
     race_year::Union{Int,Nothing}=nothing,
     race_date::Union{Date,Nothing}=nothing,
     domestique_discount::Float64=0.0,
+    force_enable::Set{Symbol}=Set{Symbol}(),
 )
     df = copy(rider_df)
     n_riders = nrow(df)
@@ -1495,6 +1549,7 @@ function estimate_strengths(
             config=bayesian_config,
             effective_vg_variance=effective_vg_variance,
             race_has_market=race_has_market,
+            force_enable=force_enable,
         )
 
         strengths[i] = est.mean
@@ -1577,6 +1632,7 @@ function estimate_strengths(
     race_year::Union{Int,Nothing}=nothing,
     race_date::Union{Date,Nothing}=nothing,
     domestique_discount::Float64=0.0,
+    force_enable::Set{Symbol}=Set{Symbol}(),
 )
     estimate_strengths(
         data.rider_df;
@@ -1592,6 +1648,7 @@ function estimate_strengths(
         race_year=race_year,
         race_date=race_date,
         domestique_discount=domestique_discount,
+        force_enable=force_enable,
     )
 end
 
@@ -1603,6 +1660,7 @@ function estimate_rider_strength(;
     effective_vg_variance::Float64=0.0,
     race_has_market::Bool=false,
     skip_block_correlation::Bool=false,
+    force_enable::Set{Symbol}=Set{Symbol}(),
     kwargs...
 )
     estimate_rider_strength(
@@ -1612,6 +1670,7 @@ function estimate_rider_strength(;
         effective_vg_variance=effective_vg_variance,
         race_has_market=race_has_market,
         skip_block_correlation=skip_block_correlation,
+        force_enable=force_enable,
     )
 end
 
@@ -1642,6 +1701,7 @@ function predict_expected_points(
     risk_aversion::Float64=0.0,
     domestique_discount::Float64=0.0,
     total_distance_km::Float64=0.0,
+    force_enable::Set{Symbol}=Set{Symbol}(),
 )
     df = estimate_strengths(
         rider_df;
@@ -1657,6 +1717,7 @@ function predict_expected_points(
         race_year=race_year,
         race_date=race_date,
         domestique_discount=domestique_discount,
+        force_enable=force_enable,
     )
 
     # MC simulation for expected points (used by backtesting)
@@ -1693,6 +1754,7 @@ function predict_expected_points(
     risk_aversion::Float64=0.0,
     domestique_discount::Float64=0.0,
     total_distance_km::Float64=0.0,
+    force_enable::Set{Symbol}=Set{Symbol}(),
 )
     predict_expected_points(
         data.rider_df,
@@ -1714,5 +1776,6 @@ function predict_expected_points(
         risk_aversion=risk_aversion,
         domestique_discount=domestique_discount,
         total_distance_km=total_distance_km,
+        force_enable=force_enable,
     )
 end

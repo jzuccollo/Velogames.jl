@@ -1147,14 +1147,14 @@ if nrow(pit_df) > 0
             # ============================================================
 
             write(io, html_heading("Non-market signal selection", 4))
-            write(io, "<p>Which non-market signals improve discrimination? Tests signal subsets without odds or oracle — the configuration used for most races. Signals with near-zero within-tier ρ (PCS form, VG race history, qualitative) may be adding noise.</p>\n")
+            write(io, "<p>Which non-market signals improve discrimination? Tests signal subsets without odds or oracle — the configuration used for most races. Signals with near-zero within-tier ρ (PCS form, VG race history, qualitative) may be adding noise. PCS form, VG race history, and qualitative are zeroed in production by default; the ablation re-enables them via <code>force_enable</code> so the configurations below genuinely differ.</p>\n")
 
             nm_configs = [
-                ("All non-market", [:pcs, :vg_season, :race_history, :vg_history, :form]),
-                ("Drop form", [:pcs, :vg_season, :race_history, :vg_history]),
-                ("Drop VG history", [:pcs, :vg_season, :race_history, :form]),
-                ("Drop qualitative", [:pcs, :vg_season, :race_history, :vg_history, :form]),  # qual not in non-market anyway
-                ("Drop form+VG hist", [:pcs, :vg_season, :race_history]),
+                ("All non-market", [:pcs, :vg_season, :race_history, :vg_history, :form, :qualitative]),
+                ("Drop form", [:pcs, :vg_season, :race_history, :vg_history, :qualitative]),
+                ("Drop VG history", [:pcs, :vg_season, :race_history, :form, :qualitative]),
+                ("Drop qualitative", [:pcs, :vg_season, :race_history, :vg_history, :form]),
+                ("Drop form+VG hist+qual", [:pcs, :vg_season, :race_history]),
                 ("PCS + race hist only", [:pcs, :race_history]),
                 ("PCS + VG season only", [:pcs, :vg_season]),
             ]
@@ -1193,10 +1193,13 @@ if nrow(pit_df) > 0
             write(io, html_heading("Market signal configurations", 4))
             write(io, """<p>How should market signals (odds, oracle) be integrated? Tests uniform discount values and position-dependent discount (full discount for top-quartile riders only). Also tests odds-only and oracle-only to identify which market signal adds value.</p>\n""")
 
-            all_signals = [:pcs, :vg_season, :race_history, :vg_history, :form, :odds, :oracle]
-            odds_only = [:pcs, :vg_season, :race_history, :vg_history, :form, :odds]
-            oracle_only = [:pcs, :vg_season, :race_history, :vg_history, :form, :oracle]
-            no_market_signals = [:pcs, :vg_season, :race_history, :vg_history, :form]
+            # Production state: form, VG history, and qualitative are zeroed by default.
+            # Market configs stack odds/oracle on top of the production non-market set,
+            # not on top of the legacy "kitchen sink" that included disabled signals.
+            no_market_signals = [:pcs, :vg_season, :race_history]
+            all_signals = [:pcs, :vg_season, :race_history, :odds, :oracle]
+            odds_only = [:pcs, :vg_season, :race_history, :odds]
+            oracle_only = [:pcs, :vg_season, :race_history, :oracle]
 
             mkt_results = Dict{String,Dict{String,Any}}()
 
@@ -1300,13 +1303,14 @@ if nrow(pit_df) > 0
             # removed, so the combined effect may differ from the sum of parts.
 
             write(io, html_heading("Combined configuration test", 4))
-            write(io, "<p>Tests the proposed signal set (PCS seasons + VG season + PCS race history + odds) against the current default, with bootstrap 95% CIs. Individual ablation improvements interact through the block-correlation discount, so the combined effect is not necessarily the sum of individual improvements.</p>\n")
+            write(io, "<p>Tests whether re-enabling the disabled signals (PCS form, VG race history, qualitative) on top of the production signal set improves discrimination, with bootstrap 95% CIs. Individual ablation improvements interact through the block-correlation discount, so the combined effect is not necessarily the sum of individual improvements.</p>\n")
 
+            all_nm_extras = [:pcs, :vg_season, :race_history, :vg_history, :form, :qualitative]
             combined_configs = [
-                ("Current default (no market)", [:pcs, :vg_season, :race_history, :vg_history, :form], DEFAULT_BAYESIAN_CONFIG),
-                ("Proposed (no market)", [:pcs, :vg_season, :race_history], DEFAULT_BAYESIAN_CONFIG),
-                ("Current default + odds d=8", [:pcs, :vg_season, :race_history, :vg_history, :form, :odds, :oracle], BayesianConfig(; market_discount=8.0)),
-                ("Proposed + odds d=8", [:pcs, :vg_season, :race_history, :odds], BayesianConfig(; market_discount=8.0)),
+                ("Production (no market)", [:pcs, :vg_season, :race_history], DEFAULT_BAYESIAN_CONFIG),
+                ("Production + all non-market", all_nm_extras, DEFAULT_BAYESIAN_CONFIG),
+                ("Production + odds d=8", [:pcs, :vg_season, :race_history, :odds], BayesianConfig(; market_discount=8.0)),
+                ("Production + odds + all non-market d=8", [all_nm_extras..., :odds], BayesianConfig(; market_discount=8.0)),
             ]
 
             combined_results = Dict{String,Dict{String,Any}}()
