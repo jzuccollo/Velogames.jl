@@ -578,9 +578,9 @@ const _STAGE_RACE_PATTERNS =
             template="https://www.velogames.com/spain/{year}/riders.php",
         ),
         "giro" =>
-            (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php"),
+            (slug="italy", template="https://www.velogames.com/italy/{year}/riders.php"),
         "giroditalia" =>
-            (slug="giro", template="https://www.velogames.com/giro/{year}/riders.php"),
+            (slug="italy", template="https://www.velogames.com/italy/{year}/riders.php"),
         # Week-long stage races
         "parisnice" => (
             slug="pn",
