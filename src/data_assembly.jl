@@ -22,16 +22,19 @@ Pre-fetched data for a race, reusable across multiple backtest evaluations
 Also used by production solvers (`solve_oneday`, `solve_stage`) as the
 standard data container between fetching and prediction.
 """
-struct RaceData
+@kwdef struct RaceData
     rider_df::DataFrame
-    race_history_df::Union{DataFrame,Nothing}
-    odds_df::Union{DataFrame,Nothing}
-    oracle_df::Union{DataFrame,Nothing}
-    vg_history_df::Union{DataFrame,Nothing}
-    qualitative_df::Union{DataFrame,Nothing}
-    form_df::Union{DataFrame,Nothing}
-    seasons_df::Union{DataFrame,Nothing}
-    actual_df::Union{DataFrame,Nothing}
+    race_history_df::Union{DataFrame,Nothing} = nothing
+    odds_df::Union{DataFrame,Nothing} = nothing
+    oracle_df::Union{DataFrame,Nothing} = nothing
+    vg_history_df::Union{DataFrame,Nothing} = nothing
+    qualitative_df::Union{DataFrame,Nothing} = nothing
+    form_df::Union{DataFrame,Nothing} = nothing
+    seasons_df::Union{DataFrame,Nothing} = nothing
+    actual_df::Union{DataFrame,Nothing} = nothing
+    # Multi-source oracle (stage races): points jersey + KOM jersey predictions
+    points_oracle_df::Union{DataFrame,Nothing} = nothing
+    kom_oracle_df::Union{DataFrame,Nothing} = nothing
 end
 
 

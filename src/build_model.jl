@@ -15,20 +15,18 @@ function ensure_classification_columns!(
         return false
     end
 
+    # Always (re)build the boolean class columns from the source class string.
+    # We can't simply skip when a column of the same name exists: the PCS
+    # specialty join in `data_assembly.jl` creates a numeric `:climber` rating
+    # column (0-1000+) that collides with the VG-class boolean target. Trusting
+    # that pre-existing column would let `df[!, :climber]' * x >= 2` be
+    # satisfied by any single high-rated rider rather than two riders with
+    # `classraw == "Climber"`.
+    src = hasproperty(df, :class) ? df.class : df.classraw
+    norm_src = lowercase.(replace.(src, " " => ""))
     for class_name in required_classes
         col_name = Symbol(class_name)
-
-        if string(col_name) in names(df)
-            continue
-        end
-
-        if hasproperty(df, :class)
-            df[!, col_name] =
-                lowercase.(replace.(df.class, " " => "")) .== lowercase(class_name)
-        else
-            df[!, col_name] =
-                lowercase.(replace.(df.classraw, " " => "")) .== lowercase(class_name)
-        end
+        df[!, col_name] = norm_src .== lowercase(class_name)
     end
 
     return true
@@ -291,13 +289,15 @@ end
 
 """
     resample_optimise_stage(df, stages, stage_strengths, scoring, build_model_fn; kwargs...)
-        -> (DataFrame, Vector{DataFrame}, Matrix{Float64})
+        -> (DataFrame, Vector{DataFrame}, Matrix{Float64}, StageRaceDiagnostics)
 
 Resampled optimisation for stage races: runs `simulate_stage_race` to get
 per-draw total VG points, then optimises team selection per draw.
 
-Same output shape as `resample_optimise`: returns `(df, top_teams, sim_vg_points)`
-where df gains `:selection_frequency` and `:expected_vg_points`.
+Returns `(df, top_teams, sim_vg_points, diagnostics)` where df gains
+`:selection_frequency` and `:expected_vg_points`, and `diagnostics` carries
+per-stage and per-classification position counts that reports surface as
+podium / top-K probabilities.
 """
 function resample_optimise_stage(
     df::DataFrame,
@@ -308,6 +308,7 @@ function resample_optimise_stage(
     team_size::Int=9,
     n_resamples::Int=500,
     cross_stage_alpha::Float64=0.7,
+    gc_strengths::Vector{Float64}=Float64[],
     rng::AbstractRNG=Random.default_rng(),
     max_per_team::Int=0,
     risk_aversion::Float64=0.5,
@@ -316,10 +317,13 @@ function resample_optimise_stage(
     uncertainties = Float64.(df.uncertainty)
     teams = String.(df.team)
 
-    # Run all simulations at once
-    sim_vg_points = simulate_stage_race(
+    # Run all simulations at once. simulate_stage_race always returns
+    # (vg_points, diagnostics); we surface diagnostics for per-stage podium
+    # and classification top-K probabilities in reports.
+    sim_vg_points, diagnostics = simulate_stage_race(
         stages, stage_strengths, uncertainties, teams, scoring;
-        n_sims=n_resamples, cross_stage_alpha=cross_stage_alpha, rng=rng,
+        n_sims=n_resamples, cross_stage_alpha=cross_stage_alpha,
+        gc_strengths=gc_strengths, rng=rng,
     )
 
     # Track selection frequency and accumulate points
@@ -388,7 +392,7 @@ function resample_optimise_stage(
     end
 
     select!(df, Not(:_final_pts))
-    return df, top_teams, sim_vg_points
+    return df, top_teams, sim_vg_points, diagnostics
 end
 
 

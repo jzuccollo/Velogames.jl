@@ -390,16 +390,16 @@ function prefetch_race_data(
         @info "Loaded archived qualitative for $(race.name) $(race.year): $(nrow(qualitative_df)) entries"
     end
 
-    return RaceData(
-        riderdf,
-        race_history_df,
-        odds_df,
-        oracle_df,
-        vg_history_df,
-        qualitative_df,
-        form_df,
-        seasons_df,
-        actual_df,
+    return RaceData(;
+        rider_df=riderdf,
+        race_history_df=race_history_df,
+        odds_df=odds_df,
+        oracle_df=oracle_df,
+        vg_history_df=vg_history_df,
+        qualitative_df=qualitative_df,
+        form_df=form_df,
+        seasons_df=seasons_df,
+        actual_df=actual_df,
     )
 end
 

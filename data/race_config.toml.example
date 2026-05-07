@@ -7,7 +7,9 @@ year = 2026
 racehash = "#E3SaxoClassic"  # VG startlist hash filter (leave empty for all riders)
 
 [data_sources]
-oracle_url = ""              # Cycling Oracle prediction URL
+oracle_url = ""              # Cycling Oracle GC prediction URL
+points_oracle_url = ""       # Cycling Oracle points-jersey prediction URL (stage races; routes to flat/hilly dimensions)
+kom_oracle_url = ""          # Cycling Oracle KOM prediction URL (stage races; routes to mountain dimension)
 use_oddschecker = true       # Parse oddschecker_paste.txt from project root
 qualitative_youtube_url = "" # YouTube URL for auto-extraction via yt-dlp + Claude API
 qualitative_article_url = "" # Web article URL for auto-extraction via Claude API
@@ -27,7 +29,6 @@ excluded_riders = []
 
 # Stage race options (only used by render_stagerace.jl)
 cross_stage_alpha = 0.7      # Cross-stage noise correlation (0 = independent, 1 = identical)
-modifier_scale = 0.5         # Stage-type strength differentiation scale
 pcs_stage_scrape = true      # Scrape stage profiles from PCS (false = use manual stages below)
 
 [team_assessor]

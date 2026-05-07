@@ -75,7 +75,6 @@ else
     println("No archive found — running fresh prediction...")
     if is_stage
         cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
-        modifier_scale = get(_cfg["optimisation"], "modifier_scale", 0.5)
         pcs_stage_scrape = get(_cfg["optimisation"], "pcs_stage_scrape", true)
 
         stages = StageProfile[]
@@ -88,15 +87,17 @@ else
             getvg_scoring(config.slug, config.year; pcs_slug=config.pcs_slug)
         catch; nothing; end
 
-        predicted, optimal_team, _ = solve_stage(config;
+        result = solve_stage(config;
             stages=stages, racehash=racehash, history_years=history_years,
             oracle_url=oracle_url,
             n_resamples=n_resamples, excluded_riders=excluded_riders,
             domestique_discount=domestique_discount,
             risk_aversion=risk_aversion, max_per_team=max_per_team,
             breakaway_dir=breakaway_dir, simulation_df=simulation_df,
-            cross_stage_alpha=cross_stage_alpha, modifier_scale=modifier_scale,
+            cross_stage_alpha=cross_stage_alpha,
             stage_scoring=stage_scoring_fresh)
+        predicted = result.predicted
+        optimal_team = result.chosenteam
     else
         predicted, optimal_team, _ = solve_oneday(config;
             racehash=racehash, history_years=history_years,
@@ -125,8 +126,8 @@ end
 # Simulation draws
 sim_vg_points = if !prediction_ok || :strength ∉ propertynames(predicted) || :uncertainty ∉ propertynames(predicted)
     nothing
-elseif is_stage && :stage_strength_flat in propertynames(predicted)
-    # Per-stage simulation using archived stage strengths
+elseif is_stage && :strength_flat in propertynames(predicted)
+    # Per-stage simulation using archived per-dimension strengths
     stage_profiles_df = load_race_snapshot("stage_profiles", config.pcs_slug, config.year)
     if stage_profiles_df !== nothing && nrow(stage_profiles_df) > 0
         stages_from_archive = [
@@ -136,23 +137,22 @@ elseif is_stage && :stage_strength_flat in propertynames(predicted)
                 row.n_hc_climbs, row.n_cat1_climbs, 0, row.is_summit_finish,
             ) for row in eachrow(stage_profiles_df)
         ]
-        stage_strengths = Dict{Symbol,Vector{Float64}}(
-            :flat => Float64.(predicted.stage_strength_flat),
-            :hilly => Float64.(predicted.stage_strength_hilly),
-            :mountain => Float64.(predicted.stage_strength_mountain),
-            :itt => Float64.(predicted.stage_strength_itt),
-        )
+        stage_strengths = compute_stage_strengths(predicted)
+        gc_strengths_vec = Float64.(predicted.strength_gc)
         cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
         stage_scoring = try
             getvg_scoring(config.slug, config.year; pcs_slug=config.pcs_slug)
         catch
             SCORING_GRAND_TOUR
         end
-        simulate_stage_race(
+        # simulate_stage_race always returns (vg_points, diagnostics); we only
+        # need vg_points here.
+        first(simulate_stage_race(
             stages_from_archive, stage_strengths,
-            Float64.(predicted.uncertainty), String.(predicted.team),
+            Float64.(predicted.uncertainty_gc), String.(predicted.team),
             stage_scoring; n_sims=n_resamples, cross_stage_alpha=cross_stage_alpha,
-        )
+            gc_strengths=gc_strengths_vec,
+        ))
     else
         nothing
     end

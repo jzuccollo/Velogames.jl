@@ -31,6 +31,19 @@ race_year = _cfg["race"]["year"]
 racehash = _cfg["race"]["racehash"]
 
 oracle_url = _cfg["data_sources"]["oracle_url"]
+points_oracle_url = get(_cfg["data_sources"], "points_oracle_url", "")
+kom_oracle_url = get(_cfg["data_sources"], "kom_oracle_url", "")
+
+odds_df = if get(_cfg["data_sources"], "use_oddschecker", false)
+    try
+        parse_oddschecker_odds(read(joinpath(@__DIR__, "..", "oddschecker_paste.txt"), String))
+    catch
+        @warn "use_oddschecker=true but oddschecker_paste.txt not found or unparseable"
+        nothing
+    end
+else
+    nothing
+end
 
 n_resamples = _cfg["optimisation"]["n_resamples"]
 history_years = _cfg["optimisation"]["history_years"]
@@ -43,7 +56,6 @@ simulation_df = let v = _cfg["optimisation"]["simulation_df"]
 end
 
 cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
-modifier_scale = get(_cfg["optimisation"], "modifier_scale", 0.5)
 pcs_stage_scrape = get(_cfg["optimisation"], "pcs_stage_scrape", true)
 
 race_cache = CacheConfig(joinpath(homedir(), ".velogames_cache"), FRESH ? 0 : 6)
@@ -63,6 +75,10 @@ if pcs_stage_scrape && !isempty(config.pcs_slug)
         @warn "PCS stage scraping returned no stages — falling back to aggregate approach"
     else
         @info "Got $(length(stages)) stage profiles from PCS"
+        # Stage strength is now a continuous blend across (flat, hilly, mountain)
+        # weighted by PCS ProfileScore + summit-finish flag (see
+        # `stage_dimension_weights` in simulation.jl). Discrete reclassification
+        # is no longer needed.
     end
 end
 
@@ -80,11 +96,13 @@ end
 # Run prediction
 # ---------------------------------------------------------------------------
 
-predicted, chosenteam, top_teams, sim_vg_points = solve_stage(config;
+result = solve_stage(config;
     stages=stages,
     racehash=racehash,
     history_years=history_years,
     oracle_url=oracle_url,
+    points_oracle_url=points_oracle_url,
+    kom_oracle_url=kom_oracle_url,
     n_resamples=n_resamples,
     excluded_riders=excluded_riders,
     domestique_discount=domestique_discount,
@@ -92,8 +110,14 @@ predicted, chosenteam, top_teams, sim_vg_points = solve_stage(config;
     max_per_team=max_per_team,
     simulation_df=simulation_df,
     cross_stage_alpha=cross_stage_alpha,
-    modifier_scale=modifier_scale,
-    stage_scoring=stage_scoring)
+    stage_scoring=stage_scoring,
+    odds_df=odds_df)
+
+predicted = result.predicted
+chosenteam = result.chosenteam
+top_teams = result.top_teams
+sim_vg_points = result.sim_vg_points
+diagnostics = result.diagnostics
 
 if nrow(predicted) == 0
     error("No riders found — check race name, year, and startlist hash filter.")
@@ -121,19 +145,19 @@ if using_per_stage
 
     write(io, html_heading("Stage profile", 2))
     write(io, "<p><strong>$(length(stages)) stages:</strong> $n_flat flat, $n_hilly hilly, $n_mountain mountain, $n_itt ITT, $n_ttt TTT</p>\n")
-    write(io, "<p>Cross-stage correlation α=$(cross_stage_alpha), modifier scale=$(modifier_scale)</p>\n")
+    write(io, "<p>Cross-stage correlation α=$(cross_stage_alpha)</p>\n")
 
-    stage_df = DataFrame(
-        Stage=[s.stage_number for s in stages],
-        Type=[String(s.stage_type) for s in stages],
-        Distance=["$(round(s.distance_km, digits=0)) km" for s in stages],
-        ProfileScore=[s.profile_score for s in stages],
-        Vert=["$(s.vertical_meters) m" for s in stages],
-        Summit=[s.is_summit_finish ? "Yes" : "" for s in stages],
-        HC=[s.n_hc_climbs > 0 ? string(s.n_hc_climbs) : "" for s in stages],
-        Cat1=[s.n_cat1_climbs > 0 ? string(s.n_cat1_climbs) : "" for s in stages],
-    )
-    write(io, html_callout(html_table(stage_df); title="Stage details", collapsed=true))
+    if diagnostics !== nothing
+        stage_df = format_stage_podium_picks(diagnostics, stages, predicted)
+        stage_col_order = [
+            "Stage", "Type", "Distance", "ProfileScore", "Vert", "Summit",
+            "HC", "Cat1", "Likely 1st", "Likely 2nd", "Likely 3rd",
+        ]
+        write(io, html_callout(
+            "<p>Most likely podium finishers per stage, alongside basic stage details. Probabilities in parentheses are the share of $(diagnostics.n_sims) simulations in which the named rider finished in that exact position.</p>\n" *
+            html_table(stage_df[:, stage_col_order]);
+            title="Stage details and podium picks", collapsed=false))
+    end
 end
 
 # --- Data sources ---
@@ -142,6 +166,8 @@ n_pcs = count(predicted.has_pcs)
 n_history = count(predicted.has_race_history)
 n_odds = count(predicted.has_odds)
 n_oracle = count(predicted.has_oracle)
+n_points_oracle = :has_points_oracle in propertynames(predicted) ? count(predicted.has_points_oracle) : 0
+n_kom_oracle = :has_kom_oracle in propertynames(predicted) ? count(predicted.has_kom_oracle) : 0
 n_vg_hist = count(predicted.has_vg_history)
 pct(n) = round(Int, 100 * n / n_total)
 
@@ -150,60 +176,64 @@ similar_str = isempty(similar_races) ? "None configured" : join(similar_races, "
 
 sources_df = DataFrame(
     Source=[
-        "PCS season points (class-blended)", "VG season points",
+        "PCS specialty (per-source)", "VG season points",
         "PCS race history ($(history_years) yrs)", "Similar races", "VG race history",
-        "Cycling Oracle", "Odds",
+        "Oracle GC", "Oracle Points", "Oracle KOM", "Odds",
     ],
     Coverage=[
         "$(n_pcs)/$(n_total) ($(pct(n_pcs))%)", "$(n_total)/$(n_total) (100%)",
         "$(n_history)/$(n_total) ($(pct(n_history))%)", similar_str,
         "$(n_vg_hist)/$(n_total) ($(pct(n_vg_hist))%)",
         "$(n_oracle)/$(n_total) ($(pct(n_oracle))%)",
+        "$(n_points_oracle)/$(n_total) ($(pct(n_points_oracle))%)",
+        "$(n_kom_oracle)/$(n_total) ($(pct(n_kom_oracle))%)",
         "$(n_odds)/$(n_total) ($(pct(n_odds))%)",
     ],
 )
 
 sources_html = html_table(sources_df)
-sources_html *= "<p>PCS season scores are blended by rider classification: all-rounders weight GC + TT + climbing, climbers weight climbing heavily, sprinters weight sprint + one-day.</p>\n"
+sources_html *= "<p>PCS specialty (sprint, oneday, climber, tt, gc) is routed per-source to the strength dimensions it informs. GC-flavoured market signals (Oracle GC + odds) only update the <code>:gc</code> dimension; points-jersey oracle updates <code>:flat</code>/<code>:hilly</code>; KOM oracle updates <code>:mountain</code>.</p>\n"
 write(io, html_callout(sources_html; title="Data sources", collapsed=false))
 
-# --- Signal impact ---
+# --- Signal impact (per-dimension) ---
 
-rms(v) = sqrt(mean(v .^ 2))
-signal_names = ["PCS seasons", "VG season points", "PCS form", "PCS race history", "VG race history", "Cycling Oracle", "Odds"]
-shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_history, :shift_vg_history, :shift_oracle, :shift_odds]
-affected_counts = [count(!=(0.0), predicted[!, c]) for c in shift_cols]
-rms_shifts = [rms(predicted[!, c]) for c in shift_cols]
-
-impact_df = DataFrame(
-    Signal=signal_names,
-    Riders_affected=affected_counts,
-    RMS_shift=round.(rms_shifts, digits=3),
-)
 write(io, html_callout(
-    "<p>How much each source shifted rider strength estimates from the uninformative prior.</p>\n" * html_table(impact_df);
-    title="Signal impact", collapsed=true))
+    "<p>Per-dimension RMS shift in posterior mean from each signal. Note GC-flavoured floors (Oracle GC, Odds) only touch the GC column — sprinters absent from those markets are no longer penalised on their flat/hilly dimensions.</p>\n" *
+    format_signal_impact_per_dim(predicted);
+    title="Signal impact (per dimension)", collapsed=true))
 
-# --- Stage-type strength distributions ---
+# --- Classification predictions (GC, Points, KOM, Team) ---
 
-if using_per_stage && :stage_strength_flat in propertynames(predicted)
-    write(io, html_heading("Stage-type strength profile", 2))
-    write(io, "<p>How rider strengths vary by stage type. Higher = predicted to finish better on that stage type.</p>\n")
+if diagnostics !== nothing
+    write(io, html_heading("Final classification predictions", 2))
+    write(io, "<p>Top riders by probability of finishing in each classification's prize positions, summarised across $(diagnostics.n_sims) simulated grand tours. The win column shows the share of simulations in which they finished 1st; the top-N column shows the share they finished anywhere in the prize positions.</p>\n")
 
-    has_class = :classraw in propertynames(predicted)
-    if has_class
-        class_col = :classraw
-    elseif :class in propertynames(predicted)
-        class_col = :class
-    else
-        class_col = nothing
-    end
+    write(io, html_heading("General classification (GC)", 3))
+    write(io, format_classification_table(diagnostics, :gc, predicted))
 
-    # Build a summary table: mean strength per class per stage type
+    write(io, html_heading("Points classification", 3))
+    write(io, format_classification_table(diagnostics, :points, predicted))
+
+    write(io, html_heading("Mountains classification (KOM)", 3))
+    write(io, format_classification_table(diagnostics, :mountains, predicted))
+
+    write(io, html_heading("Team classification", 3))
+    write(io, format_team_classification(diagnostics))
+end
+
+# --- Per-dimension strength distributions by class ---
+
+if :strength_flat in propertynames(predicted)
+    write(io, html_heading("Per-dimension strength profile", 2))
+    write(io, "<p>Mean rider strength on each dimension, broken down by classification. Higher = predicted to finish better on that stage type.</p>\n")
+
+    class_col = :classraw in propertynames(predicted) ? :classraw :
+                :class in propertynames(predicted) ? :class : nothing
+
     if class_col !== nothing
         classes = sort(unique(lowercase.(string.(predicted[!, class_col]))))
-        type_cols = [:stage_strength_flat, :stage_strength_hilly, :stage_strength_mountain, :stage_strength_itt]
-        type_labels = ["Flat", "Hilly", "Mountain", "ITT"]
+        type_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt, :strength_gc]
+        type_labels = ["Flat", "Hilly", "Mountain", "ITT", "GC"]
 
         summary_rows = []
         for cls in classes
@@ -215,8 +245,7 @@ if using_per_stage && :stage_strength_flat in propertynames(predicted)
             push!(summary_rows, row)
         end
         summary_df = DataFrame(summary_rows)
-        # Reorder columns
-        col_order = intersect(["Class", "N", "Flat", "Hilly", "Mountain", "ITT"], names(summary_df))
+        col_order = intersect(["Class", "N", "Flat", "Hilly", "Mountain", "ITT", "GC"], names(summary_df))
         write(io, html_table(summary_df[:, col_order]))
     end
 end
@@ -238,10 +267,10 @@ if nrow(chosenteam) > 0
         write(io, "<p><strong>Classes:</strong> $(class_str)</p>\n")
     end
 
-    # Include stage-type strengths in team table if available
-    base_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :selection_frequency, :strength, :uncertainty]
-    stage_cols = [:stage_strength_flat, :stage_strength_hilly, :stage_strength_mountain, :stage_strength_itt]
-    all_display_cols = using_per_stage ? vcat(base_cols, stage_cols) : base_cols
+    # Include per-dimension strengths in team table
+    base_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :selection_frequency, :strength_gc, :uncertainty_gc]
+    dim_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt]
+    all_display_cols = vcat(base_cols, dim_cols)
     display_cols = intersect(all_display_cols, propertynames(chosenteam))
     write(io, html_table(sort(chosenteam[:, display_cols], :expected_vg_points, rev=true)))
 
@@ -259,9 +288,9 @@ end
 write(io, html_heading("Full prediction rankings", 2))
 write(io, "<p>Top 30 riders by expected VG points:</p>\n")
 
-base_ranking_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :selection_frequency, :strength, :uncertainty, :chosen]
-stage_ranking_cols = [:stage_strength_flat, :stage_strength_mountain, :stage_strength_itt]
-all_ranking_cols = using_per_stage ? vcat(base_ranking_cols, stage_ranking_cols) : base_ranking_cols
+base_ranking_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :selection_frequency, :strength_gc, :uncertainty_gc, :chosen]
+dim_ranking_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt]
+all_ranking_cols = vcat(base_ranking_cols, dim_ranking_cols)
 ranking_cols = intersect(all_ranking_cols, propertynames(predicted))
 ranking = sort(predicted, :expected_vg_points, rev=true)
 top_n = min(30, nrow(ranking))

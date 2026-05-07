@@ -1358,3 +1358,179 @@ function load_stage_profiles(
         for row in eachrow(df)
     ]
 end
+
+
+# ---------------------------------------------------------------------------
+# Stage-race classification rendering
+# ---------------------------------------------------------------------------
+
+"""
+    format_classification_table(diagnostics, classification, riders;
+                                top_label=10, n_show=10) -> String
+
+Render a top-N classification probability table for one of the rider-level
+classifications produced by `simulate_stage_race` (`:gc`, `:points`,
+`:mountains`). Returns the HTML table as a String, or a fallback `<p>` when
+no rider has non-trivial probability mass.
+
+Sorting: by P(rider finishes top-`top_label`) descending, with P(win) breaking
+ties — so an evenly-matched group ahead of the field is then ordered by
+who's most likely to win outright.
+"""
+function format_classification_table(
+    diagnostics,
+    classification::Symbol,
+    riders::DataFrame;
+    top_label::Int=10,
+    n_show::Int=10,
+)
+    pos_counts = if classification == :gc
+        diagnostics.final_gc_position_counts
+    elseif classification == :points
+        diagnostics.final_points_position_counts
+    elseif classification == :mountains
+        diagnostics.final_mountains_position_counts
+    else
+        error("Unknown classification $classification (expected :gc, :points, or :mountains)")
+    end
+
+    rider_names = String.(riders.rider)
+    rider_teams = String.(riders.team)
+    n_sims = diagnostics.n_sims
+    top_k = size(pos_counts, 2)
+
+    any_pos = vec(sum(pos_counts[:, 1:min(top_label, top_k)], dims=2)) ./ n_sims
+    win = pos_counts[:, 1] ./ n_sims
+    order = sortperm(collect(zip(any_pos, win)); rev=true)
+
+    rows = Dict{String,Any}[]
+    for rank in 1:min(n_show, length(order))
+        i = order[rank]
+        any_pos[i] < 0.005 && break
+        push!(rows, Dict{String,Any}(
+            "Rank" => rank,
+            "Rider" => rider_names[i],
+            "Team" => rider_teams[i],
+            "Win %" => round(100 * win[i], digits=1),
+            "Top-$top_label %" => round(100 * any_pos[i], digits=1),
+        ))
+    end
+    isempty(rows) && return "<p>No riders with non-trivial top-$top_label probability.</p>\n"
+    df = DataFrame(rows)
+    return html_table(df[:, ["Rank", "Rider", "Team", "Win %", "Top-$top_label %"]])
+end
+
+"""
+    format_team_classification(diagnostics; n_show=10) -> String
+
+Render a top-N team-classification probability table. The number of prize
+positions varies by VG game (e.g. 5 in `SCORING_GRAND_TOUR`), so the column
+name is derived dynamically (`Top-5 %`, `Top-3 %`, etc.).
+"""
+function format_team_classification(diagnostics; n_show::Int=10)
+    isempty(diagnostics.final_team_position_counts) &&
+        return "<p>No team predictions available.</p>\n"
+
+    n_sims = diagnostics.n_sims
+    rows = Dict{String,Any}[]
+    top_k = 0
+    for (team, pos_counts) in diagnostics.final_team_position_counts
+        top_k = length(pos_counts)
+        push!(rows, Dict{String,Any}(
+            "Team" => team,
+            "Win %" => round(100 * pos_counts[1] / n_sims, digits=1),
+            "Top-$top_k %" => round(100 * sum(pos_counts) / n_sims, digits=1),
+        ))
+    end
+    df = DataFrame(rows)
+    top_col = "Top-$top_k %"
+    sort!(df, top_col, rev=true)
+    df = first(df, min(n_show, nrow(df)))
+    df.Rank = 1:nrow(df)
+    return html_table(df[:, ["Rank", "Team", "Win %", top_col]])
+end
+
+"""
+    format_stage_podium_picks(diagnostics, stages, riders) -> DataFrame
+
+Build the per-stage details table including the most-likely podium finishers
+(1st, 2nd, 3rd) for each stage. Each rider entry is rendered as
+`"<Name> (xx%)"` where the percentage is the share of simulations in which
+that rider finished in that exact position. Probabilities below 0.5% are
+suppressed (empty cell).
+
+Caller is expected to render via `html_table` with the desired column order.
+"""
+function format_stage_podium_picks(
+    diagnostics,
+    stages::Vector{StageProfile},
+    riders::DataFrame,
+)
+    rider_names = String.(riders.rider)
+    n_sims = diagnostics.n_sims
+
+    function _pick(stage_idx::Int, rank::Int)
+        counts = diagnostics.stage_finish_counts[stage_idx, :, rank]
+        i = argmax(counts)
+        prob = counts[i] / n_sims
+        prob < 0.005 && return ""
+        return "$(rider_names[i]) ($(round(Int, 100 * prob))%)"
+    end
+
+    rows = Dict{String,Any}[]
+    for (idx, s) in enumerate(stages)
+        push!(rows, Dict{String,Any}(
+            "Stage" => s.stage_number,
+            "Type" => String(s.stage_type),
+            "Distance" => "$(round(s.distance_km, digits=0)) km",
+            "ProfileScore" => s.profile_score,
+            "Vert" => "$(s.vertical_meters) m",
+            "Summit" => s.is_summit_finish ? "Yes" : "",
+            "HC" => s.n_hc_climbs > 0 ? string(s.n_hc_climbs) : "",
+            "Cat1" => s.n_cat1_climbs > 0 ? string(s.n_cat1_climbs) : "",
+            "Likely 1st" => _pick(idx, 1),
+            "Likely 2nd" => _pick(idx, 2),
+            "Likely 3rd" => _pick(idx, 3),
+        ))
+    end
+    return DataFrame(rows)
+end
+
+"""
+    format_signal_impact_per_dim(predicted; signal_specs, dim_labels, dim_syms) -> String
+
+Render a per-dimension RMS-shift table summarising how much each signal
+moved the posterior on each strength dimension. `signal_specs` is a vector
+of `(human_label, signal_key)` tuples where `signal_key` matches the
+`shift_<key>_<dim>` column convention produced by the multidim estimator.
+Returns the HTML table.
+"""
+function format_signal_impact_per_dim(
+    predicted::DataFrame;
+    signal_specs::Vector{Tuple{String,Symbol}}=[
+        ("PCS specialty", :pcs),
+        ("VG season points", :vg),
+        ("PCS race history", :history),
+        ("VG race history", :vg_history),
+        ("Oracle GC", :oracle_gc),
+        ("Oracle Points", :oracle_points),
+        ("Oracle KOM", :oracle_kom),
+        ("Odds", :odds),
+    ],
+    dim_labels::Vector{String}=["Flat", "Hilly", "Mountain", "ITT", "GC"],
+    dim_syms::Vector{Symbol}=[:flat, :hilly, :mountain, :itt, :gc],
+)
+    rms(v) = sqrt(mean(v .^ 2))
+    rows = Dict{String,Any}[]
+    for (label, sig) in signal_specs
+        row = Dict{String,Any}("Signal" => label)
+        for (lab, dsym) in zip(dim_labels, dim_syms)
+            col = Symbol("shift_$(sig)_$(dsym)")
+            row[lab] = col in propertynames(predicted) ?
+                round(rms(predicted[!, col]), digits=3) : 0.0
+        end
+        push!(rows, row)
+    end
+    df = DataFrame(rows)
+    return html_table(df[:, ["Signal", dim_labels...]])
+end

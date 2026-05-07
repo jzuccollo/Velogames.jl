@@ -70,7 +70,7 @@ Two interventions are now distinguishable rather than one: drop the oracle signa
 
 **4. ML augmentation.** ~3% above tuned baseline per Kholkine; requires 90+ race training set. Not started — prerequisites missing.
 
-**5. Profile-aware PCS specialty blend for one-day races.** Stage races already blend PCS specialty columns (`:gc`, `:climber`, `:sprint`, `:oneday`, `:tt`) by rider classification via `STAGE_RACE_PCS_WEIGHTS`. One-day races use the generic `:oneday` column for every classic from Roubaix to Scheldeprijs, so the prior does not distinguish cobbled, flat-sprint, puncheur, or Ardennes-style courses. Adding a per-race blend (e.g. Eschborn / Brabantse Pijl / Quebec: `:oneday` 0.5 + `:climber` 0.3 + `:sprint` 0.2) would give the prior some terrain awareness, particularly valuable for younger riders missing race-history coverage. Risk of double-counting with the `SIMILAR_RACES` signal, which already provides terrain matching from observed results. Implement as a small ablation on 3–4 puncheur races and reject if Spearman ρ does not improve relative to the current single-column setup.
+**5. Profile-aware PCS specialty blend for one-day races.** Stage races route per-source PCS specialty columns (`:gc`, `:climber`, `:sprint`, `:oneday`, `:tt`) to per-stage strength dimensions via `SIGNAL_DIMENSION_WEIGHTS` (Phase 5). One-day races use only the generic `:oneday` column for every classic from Roubaix to Scheldeprijs, so the prior does not distinguish cobbled, flat-sprint, puncheur, or Ardennes-style courses. Adding a per-race blend (e.g. Eschborn / Brabantse Pijl / Quebec: `:oneday` 0.5 + `:climber` 0.3 + `:sprint` 0.2) would give the prior some terrain awareness, particularly valuable for younger riders missing race-history coverage. Risk of double-counting with the `SIMILAR_RACES` signal, which already provides terrain matching from observed results. Implement as a small ablation on 3–4 puncheur races and reject if Spearman ρ does not improve relative to the current single-column setup.
 
 **6. Data-driven `SIMILAR_RACES` via latent-factor model.** The current similar-races list is hand-curated terrain guesswork (cobbled / Ardennes / sprint clusters). Neither Kholkine nor VeloRost actually defines similarity from rider results — Kholkine hand-picks related-race features, and VeloRost clusters by elevation and road surface attributes. A result-driven approach would be moderately novel relative to those baselines.
 
@@ -124,10 +124,9 @@ Per-stage simulation replaces the aggregate GC-position model for stage races. E
 - Stage type classification from PCS profile codes: p1=flat, p2/p3=hilly, p4/p5=mountain, with ITT/TTT detection from stage name
 - `getpcsraceresults` falls back from `/result` to `/gc` URL for stage races where PCS uses a different results page structure
 
-#### Stage-type strength modifiers
+#### Stage-type strength modifiers (deprecated — replaced in Phase 5)
 
-- `compute_stage_type_modifiers` in `src/simulation.jl` applies additive modifiers to base strength using class-aware PCS specialty blending (flat/hilly/mountain/ITT weights per rider classification)
-- `modifier_scale` parameter (default 0.5) controls differentiation vs overall ability
+- The original Phase 4 design used `compute_stage_type_modifiers` to apply additive ±0.5σ modifiers on top of a single Bayesian latent strength (since deleted). Phase 5 replaced this with a multi-dimensional posterior over `STRENGTH_DIMENSIONS`; per-stage strengths come from a continuous PCS-ProfileScore-weighted blend across `:flat/:hilly/:mountain/:itt` rather than discrete modifiers.
 
 #### Per-stage simulation
 
@@ -157,6 +156,55 @@ Per-stage simulation replaces the aggregate GC-position model for stage races. E
 - Stage-race-specific PIT calibration in prospective evaluation
 - Stage race backtesting (extend `backtest.jl` to compare per-stage vs aggregate predictions across historical grand tours)
 - Tour de Pologne and Renewi Tour VG slug mappings (VG pages not yet created for 2026)
+
+---
+
+## Phase 5: Multi-dimensional rider strength for stage races (May 2026)
+
+The Phase 4 stage-race model produced a single Bayesian latent strength per rider, with a thin per-stage-type modifier layer adding ±0.5σ shifts on top from PCS specialty z-scores. The architecture failed for non-GC riders. On the Giro 2026 prediction, Cycling Oracle listed only 15 GC contenders; the remaining 168 riders absorbed an oracle-floor observation of strength=−4.69 across their entire base strength, which the +0.7 sprint modifier on flat stages could not recover. Mads Pedersen — second-overall for VG points in the 2025 Tour — was ranked alongside mid-tier domestiques. Phase 5 replaces the scalar posterior with a multi-dimensional one aligned to stage profile types.
+
+### What was built
+
+Each rider now carries a Gaussian posterior over five dimensions (`STRENGTH_DIMENSIONS = (:flat, :hilly, :mountain, :itt, :gc)`) rather than a single strength. Four dimensions match `StageProfile.stage_type`; `:gc` tracks cumulative ranking ability. The prior is independent across dimensions (`N(0, prior_variance)` per dim). Cross-dimension information flow happens only through the explicit `SIGNAL_DIMENSION_WEIGHTS` routing table, not via a hierarchical prior or covariance structure — earlier covariance designs were tried and abandoned because the implicit leakage overpowered the explicit routing for strong signals (a rider's huge PCS GC score would leak into ITT and swamp a true TT specialist's PCS TT direct evidence).
+
+Each signal carries a weight vector across the five dimensions (`SIGNAL_DIMENSION_WEIGHTS`), and each non-zero weight produces a per-dimension Bayesian update with effective variance $v / w$. PCS specialty signals route to their natural dimensions: PCS sprint to `:flat` (1.0) and `:hilly` (0.1), PCS climber to `:hilly` (0.5) and `:mountain` (1.0), PCS GC to `:hilly` (0.3), `:mountain` (0.7), and `:gc` (1.0). The Cycling Oracle splits into three independent sources: GC oracle routes mainly to `:gc` with light cross-routing to `:hilly`/`:mountain`, points-jersey oracle to `:flat`/`:hilly`, and KOM oracle to `:mountain`. Bookmaker GC odds use the same routing as oracle GC.
+
+Two routing mechanisms coexist by design. PCS specialty / oracles / odds use direct (signal-specific) weights because the signal source itself carries dimension information — sprint points means flat ability for every rider regardless of class. VG season points and PCS race history use per-rider class projection (`RACE_HISTORY_CLASS_PROJECTION`) because the signal is dimension-agnostic — the rider's classification acts as an attribution prior over an otherwise undifferentiated total. The principle is documented inline in `src/simulation.jl`.
+
+The keystone fix is the floor mechanism. When a rider is absent from the GC oracle, the floor observation now updates only `:gc`, not the entire strength vector. A sprinter outside the GC contenders no longer takes a hit on `:flat`. The new test `test_stage_race.jl` "Pedersen-shaped sprinter sanity check" pins this behaviour: a high-sprint, low-GC rider absent from oracle ranks in the top decile on `:flat` despite the GC oracle floor pushing his `:gc` down.
+
+`simulate_stage_race` accumulates per-stage GC contributions from the `:gc` dimension rather than summing stage finish positions. A sprinter winning a flat stage no longer accumulates GC points he should not have. The per-stage strength used for ranking comes from a continuous PCS-ProfileScore-weighted blend across `:flat/:hilly/:mountain/:itt`, so a low-PS "hilly" stage (Giro 2026 stage 6, PS=14) is treated as mostly flat while a high-PS hilly with summit finish blends toward mountain. Per-event breakaway noise (consolidated in `BREAKAWAY_NOISE_BY_EVENT`) is added to specific ranking events (stage finish, points jersey) to prevent dominant climbers sweeping mountain stages and the points jersey in simulation.
+
+### Code surface
+
+`src/simulation.jl`: `STRENGTH_DIMENSIONS`, `STAGE_TYPES`, `MultiDimPosterior`, `bayesian_update_multidim_dim`, `SIGNAL_DIMENSION_WEIGHTS`, `RACE_HISTORY_CLASS_PROJECTION`, `MultiDimStrengthEstimate`, `estimate_rider_strength_multidim`, `_estimate_strengths_multidim`, `compute_stage_strengths`, `stage_dimension_weights`, `BREAKAWAY_NOISE_BY_EVENT`, `STAGE_POINTS_JERSEY_ALLOCATION`, `INTERMEDIATE_SPRINT_POINTS`, `StageRaceDiagnostics`. `simulate_stage_race` always returns `(vg_points, diagnostics)`. `_assemble_signals` is the shared signal-prep helper used by both the scalar one-day and multidim stage paths. `STAGE_RACE_PCS_WEIGHTS`, `compute_stage_race_pcs_score`, `STAGE_TYPE_MODIFIER_WEIGHTS`, `SPRINTER_MOUNTAIN_PENALTY`, and `compute_stage_type_modifiers` were deleted; their roles are subsumed by direct per-dimension routing. `RaceData` gains `points_oracle_df` and `kom_oracle_df` slots.
+
+`src/race_solver.jl`'s `solve_stage` accepts `points_oracle_url` and `kom_oracle_url` keyword arguments, fetches each independently via the existing `get_cycling_oracle`, and archives them under `oracle_points` and `oracle_kom` data types. The `_archive_predictions` column allowlist includes per-dimension `strength_<dim>` and `uncertainty_<dim>` columns.
+
+`src/report_helpers.jl` adds `format_classification_table`, `format_team_classification`, `format_stage_podium_picks`, and `format_signal_impact_per_dim` so the stage-race report builds classification tables and per-dimension signal panels via reusable helpers rather than inline script logic.
+
+### Validation
+
+Rider-level multidim test on a Pedersen-shaped synthetic sprinter (high PCS sprint, low PCS GC, absent from oracle and odds): the new test asserts `strength_flat > 1.0`, `strength_gc < strength_flat`, and `strength_flat > strength_gc + 0.5` — the GC oracle floor pushes `:gc` down without dragging `:flat` with it. The full test suite passes. The one-day pipeline shares `_assemble_signals` with the multidim path but keeps its own PCS handling (raw decay-weighted points substitution) and signal set.
+
+### What remains for Phase 6
+
+See the dedicated Phase 6 section below.
+
+---
+
+## Phase 6: Empirical calibration and architectural follow-ups
+
+Deferred work surfaced by the May 2026 cleanup. Listed roughly in priority order; each item is independent of the others.
+
+- Empirical calibration of `SIGNAL_DIMENSION_WEIGHTS`, `RACE_HISTORY_CLASS_PROJECTION`, `STAGE_POINTS_JERSEY_ALLOCATION`, and `BREAKAWAY_NOISE_BY_EVENT` against historical per-stage VG points (Tour and Vuelta 2025 plus aggregate Giro 2023–2025; ~350 rider-race pairs available). Today these tables are hand-tuned against specific failure modes; calibration would let the data set them.
+- Hierarchical prior with per-rider ability $\tau^2$ and per-dimension deviation $\sigma_d^2$. The current independent-prior design works for data-rich riders (top contenders have lots of signal) but is weakest for sparse-data riders. A hierarchy would couple dimensions structurally so a rider with only VG points still gets a coherent strength vector. Add as part of the calibration work so $\tau^2/\sigma_d^2$ have empirical guidance.
+- PCS race history projection through the actual stage-type mix of each past race rather than the Phase 5 fallback of projecting via the rider's own class profile.
+- Stage-winner bookmaker markets routed per stage type (no infrastructure exists yet).
+- Multi-dim prior predictive checks and SBC.
+- Promote per-stage scoring tables (`STAGE_POINTS_JERSEY_ALLOCATION`, `INTERMEDIATE_SPRINT_POINTS`, `BREAKAWAY_NOISE_BY_EVENT`) into a `StageRaceConfig` struct alongside `BayesianConfig`, so race-specific scoring (Giro vs Tour vs Vuelta) is one parameter swap rather than five `const` reassignments.
+- Routing-principle empirical validation: should VG season points stay on per-class projection or move to direct weights?
+- Migrate one-day races to the multi-dim model if the architecture proves robust on stage races.
 
 ---
 

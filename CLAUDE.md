@@ -58,7 +58,9 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `predict_expected_points(df, scoring; ...)` - Backward-compatible wrapper: calls `estimate_strengths` then runs MC simulation to compute `expected_vg_points`. Used by backtesting.
 - `estimate_rider_strength(...)` - Bayesian posterior from uninformative prior (mean=0, variance=100), updated with PCS specialty (gated on `has_pcs`), VG, PCS form, PCS race history with variance penalties, VG race history, odds, oracle, qualitative intelligence. Trajectory signal removed. Variances accessed via functions: `pcs_variance(config)`, `odds_variance(config)`, etc. When odds are present for a race, non-market signal variances are inflated by `market_discount` (default 8.0) at the race level to prevent double-counting information already reflected in odds. Block-correlation discount groups signals into market/history/ability clusters with within-cluster ρ=0.5 and between-cluster ρ=0.15.
 - `simulate_race(strengths, uncertainties; n_sims)` - Monte Carlo position simulation (used by backtesting)
-- `compute_stage_race_pcs_score(row, class)` - Class-aware PCS blending for stage races
+- `estimate_rider_strength_multidim(signals; ...)` - Multi-dimensional Bayesian strength estimation for stage races. Routes each signal to dimensions in `STRENGTH_DIMENSIONS` according to `SIGNAL_DIMENSION_WEIGHTS`. Returns `MultiDimStrengthEstimate` with per-dim mean/variance/shift vectors.
+- `compute_stage_strengths(rider_df)` - Project per-dim strength columns onto per-stage-type strength vectors used by `simulate_stage_race`.
+- `simulate_stage_race(stages, stage_strengths, uncertainties, teams, scoring; ...)` - Always returns `(vg_points, diagnostics)`. Per-event scoring delegated to `_score_*` helpers; breakaway noise scales live in `BREAKAWAY_NOISE_BY_EVENT`.
 
 ### Prior predictive checks (src/prior_checks.jl)
 
@@ -110,7 +112,7 @@ The strength model combines multiple signals grouped into three precision famili
 
 | Signal | Source | Group | Base variance | Notes |
 | ------ | ------ | ----- | ------------- | ----- |
-| PCS seasons | `getpcsriderpts_batch()` | Ability | 7.9 | Z-scored across field. Best discriminator across all tiers (ρ=0.16–0.34). For stage races, class-aware blending via `STAGE_RACE_PCS_WEIGHTS` |
+| PCS seasons | `getpcsriderpts_batch()` | Ability | 7.9 | Z-scored across field. Best discriminator across all tiers (ρ=0.16–0.34). For stage races, each PCS specialty source (sprint/oneday/climber/tt/gc) is z-scored separately and routed to dimensions via `SIGNAL_DIMENSION_WEIGHTS`. |
 | VG season points | `getvgriders()` | Ability | 1.4×scale | Season-adaptive: `effective = vg_var * (1 + penalty * (1 - frac_nonzero))`. Strong for top-tier discrimination (ρ=0.287) |
 | PCS race history | `getpcsracehistory()` | History | 3.0+decay/yr | Recency-weighted. Strong for bottom/middle tiers (ρ=0.23–0.25), weak for top (ρ=0.004) |
 | Similar-race history | `getpcsracehistory()` | History | +penalty | Same as race history but with variance penalty. Races from `SIMILAR_RACES` terrain mapping |
@@ -134,7 +136,7 @@ Normal-normal conjugate model (`estimate_rider_strength()`). Each signal updates
 
 | Aspect | One-day | Stage race |
 | ------ | ------- | ---------- |
-| PCS blending | Single specialty (e.g. one-day points) | Class-aware blend via `STAGE_RACE_PCS_WEIGHTS` |
+| PCS blending | Single specialty (e.g. one-day points) | Per-source z-scoring routed to dimensions via `SIGNAL_DIMENSION_WEIGHTS` (multi-dim posterior) |
 | Scoring table | Cat 1/2/3 (finish + assist + breakaway) | `SCORING_GRAND_TOUR` (per-stage scoring) or `SCORING_STAGE` (aggregate fallback) |
 | Simulation | Single race simulation | Per-stage simulation with cross-stage correlated noise (α=0.7) and stage-type strength modifiers |
 | Breakaway points | Heuristic estimate | Not modelled (~6 pts/stage gap from sprint/climb/breakaway bonuses) |

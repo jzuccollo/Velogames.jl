@@ -343,14 +343,10 @@ end
     @test result.has_pcs[2] == false
 end
 
-@testset "Stage race PCS blending" begin
-    row = (gc=1000.0, tt=500.0, climber=800.0, sprint=200.0, oneday=600.0)
-
-    @test isapprox(compute_stage_race_pcs_score(row, "allrounder"), 825.0; atol=0.1)
-    @test isapprox(compute_stage_race_pcs_score(row, "climber"), 785.0; atol=0.1)
-    @test compute_stage_race_pcs_score(row, "unknown") ==
-          compute_stage_race_pcs_score(row, "unclassed")
-end
+# Stage race PCS blending was removed: the multidim model routes each PCS
+# specialty source to its own dimension(s) directly, no class-aware blend.
+# See `estimate_strengths(...; race_type=:stage)` and the multidim tests in
+# `test_stage_race.jl`.
 
 @testset "Variance penalties in strength estimation" begin
     exact = estimate_rider_strength(

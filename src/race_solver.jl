@@ -2,6 +2,26 @@
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+"""
+    StageResult
+
+Bundle of outputs from `solve_stage`. Fields:
+- `predicted` — full per-rider prediction DataFrame
+- `chosenteam` — riders selected by the most-frequent optimal team
+- `top_teams` — vector of the most-frequent team selections, descending
+- `sim_vg_points` — `n_riders × n_resamples` matrix of simulated VG points
+- `diagnostics` — per-stage / per-classification position counters from
+  `simulate_stage_race` (only set on the per-stage pipeline; `nothing` on
+  the aggregate fallback)
+"""
+struct StageResult
+    predicted::DataFrame
+    chosenteam::DataFrame
+    top_teams::Vector{DataFrame}
+    sim_vg_points::Matrix{Float64}
+    diagnostics::Union{StageRaceDiagnostics,Nothing}
+end
+
 """Extract the chosen team (highest selection_frequency riders) and mark all riders."""
 function _extract_chosen_team(predicted::DataFrame, top_teams::Vector{DataFrame})
     if isempty(top_teams)
@@ -63,12 +83,20 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :shift_history,
             :shift_vg_history,
             :shift_oracle,
+            :shift_oracle_points,
+            :shift_oracle_kom,
             :shift_qualitative,
             :shift_odds,
-            :stage_strength_flat,
-            :stage_strength_hilly,
-            :stage_strength_mountain,
-            :stage_strength_itt,
+            :strength_flat,
+            :strength_hilly,
+            :strength_mountain,
+            :strength_itt,
+            :strength_gc,
+            :uncertainty_flat,
+            :uncertainty_hilly,
+            :uncertainty_mountain,
+            :uncertainty_itt,
+            :uncertainty_gc,
             :expected_vg_points,
             :selection_frequency,
             :chosen,
@@ -178,6 +206,8 @@ function _prepare_rider_data(
     filter_startlist::Bool=true,
     qualitative_df::Union{DataFrame,Nothing}=nothing,
     odds_df::Union{DataFrame,Nothing}=nothing,
+    points_oracle_url::String="",
+    kom_oracle_url::String="",
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -363,37 +393,33 @@ function _prepare_rider_data(
         end
     end
 
-    # --- 5. Fetch Cycling Oracle predictions (optional) ---
-    oracle_df = nothing
-    if !isempty(oracle_url)
+    # --- 5. Fetch Cycling Oracle predictions (GC + optional points/KOM) ---
+    function _fetch_oracle(url::String, archive_type::String, label::String)
+        isempty(url) && return nothing
         try
-            oracle_df = get_cycling_oracle(
-                oracle_url;
-                cache_config=cache_config,
-                force_refresh=force_refresh,
-            )
-            if nrow(oracle_df) > 0
-                @info "Got Cycling Oracle predictions for $(nrow(oracle_df)) riders"
-                # Archive for future backtesting
+            df = get_cycling_oracle(url; cache_config=cache_config, force_refresh=force_refresh)
+            if nrow(df) > 0
+                @info "Got Cycling Oracle $label predictions for $(nrow(df)) riders"
                 if !isempty(config.pcs_slug)
                     try
-                        save_race_snapshot(
-                            oracle_df,
-                            "oracle",
-                            config.pcs_slug,
-                            config.year,
-                        )
+                        save_race_snapshot(df, archive_type, config.pcs_slug, config.year)
                     catch e
-                        @warn "Failed to archive oracle predictions: $e"
+                        @warn "Failed to archive $archive_type predictions: $e"
                     end
                 end
             else
-                @info "Cycling Oracle returned no predictions"
+                @info "Cycling Oracle $label returned no predictions"
             end
+            return df
         catch e
-            @warn "Failed to fetch Cycling Oracle predictions: $e"
+            @warn "Failed to fetch Cycling Oracle $label predictions: $e"
+            return nothing
         end
     end
+
+    oracle_df = _fetch_oracle(oracle_url, "oracle", "GC")
+    points_oracle_df = _fetch_oracle(points_oracle_url, "oracle_points", "points")
+    kom_oracle_df = _fetch_oracle(kom_oracle_url, "oracle_kom", "KOM")
 
     # --- Data quality summary ---
     n_total = nrow(riderdf)
@@ -455,16 +481,18 @@ function _prepare_rider_data(
         @warn "No riders matched to race history — historical finishing positions won't inform predictions"
     end
 
-    return RaceData(
-        riderdf,
-        race_history_df,
-        final_odds_df,
-        oracle_df,
-        vg_history_df,
-        qualitative_df,
-        form_df,
-        seasons_df,
-        nothing,
+    return RaceData(;
+        rider_df=riderdf,
+        race_history_df=race_history_df,
+        odds_df=final_odds_df,
+        oracle_df=oracle_df,
+        vg_history_df=vg_history_df,
+        qualitative_df=qualitative_df,
+        form_df=form_df,
+        seasons_df=seasons_df,
+        actual_df=nothing,
+        points_oracle_df=points_oracle_df,
+        kom_oracle_df=kom_oracle_df,
     )
 end
 
@@ -588,6 +616,8 @@ function solve_stage(
     racehash::String="",
     history_years::Int=3,
     oracle_url::String="",
+    points_oracle_url::String="",
+    kom_oracle_url::String="",
     n_resamples::Int=500,
     excluded_riders::Vector{String}=String[],
     filter_startlist::Bool=true,
@@ -601,7 +631,6 @@ function solve_stage(
     breakaway_dir::String="",
     simulation_df::Union{Int,Nothing}=nothing,
     cross_stage_alpha::Float64=0.7,
-    modifier_scale::Float64=0.5,
     stage_scoring::Union{StageRaceScoringTable,Nothing}=nothing,
 )
     data = _prepare_rider_data(
@@ -617,9 +646,14 @@ function solve_stage(
         filter_startlist=filter_startlist,
         qualitative_df=qualitative_df,
         odds_df=odds_df,
+        points_oracle_url=points_oracle_url,
+        kom_oracle_url=kom_oracle_url,
     )
     if data === nothing
-        return DataFrame(), DataFrame(), DataFrame[], Matrix{Float64}(undef, 0, 0)
+        return StageResult(
+            DataFrame(), DataFrame(), DataFrame[],
+            Matrix{Float64}(undef, 0, 0), nothing,
+        )
     end
 
     @info "Estimating rider strengths (stage race)..."
@@ -632,17 +666,9 @@ function solve_stage(
 
     if !isempty(stages)
         # --- Per-stage pipeline ---
-        @info "Computing stage-type strength modifiers ($(length(stages)) stages)..."
-        stage_strengths = compute_stage_type_modifiers(
-            predicted, Float64.(predicted.strength);
-            modifier_scale=modifier_scale,
-        )
-
-        # Add per-stage-type strengths to the DataFrame for reporting
-        for stype in [:flat, :hilly, :mountain, :itt]
-            col = Symbol("stage_strength_$stype")
-            predicted[!, col] = round.(stage_strengths[stype], digits=3)
-        end
+        @info "Building per-stage strengths from multidim posterior ($(length(stages)) stages)..."
+        stage_strengths = compute_stage_strengths(predicted)
+        gc_strengths_vec = Float64.(predicted.strength_gc)
 
         # Archive stage profiles
         if !isempty(config.pcs_slug)
@@ -665,7 +691,7 @@ function solve_stage(
 
         scoring_table = stage_scoring !== nothing ? stage_scoring : SCORING_GRAND_TOUR
         @info "Running per-stage resampled optimisation ($n_resamples resamples, $(length(stages)) stages)..."
-        predicted, top_teams, sim_vg_points = resample_optimise_stage(
+        predicted, top_teams, sim_vg_points, diagnostics = resample_optimise_stage(
             predicted,
             stages,
             stage_strengths,
@@ -674,6 +700,7 @@ function solve_stage(
             team_size=config.team_size,
             n_resamples=n_resamples,
             cross_stage_alpha=cross_stage_alpha,
+            gc_strengths=gc_strengths_vec,
             max_per_team=max_per_team,
             risk_aversion=risk_aversion,
         )
@@ -696,6 +723,7 @@ function solve_stage(
             breakaway_mean_sectors=b_sectors,
             simulation_df=simulation_df,
         )
+        diagnostics = nothing
     end
 
     predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
@@ -703,5 +731,5 @@ function solve_stage(
     # Archive after optimisation so chosen / selection_frequency / expected_vg_points are persisted
     _archive_predictions(predicted, config)
 
-    return predicted, chosenteam, top_teams, sim_vg_points
+    return StageResult(predicted, chosenteam, top_teams, sim_vg_points, diagnostics)
 end
