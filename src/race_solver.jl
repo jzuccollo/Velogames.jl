@@ -87,6 +87,20 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :shift_oracle_kom,
             :shift_qualitative,
             :shift_odds,
+            :info_share_pcs,
+            :info_share_vg,
+            :info_share_form,
+            :info_share_history,
+            :info_share_vg_history,
+            :info_share_oracle,
+            :info_share_oracle_gc,
+            :info_share_oracle_points,
+            :info_share_oracle_kom,
+            :info_share_qualitative,
+            :info_share_odds,
+            :info_share_odds_points,
+            :info_share_odds_kom,
+            :info_share_odds_stagewin,
             :strength_flat,
             :strength_hilly,
             :strength_mountain,
@@ -208,6 +222,9 @@ function _prepare_rider_data(
     odds_df::Union{DataFrame,Nothing}=nothing,
     points_oracle_url::String="",
     kom_oracle_url::String="",
+    points_odds_df::Union{DataFrame,Nothing}=nothing,
+    kom_odds_df::Union{DataFrame,Nothing}=nothing,
+    stagewin_odds_df::Union{DataFrame,Nothing}=nothing,
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -393,6 +410,20 @@ function _prepare_rider_data(
         end
     end
 
+    # --- 4b. Secondary bookmaker markets (stage races) ---
+    function _archive_secondary(odds_input_df, archive_type)
+        if odds_input_df !== nothing && nrow(odds_input_df) > 0 && !isempty(config.pcs_slug)
+            try
+                save_race_snapshot(odds_input_df, archive_type, config.pcs_slug, config.year)
+            catch e
+                @warn "Failed to archive $archive_type: $e"
+            end
+        end
+    end
+    _archive_secondary(points_odds_df, "odds_points")
+    _archive_secondary(kom_odds_df, "odds_kom")
+    _archive_secondary(stagewin_odds_df, "odds_stagewin")
+
     # --- 5. Fetch Cycling Oracle predictions (GC + optional points/KOM) ---
     function _fetch_oracle(url::String, archive_type::String, label::String)
         isempty(url) && return nothing
@@ -493,6 +524,9 @@ function _prepare_rider_data(
         actual_df=nothing,
         points_oracle_df=points_oracle_df,
         kom_oracle_df=kom_oracle_df,
+        points_odds_df=points_odds_df,
+        kom_odds_df=kom_odds_df,
+        stagewin_odds_df=stagewin_odds_df,
     )
 end
 
@@ -625,6 +659,9 @@ function solve_stage(
     force_refresh::Bool=false,
     qualitative_df::Union{DataFrame,Nothing}=nothing,
     odds_df::Union{DataFrame,Nothing}=nothing,
+    points_odds_df::Union{DataFrame,Nothing}=nothing,
+    kom_odds_df::Union{DataFrame,Nothing}=nothing,
+    stagewin_odds_df::Union{DataFrame,Nothing}=nothing,
     domestique_discount::Float64=0.0,
     max_per_team::Int=0,
     risk_aversion::Float64=0.5,
@@ -648,6 +685,9 @@ function solve_stage(
         odds_df=odds_df,
         points_oracle_url=points_oracle_url,
         kom_oracle_url=kom_oracle_url,
+        points_odds_df=points_odds_df,
+        kom_odds_df=kom_odds_df,
+        stagewin_odds_df=stagewin_odds_df,
     )
     if data === nothing
         return StageResult(

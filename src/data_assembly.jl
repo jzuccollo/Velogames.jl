@@ -35,6 +35,10 @@ standard data container between fetching and prediction.
     # Multi-source oracle (stage races): points jersey + KOM jersey predictions
     points_oracle_df::Union{DataFrame,Nothing} = nothing
     kom_oracle_df::Union{DataFrame,Nothing} = nothing
+    # Bookmaker secondary markets (stage races): points jersey, KOM, stage-win
+    points_odds_df::Union{DataFrame,Nothing} = nothing
+    kom_odds_df::Union{DataFrame,Nothing} = nothing
+    stagewin_odds_df::Union{DataFrame,Nothing} = nothing
 end
 
 

@@ -45,6 +45,22 @@ else
     nothing
 end
 
+# --- Secondary bookmaker markets (stage races): Points jersey, KOM, stage-win ---
+function _try_parse_paste(filename)
+    isempty(filename) && return nothing
+    path = joinpath(@__DIR__, "..", filename)
+    isfile(path) || return nothing
+    try
+        return parse_oddschecker_odds(read(path, String))
+    catch e
+        @warn "Failed to parse $filename: $e"
+        return nothing
+    end
+end
+points_odds_df = _try_parse_paste(get(_cfg["data_sources"], "points_odds_paste_file", ""))
+kom_odds_df = _try_parse_paste(get(_cfg["data_sources"], "kom_odds_paste_file", ""))
+stagewin_odds_df = _try_parse_paste(get(_cfg["data_sources"], "stagewin_odds_paste_file", ""))
+
 n_resamples = _cfg["optimisation"]["n_resamples"]
 history_years = _cfg["optimisation"]["history_years"]
 domestique_discount = _cfg["optimisation"]["domestique_discount"]
@@ -111,7 +127,10 @@ result = solve_stage(config;
     simulation_df=simulation_df,
     cross_stage_alpha=cross_stage_alpha,
     stage_scoring=stage_scoring,
-    odds_df=odds_df)
+    odds_df=odds_df,
+    points_odds_df=points_odds_df,
+    kom_odds_df=kom_odds_df,
+    stagewin_odds_df=stagewin_odds_df)
 
 predicted = result.predicted
 chosenteam = result.chosenteam
@@ -274,11 +293,20 @@ if nrow(chosenteam) > 0
     display_cols = intersect(all_display_cols, propertynames(chosenteam))
     write(io, html_table(sort(chosenteam[:, display_cols], :expected_vg_points, rev=true)))
 
-    # Signal breakdown
+    # Signal breakdown — order-invariant info-share percentages (signal precision /
+    # total observed precision per rider). Sums to 100% across signals per rider.
     waterfall = format_signal_waterfall(sort(chosenteam, :expected_vg_points, rev=true))
     write(io, html_callout(
-        "<p>How each signal shifted the strength estimate for riders in your team.</p>\n" * waterfall;
-        title="Signal breakdown", collapsed=true))
+        "<p>Each cell shows the share of total observed precision contributed by that signal — order-invariant, summing to 100% across signals per rider. A rider whose Odds cell shows 70% means bookmaker odds account for the majority of the information that shaped their posterior.</p>\n" * waterfall;
+        title="Signal breakdown (info share)", collapsed=true))
+
+    # Per-dimension info-share heatmap — diagnoses which signals drove which
+    # dimension for each chosen rider (useful when ranking depends on multi-
+    # dim simulation, not just the scalar :gc strength).
+    info_share_dim = format_info_share_per_dim(sort(chosenteam, :expected_vg_points, rev=true))
+    write(io, html_callout(
+        "<p>Per-dimension info share for your team. Each signal block has 5 columns (F=flat, H=hilly, M=mountain, I=ITT, G=gc); cells show the percent of total observed precision on that dimension contributed by that signal. Order-invariant.</p>\n" * info_share_dim;
+        title="Per-dimension info share (chosen team)", collapsed=true))
 else
     write(io, html_callout("No optimal team generated — check configuration and try again."; type="warning"))
 end

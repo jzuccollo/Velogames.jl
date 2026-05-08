@@ -109,13 +109,16 @@ end
     @test with_floor.shift_odds < 0.0
     @test no_floor.shift_odds == 0.0
 
-    # Floor uses higher variance than direct odds (wider posterior)
-    # Use market_discount=1.0 to isolate floor vs direct odds behaviour
+    # Floor uses higher variance than direct odds (wider posterior).
+    # Use market_discount=1.0 to isolate floor vs direct odds behaviour.
+    # Use a listing above baseline (positive evidence path) so the direct
+    # update actually fires — listings below baseline now fall through to
+    # the floor (longshot tail-pricing isn't strong negative evidence).
     no_discount = BayesianConfig(market_discount=1.0)
     direct_odds = estimate_rider_strength(
         pcs_score=0.5,
         vg_points=0.3,
-        odds_implied_prob=0.002,
+        odds_implied_prob=0.05,
         n_starters=150,
         config=no_discount,
     )

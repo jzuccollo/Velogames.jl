@@ -67,6 +67,10 @@ struct StrengthEstimate
     shift_oracle::Float64
     shift_qualitative::Float64
     shift_odds::Float64
+    # Precision contribution per signal (1/obs_variance summed across updates).
+    # Used to compute order-invariant "information share" diagnostics that
+    # complement the order-dependent mean-shift fields above.
+    precisions::Dict{Symbol,Float64}
 end
 
 """
@@ -186,12 +190,19 @@ signal degrades rather than *how much* to trust the signal source.
     # (less precise than direct observations).
     #
     # Two floor mechanisms:
-    #   :odds, :oracle — market-based: absent riders share the residual
-    #       probability mass (data-driven, varies per race).
+    #   :odds — market-based: bookmaker GC market prices the full field, so
+    #       absence is informative (residual probability mass shared across
+    #       absent riders).
     #   :form, :qualitative — fixed: absent riders get a per-signal floor
-    #       strength as a z-score observation. Stronger floors for sources
-    #       with broader coverage (odds > oracle > qualitative).
-    floor_signals::Set{Symbol} = Set([:odds, :oracle, :qualitative])
+    #       strength as a z-score observation.
+    #
+    # `:oracle` is intentionally absent: Cycling Oracle publishes a top-15
+    # with probabilities normalised to sum to 1.0, so applying the residual-
+    # probability floor erroneously infers that absent riders have ~1% of
+    # baseline (floor strength ≈ -4.7), which dominated the posterior of any
+    # rider not in the published top-15. Treat oracle absence as
+    # uninformative (consistent with Oracle Points / Oracle KOM handling).
+    floor_signals::Set{Symbol} = Set([:odds, :qualitative])
     # Per-signal floor config: (strength, variance_multiplier).
     # Strength is the z-score observation for absent riders.
     # Variance multiplier scales the signal's base variance for floor observations
@@ -374,15 +385,17 @@ const SIGNAL_DIMENSION_WEIGHTS = (
     # GC ability is the strongest single proxy for current climbing form,
     # since PCS climber is career-cumulative and stale. Heavier weight on
     # :mountain so current GC dominance translates into mountain favouritism.
-    pcs_gc       = (flat=0.0, hilly=0.3, mountain=0.7, itt=0.0, gc=1.0),
+    # `:hilly` cross-routing is small: punchy hilly finishes (cat-3 / cat-4
+    # late climbs) reward puncheurs, not GC riders — Vingegaard contests
+    # summit finishes, not 4 km kickers, so GC strength shouldn't dominate
+    # `:hilly` posterior.
+    pcs_gc       = (flat=0.0, hilly=0.1, mountain=0.7, itt=0.0, gc=1.0),
     # GC oracle and odds carry strong "this rider is contender for the overall"
-    # information. Positive evidence cross-routes lightly to mountain/hilly so
-    # the GC favourite emerges as a mountain-stage favourite too, reflecting
-    # that Tour-winning climbers (Vingegaard, Pogacar, Roglic) typically win
-    # summit finishes. The floor is asymmetric (gc-only) — see floor handling
-    # in `estimate_rider_strength_multidim`.
-    oracle_gc    = (flat=0.0, hilly=0.1, mountain=0.2, itt=0.0, gc=1.0),
-    odds_gc      = (flat=0.0, hilly=0.1, mountain=0.2, itt=0.0, gc=1.0),
+    # information. Positive evidence cross-routes to mountain (Tour-winning
+    # climbers typically win summit finishes), but minimally to :hilly — they
+    # score daily-GC points there but rarely win punchy hilly stages.
+    oracle_gc    = (flat=0.0, hilly=0.05, mountain=0.2, itt=0.0, gc=1.0),
+    odds_gc      = (flat=0.0, hilly=0.05, mountain=0.2, itt=0.0, gc=1.0),
     # Jersey oracles predict season-long jersey winners. Points oracle
     # correlates with flat-stage finishing for listed sprinters (they
     # contest bunch finishes consistently), justifying a small :flat
@@ -390,6 +403,10 @@ const SIGNAL_DIMENSION_WEIGHTS = (
     # the riders most likely to chase summit-finish bonuses.
     oracle_points= (flat=0.4, hilly=0.1, mountain=0.0, itt=0.0, gc=0.0),
     oracle_kom   = (flat=0.0, hilly=0.0, mountain=1.0, itt=0.0, gc=0.0),
+    # Bookmaker odds for jersey markets — same routing as the oracle
+    # counterparts, but consumed with the sharper `odds_variance`.
+    odds_points  = (flat=0.4, hilly=0.1, mountain=0.0, itt=0.0, gc=0.0),
+    odds_kom     = (flat=0.0, hilly=0.0, mountain=1.0, itt=0.0, gc=0.0),
 )
 
 """
@@ -449,6 +466,9 @@ remain as separate arguments to `estimate_rider_strength`.
     points_oracle_floor_strength::Float64 = 0.0
     kom_oracle_implied_prob::Float64 = 0.0
     kom_oracle_floor_strength::Float64 = 0.0
+    points_odds_implied_prob::Float64 = 0.0
+    kom_odds_implied_prob::Float64 = 0.0
+    stagewin_odds_implied_prob::Float64 = 0.0
 end
 
 """
@@ -512,6 +532,13 @@ function estimate_rider_strength(
     n_ability = 0
     n_history = 0
     n_market = 0
+    # Per-signal precision contributions (1/obs_variance summed per signal).
+    # Used for order-invariant info-share diagnostics. Pre-discount: reflects
+    # raw signal precision; the block-correlation discount is applied to the
+    # posterior separately and does not retroactively rescale these.
+    precisions = Dict{Symbol,Float64}(
+        s => 0.0 for s in (:pcs, :vg, :form, :history, :vg_history, :oracle, :qualitative, :odds)
+    )
 
     # --- Market discount ---
     # When odds exist for this race, non-market signals are partially redundant
@@ -525,7 +552,9 @@ function estimate_rider_strength(
     # Only applied when the rider has real PCS data (not coalesced-from-missing).
     mean_before = posterior.mean
     if has_pcs
-        posterior = bayesian_update(posterior, pcs_score, pcs_variance(config) * md)
+        v = pcs_variance(config) * md
+        posterior = bayesian_update(posterior, pcs_score, v)
+        precisions[:pcs] += 1.0 / v
         n_signals += 1
         n_ability += 1
     end
@@ -537,7 +566,9 @@ function estimate_rider_strength(
     if vg_points != 0.0
         eff_vg_var =
             effective_vg_variance > 0.0 ? effective_vg_variance : vg_variance(config)
-        posterior = bayesian_update(posterior, vg_points, eff_vg_var * md)
+        v = eff_vg_var * md
+        posterior = bayesian_update(posterior, vg_points, v)
+        precisions[:vg] += 1.0 / v
         n_signals += 1
         n_ability += 1
     end
@@ -555,12 +586,15 @@ function estimate_rider_strength(
     if :form in force_enable
         mean_before = posterior.mean
         if form_score != 0.0
-            posterior = bayesian_update(posterior, form_score, form_variance(config) * md)
+            v = form_variance(config) * md
+            posterior = bayesian_update(posterior, form_score, v)
+            precisions[:form] += 1.0 / v
             n_signals += 1
             n_history += 1
         elseif form_floor_strength != 0.0
             floor_var = form_variance(config) * config.form_floor_variance_multiplier * md
             posterior = bayesian_update(posterior, form_floor_strength, floor_var)
+            precisions[:form] += 1.0 / floor_var
             n_signals += 1
             n_history += 1
         end
@@ -587,6 +621,7 @@ function estimate_rider_strength(
         penalty = i <= length(penalties) ? penalties[i] : 0.0
         hist_var = (hist_base_variance(config) + config.hist_decay_rate * years_ago + penalty) * md
         posterior = bayesian_update(posterior, hist_strength, hist_var)
+        precisions[:history] += 1.0 / hist_var
         n_signals += 1
         n_history += 1
     end
@@ -606,6 +641,7 @@ function estimate_rider_strength(
         for (vg_strength, years_ago) in zip(vg_race_history, vg_race_history_years_ago)
             vg_var = (vg_hist_base_variance(config) + config.vg_hist_decay_rate * years_ago) * md
             posterior = bayesian_update(posterior, vg_strength, vg_var)
+            precisions[:vg_history] += 1.0 / vg_var
             n_signals += 1
             n_history += 1
         end
@@ -618,18 +654,26 @@ function estimate_rider_strength(
     prec_after_history = 1.0 / posterior.variance
 
     # --- Update with Cycling Oracle predictions ---
-    # Algorithmic win probabilities. Less precise than market odds but covers more races.
+    # Algorithmic win probabilities. Cycling Oracle publishes a normalised
+    # top-15; inclusion is itself a positive endorsement, and the published
+    # probability is intra-list ranking rather than a claim against the full
+    # field. Clamp at 0 so a low-probability listing never reduces strength.
     mean_before = posterior.mean
     if oracle_implied_prob > 0.0
         baseline_prob = 1.0 / n_starters
         oracle_strength =
             log(oracle_implied_prob / baseline_prob) / config.odds_normalisation
-        posterior = bayesian_update(posterior, oracle_strength, oracle_variance(config))
-        n_signals += 1
-        n_market += 1
+        if oracle_strength > 0.0
+            v = oracle_variance(config)
+            posterior = bayesian_update(posterior, oracle_strength, v)
+            precisions[:oracle] += 1.0 / v
+            n_signals += 1
+            n_market += 1
+        end
     elseif oracle_floor_strength != 0.0
         floor_var = oracle_variance(config) * config.oracle_floor_variance_multiplier
         posterior = bayesian_update(posterior, oracle_floor_strength, floor_var)
+        precisions[:oracle] += 1.0 / floor_var
         n_signals += 1
         n_market += 1
     end
@@ -648,6 +692,7 @@ function estimate_rider_strength(
                 if conf > 0.0
                     eff_var = qualitative_base_variance(config) / conf
                     posterior = bayesian_update(posterior, adj, eff_var)
+                    precisions[:qualitative] += 1.0 / eff_var
                     n_signals += 1
                     n_market += 1
                 end
@@ -655,6 +700,7 @@ function estimate_rider_strength(
         elseif qualitative_floor_strength != 0.0
             floor_var = qualitative_base_variance(config) * config.qualitative_floor_variance_multiplier
             posterior = bayesian_update(posterior, qualitative_floor_strength, floor_var)
+            precisions[:qualitative] += 1.0 / floor_var
             n_signals += 1
             n_market += 1
         end
@@ -665,16 +711,30 @@ function estimate_rider_strength(
 
     # --- Update with betting odds ---
     # Odds-implied probability is the market's posterior. Very precise when available.
+    # When listed below baseline (longshot tail), fall through to the bounded
+    # absence floor instead of applying the negative obs — listings at long
+    # odds are conservative tail-pricing, not strong negative endorsements.
     mean_before = posterior.mean
     if odds_implied_prob > 0.0
         baseline_prob = 1.0 / n_starters
         odds_strength = log(odds_implied_prob / baseline_prob) / config.odds_normalisation
-        posterior = bayesian_update(posterior, odds_strength, odds_variance(config))
-        n_signals += 1
-        n_market += 1
+        if odds_strength > 0.0
+            v = odds_variance(config)
+            posterior = bayesian_update(posterior, odds_strength, v)
+            precisions[:odds] += 1.0 / v
+            n_signals += 1
+            n_market += 1
+        elseif odds_floor_strength != 0.0
+            floor_var = odds_variance(config) * config.odds_floor_variance_multiplier
+            posterior = bayesian_update(posterior, odds_floor_strength, floor_var)
+            precisions[:odds] += 1.0 / floor_var
+            n_signals += 1
+            n_market += 1
+        end
     elseif odds_floor_strength != 0.0
         floor_var = odds_variance(config) * config.odds_floor_variance_multiplier
         posterior = bayesian_update(posterior, odds_floor_strength, floor_var)
+        precisions[:odds] += 1.0 / floor_var
         n_signals += 1
         n_market += 1
     end
@@ -736,6 +796,7 @@ function estimate_rider_strength(
         shift_oracle,
         shift_qualitative,
         shift_odds,
+        precisions,
     )
 end
 
@@ -753,6 +814,10 @@ struct MultiDimStrengthEstimate
     mean::Vector{Float64}
     variance::Vector{Float64}
     shifts::Dict{Symbol,Vector{Float64}}
+    # Precision contribution per (signal, dim): 1/obs_variance accumulated
+    # across all bayesian_update_multidim_dim calls for that signal on that
+    # dim. Used for order-invariant information-share diagnostics.
+    precisions::Dict{Symbol,Vector{Float64}}
 end
 
 """
@@ -776,6 +841,16 @@ function estimate_rider_strength_multidim(
     posterior = multidim_prior(config)
     md = race_has_market ? config.market_discount : 1.0
     shifts = Dict{Symbol,Vector{Float64}}()
+    # Per-(signal, dim) precision contributions for order-invariant info-share
+    # diagnostics. Each `bayesian_update_multidim_dim(posterior, obs, var, dsym)`
+    # call below accumulates `1/var` into the corresponding entry.
+    precisions = Dict{Symbol,Vector{Float64}}(
+        s => zeros(D) for s in (
+            :pcs, :vg, :form, :history, :vg_history,
+            :oracle_gc, :oracle_points, :oracle_kom, :qualitative,
+            :odds, :odds_points, :odds_kom, :odds_stagewin,
+        )
+    )
 
     # --- PCS specialty (per-source, dim-specific) ---
     mean_before = copy(posterior.mean)
@@ -792,7 +867,9 @@ function estimate_rider_strength_multidim(
             for dsym in STRENGTH_DIMENSIONS
                 w = getfield(weights_nt, dsym)
                 w == 0.0 && continue
-                posterior = bayesian_update_multidim_dim(posterior, obs, base_var / w, dsym)
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:pcs][_DIM_INDEX[dsym]] += 1.0 / v
             end
         end
     end
@@ -817,7 +894,9 @@ function estimate_rider_strength_multidim(
         for dsym in STRENGTH_DIMENSIONS
             w = getfield(proj, dsym)
             w == 0.0 && continue
-            posterior = bayesian_update_multidim_dim(posterior, signals.vg_points, eff_var_base / w, dsym)
+            v = eff_var_base / w
+            posterior = bayesian_update_multidim_dim(posterior, signals.vg_points, v, dsym)
+            precisions[:vg][_DIM_INDEX[dsym]] += 1.0 / v
         end
     end
     shifts[:vg] = posterior.mean .- mean_before
@@ -841,7 +920,9 @@ function estimate_rider_strength_multidim(
             for dsym in STRENGTH_DIMENSIONS
                 w = getfield(proj, dsym)
                 w == 0.0 && continue
-                posterior = bayesian_update_multidim_dim(posterior, hist_strength, base_var / w, dsym)
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, hist_strength, v, dsym)
+                precisions[:history][_DIM_INDEX[dsym]] += 1.0 / v
             end
         end
     end
@@ -860,64 +941,84 @@ function estimate_rider_strength_multidim(
             for dsym in STRENGTH_DIMENSIONS
                 w = getfield(proj, dsym)
                 w == 0.0 && continue
-                posterior = bayesian_update_multidim_dim(posterior, vg_strength, eff_var / w, dsym)
+                v = eff_var / w
+                posterior = bayesian_update_multidim_dim(posterior, vg_strength, v, dsym)
+                precisions[:vg_history][_DIM_INDEX[dsym]] += 1.0 / v
             end
         end
     end
     shifts[:vg_history] = posterior.mean .- mean_before
 
     # --- Cycling Oracle GC ---
-    # Positive evidence routes via SIGNAL_DIMENSION_WEIGHTS.oracle_gc (gc + a
-    # secondary boost on mountain/hilly, since GC contenders are elite climbers).
-    # Absence floor only hits :gc — being absent from GC oracle is not evidence
-    # of poor climbing (Pedersen is a top sprinter, not weak in mountains).
+    # Cycling Oracle publishes a normalised top-15. Inclusion is itself a
+    # positive endorsement; the published probability ranks within the listed
+    # set, not against the full field. A bottom-of-list 0.01% prob would
+    # otherwise compute a strongly negative observation (worse than absence),
+    # which is wrong — clamp at 0 so listing never reduces strength.
+    # Routes to gc + a secondary boost on mountain/hilly (GC contenders
+    # are elite climbers).
     mean_before = copy(posterior.mean)
     if signals.oracle_implied_prob > 0.0
         baseline = 1.0 / n_starters
         obs = log(signals.oracle_implied_prob / baseline) / config.odds_normalisation
-        base_var = oracle_variance(config)
-        for dsym in STRENGTH_DIMENSIONS
-            w = getfield(SIGNAL_DIMENSION_WEIGHTS.oracle_gc, dsym)
-            w == 0.0 && continue
-            posterior = bayesian_update_multidim_dim(posterior, obs, base_var / w, dsym)
+        # Skip entirely if obs is negative — list-cutoff publication means a
+        # below-baseline listing is intra-list ranking, not negative evidence.
+        # Observing 0 with finite variance would still shrink the posterior;
+        # we want a true no-op for low-prob listings.
+        if obs > 0.0
+            base_var = oracle_variance(config)
+            for dsym in STRENGTH_DIMENSIONS
+                w = getfield(SIGNAL_DIMENSION_WEIGHTS.oracle_gc, dsym)
+                w == 0.0 && continue
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:oracle_gc][_DIM_INDEX[dsym]] += 1.0 / v
+            end
         end
     elseif signals.oracle_floor_strength != 0.0
         var_f = oracle_variance(config) * config.oracle_floor_variance_multiplier
         posterior = bayesian_update_multidim_dim(posterior, signals.oracle_floor_strength, var_f, :gc)
+        precisions[:oracle_gc][_DIM_INDEX[:gc]] += 1.0 / var_f
     end
     shifts[:oracle_gc] = posterior.mean .- mean_before
 
-    # --- Cycling Oracle Points (→ :flat 0.7 + :hilly 0.3, positive evidence only) ---
+    # --- Cycling Oracle Points (→ :flat 0.4 + :hilly 0.1, listed only, clamp at 0) ---
     # Jersey-prediction oracles have selection bias: only riders chasing the
     # jersey are listed. A GC contender absent from points oracle is not
-    # automatically weak on flat/hilly stages (they conserve effort, but
-    # can still finish). Apply listed-rider boost only — skip absence floor.
+    # automatically weak on flat/hilly stages. Apply listed-rider boost only
+    # (no absence floor); clamp at 0 so a low-probability listing never
+    # reduces strength.
     mean_before = copy(posterior.mean)
     if signals.points_oracle_implied_prob > 0.0
         baseline = 1.0 / n_starters
         obs = log(signals.points_oracle_implied_prob / baseline) / config.odds_normalisation
-        base_var = oracle_variance(config)
-        for dsym in STRENGTH_DIMENSIONS
-            w = getfield(SIGNAL_DIMENSION_WEIGHTS.oracle_points, dsym)
-            w == 0.0 && continue
-            posterior = bayesian_update_multidim_dim(posterior, obs, base_var / w, dsym)
+        if obs > 0.0
+            base_var = oracle_variance(config)
+            for dsym in STRENGTH_DIMENSIONS
+                w = getfield(SIGNAL_DIMENSION_WEIGHTS.oracle_points, dsym)
+                w == 0.0 && continue
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:oracle_points][_DIM_INDEX[dsym]] += 1.0 / v
+            end
         end
     end
     shifts[:oracle_points] = posterior.mean .- mean_before
 
-    # --- Cycling Oracle KOM (→ :mountain, positive evidence only) ---
-    # Same reasoning as points oracle: KOM jersey absence does not mean weak
-    # climber — top GC riders skip KOM hunting to conserve effort but still
-    # finish near the front on mountain stages.
+    # --- Cycling Oracle KOM (→ :mountain, listed only, clamp at 0) ---
     mean_before = copy(posterior.mean)
     if signals.kom_oracle_implied_prob > 0.0
         baseline = 1.0 / n_starters
         obs = log(signals.kom_oracle_implied_prob / baseline) / config.odds_normalisation
-        base_var = oracle_variance(config)
-        for dsym in STRENGTH_DIMENSIONS
-            w = getfield(SIGNAL_DIMENSION_WEIGHTS.oracle_kom, dsym)
-            w == 0.0 && continue
-            posterior = bayesian_update_multidim_dim(posterior, obs, base_var / w, dsym)
+        if obs > 0.0
+            base_var = oracle_variance(config)
+            for dsym in STRENGTH_DIMENSIONS
+                w = getfield(SIGNAL_DIMENSION_WEIGHTS.oracle_kom, dsym)
+                w == 0.0 && continue
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:oracle_kom][_DIM_INDEX[dsym]] += 1.0 / v
+            end
         end
     end
     shifts[:oracle_kom] = posterior.mean .- mean_before
@@ -926,28 +1027,106 @@ function estimate_rider_strength_multidim(
     shifts[:qualitative] = zeros(D)
 
     # --- Betting odds (GC outright market) ---
-    # Same asymmetric routing as GC oracle: positive evidence informs gc plus
-    # mountain/hilly via cross-routing; absence floor hits gc only.
+    # Positive evidence (listed at or above baseline): cross-route to gc +
+    # secondary mountain/hilly. Listed below baseline (e.g. 1001/1 longshot)
+    # falls through to the bounded gc-only floor — avoids the cross-route
+    # crushing the rider's actual strong dimensions just because bookmakers
+    # tail-priced them. Absent rider: same floor.
     mean_before = copy(posterior.mean)
     if signals.odds_implied_prob > 0.0
         baseline = 1.0 / n_starters
         obs = log(signals.odds_implied_prob / baseline) / config.odds_normalisation
-        base_var = odds_variance(config)
-        for dsym in STRENGTH_DIMENSIONS
-            w = getfield(SIGNAL_DIMENSION_WEIGHTS.odds_gc, dsym)
-            w == 0.0 && continue
-            posterior = bayesian_update_multidim_dim(posterior, obs, base_var / w, dsym)
+        if obs > 0.0
+            base_var = odds_variance(config)
+            for dsym in STRENGTH_DIMENSIONS
+                w = getfield(SIGNAL_DIMENSION_WEIGHTS.odds_gc, dsym)
+                w == 0.0 && continue
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:odds][_DIM_INDEX[dsym]] += 1.0 / v
+            end
+        elseif signals.odds_floor_strength != 0.0
+            var_f = odds_variance(config) * config.odds_floor_variance_multiplier
+            posterior = bayesian_update_multidim_dim(posterior, signals.odds_floor_strength, var_f, :gc)
+            precisions[:odds][_DIM_INDEX[:gc]] += 1.0 / var_f
         end
     elseif signals.odds_floor_strength != 0.0
         var_f = odds_variance(config) * config.odds_floor_variance_multiplier
         posterior = bayesian_update_multidim_dim(posterior, signals.odds_floor_strength, var_f, :gc)
+        precisions[:odds][_DIM_INDEX[:gc]] += 1.0 / var_f
     end
     shifts[:odds] = posterior.mean .- mean_before
+
+    # --- Bookmaker Points-jersey market (→ :flat 0.4 + :hilly 0.1, listed only) ---
+    # Same list-cutoff logic as Cycling Oracle: bookmakers only price plausible
+    # jersey contenders. Inclusion is itself a positive endorsement; clamp at 0.
+    mean_before = copy(posterior.mean)
+    if signals.points_odds_implied_prob > 0.0
+        baseline = 1.0 / n_starters
+        obs = log(signals.points_odds_implied_prob / baseline) / config.odds_normalisation
+        if obs > 0.0
+            base_var = odds_variance(config)
+            for dsym in STRENGTH_DIMENSIONS
+                w = getfield(SIGNAL_DIMENSION_WEIGHTS.odds_points, dsym)
+                w == 0.0 && continue
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:odds_points][_DIM_INDEX[dsym]] += 1.0 / v
+            end
+        end
+    end
+    shifts[:odds_points] = posterior.mean .- mean_before
+
+    # --- Bookmaker KOM market (→ :mountain, listed only, clamp at 0) ---
+    mean_before = copy(posterior.mean)
+    if signals.kom_odds_implied_prob > 0.0
+        baseline = 1.0 / n_starters
+        obs = log(signals.kom_odds_implied_prob / baseline) / config.odds_normalisation
+        if obs > 0.0
+            base_var = odds_variance(config)
+            for dsym in STRENGTH_DIMENSIONS
+                w = getfield(SIGNAL_DIMENSION_WEIGHTS.odds_kom, dsym)
+                w == 0.0 && continue
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:odds_kom][_DIM_INDEX[dsym]] += 1.0 / v
+            end
+        end
+    end
+    shifts[:odds_kom] = posterior.mean .- mean_before
+
+    # --- Bookmaker "Rider To Win A Stage" market — class-aware routing ---
+    # Stage-winning evidence informs the dimensions where the rider plausibly
+    # wins (a sprinter scores stage-win points on flat/hilly, a climber on
+    # hilly/mountain). Reuse RACE_HISTORY_CLASS_PROJECTION which already
+    # encodes the per-class dimension mix.
+    # List-cutoff market: skip update entirely when obs ≤ 0 (true no-op,
+    # not posterior-shrinkage-toward-zero).
+    mean_before = copy(posterior.mean)
+    if signals.stagewin_odds_implied_prob > 0.0
+        baseline = 1.0 / n_starters
+        obs = log(signals.stagewin_odds_implied_prob / baseline) / config.odds_normalisation
+        if obs > 0.0
+            base_var = odds_variance(config)
+            cls = haskey(RACE_HISTORY_CLASS_PROJECTION, signals.rider_class) ?
+                  signals.rider_class : "unclassed"
+            weights = RACE_HISTORY_CLASS_PROJECTION[cls]
+            for dsym in STRENGTH_DIMENSIONS
+                w = getfield(weights, dsym)
+                w == 0.0 && continue
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:odds_stagewin][_DIM_INDEX[dsym]] += 1.0 / v
+            end
+        end
+    end
+    shifts[:odds_stagewin] = posterior.mean .- mean_before
 
     return MultiDimStrengthEstimate(
         copy(posterior.mean),
         copy(posterior.variance),
         shifts,
+        precisions,
     )
 end
 
@@ -1771,6 +1950,9 @@ struct AssembledSignals
     oracle_lookup::Dict{String,Float64}
     points_oracle_lookup::Dict{String,Float64}
     kom_oracle_lookup::Dict{String,Float64}
+    points_odds_lookup::Dict{String,Float64}
+    kom_odds_lookup::Dict{String,Float64}
+    stagewin_odds_lookup::Dict{String,Float64}
 
     odds_floor::Float64
     oracle_floor::Float64
@@ -1806,6 +1988,9 @@ function _assemble_signals(
     oracle_df::Union{DataFrame,Nothing}=nothing,
     points_oracle_df::Union{DataFrame,Nothing}=nothing,
     kom_oracle_df::Union{DataFrame,Nothing}=nothing,
+    points_odds_df::Union{DataFrame,Nothing}=nothing,
+    kom_odds_df::Union{DataFrame,Nothing}=nothing,
+    stagewin_odds_df::Union{DataFrame,Nothing}=nothing,
     vg_history_df::Union{DataFrame,Nothing}=nothing,
     seasons_df::Union{DataFrame,Nothing}=nothing,
     bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
@@ -1953,6 +2138,28 @@ function _assemble_signals(
     kom_oracle_lookup, kom_oracle_floor =
         _market_lookup(kom_oracle_df, :win_prob, "Oracle KOM floor")
 
+    # --- Bookmaker secondary markets (Points / KOM / stage-win).
+    # Overround-corrected probabilities; no floor for absent riders (jersey
+    # absence is uninformative — see oracle Points / KOM blocks).
+    function _bookmaker_lookup(odds_input_df, label)
+        lookup = Dict{String,Float64}()
+        odds_input_df === nothing && return lookup
+        :riderkey in propertynames(odds_input_df) || return lookup
+        :odds in propertynames(odds_input_df) || return lookup
+        :rider in propertynames(odds_input_df) && rematch_riderkeys!(odds_input_df, df)
+        raw_probs = 1.0 ./ Float64.(odds_input_df.odds)
+        overround = sum(raw_probs)
+        for (i, row) in enumerate(eachrow(odds_input_df))
+            lookup[row.riderkey] = raw_probs[i] / overround
+        end
+        n_listed = length(intersect(keys(lookup), Set(df.riderkey)))
+        @info "$label: $n_listed listed (no floor for absent riders)"
+        return lookup
+    end
+    points_odds_lookup = _bookmaker_lookup(points_odds_df, "Odds points")
+    kom_odds_lookup = _bookmaker_lookup(kom_odds_df, "Odds KOM")
+    stagewin_odds_lookup = _bookmaker_lookup(stagewin_odds_df, "Odds stage-win")
+
     # --- Race history lookup ---
     history_lookup = Dict{String,Vector{Tuple{Float64,Int,Float64}}}()
     if race_history_df !== nothing &&
@@ -2008,6 +2215,7 @@ function _assemble_signals(
         currency_factors, rider_currency, seasons_keys,
         history_lookup, vg_history_lookup,
         odds_lookup, oracle_lookup, points_oracle_lookup, kom_oracle_lookup,
+        points_odds_lookup, kom_odds_lookup, stagewin_odds_lookup,
         odds_floor, oracle_floor, points_oracle_floor, kom_oracle_floor,
         !isempty(odds_lookup),
     )
@@ -2030,6 +2238,9 @@ function _estimate_strengths_multidim(
     oracle_df::Union{DataFrame,Nothing}=nothing,
     points_oracle_df::Union{DataFrame,Nothing}=nothing,
     kom_oracle_df::Union{DataFrame,Nothing}=nothing,
+    points_odds_df::Union{DataFrame,Nothing}=nothing,
+    kom_odds_df::Union{DataFrame,Nothing}=nothing,
+    stagewin_odds_df::Union{DataFrame,Nothing}=nothing,
     vg_history_df::Union{DataFrame,Nothing}=nothing,
     seasons_df::Union{DataFrame,Nothing}=nothing,
     bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
@@ -2045,6 +2256,9 @@ function _estimate_strengths_multidim(
         oracle_df=oracle_df,
         points_oracle_df=points_oracle_df,
         kom_oracle_df=kom_oracle_df,
+        points_odds_df=points_odds_df,
+        kom_odds_df=kom_odds_df,
+        stagewin_odds_df=stagewin_odds_df,
         vg_history_df=vg_history_df,
         seasons_df=seasons_df,
         bayesian_config=bayesian_config,
@@ -2085,8 +2299,10 @@ function _estimate_strengths_multidim(
     means_per_dim = [Vector{Float64}(undef, n_riders) for _ in 1:D]
     vars_per_dim = [Vector{Float64}(undef, n_riders) for _ in 1:D]
     shifts_storage = Dict{Symbol,Vector{Vector{Float64}}}()
-    for sig_key in (:pcs, :vg, :form, :history, :vg_history, :oracle_gc, :oracle_points, :oracle_kom, :qualitative, :odds)
+    precisions_storage = Dict{Symbol,Vector{Vector{Float64}}}()
+    for sig_key in (:pcs, :vg, :form, :history, :vg_history, :oracle_gc, :oracle_points, :oracle_kom, :qualitative, :odds, :odds_points, :odds_kom, :odds_stagewin)
         shifts_storage[sig_key] = Vector{Vector{Float64}}(undef, n_riders)
+        precisions_storage[sig_key] = Vector{Vector{Float64}}(undef, n_riders)
     end
 
     for i in 1:n_riders
@@ -2105,8 +2321,17 @@ function _estimate_strengths_multidim(
         oracle_prob = get(sig.oracle_lookup, key, 0.0)
         points_prob = get(sig.points_oracle_lookup, key, 0.0)
         kom_prob = get(sig.kom_oracle_lookup, key, 0.0)
+        points_odds_prob = get(sig.points_odds_lookup, key, 0.0)
+        kom_odds_prob = get(sig.kom_odds_lookup, key, 0.0)
+        stagewin_odds_prob = get(sig.stagewin_odds_lookup, key, 0.0)
 
-        odds_floor = haskey(sig.odds_lookup, key) ? 0.0 : sig.odds_floor
+        # Always pass the race-level odds floor strength: the estimator's
+        # listed-below-baseline branch falls through to the floor, which needs
+        # access regardless of whether the rider is listed (a longshot listing
+        # at 1001/1 should fall to the floor, not produce a sharp negative obs).
+        # For listed-above-baseline riders, the positive-evidence branch fires
+        # first and the floor is unused.
+        odds_floor = sig.odds_floor
         oracle_floor = haskey(sig.oracle_lookup, key) ? 0.0 : sig.oracle_floor
         points_floor = haskey(sig.points_oracle_lookup, key) ? 0.0 : sig.points_oracle_floor
         kom_floor = haskey(sig.kom_oracle_lookup, key) ? 0.0 : sig.kom_oracle_floor
@@ -2129,6 +2354,9 @@ function _estimate_strengths_multidim(
             oracle_implied_prob=oracle_prob,
             points_oracle_implied_prob=points_prob,
             kom_oracle_implied_prob=kom_prob,
+            points_odds_implied_prob=points_odds_prob,
+            kom_odds_implied_prob=kom_odds_prob,
+            stagewin_odds_implied_prob=stagewin_odds_prob,
             odds_floor_strength=odds_floor,
             oracle_floor_strength=oracle_floor,
             points_oracle_floor_strength=points_floor,
@@ -2149,6 +2377,7 @@ function _estimate_strengths_multidim(
         end
         for sig_key in keys(shifts_storage)
             shifts_storage[sig_key][i] = get(est.shifts, sig_key, zeros(D))
+            precisions_storage[sig_key][i] = get(est.precisions, sig_key, zeros(D))
         end
     end
 
@@ -2197,6 +2426,9 @@ function _estimate_strengths_multidim(
     df[!, :has_oracle] = [haskey(sig.oracle_lookup, df.riderkey[i]) for i in 1:n_riders]
     df[!, :has_points_oracle] = [haskey(sig.points_oracle_lookup, df.riderkey[i]) for i in 1:n_riders]
     df[!, :has_kom_oracle] = [haskey(sig.kom_oracle_lookup, df.riderkey[i]) for i in 1:n_riders]
+    df[!, :has_points_odds] = [haskey(sig.points_odds_lookup, df.riderkey[i]) for i in 1:n_riders]
+    df[!, :has_kom_odds] = [haskey(sig.kom_odds_lookup, df.riderkey[i]) for i in 1:n_riders]
+    df[!, :has_stagewin_odds] = [haskey(sig.stagewin_odds_lookup, df.riderkey[i]) for i in 1:n_riders]
     df[!, :has_qualitative] = falses(n_riders)
     df[!, :has_form] = falses(n_riders)
     df[!, :has_seasons] = [haskey(sig.currency_factors, df.riderkey[i]) for i in 1:n_riders]
@@ -2213,6 +2445,9 @@ function _estimate_strengths_multidim(
     df[!, :shift_oracle_kom] = round.([_norm(shifts_storage[:oracle_kom][i]) for i in 1:n_riders], digits=3)
     df[!, :shift_qualitative] = round.([_norm(shifts_storage[:qualitative][i]) for i in 1:n_riders], digits=3)
     df[!, :shift_odds] = round.([_norm(shifts_storage[:odds][i]) for i in 1:n_riders], digits=3)
+    df[!, :shift_odds_points] = round.([_norm(shifts_storage[:odds_points][i]) for i in 1:n_riders], digits=3)
+    df[!, :shift_odds_kom] = round.([_norm(shifts_storage[:odds_kom][i]) for i in 1:n_riders], digits=3)
+    df[!, :shift_odds_stagewin] = round.([_norm(shifts_storage[:odds_stagewin][i]) for i in 1:n_riders], digits=3)
 
     # --- Per-(signal, dim) shift columns: shift_<signal>_<dim> ---
     # Used by reports' per-dimension signal panel.
@@ -2220,6 +2455,41 @@ function _estimate_strengths_multidim(
         col = Symbol("shift_$(sig_key)_$(dsym)")
         df[!, col] = round.([shifts_storage[sig_key][i][d] for i in 1:n_riders], digits=3)
     end
+
+    # --- Order-invariant info-share columns ---
+    # info_share_<signal>: signal's share of the rider's total observed
+    # precision summed across dims. Used by the per-rider waterfall as a
+    # single-number summary that doesn't suffer the L2-norm cross-dim
+    # aggregation bias or the marginal-shift order-dependence.
+    # info_share_<signal>_<dim>: per-dim share — signal's precision contribution
+    # to that dim divided by total observed precision on that dim. Used by
+    # the chosen-team per-dim panel.
+    sig_keys = collect(keys(precisions_storage))
+    total_prec_by_dim = [
+        [sum(precisions_storage[s][i][d] for s in sig_keys) for d in 1:D]
+        for i in 1:n_riders
+    ]
+    total_prec_overall = [sum(total_prec_by_dim[i]) for i in 1:n_riders]
+    for sig_key in sig_keys
+        sig_totals = [sum(precisions_storage[sig_key][i]) for i in 1:n_riders]
+        df[!, Symbol("info_share_$(sig_key)")] = round.(
+            [total_prec_overall[i] > 0 ? sig_totals[i] / total_prec_overall[i] : 0.0
+             for i in 1:n_riders],
+            digits=4,
+        )
+        for (d, dsym) in enumerate(STRENGTH_DIMENSIONS)
+            df[!, Symbol("info_share_$(sig_key)_$(dsym)")] = round.(
+                [total_prec_by_dim[i][d] > 0 ?
+                    precisions_storage[sig_key][i][d] / total_prec_by_dim[i][d] : 0.0
+                 for i in 1:n_riders],
+                digits=4,
+            )
+        end
+    end
+    # Alias: :info_share_oracle mirrors :info_share_oracle_gc (matches the
+    # existing :shift_oracle alias). Lets the waterfall use a single oracle
+    # column name across scalar and multidim pipelines.
+    df[!, :info_share_oracle] = df[!, :info_share_oracle_gc]
 
     df[!, :domestique_penalty] = round.(domestique_penalties, digits=3)
 
@@ -2253,6 +2523,9 @@ function estimate_strengths(
     oracle_df::Union{DataFrame,Nothing}=nothing,
     points_oracle_df::Union{DataFrame,Nothing}=nothing,
     kom_oracle_df::Union{DataFrame,Nothing}=nothing,
+    points_odds_df::Union{DataFrame,Nothing}=nothing,
+    kom_odds_df::Union{DataFrame,Nothing}=nothing,
+    stagewin_odds_df::Union{DataFrame,Nothing}=nothing,
     vg_history_df::Union{DataFrame,Nothing}=nothing,
     qualitative_df::Union{DataFrame,Nothing}=nothing,
     form_df::Union{DataFrame,Nothing}=nothing,
@@ -2273,6 +2546,9 @@ function estimate_strengths(
             oracle_df=oracle_df,
             points_oracle_df=points_oracle_df,
             kom_oracle_df=kom_oracle_df,
+            points_odds_df=points_odds_df,
+            kom_odds_df=kom_odds_df,
+            stagewin_odds_df=stagewin_odds_df,
             vg_history_df=vg_history_df,
             seasons_df=seasons_df,
             bayesian_config=bayesian_config,
@@ -2352,6 +2628,10 @@ function estimate_strengths(
     shifts_oracle = Vector{Float64}(undef, n_riders)
     shifts_qualitative = Vector{Float64}(undef, n_riders)
     shifts_odds = Vector{Float64}(undef, n_riders)
+    precisions_storage = Dict{Symbol,Vector{Float64}}(
+        s => Vector{Float64}(undef, n_riders)
+        for s in (:pcs, :vg, :form, :history, :vg_history, :oracle, :qualitative, :odds)
+    )
 
     for i = 1:n_riders
         key = df.riderkey[i]
@@ -2369,8 +2649,10 @@ function estimate_strengths(
         oracle_prob = get(sig.oracle_lookup, key, 0.0)
         form_val = get(form_lookup, key, 0.0)
 
-        # Floor strengths: applied only to riders absent from the signal source
-        odds_floor = haskey(sig.odds_lookup, key) ? 0.0 : sig.odds_floor
+        # Floor strengths: applied to absent riders, AND used as fall-through
+        # for listed-below-baseline riders (longshots) in the odds branch.
+        # Other floors stay gated on absence.
+        odds_floor = sig.odds_floor
         oracle_floor = haskey(sig.oracle_lookup, key) ? 0.0 : sig.oracle_floor
         form_floor = haskey(form_lookup, key) ? 0.0 : form_floor_strength_val
         qual_floor = haskey(qualitative_lookup, key) ? 0.0 : qualitative_floor_strength_val
@@ -2416,6 +2698,9 @@ function estimate_strengths(
         shifts_oracle[i] = est.shift_oracle
         shifts_qualitative[i] = est.shift_qualitative
         shifts_odds[i] = est.shift_odds
+        for sig_key in keys(precisions_storage)
+            precisions_storage[sig_key][i] = get(est.precisions, sig_key, 0.0)
+        end
     end
 
     # --- Domestique discount: penalise non-leaders proportionally to strength gap ---
@@ -2467,6 +2752,23 @@ function estimate_strengths(
     df[!, :shift_oracle] = round.(shifts_oracle, digits=3)
     df[!, :shift_qualitative] = round.(shifts_qualitative, digits=3)
     df[!, :shift_odds] = round.(shifts_odds, digits=3)
+
+    # --- Order-invariant info-share columns (one-day scalar path) ---
+    # info_share_<signal> = signal_precision / total_observed_precision per rider.
+    sig_keys_scalar = collect(keys(precisions_storage))
+    total_prec_per_rider = [
+        sum(precisions_storage[s][i] for s in sig_keys_scalar)
+        for i in 1:n_riders
+    ]
+    for sig_key in sig_keys_scalar
+        df[!, Symbol("info_share_$(sig_key)")] = round.(
+            [total_prec_per_rider[i] > 0 ?
+                precisions_storage[sig_key][i] / total_prec_per_rider[i] : 0.0
+             for i in 1:n_riders],
+            digits=4,
+        )
+    end
+
     df[!, :domestique_penalty] = round.(domestique_penalties, digits=3)
 
     return df
@@ -2494,6 +2796,9 @@ function estimate_strengths(
         oracle_df=data.oracle_df,
         points_oracle_df=data.points_oracle_df,
         kom_oracle_df=data.kom_oracle_df,
+        points_odds_df=data.points_odds_df,
+        kom_odds_df=data.kom_odds_df,
+        stagewin_odds_df=data.stagewin_odds_df,
         vg_history_df=data.vg_history_df,
         qualitative_df=data.qualitative_df,
         form_df=data.form_df,

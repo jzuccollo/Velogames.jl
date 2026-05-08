@@ -378,13 +378,20 @@ function parse_oddschecker_odds(text::String)
         end
     end
 
-    # An odds line has ≥3 tab-separated tokens, all non-empty ones parseable as odds.
-    # Requiring ≥3 rules out the each-way terms section (single values per line).
+    # An odds line has tab-separated tokens, all non-empty ones parseable as odds.
+    # Default threshold is ≥3 (rules out each-way terms with `1/4\t\t3`); but we
+    # also accept ≥2 when every non-empty token decodes to the same decimal,
+    # which catches the stage-win-style format where a thin field of bookmakers
+    # all price at the same odds (`1/8\t1/8`).
     function is_multi_odds_line(line::AbstractString)
         tokens = split(line, '\t')
         non_empty = [strip(t) for t in tokens if !isempty(strip(t))]
-        length(non_empty) < 3 && return false
-        return all(to_decimal(t) !== nothing for t in non_empty)
+        length(non_empty) < 2 && return false
+        all(to_decimal(t) !== nothing for t in non_empty) || return false
+        length(non_empty) >= 3 && return true
+        # Two-token line: only accept if both decode to the same value
+        decs = to_decimal.(non_empty)
+        return decs[1] == decs[2]
     end
 
     lines = split(replace(text, "\r\n" => "\n", "\r" => "\n"), '\n')

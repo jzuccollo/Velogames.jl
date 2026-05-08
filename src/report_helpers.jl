@@ -375,6 +375,22 @@ const _SHIFT_COLS = [
     :shift_qualitative,
     :shift_odds,
 ]
+# Parallel info-share columns. Order-invariant precision-share metric:
+# `signal_precision / total_observed_precision`, computed in
+# `_estimate_strengths_multidim` / scalar `estimate_strengths`. Replaces the
+# L2-norm shift display in `format_signal_waterfall` so the magnitude
+# comparison across signals is fair (PCS routes to all 5 dims; odds routes
+# mostly to gc — L2 norm structurally inflates PCS).
+const _INFO_SHARE_COLS = [
+    :info_share_pcs,
+    :info_share_vg,
+    :info_share_form,
+    :info_share_history,
+    :info_share_vg_history,
+    :info_share_oracle,
+    :info_share_qualitative,
+    :info_share_odds,
+]
 
 """
     _shift_cell_style(value, max_abs)
@@ -394,23 +410,30 @@ function _shift_cell_style(value::Float64, max_abs::Float64)
 end
 
 """
+    _info_share_cell_style(value)
+
+Inline CSS for an info-share cell. Sequential green scale: deeper green =
+higher share. `value` is in [0, 1].
+"""
+function _info_share_cell_style(value::Float64)
+    if value <= 0.0
+        return "text-align:right; color:#999"
+    end
+    intensity = clamp(value, 0.0, 1.0)
+    alpha = round(intensity * 0.6, digits=2)  # cap at 0.6 for readability
+    return "text-align:right; background:rgba(34,139,34,$alpha)"
+end
+
+"""
     format_signal_waterfall(df; max_riders=10)
 
-Generate an HTML table showing per-rider signal shifts with heatmap colouring.
-Positive shifts are green, negative are red, with intensity proportional to
-magnitude. Flags riders with few active signals or single-signal dominance.
+Generate an HTML table showing per-rider info-share contributions of each
+signal to the rider's posterior. Info share is order-invariant precision
+share (signal precision / total observed precision). Sequential green
+heatmap; flags single-signal dominance > 60%.
 """
 function format_signal_waterfall(df::DataFrame; max_riders::Int=10)
     subset = df[1:min(max_riders, nrow(df)), :]
-
-    # Find max absolute shift across all riders for consistent colour scaling
-    all_shifts = Float64[]
-    for row in eachrow(subset)
-        for c in _SHIFT_COLS
-            push!(all_shifts, abs(Float64(row[c])))
-        end
-    end
-    max_abs = maximum(all_shifts; init=1.0)
 
     lines = String[]
     push!(lines, "<table style='border-collapse:collapse; font-size:0.85em; width:100%'>")
@@ -426,14 +449,12 @@ function format_signal_waterfall(df::DataFrame; max_riders::Int=10)
     push!(lines, "</tr></thead><tbody>")
 
     for row in eachrow(subset)
-        shifts = [Float64(row[c]) for c in _SHIFT_COLS]
-        n_active = count(!=(0.0), shifts)
-        total_abs = sum(abs.(shifts))
+        shares = [Float64(row[c]) for c in _INFO_SHARE_COLS]
+        n_active = count(>(0.001), shares)
 
-        # Flag logic
-        dominant_name, dominant_pct = if total_abs > 0
-            idx = argmax(abs.(shifts))
-            _SIGNAL_NAMES[idx], round(Int, 100 * abs(shifts[idx]) / total_abs)
+        dominant_name, dominant_pct = if any(>(0.0), shares)
+            idx = argmax(shares)
+            _SIGNAL_NAMES[idx], round(Int, 100 * shares[idx])
         else
             "none", 0
         end
@@ -453,9 +474,9 @@ function format_signal_waterfall(df::DataFrame; max_riders::Int=10)
         )
         push!(lines, "<td style='text-align:right; padding:4px'>$(row.cost)</td>")
 
-        for shift in shifts
-            style = _shift_cell_style(shift, max_abs)
-            display_val = shift == 0.0 ? "·" : string(round(shift, digits=2))
+        for share in shares
+            style = _info_share_cell_style(share)
+            display_val = share <= 0.0 ? "·" : string(round(Int, 100 * share), "%")
             push!(lines, "<td style='$style; padding:4px'>$display_val</td>")
         end
 
@@ -1515,7 +1536,10 @@ function format_signal_impact_per_dim(
         ("Oracle GC", :oracle_gc),
         ("Oracle Points", :oracle_points),
         ("Oracle KOM", :oracle_kom),
-        ("Odds", :odds),
+        ("Odds GC", :odds),
+        ("Odds Points", :odds_points),
+        ("Odds KOM", :odds_kom),
+        ("Odds stage-win", :odds_stagewin),
     ],
     dim_labels::Vector{String}=["Flat", "Hilly", "Mountain", "ITT", "GC"],
     dim_syms::Vector{Symbol}=[:flat, :hilly, :mountain, :itt, :gc],
@@ -1533,4 +1557,67 @@ function format_signal_impact_per_dim(
     end
     df = DataFrame(rows)
     return html_table(df[:, ["Signal", dim_labels...]])
+end
+
+"""
+    format_info_share_per_dim(chosen_team_df; signal_specs, dim_labels, dim_syms) -> String
+
+Render a per-rider × per-(signal, dim) info-share heatmap for the chosen team.
+Each cell is `info_share_<signal>_<dim>` — the share of total observed
+precision on that dimension contributed by that signal. Order-invariant
+(unlike per-signal mean shifts) and direction-aware (unlike L2 norms).
+
+Layout: one row per chosen rider; columns are (signal × dim) cells grouped
+by signal with sub-headers for each dim.
+"""
+function format_info_share_per_dim(
+    chosen_team_df::DataFrame;
+    signal_specs::Vector{Tuple{String,Symbol}}=[
+        ("PCS", :pcs),
+        ("VG", :vg),
+        ("Hist", :history),
+        ("Oracle GC", :oracle_gc),
+        ("Oracle Pts", :oracle_points),
+        ("Oracle KOM", :oracle_kom),
+        ("Odds GC", :odds),
+        ("Odds Pts", :odds_points),
+        ("Odds KOM", :odds_kom),
+        ("Odds Stage", :odds_stagewin),
+    ],
+    dim_labels::Vector{String}=["F", "H", "M", "I", "G"],
+    dim_syms::Vector{Symbol}=[:flat, :hilly, :mountain, :itt, :gc],
+)
+    lines = String[]
+    push!(lines, "<table style='border-collapse:collapse; font-size:0.78em; width:100%'>")
+    # Two-row header: signal labels (spanning per-dim columns) + dim sub-labels
+    push!(lines, "<thead>")
+    push!(lines, "<tr style='border-bottom:1px solid #999'>")
+    push!(lines, "<th rowspan='2' style='text-align:left; padding:4px'>Rider</th>")
+    for (label, _) in signal_specs
+        push!(lines, "<th colspan='$(length(dim_syms))' style='text-align:center; padding:4px; border-left:1px solid #ddd'>$label</th>")
+    end
+    push!(lines, "</tr>")
+    push!(lines, "<tr style='border-bottom:2px solid #666'>")
+    for _ in signal_specs, (j, lab) in enumerate(dim_labels)
+        border = j == 1 ? "border-left:1px solid #ddd;" : ""
+        push!(lines, "<th style='text-align:right; padding:2px 4px; $border font-size:0.85em; color:#666'>$lab</th>")
+    end
+    push!(lines, "</tr></thead><tbody>")
+
+    for row in eachrow(chosen_team_df)
+        push!(lines, "<tr style='border-bottom:1px solid #ddd'>")
+        push!(lines, "<td style='padding:4px; white-space:nowrap'><strong>$(row.rider)</strong></td>")
+        for (_, sig) in signal_specs, (j, dsym) in enumerate(dim_syms)
+            col = Symbol("info_share_$(sig)_$(dsym)")
+            v = col in propertynames(chosen_team_df) ? Float64(row[col]) : 0.0
+            border = j == 1 ? "border-left:1px solid #ddd;" : ""
+            style = _info_share_cell_style(v) * "; $border"
+            display_val = v <= 0.0 ? "·" : string(round(Int, 100 * v))
+            push!(lines, "<td style='$style padding:2px 4px'>$display_val</td>")
+        end
+        push!(lines, "</tr>")
+    end
+
+    push!(lines, "</tbody></table>")
+    return join(lines, "\n")
 end
