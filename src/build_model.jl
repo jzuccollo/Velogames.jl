@@ -79,8 +79,11 @@ end
     build_model_stage(inputdf::DataFrame, n::Integer=9, points::Symbol=:expected_vg_points, cost::Symbol=:cost; totalcost::Integer=100)
 
 Build the optimisation model for stage races in the velogames game.
-Enforces VG Sixes classification constraints: at least 2 all-rounders, 2 climbers,
-1 sprinter, and 3 unclassed riders.
+
+Enforces VG Sixes classification constraints: 2 all-rounders, 2 climbers,
+1 sprinter, 3 unclassed riders, and 1 wildcard. The wildcard slot may be any
+class — implemented as `sum(x) == 9` with class minimums summing to 8, so the
+optimiser can put the 9th rider in whichever class it likes.
 
 Also used for historical analysis of stage races by passing actual points and cost
 columns (e.g. `build_model_stage(df, 9, :points, :cost)`).
