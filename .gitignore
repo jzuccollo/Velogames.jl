@@ -33,6 +33,8 @@ prediction_docs/
 
 # Per-race notebook config (changes every race, not version controlled)
 data/race_config.toml
+data/race_config.toml.*
+!data/race_config.toml.example
 
 # League results (changes every race, not version controlled)
 data/league_winners.toml

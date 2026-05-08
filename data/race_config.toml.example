@@ -1,35 +1,49 @@
 # Race configuration — shared between render scripts (predictor, stagerace, assessor)
 # Copy to race_config.toml and edit for each race. race_config.toml is gitignored.
+#
+# Within [data_sources] and [optimisation], keys are grouped by renderer:
+#   shared      — used by all renderers
+#   one-day     — used by render_predictor.jl only
+#   stage races — used by render_stagerace.jl only
 
 [race]
-name = "e3-harelbeke"        # Race identifier (PCS slug or alias like "tdf", "giro", "vuelta")
+name = "e3-harelbeke"        # PCS slug or alias ("tdf", "giro", "vuelta")
 year = 2026
-racehash = "#E3SaxoClassic"  # VG startlist hash filter (leave empty for all riders)
+racehash = "#E3SaxoClassic"  # VG startlist hash filter (empty = all riders)
+
+[output]
+dir = "prediction_docs"      # HTML output directory (relative to project root)
 
 [data_sources]
+# --- shared (GC / overall winner) ---
 oracle_url = ""              # Cycling Oracle GC prediction URL
-points_oracle_url = ""       # Cycling Oracle points-jersey prediction URL (stage races; routes to flat/hilly dimensions)
-kom_oracle_url = ""          # Cycling Oracle KOM prediction URL (stage races; routes to mountain dimension)
 use_oddschecker = true       # Parse oddschecker_paste.txt from project root
+
+# --- one-day only ---
 qualitative_youtube_url = "" # YouTube URL for auto-extraction via yt-dlp + Claude API
 qualitative_article_url = "" # Web article URL for auto-extraction via Claude API
 qualitative_json_file = ""   # Path to manually saved JSON response file
 
-[output]
-dir = "prediction_docs"              # Output directory for HTML reports (relative to project root)
+# --- stage races only ---
+points_oracle_url        = "" # Cycling Oracle points-jersey URL (routes to flat/hilly dimensions)
+kom_oracle_url           = "" # Cycling Oracle KOM URL (routes to mountain dimension)
+points_odds_paste_file   = "" # Bookmaker points-jersey paste filename (relative to project root)
+kom_odds_paste_file      = "" # Bookmaker KOM paste filename
+stagewin_odds_paste_file = "" # Bookmaker "Rider To Win A Stage" paste filename
 
 [optimisation]
+# --- shared ---
 n_resamples = 500            # Resampled optimisation iterations (more = smoother, slower)
 history_years = 3            # Years of PCS race history to fetch
 domestique_discount = 1.0    # Penalise non-leaders proportionally to strength gap (0 = off)
 risk_aversion = 0.5          # Penalise volatile riders via downside CV (0 = off)
 max_per_team = 2             # Max riders from any single team (0 = no limit)
-simulation_df = 5            # Student's t degrees of freedom (use "" for Gaussian)
+simulation_df = 5            # Student's t degrees of freedom ("" = Gaussian)
 excluded_riders = []
 
-# Stage race options (only used by render_stagerace.jl)
+# --- stage races only ---
 cross_stage_alpha = 0.7      # Cross-stage noise correlation (0 = independent, 1 = identical)
-pcs_stage_scrape = true      # Scrape stage profiles from PCS (false = use manual stages below)
+pcs_stage_scrape = true      # Scrape stage profiles from PCS (false = use manual stages)
 
 [team_assessor]
 vg_race_number = 0           # 0 = auto-detect, -1 = skip, or set manually (e.g. 3)
