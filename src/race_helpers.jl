@@ -421,6 +421,8 @@ Find a race in the classics schedule by partial name match (case-insensitive).
 Returns the first matching RaceInfo or nothing.
 """
 function find_race(name::String)
+    ri = _find_race_by_slug(name)
+    ri !== nothing && return ri
     name_norm = replace(lowercase(name), r"[-\s]" => "")
     for race in CLASSICS_RACES_2026
         if occursin(name_norm, replace(lowercase(race.name), r"[-\s]" => ""))
