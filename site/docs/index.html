@@ -4,8 +4,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Velogames: race reports</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,400..700&display=swap"
+      rel="stylesheet"
+    />
     <style>
-      *,
+      :root {
+  --font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-body:
+    "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --navy: #043b5c;
+  --navy-2: #0a6aa8;
+  --ink: #24303a;
+  --ink-soft: #5b6770;
+  --rule: #e7e3da;
+  --rule-soft: #f0ece3;
+  --paper: #ffffff;
+  --bg: #f3f1ec;
+  --link: #0a6aa8;
+  /* --accent is set per-race on <body>; this is the fallback (classics gold). */
+  --accent: #d4a843;
+}
+*,
 *::before,
 *::after {
   box-sizing: border-box;
@@ -14,45 +37,76 @@ html {
   scroll-behavior: smooth;
 }
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+  font-family: var(--font-body);
   margin: 0;
   padding: 0;
-  color: #2d3436;
-  line-height: 1.7;
-  background: #f0f2f5;
+  color: var(--ink);
+  line-height: 1.6;
+  background: var(--bg);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+/* ---- Masthead ---- */
 .page-header {
-  background: linear-gradient(135deg, #043b5c 0%, #066aab 100%);
+  position: relative;
   color: #fff;
-  padding: 2.5em 1.5em 2em;
+  padding: 3em 1.5em 2.5em;
+  background:
+    radial-gradient(
+      120% 140% at 12% 0%,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0) 55%
+    ),
+    repeating-linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.035) 0 2px,
+      rgba(255, 255, 255, 0) 2px 26px
+    ),
+    linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+  border-top: 4px solid var(--accent);
 }
 .header-content {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
+  padding: 0 0.5em;
 }
 .page-header h1 {
-  font-size: 2em;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.15em;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(2.2em, 5vw, 3.1em);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  margin: 0.1em 0 0.2em;
   border: none;
   padding: 0;
   color: #fff;
 }
 .page-header .subtitle {
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 1.05em;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 1em;
   margin: 0;
   font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.page-header .subtitle::before {
+  content: "";
+  display: block;
+  width: 2.5em;
+  height: 3px;
+  background: var(--accent);
+  margin: 0 0 0.9em;
+  border-radius: 2px;
 }
 .page-header .home-link {
   display: inline-block;
-  margin-bottom: 0.5em;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.85em;
+  margin-bottom: 0.4em;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
   text-decoration: none;
   transition: color 0.15s;
 }
@@ -60,91 +114,202 @@ body {
   color: #fff;
   text-decoration: none;
 }
+
+/* ---- Layout ---- */
+.page-body {
+  max-width: 1200px;
+  margin: 0 auto 4em;
+  padding: 0 1.5em;
+  display: flex;
+  align-items: flex-start;
+  gap: 2.5em;
+}
 .content {
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 900px;
-  margin: -1em auto 3em;
-  padding: 2em 2.5em 2.5em;
-  background: #fff;
-  border-radius: 8px;
+  margin-top: -1.25em;
+  padding: 2.25em 2.75em 3em;
+  background: var(--paper);
+  border-radius: 10px;
   box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.08),
-    0 4px 12px rgba(0, 0, 0, 0.04);
+    0 1px 2px rgba(15, 35, 55, 0.06),
+    0 10px 30px rgba(15, 35, 55, 0.06);
   position: relative;
   z-index: 1;
+  animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
+.page-header .header-content {
+  animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- Typography ---- */
 h1,
 h2,
 h3,
 h4 {
-  font-weight: 700;
-  color: #054d78;
-  margin-top: 2em;
-  margin-bottom: 0.5em;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  color: var(--navy);
+  margin: 0 0 0.35em;
+  line-height: 1.25;
 }
 h2 {
-  font-size: 1.5em;
+  margin-top: 1.9em;
+  font-size: 1.6em;
   letter-spacing: -0.01em;
-  padding-bottom: 0.3em;
-  border-bottom: 2px solid #d4a843;
+  padding-bottom: 0.25em;
+  border-bottom: 2px solid var(--accent);
 }
+/* Structural sans subheads with a per-race accent tick (eyebrow), no italic flourish. */
 h3 {
-  font-size: 1.15em;
-  color: #4a5568;
-  font-weight: 600;
+  margin-top: 1.4em;
+  font-family: var(--font-body);
+  font-size: 0.84em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #3a4451;
+}
+h3::before {
+  content: "";
+  display: inline-block;
+  width: 1.5em;
+  height: 2px;
+  background: var(--accent);
+  vertical-align: middle;
+  margin-right: 0.65em;
+  position: relative;
+  top: -0.08em;
 }
 h4 {
-  font-size: 1em;
+  margin-top: 1.3em;
+  font-size: 1.02em;
+  font-family: var(--font-body);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.content > h2:first-child,
+.content > h3:first-child,
+.content > p:first-child {
+  margin-top: 0.3em;
 }
 p {
-  margin: 0.75em 0;
+  margin: 0.65em 0;
+}
+strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+ul {
+  padding-left: 1.2em;
+}
+li {
+  margin: 0.3em 0;
 }
 a {
-  color: #066aab;
+  color: var(--link);
   text-decoration: none;
   transition: color 0.15s;
 }
 a:hover {
-  color: #043b5c;
+  color: var(--navy);
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
+
+/* ---- Tables ---- */
 table {
   border-collapse: collapse;
   width: 100%;
-  margin: 1.25em 0;
-  font-size: 0.88em;
-  background: #fff;
-  border-radius: 6px;
+  margin: 1.4em 0;
+  font-size: 0.9em;
+  background: var(--paper);
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 0 0 1px #e2e8f0;
+  box-shadow: 0 0 0 1px var(--rule);
 }
 thead {
-  background: #f7fafc;
+  background: #faf8f3;
 }
 th {
-  padding: 0.7em 1em;
+  padding: 0.65em 1.1em;
   text-align: left;
-  font-weight: 600;
-  color: #4a5568;
-  font-size: 0.85em;
+  font-family: var(--font-body);
+  font-weight: 700;
+  color: var(--ink-soft);
+  font-size: 0.72em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 2px solid #d4a843;
+  letter-spacing: 0.07em;
+  border-bottom: 2px solid var(--accent);
+  white-space: nowrap;
 }
 td {
-  padding: 0.55em 1em;
+  padding: 0.6em 1.1em;
   text-align: left;
-  border-bottom: 1px solid #edf2f7;
-  color: #2d3436;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--ink);
+}
+td:first-child {
+  font-weight: 600;
+}
+th.num,
+td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .table-striped tbody tr:nth-child(even) {
-  background: #f7fafc;
+  background: #faf8f3;
 }
 tbody tr {
-  transition: background 0.1s;
+  transition: background 0.12s;
 }
 tbody tr:hover {
-  background: #edf2f7;
+  background: #f3efe6;
 }
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ---- Role badges (Class column) ---- */
+.badge {
+  display: inline-block;
+  padding: 0.12em 0.65em;
+  border-radius: 999px;
+  font-size: 0.82em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.badge-climber {
+  background: rgba(190, 120, 96, 0.16);
+  color: #98513c;
+}
+.badge-sprinter {
+  background: rgba(96, 139, 75, 0.16);
+  color: #54683a;
+}
+.badge-allrounder {
+  background: rgba(10, 106, 168, 0.12);
+  color: #0a5a8f;
+}
+.badge-unclassed {
+  background: #ece9e2;
+  color: #6b7280;
+}
+
+/* ---- Details / charts ---- */
 details {
   margin: 1.25em 0;
   border-radius: 6px;
@@ -159,69 +324,92 @@ details[open] summary {
   margin-bottom: 0.5em;
 }
 .js-plotly-plot {
-  margin: 1em 0;
-  border-radius: 6px;
+  margin: 1.25em 0;
+  border-radius: 8px;
   overflow: hidden;
 }
+
+/* ---- Table of contents ---- */
 nav#toc {
-  position: fixed;
-  top: 2.5em;
-  right: 2em;
-  width: 220px;
-  max-height: 80vh;
+  flex: 0 0 210px;
+  align-self: flex-start;
+  position: sticky;
+  top: 2em;
+  max-height: calc(100vh - 4em);
   overflow-y: auto;
+  font-size: 0.8em;
+  border-left: 2px solid var(--rule);
+  padding-left: 1.1em;
+  margin-top: 1em;
+}
+nav#toc::before {
+  content: "On this page";
+  display: block;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
   font-size: 0.82em;
-  border-left: 3px solid #e2e8f0;
-  padding-left: 1em;
-  z-index: 10;
+  color: var(--ink-soft);
+  margin-bottom: 0.7em;
 }
 nav#toc a {
   display: block;
-  padding: 0.25em 0;
-  color: #718096;
+  padding: 0.28em 0;
+  color: #8a93a0;
   text-decoration: none;
   transition:
     color 0.15s,
     padding-left 0.15s;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 nav#toc a:hover {
-  color: #066aab;
+  color: var(--link);
   padding-left: 0.3em;
+}
+nav#toc a.active {
+  color: var(--navy);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 nav#toc .toc-h3 {
   padding-left: 1em;
-  font-size: 0.92em;
+  font-size: 0.94em;
 }
-@media (max-width: 1280px) {
+
+/* ---- Responsive ---- */
+@media (max-width: 1100px) {
+  .page-body {
+    display: block;
+    max-width: 900px;
+  }
   nav#toc {
     display: none;
   }
 }
 @media (max-width: 768px) {
+  .page-body {
+    padding: 0;
+  }
   .content {
     margin: 0;
-    padding: 1.25em 1em;
+    padding: 1.5em 1.1em;
     border-radius: 0;
     box-shadow: none;
   }
   .page-header {
-    padding: 1.5em 1em 1.25em;
-  }
-  .page-header h1 {
-    font-size: 1.5em;
+    padding: 2em 1.1em 1.5em;
   }
   table {
-    font-size: 0.82em;
+    font-size: 0.84em;
   }
   th,
   td {
-    padding: 0.4em 0.6em;
+    padding: 0.45em 0.65em;
   }
 }
 @media (max-width: 480px) {
   .content {
-    padding: 1em 0.75em;
+    padding: 1.25em 0.85em;
   }
   table {
     display: block;
@@ -229,11 +417,17 @@ nav#toc .toc-h3 {
     white-space: nowrap;
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
 
     </style>
     
   </head>
-  <body>
+  <body style="--accent: #d4a843">
     <header class="page-header">
       <div class="header-content">
         
@@ -242,8 +436,16 @@ nav#toc .toc-h3 {
 
       </div>
     </header>
-    <main class="content"><p>A look back at each race in the season: who delivered, who disappointed, and what the perfect team would have been.</p>
+    <div class="page-body">
+      <main class="content"><p>A look back at each race in the season: who delivered, who disappointed, and what the perfect team would have been.</p>
 <h2 id="2026-season">2026 season</h2>
+<h3 id="grand-tours">Grand tours</h3>
+<table class="table table-sm">
+<thead><tr><th>Race</th><th>Date</th></tr></thead>
+<tbody>
+<tr><td><a href="reports/giro-d-italia-2026.html">Giro d'Italia</a></td><td>May</td></tr>
+</tbody></table>
+<h3 id="classics">Classics</h3>
 <table class="table table-sm">
 <thead><tr><th>Race</th><th>Date</th></tr></thead>
 <tbody>
@@ -265,12 +467,15 @@ nav#toc .toc-h3 {
 <tr><td><a href="reports/la-fleche-wallonne-2026.html">La Fleche Wallonne</a></td><td>22 April</td></tr>
 <tr><td><a href="reports/liege-bastogne-liege-2026.html">Liege-Bastogne-Liege</a></td><td>26 April</td></tr>
 <tr><td><a href="reports/eschborn-frankfurt-2026.html">Eschborn-Frankfurt</a></td><td>1 May</td></tr>
+<tr><td><a href="reports/gp-de-plumelec-2026.html">Grand Prix du Morbihan</a></td><td>9 May</td></tr>
+<tr><td><a href="reports/tro-bro-leon-2026.html">Tro-Bro Leon</a></td><td>10 May</td></tr>
 </tbody></table>
 <h2 id="2025-season">2025 season</h2>
 <h3 id="grand-tours">Grand tours</h3>
 <table class="table table-sm">
 <thead><tr><th>Race</th><th>Date</th></tr></thead>
 <tbody>
+<tr><td><a href="reports/giro-d-italia-2025.html">Giro d'Italia</a></td><td>May</td></tr>
 <tr><td><a href="reports/tour-de-france-2025.html">Tour de France</a></td><td>July</td></tr>
 <tr><td><a href="reports/vuelta-a-espana-2025.html">Vuelta a España</a></td><td>September</td></tr>
 </tbody></table>
@@ -291,9 +496,16 @@ nav#toc .toc-h3 {
 <tr><td><a href="reports/ronde-van-vlaanderen-2025.html">Ronde van Vlaanderen</a></td><td>5 April</td></tr>
 <tr><td><a href="reports/scheldeprijs-2025.html">Scheldeprijs</a></td><td>8 April</td></tr>
 <tr><td><a href="reports/paris-roubaix-2025.html">Paris-Roubaix</a></td><td>12 April</td></tr>
+<tr><td><a href="reports/brabantse-pijl-2025.html">De Brabantse Pijl</a></td><td>17 April</td></tr>
 <tr><td><a href="reports/amstel-gold-race-2025.html">Amstel Gold Race</a></td><td>19 April</td></tr>
+<tr><td><a href="reports/la-fleche-wallonne-2025.html">La Fleche Wallonne</a></td><td>22 April</td></tr>
 <tr><td><a href="reports/liege-bastogne-liege-2025.html">Liege-Bastogne-Liege</a></td><td>26 April</td></tr>
 <tr><td><a href="reports/eschborn-frankfurt-2025.html">Eschborn-Frankfurt</a></td><td>1 May</td></tr>
+<tr><td><a href="reports/gp-de-plumelec-2025.html">Grand Prix du Morbihan</a></td><td>9 May</td></tr>
+<tr><td><a href="reports/tro-bro-leon-2025.html">Tro-Bro Leon</a></td><td>10 May</td></tr>
+<tr><td><a href="reports/classique-dunkerque-2025.html">Classique Dunkerque</a></td><td>19 May</td></tr>
+<tr><td><a href="reports/circuit-franco-belge-2025.html">Circuit Franco-Belge</a></td><td>10 June</td></tr>
+<tr><td><a href="reports/dwars-door-het-hageland-2025.html">Duracell Dwars door het Hageland</a></td><td>13 June</td></tr>
 <tr><td><a href="reports/san-sebastian-2025.html">Donostia San Sebastian Klasikoa</a></td><td>1 August</td></tr>
 <tr><td><a href="reports/cyclassics-hamburg-2025.html">ADAC Cyclassics Hamburg</a></td><td>16 August</td></tr>
 <tr><td><a href="reports/bretagne-classic-2025.html">Bretagne Classic - CIC</a></td><td>30 August</td></tr>
@@ -304,13 +516,43 @@ nav#toc .toc-h3 {
 <tr><td><a href="reports/paris-tours-2025.html">Paris - Tours Elite</a></td><td>11 October</td></tr>
 </tbody></table>
 </main>
-    <nav id="toc"></nav>
+      <nav id="toc"></nav>
+    </div>
     <script>
-      {
-        {
-          toc_js;
-        }
+document.addEventListener("DOMContentLoaded", function () {
+  var toc = document.getElementById("toc");
+  if (!toc) return;
+  var headings = Array.prototype.slice.call(
+    document.querySelectorAll("h2[id], h3[id]"),
+  );
+  var links = {};
+  headings.forEach(function (h) {
+    var a = document.createElement("a");
+    a.href = "#" + h.id;
+    a.textContent = h.textContent;
+    if (h.tagName === "H3") a.className = "toc-h3";
+    toc.appendChild(a);
+    links[h.id] = a;
+  });
+
+  // Scroll-spy: highlight the last heading scrolled past the top of the viewport.
+  function update() {
+    var current = headings.length ? headings[0] : null;
+    for (var i = 0; i < headings.length; i++) {
+      if (headings[i].getBoundingClientRect().top <= 120) {
+        current = headings[i];
+      } else {
+        break;
       }
-    </script>
+    }
+    headings.forEach(function (h) {
+      links[h.id].classList.toggle("active", current && h.id === current.id);
+    });
+  }
+  update();
+  window.addEventListener("scroll", update, { passive: true });
+  window.addEventListener("resize", update);
+});
+</script>
   </body>
 </html>
