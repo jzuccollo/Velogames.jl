@@ -13,8 +13,10 @@ Generates standalone HTML pages directly (no Quarto dependency).
 Auto-archives VG/PCS results if not already archived.
 """
 
-using Velogames, DataFrames, Dates, Statistics, TOML
+using Velogames, DataFrames, Dates, Statistics, TOML, Base64
 using PlotlyBase
+
+const commafmt = Velogames.commafmt
 
 const FRESH = "--fresh" in ARGS
 
@@ -52,7 +54,7 @@ function _write_points_by_price!(io::IOBuffer, allriders::DataFrame, optimal_key
         push!(traces, PlotlyBase.scatter(
             x=zeroes.cost .+ jitter[zeroes_mask], y=zeroes.score,
             mode="markers", name="Did not score",
-            marker=attr(size=5, opacity=0.35, color="#aaaaaa", symbol="x"),
+            marker=attr(size=5, opacity=0.35, color="#cbd1d6", symbol="x"),
             text=["$(r.rider) ($(r.team))<br>Cost: $(r.cost), Points: 0" for r in eachrow(zeroes)],
             hoverinfo="text"))
     end
@@ -64,8 +66,9 @@ function _write_points_by_price!(io::IOBuffer, allriders::DataFrame, optimal_key
         push!(traces, PlotlyBase.scatter(
             x=sub.cost .+ jitter[mask], y=sub.score,
             mode="markers", name=label,
-            marker=attr(size=is_opt ? 10 : 6, opacity=is_opt ? 0.9 : 0.5),
-            text=["$(r.rider) ($(r.team))<br>Cost: $(r.cost), Points: $(r.score), Value: $(r.value)" for r in eachrow(sub)],
+            marker=attr(size=is_opt ? 10 : 6, opacity=is_opt ? 0.9 : 0.5,
+                color=is_opt ? COLOR_OPTIMAL : COLOR_OTHER),
+            text=["$(r.rider) ($(r.team))<br>Cost: $(r.cost), Points: $(commafmt(r.score)), Value: $(round(Int, r.value))" for r in eachrow(sub)],
             hoverinfo="text"))
     end
 
@@ -79,11 +82,12 @@ function _write_points_by_price!(io::IOBuffer, allriders::DataFrame, optimal_key
     push!(traces, PlotlyBase.scatter(
         x=[x_min, x_max], y=[α_pts + β_pts * x_min, α_pts + β_pts * x_max],
         mode="lines", name=trend_label,
-        line=attr(color="#666666", dash="dash", width=1.5), hoverinfo="skip"))
+        line=attr(color="#7a828a", dash="dash", width=1.5), hoverinfo="skip"))
 
     write(io, plotly_html(traces, Layout(
-            xaxis_title="Cost (credits)", yaxis_title="Points scored",
-            hovermode="closest", template="plotly_white"); id="plot-pts"))
+            template="plotly_white", hovermode="closest",
+            font=attr(family=REPORT_FONT, color="#2d3436"), hoverlabel=report_hoverlabel(),
+            xaxis=report_xaxis("Cost (credits)"), yaxis=report_yaxis("Points scored")); id="plot-pts"))
 
     return (; jitter, costs_f, mean_c, x_min, x_max)
 end
@@ -103,7 +107,7 @@ function _write_points_per_credit!(io::IOBuffer, allriders::DataFrame, optimal_k
         push!(traces2, PlotlyBase.scatter(
             x=zeroes2.cost .+ jitter[zeroes_mask2], y=zeroes2.value,
             mode="markers", name="Did not score",
-            marker=attr(size=5, opacity=0.35, color="#aaaaaa", symbol="x"),
+            marker=attr(size=5, opacity=0.35, color="#cbd1d6", symbol="x"),
             text=["$(r.rider) ($(r.team))<br>Cost: $(r.cost), Points: 0, Value: 0" for r in eachrow(zeroes2)],
             hoverinfo="text"))
     end
@@ -115,8 +119,9 @@ function _write_points_per_credit!(io::IOBuffer, allriders::DataFrame, optimal_k
         push!(traces2, PlotlyBase.scatter(
             x=sub.cost .+ jitter[mask], y=sub.value,
             mode="markers", name=label,
-            marker=attr(size=is_opt ? 10 : 6, opacity=is_opt ? 0.9 : 0.5),
-            text=["$(r.rider) ($(r.team))<br>Cost: $(r.cost), Points: $(r.score), Value: $(r.value)" for r in eachrow(sub)],
+            marker=attr(size=is_opt ? 10 : 6, opacity=is_opt ? 0.9 : 0.5,
+                color=is_opt ? COLOR_OPTIMAL : COLOR_OTHER),
+            text=["$(r.rider) ($(r.team))<br>Cost: $(r.cost), Points: $(commafmt(r.score)), Value: $(round(Int, r.value))" for r in eachrow(sub)],
             hoverinfo="text"))
     end
 
@@ -128,11 +133,12 @@ function _write_points_per_credit!(io::IOBuffer, allriders::DataFrame, optimal_k
     push!(traces2, PlotlyBase.scatter(
         x=[x_min, x_max], y=[α_val + β_val * x_min, α_val + β_val * x_max],
         mode="lines", name=trend_label2,
-        line=attr(color="#666666", dash="dash", width=1.5), hoverinfo="skip"))
+        line=attr(color="#7a828a", dash="dash", width=1.5), hoverinfo="skip"))
 
     write(io, plotly_html(traces2, Layout(
-            xaxis_title="Cost (credits)", yaxis_title="Value (points per credit)",
-            hovermode="closest", template="plotly_white"); id="plot-val"))
+            template="plotly_white", hovermode="closest",
+            font=attr(family=REPORT_FONT, color="#2d3436"), hoverlabel=report_hoverlabel(),
+            xaxis=report_xaxis("Cost (credits)"), yaxis=report_yaxis("Value (points per credit)")); id="plot-val"))
 end
 
 """Write top scorers table."""
@@ -143,11 +149,47 @@ function _write_top_scorers!(io::IOBuffer, scorers::DataFrame;
     top_cols = [:rider, :team, :cost, :score, :value]
     has_class && push!(top_cols, :class)
     top = scorers[1:top_n, top_cols]
+    top[!, :value] = round.(Int, top.value)
     col_renames = [:rider => :Rider, :team => :Team, :cost => :Cost,
         :score => :Points, :value => :Value]
     has_class && push!(col_renames, :class => :Class)
     rename!(top, col_renames...)
     write(io, html_table(top))
+end
+
+"""Set of riderkeys who finished the race (from archived PCS GC results), or `nothing`
+if unavailable. Lets the report separate genuine underperformers from crashes/abandons."""
+function load_finishers(pcs_slug, year)
+    gc = load_race_snapshot("pcs_gc_results", pcs_slug, year)
+    gc === nothing && return nothing
+    fin = Set(gc.riderkey[gc.position.<Velogames.DNF_POSITION])
+    return isempty(fin) ? nothing : fin
+end
+
+"""Map of riderkey => stage a rider abandoned on (from archived PCS per-stage results),
+or `nothing` if unavailable."""
+function load_abandons(pcs_slug, year)
+    df = load_race_snapshot("pcs_abandons", pcs_slug, year)
+    df === nothing && return nothing
+    return Dict(df.riderkey .=> df.abandon_stage)
+end
+
+"""Write the biggest single-stage point hauls — standout individual stage performances."""
+function _write_biggest_hauls!(io::IOBuffer, per_stage, stages)
+    (per_stage === nothing || nrow(per_stage) == 0) && return
+    write(io, html_heading("Biggest single-stage hauls", 2))
+    write(io, "<p>The ten biggest one-day point hauls of the race &mdash; the standout individual stage performances.</p>\n")
+    type_names = Dict(:flat => "Flat", :hilly => "Hilly", :mountain => "Mountain",
+        :itt => "ITT", :ttt => "TTT")
+    type_map = Dict(s.stage_number => get(type_names, s.stage_type, "—") for s in stages)
+    top = first(sort(per_stage, :score, rev=true), min(10, nrow(per_stage)))
+    df = DataFrame(
+        Rider=top.rider,
+        Stage=top.stage,
+        Type=[get(type_map, s, "—") for s in top.stage],
+        Points=top.score,
+    )
+    write(io, html_table(df))
 end
 
 """Write best value picks table."""
@@ -158,6 +200,7 @@ function _write_best_value!(io::IOBuffer, scorers::DataFrame; has_class::Bool=fa
     bv_cols = [:rider, :team, :cost, :score, :value]
     has_class && push!(bv_cols, :class)
     top_val = best_value[1:min(10, nrow(best_value)), bv_cols]
+    top_val[!, :value] = round.(Int, top_val.value)
     col_renames = [:rider => :Rider, :team => :Team, :cost => :Cost,
         :score => :Points, :value => :Value]
     has_class && push!(col_renames, :class => :Class)
@@ -165,29 +208,58 @@ function _write_best_value!(io::IOBuffer, scorers::DataFrame; has_class::Bool=fa
     write(io, html_table(top_val))
 end
 
-"""Write "The ones to avoid" section: priciest blanks and premium disappointments."""
-function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame)
+"""Write "The ones to avoid" section: priciest blanks and premium disappointments.
+When `finishers` is supplied, the blame tables are restricted to riders who finished
+the race, and a separate table lists expensive riders who crashed out or withdrew."""
+function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame, finishers=nothing, abandons=nothing)
     write(io, html_heading("The ones to avoid", 2))
 
+    # Only blame riders who actually finished; crashes/abandons are shown separately.
+    blame = finishers === nothing ? allriders :
+            filter(r -> r.riderkey in finishers, allriders)
+    fin_clause = finishers === nothing ? "" : "finished the race but "
+
     write(io, html_heading("Priciest blanks", 3))
-    write(io, "<p>The most expensive riders who failed to score a single point.</p>\n")
-    pricey_zeroes = filter(row -> row.cost >= 8 && row.score == 0, allriders)
+    pricey_zeroes = filter(row -> row.cost >= 8 && row.score == 0, blame)
     if nrow(pricey_zeroes) > 0
+        write(io, "<p>The most expensive riders who $(fin_clause)failed to score a single point.</p>\n")
         sort!(pricey_zeroes, :cost, rev=true)
         display_df = pricey_zeroes[1:min(5, nrow(pricey_zeroes)), [:rider, :team, :cost, :score]]
         rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Points)
         write(io, html_table(display_df))
+    elseif finishers !== nothing
+        write(io, "<p>Every rider priced at 8+ credits who finished the race scored at least once &mdash; the priciest blanks all abandoned (see below).</p>\n")
+    else
+        write(io, "<p>No expensive rider drew a complete blank.</p>\n")
     end
 
     write(io, html_heading("Biggest premium disappointments", 3))
-    write(io, "<p>The five most expensive riders (8+ credits) who scored the least for their price.</p>\n")
-    premium = filter(row -> row.cost >= 8 && row.score > 0, allriders)
+    write(io, "<p>The five most expensive riders (8+ credits) who $(isempty(fin_clause) ? "" : "finished but ")scored the least for their price.</p>\n")
+    premium = filter(row -> row.cost >= 8 && row.score > 0, blame)
     if nrow(premium) > 0
         sort!(premium, :value)
         display_df = premium[1:min(5, nrow(premium)), [:rider, :team, :cost, :score, :value]]
+        display_df[!, :value] = round.(Int, display_df.value)
         rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost,
-            :score => :Points, :value => Symbol("Pts/credit"))
+            :score => :Points, :value => :Value)
         write(io, html_table(display_df))
+    end
+
+    # Expensive riders who abandoned — separated from genuine underperformance.
+    if finishers !== nothing
+        dnf = filter(row -> row.cost >= 8 && !(row.riderkey in finishers), allriders)
+        if nrow(dnf) > 0
+            write(io, html_heading("Expensive riders who abandoned", 3))
+            write(io, "<p>Pricey picks who crashed out or withdrew before the finish. Points shown are what they managed beforehand &mdash; lost potential rather than necessarily a bad pick.</p>\n")
+            sort!(dnf, :value)  # most credits wasted first; big-scoring late abandons last
+            top = dnf[1:min(8, nrow(dnf)), :]
+            display_df = DataFrame(Rider=top.rider, Team=top.team, Cost=top.cost, Points=top.score)
+            if abandons !== nothing
+                display_df[!, Symbol("Abandoned on")] =
+                    [haskey(abandons, k) ? "Stage $(abandons[k])" : "—" for k in top.riderkey]
+            end
+            write(io, html_table(display_df))
+        end
     end
 end
 
@@ -202,12 +274,34 @@ function _write_team_performance!(io::IOBuffer, allriders::DataFrame)
         :score => (s -> count(>(0), s)) => :scorers,
         nrow => :riders,
     )
-    team_stats[!, :avg_value] = round.(team_stats.total_points ./ max.(team_stats.total_cost, 1), digits=1)
+    team_stats[!, :avg_value] = round.(Int, team_stats.total_points ./ max.(team_stats.total_cost, 1))
     sort!(team_stats, :total_points, rev=true)
     top_teams = team_stats[1:min(10, nrow(team_stats)), :]
     rename!(top_teams, :team => :Team, :total_points => :Points, :total_cost => :Cost,
-        :scorers => :Scorers, :riders => :Starters, :avg_value => Symbol("Pts/credit"))
+        :scorers => :Scorers, :riders => :Starters, :avg_value => :Value)
     write(io, html_table(top_teams))
+end
+
+"""Write classification (rider-type) performance table (grand tours only)."""
+function _write_classification_performance!(io::IOBuffer, allriders::DataFrame, has_class::Bool)
+    has_class || return
+    write(io, html_heading("Classification performance", 2))
+    write(io, "<p>How each rider classification fared in terms of points and value.</p>\n")
+    class_stats = combine(
+        groupby(allriders, :class),
+        nrow => :riders,
+        :score => mean => :avg_score,
+        :cost => mean => :avg_cost,
+        :value => mean => :avg_value,
+    )
+    class_stats[!, :avg_score] = round.(Int, class_stats.avg_score)
+    class_stats[!, :avg_cost] = round.(Int, class_stats.avg_cost)
+    class_stats[!, :avg_value] = round.(Int, class_stats.avg_value)
+    sort!(class_stats, :avg_score, rev=true)
+    rename!(class_stats,
+        :class => :Class, :riders => :Riders, :avg_score => Symbol("Avg points"),
+        :avg_cost => Symbol("Avg cost"), :avg_value => Symbol("Avg value"))
+    write(io, html_table(class_stats))
 end
 
 """Ensure VG and PCS results are archived for a race, fetching if needed."""
@@ -281,7 +375,7 @@ function report_html(;
 
     # Intro
     if !isempty(winner_name) && winner_score > 0
-        write(io, "<p><strong>$(winner_name)</strong> won our fantasy league with <strong>$(winner_score)</strong> points. But could they have done better? Read on to find out.</p>\n")
+        write(io, "<p><strong>$(winner_name)</strong> won our fantasy league with <strong>$(commafmt(winner_score))</strong> points. But could they have done better? Read on to find out.</p>\n")
     end
 
     # How the race played out
@@ -289,16 +383,16 @@ function report_html(;
     write(io, "<ul>\n")
     write(io, "<li><strong>Riders who scored</strong>: $(nrow(scorers)) out of $(nrow(allriders)) starters</li>\n")
     if nrow(scorers) > 0
-        write(io, "<li><strong>Top scorer</strong>: $(first(scorers).rider) with $(first(scorers).score) points</li>\n")
+        write(io, "<li><strong>Top scorer</strong>: $(first(scorers).rider) with $(commafmt(first(scorers).score)) points</li>\n")
         best_val = first(sort(scorers, :value, rev=true))
-        write(io, "<li><strong>Best value</strong>: $(best_val.rider) at $(best_val.value) pts/credit</li>\n")
-        write(io, "<li><strong>Average value</strong> (all starters): $(round(sum(allriders.score) / sum(allriders.cost), digits=1)) points per credit</li>\n")
+        write(io, "<li><strong>Best value</strong>: $(best_val.rider) at $(round(Int, best_val.value)) pts/credit</li>\n")
+        write(io, "<li><strong>Average value</strong> (all starters): $(round(Int, sum(allriders.score) / sum(allriders.cost))) points per credit</li>\n")
     end
     if optimal_team !== nothing
-        write(io, "<li><strong>Perfect team score</strong>: $(optimal_score) points for $(optimal_cost) credits</li>\n")
+        write(io, "<li><strong>Perfect team score</strong>: $(commafmt(optimal_score)) points for $(optimal_cost) credits</li>\n")
     end
     if !isempty(winner_name) && winner_score > 0
-        write(io, "<li><strong>League winner</strong>: $(winner_name) with $(winner_score) points</li>\n")
+        write(io, "<li><strong>League winner</strong>: $(winner_name) with $(commafmt(winner_score)) points</li>\n")
     end
     write(io, "</ul>\n")
 
@@ -307,11 +401,12 @@ function report_html(;
     write(io, "<p>With the benefit of hindsight, this is the highest-scoring team that fits within the budget.</p>\n")
 
     if optimal_team !== nothing
-        diff_str = winner_score > 0 ? " That's <strong>$(optimal_score - winner_score)</strong> points more than our league winner." : ""
-        write(io, "<p>The perfect team scores <strong>$(optimal_score)</strong> points, costing <strong>$(optimal_cost)</strong> out of 100 credits.$diff_str</p>\n")
+        diff_str = winner_score > 0 ? " That's <strong>$(commafmt(optimal_score - winner_score))</strong> points more than our league winner." : ""
+        write(io, "<p>The perfect team scores <strong>$(commafmt(optimal_score))</strong> points, costing <strong>$(optimal_cost)</strong> out of 100 credits.$diff_str</p>\n")
 
         display_df = sort(optimal_team[:, [:rider, :team, :cost, :score, :value]], :score, rev=true)
-        rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Points, :value => Symbol("Pts/credit"))
+        display_df[!, :value] = round.(Int, display_df.value)
+        rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Points, :value => :Value)
         write(io, html_table(display_df))
     end
 
@@ -321,10 +416,11 @@ function report_html(;
         cheapest_cost = sum(cheapest_team.cost)
 
         write(io, html_heading("The cheapest winning team", 2))
-        write(io, "<p>What's the minimum investment that could have beaten <strong>$(winner_name)</strong>? This team scores <strong>$(cheapest_score)</strong> points for just <strong>$(cheapest_cost)</strong> credits, leaving <strong>$(100 - cheapest_cost)</strong> credits on the table.</p>\n")
+        write(io, "<p>What's the minimum investment that could have beaten <strong>$(winner_name)</strong>? This team scores <strong>$(commafmt(cheapest_score))</strong> points for just <strong>$(cheapest_cost)</strong> credits, leaving <strong>$(100 - cheapest_cost)</strong> credits on the table.</p>\n")
 
         display_df = sort(cheapest_team[:, [:rider, :team, :cost, :score, :value]], :score, rev=true)
-        rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Points, :value => Symbol("Pts/credit"))
+        display_df[!, :value] = round.(Int, display_df.value)
+        rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Points, :value => :Value)
         write(io, html_table(display_df))
     end
 
@@ -344,14 +440,99 @@ function report_html(;
         body=body,
         include_plotly=true,
         home_url="../index.html",
+        accent=race_accent(pcs_slug),
     )
 end
+
+# Minimal monochrome line-art pictograms for stage terrain, drawn on a 0 0 24 24 grid.
+# Shape carries the meaning, so a single neutral ink colour is used throughout.
+const _STAGE_ICON_INK = "#54616b"
+const _STAGE_ICON_BODIES = Dict(
+    :flat => """<path d="M3 13 Q8 11 12 13 T21 13"/>""",
+    :hilly => """<path d="M3 16 Q7 8 11 16 Q15 8 19 16 H21"/>""",
+    :mountain => """<path d="M3 18 L10 6 L13 11 L17 6 L21 18"/>""",
+    :itt => """<circle cx="12" cy="14" r="7"/><path d="M12 7 V4"/><path d="M10 4 H14"/><path d="M12 14 L15 11"/>""",
+    :ttt => """<circle cx="10" cy="14" r="6"/><path d="M10 8 V5"/><path d="M8 5 H12"/><path d="M10 14 L13 11"/><path d="M19 11 H22"/><path d="M19 14 H22"/><path d="M19 17 H22"/>""",
+)
+
+"""Build a base64 data-URI SVG for a stage-type icon (base64 avoids `#`/`<` URI breakage)."""
+function stage_icon_datauri(stage_type::Symbol)
+    body = get(_STAGE_ICON_BODIES, stage_type, "")
+    isempty(body) && return ""
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" """ *
+          """fill="none" stroke="$_STAGE_ICON_INK" stroke-width="1.6" """ *
+          """stroke-linecap="round" stroke-linejoin="round">$body</svg>"""
+    return "data:image/svg+xml;base64," * base64encode(svg)
+end
+
+"""Convert a `#rrggbb` hex colour to an `rgba(...)` string at the given alpha."""
+function hex_to_rgba(hex::AbstractString, alpha::Real)
+    r = parse(Int, hex[2:3]; base=16)
+    g = parse(Int, hex[4:5]; base=16)
+    b = parse(Int, hex[6:7]; base=16)
+    return "rgba($r,$g,$b,$alpha)"
+end
+
+# Muted terrain tints (used for the faint full-height shading and the ribbon cells
+# behind each icon, so a stage's column is colour-tied to its terrain type).
+# Muted, warm earth tones so the bands recede behind the lines.
+const _TERRAIN_TINT = Dict(
+    :flat => (151, 166, 122), :hilly => (201, 169, 110), :mountain => (190, 120, 96),
+    :itt => (120, 146, 168), :ttt => (146, 120, 150),
+)
+function terrain_tint(stage_type::Symbol, alpha::Real)
+    haskey(_TERRAIN_TINT, stage_type) || return "rgba(0,0,0,0)"
+    r, g, b = _TERRAIN_TINT[stage_type]
+    return "rgba($r,$g,$b,$alpha)"
+end
+
+"""Reclassify a stage's display type from its ProfileScore, matching the strength
+model's dominant terrain dimension (`stage_dimension_weights`). Falls back to the
+scraped type when ProfileScore is missing (≤0) or for time trials."""
+function display_stage_type(s::Velogames.StageProfile)
+    (s.stage_type == :itt || s.stage_type == :ttt || s.profile_score <= 0) && return s.stage_type
+    w = Velogames.stage_dimension_weights(s)
+    (:flat, :hilly, :mountain)[argmax((w.flat, w.hilly, w.mountain))]
+end
+
+function reclassify_stages(stages)
+    map(stages) do s
+        nt = display_stage_type(s)
+        nt == s.stage_type ? s : Velogames.StageProfile(
+            s.stage_number, nt, s.distance_km, s.profile_score, s.vertical_meters,
+            s.gradient_final_km, s.n_hc_climbs, s.n_cat1_climbs,
+            s.n_intermediate_sprints, s.is_summit_finish)
+    end
+end
+
+# Shared chart styling for visual consistency across the report's charts.
+const REPORT_FONT = "Public Sans, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif"
+const COLOR_OPTIMAL = "#3d6b99"   # highlighted "optimal team" points
+const COLOR_OTHER = "#9aa3ab"     # muted "other riders" points
+report_xaxis(title) = attr(title=attr(text=title, font=attr(size=12, color="#54616b")),
+    showgrid=false, zeroline=false, tickfont=attr(size=11, color="#54616b"))
+report_yaxis(title) = attr(title=attr(text=title, font=attr(size=12, color="#54616b")),
+    showgrid=true, gridcolor="#eef0f2", gridwidth=1, zeroline=false, tickformat=",",
+    tickfont=attr(size=11, color="#54616b"))
+report_hoverlabel() = attr(bgcolor="#ffffff", bordercolor="#e7e3da",
+    font=attr(family=REPORT_FONT, size=12, color="#24303a"))
+# Refined, muted editorial palette; deeper mustard/teal keep adjacent riders distinct.
+const LINE_PALETTE = ["#3d6b99", "#c75b53", "#5c8a4a", "#d29a3c",
+    "#3f938c", "#9b6a93", "#df8a3c", "#8c6f5e"]
 
 const GRAND_TOUR_RACES = [
     (pcs_slug="giro-d-italia", name="Giro d'Italia", month=5, n_stages=21),
     (pcs_slug="tour-de-france", name="Tour de France", month=7, n_stages=21),
     (pcs_slug="vuelta-a-espana", name="Vuelta a España", month=9, n_stages=21),
 ]
+
+# Per-race accent colour (leader's jersey); classics fall back to the default gold.
+const _RACE_ACCENT = Dict(
+    "giro-d-italia" => "#d6336c",   # maglia rosa
+    "tour-de-france" => "#e0a500",  # maillot jaune
+    "vuelta-a-espana" => "#d92c3a", # la roja
+)
+race_accent(pcs_slug) = get(_RACE_ACCENT, pcs_slug, "#d4a843")
 
 function stage_race_report_html(;
     pcs_slug,
@@ -373,7 +554,9 @@ function stage_race_report_html(;
 
     per_stage = load_stage_race_per_stage_data(pcs_slug, year, n_stages;
         cache_config=_report_cache)
-    stages = load_stage_profiles(pcs_slug, year)
+    stages = reclassify_stages(load_stage_profiles(pcs_slug, year))
+    finishers = load_finishers(pcs_slug, year)
+    abandons = load_abandons(pcs_slug, year)
 
     has_class = hasproperty(allriders, :class)
 
@@ -395,23 +578,23 @@ function stage_race_report_html(;
 
     # --- Section 1: Intro + race summary ---
     if !isempty(winner_name) && winner_score > 0
-        write(io, "<p><strong>$(winner_name)</strong> won our fantasy league with <strong>$(winner_score)</strong> points. But could they have done better? Read on to find out.</p>\n")
+        write(io, "<p><strong>$(winner_name)</strong> won our fantasy league with <strong>$(commafmt(winner_score))</strong> points. But could they have done better? Read on to find out.</p>\n")
     end
 
-    write(io, html_heading("How the race played out", 2))
+    write(io, html_heading("The race in numbers", 2))
     write(io, "<ul>\n")
     write(io, "<li><strong>Stages</strong>: $n_stages</li>\n")
     write(io, "<li><strong>Riders who scored</strong>: $(nrow(scorers)) out of $(nrow(allriders))</li>\n")
     if nrow(scorers) > 0
-        write(io, "<li><strong>Top scorer</strong>: $(first(scorers).rider) with $(first(scorers).score) points</li>\n")
+        write(io, "<li><strong>Top scorer</strong>: $(first(scorers).rider) with $(commafmt(first(scorers).score)) points</li>\n")
         best_val = first(sort(scorers, :value, rev=true))
-        write(io, "<li><strong>Best value</strong>: $(best_val.rider) at $(best_val.value) pts/credit</li>\n")
+        write(io, "<li><strong>Best value</strong>: $(best_val.rider) at $(round(Int, best_val.value)) pts/credit</li>\n")
     end
     if optimal_team !== nothing
-        write(io, "<li><strong>Perfect team score</strong>: $(optimal_score) points for $(optimal_cost) credits</li>\n")
+        write(io, "<li><strong>Perfect team score</strong>: $(commafmt(optimal_score)) points for $(optimal_cost) credits</li>\n")
     end
     if !isempty(winner_name) && winner_score > 0
-        write(io, "<li><strong>League winner</strong>: $(winner_name) with $(winner_score) points</li>\n")
+        write(io, "<li><strong>League winner</strong>: $(winner_name) with $(commafmt(winner_score)) points</li>\n")
     end
 
     # Stage profile summary
@@ -437,14 +620,15 @@ function stage_race_report_html(;
     write(io, "<p>With the benefit of hindsight, this is the highest-scoring team of 9 riders that fits within the budget and classification constraints.</p>\n")
 
     if optimal_team !== nothing
-        diff_str = winner_score > 0 ? " That's <strong>$(optimal_score - winner_score)</strong> points more than our league winner." : ""
-        write(io, "<p>The perfect team scores <strong>$(optimal_score)</strong> points, costing <strong>$(optimal_cost)</strong> out of 100 credits.$diff_str</p>\n")
+        diff_str = winner_score > 0 ? " That's <strong>$(commafmt(optimal_score - winner_score))</strong> points more than our league winner." : ""
+        write(io, "<p>The perfect team scores <strong>$(commafmt(optimal_score))</strong> points, costing <strong>$(optimal_cost)</strong> out of 100 credits.$diff_str</p>\n")
 
         opt_cols = [:rider, :team, :cost, :score, :value]
         has_class && push!(opt_cols, :class)
         display_df = sort(optimal_team[:, opt_cols], :score, rev=true)
+        display_df[!, :value] = round.(Int, display_df.value)
         col_renames = [:rider => :Rider, :team => :Team, :cost => :Cost,
-            :score => :Points, :value => Symbol("Pts/credit")]
+            :score => :Points, :value => :Value]
         has_class && push!(col_renames, :class => :Class)
         rename!(display_df, col_renames...)
         write(io, html_table(display_df))
@@ -456,13 +640,14 @@ function stage_race_report_html(;
         cheapest_cost = sum(cheapest_team.cost)
 
         write(io, html_heading("The cheapest winning team", 2))
-        write(io, "<p>What's the minimum investment that could have beaten <strong>$(winner_name)</strong>? This team scores <strong>$(cheapest_score)</strong> points for just <strong>$(cheapest_cost)</strong> credits, leaving <strong>$(100 - cheapest_cost)</strong> credits on the table.</p>\n")
+        write(io, "<p>What's the minimum investment that could have beaten <strong>$(winner_name)</strong>? This team scores <strong>$(commafmt(cheapest_score))</strong> points for just <strong>$(cheapest_cost)</strong> credits, leaving <strong>$(100 - cheapest_cost)</strong> credits on the table.</p>\n")
 
         ch_cols = [:rider, :team, :cost, :score, :value]
         has_class && push!(ch_cols, :class)
         display_df = sort(cheapest_team[:, ch_cols], :score, rev=true)
+        display_df[!, :value] = round.(Int, display_df.value)
         col_renames = [:rider => :Rider, :team => :Team, :cost => :Cost,
-            :score => :Points, :value => Symbol("Pts/credit")]
+            :score => :Points, :value => :Value]
         has_class && push!(col_renames, :class => :Class)
         rename!(display_df, col_renames...)
         write(io, html_table(display_df))
@@ -471,7 +656,7 @@ function stage_race_report_html(;
     # --- Section 4: Stage-by-stage progression ---
     if per_stage !== nothing && nrow(per_stage) > 0
         write(io, html_heading("Stage-by-stage progression", 2))
-        write(io, "<p>How the top scorers accumulated their points across the race. The \"Final\" column shows end-of-race classification bonuses (GC, points, mountains, team). Background shading shows stage type: <span style=\"color:#4CAF50\">&#9632;</span> flat, <span style=\"color:#FF9800\">&#9632;</span> hilly, <span style=\"color:#F44336\">&#9632;</span> mountain, <span style=\"color:#2196F3\">&#9632;</span> ITT, <span style=\"color:#9C27B0\">&#9632;</span> TTT.</p>\n")
+        write(io, "<p>How the top scorers accumulated points across the race. Icons along the top mark each stage's terrain &mdash; flat, hilly, mountain, individual time trial (ITT) and team time trial (TTT). The dotted segment to <strong>Final</strong> shows end-of-race classification bonuses (GC, points, mountains, team).</p>\n")
 
         # Top 8 by total score for the cumulative chart
         top_keys = first(scorers, min(8, nrow(scorers))).riderkey
@@ -487,87 +672,159 @@ function stage_race_report_html(;
             tick_labels = [string(i) for i in 1:n_stages]
             push!(tick_labels, "Final")
 
+            # On-brand, harmonious 8-colour palette (Tableau-10; first 5 match the site's
+            # line_chart helper). Maximally distinguishable without neon clashes.
+            line_palette = LINE_PALETTE
+            # Stage-type label per stage number (for hover), from the reclassified stages.
+            type_names = Dict(:flat => "flat", :hilly => "hilly", :mountain => "mountain",
+                :itt => "ITT", :ttt => "TTT")
+            stage_type_label = Dict(s.stage_number => get(type_names, s.stage_type, "stage")
+                                    for s in stages)
+
             traces = GenericTrace[]
-            for key in top_keys
+            # Collect (label_y, surname, colour) for direct end-of-line labels.
+            end_labels = NamedTuple{(:y, :name, :color),Tuple{Float64,String,String}}[]
+            for (ci, key) in enumerate(top_keys)
                 rider_cum = filter(row -> row.riderkey == key, cumulative)
                 nrow(rider_cum) == 0 && continue
                 rider_name = first(rider_cum).rider
+                line_color = line_palette[(ci - 1)%length(line_palette)+1]
 
-                # Use dashed line for the final bonus segment
+                # Real stages form the solid line; the final-bonus pseudo-stage is drawn
+                # separately as a dotted link to the "Final" column.
                 main_mask = rider_cum.stage .<= n_stages
                 main_data = rider_cum[main_mask, :]
                 final_data = rider_cum[.!main_mask, :]
 
+                # customdata per point: [stage_score, stage_type_label]
+                cdata = [[sc, get(stage_type_label, st, "stage")]
+                         for (st, sc) in zip(main_data.stage, main_data.stage_score)]
                 push!(traces, PlotlyBase.scatter(
                     x=main_data.stage, y=main_data.cumulative_score,
-                    mode="lines+markers", name=rider_name,
-                    marker=attr(size=5),
-                    line=attr(width=2.5),
-                    legendgroup=rider_name, showlegend=true,
-                    hovertemplate="%{meta}<br>Stage %{x}: +%{text} pts<br>Cumulative: %{y} pts<extra></extra>",
+                    mode="lines", name=rider_name,
+                    line=attr(width=2.5, color=line_color),
+                    showlegend=false,
+                    hovertemplate="%{meta}<br>Stage %{x} (%{customdata[1]}): +%{customdata[0]} pts<br>Cumulative: %{y:,} pts<extra></extra>",
                     meta=fill(rider_name, nrow(main_data)),
-                    text=string.(main_data.stage_score),
+                    customdata=cdata,
                 ))
 
                 if nrow(final_data) > 0 && nrow(main_data) > 0
-                    # Connect last stage to final with a dashed line
                     last_main = last(main_data)
-                    conn_x = [last_main.stage, first(final_data).stage]
-                    conn_y = [last_main.cumulative_score, first(final_data).cumulative_score]
-                    bonus_pts = first(final_data).stage_score
+                    fin = first(final_data)
+                    bonus_pts = fin.stage_score
+                    # Dotted visual link from the last stage to the Final total (no hover,
+                    # no marker — those belong only to the Final point below).
                     push!(traces, PlotlyBase.scatter(
-                        x=conn_x, y=conn_y,
-                        mode="lines+markers", name=rider_name,
-                        marker=attr(size=7, symbol="diamond"),
-                        line=attr(width=2, dash="dot"),
-                        legendgroup=rider_name, showlegend=false,
-                        hovertemplate="%{meta}<br>Final bonuses: +%{text} pts<br>Total: %{y} pts<extra></extra>",
-                        meta=fill(rider_name, 2),
-                        text=[string(0), string(bonus_pts)],
+                        x=[last_main.stage, fin.stage],
+                        y=[last_main.cumulative_score, fin.cumulative_score],
+                        mode="lines", name=rider_name,
+                        line=attr(width=1.5, dash="dot", color=hex_to_rgba(line_color, 0.7)),
+                        showlegend=false, hoverinfo="skip",
+                    ))
+                    # The Final total: the only diamond, with the correct bonus hover.
+                    push!(traces, PlotlyBase.scatter(
+                        x=[fin.stage], y=[fin.cumulative_score],
+                        mode="markers", name=rider_name,
+                        marker=attr(size=9, symbol="diamond", color=line_color,
+                            line=attr(color="#ffffff", width=1.2)),
+                        showlegend=false,
+                        hovertemplate="$rider_name<br>Final bonuses: +$bonus_pts pts<br>Total: %{y:,} pts<extra></extra>",
                     ))
                 end
+
+                # Label position = the rider's right-most plotted point.
+                label_y = Float64(last(rider_cum).cumulative_score)
+                surname = String(last(split(rider_name)))
+                push!(end_labels, (y=label_y, name=surname, color=line_color))
             end
 
-            # Stage type background shading
-            stage_type_colors = Dict(
-                :flat => "rgba(76,175,80,0.08)", :hilly => "rgba(255,152,0,0.10)",
-                :mountain => "rgba(244,67,54,0.08)", :itt => "rgba(33,150,243,0.10)",
-                :ttt => "rgba(156,39,176,0.10)",
-            )
+            # De-overlap end labels: sort by y and push any that crowd the previous one.
+            y_max = isempty(end_labels) ? 1.0 : maximum(e.y for e in end_labels)
+            min_gap = 0.045 * y_max
+            sort!(end_labels, by=e -> e.y)
+            annotations = []
+            last_y = -Inf
+            for e in end_labels
+                ly = max(e.y, last_y + min_gap)
+                last_y = ly
+                push!(annotations, attr(
+                    x=final_stage, y=ly, xref="x", yref="y",
+                    text=e.name, showarrow=false,
+                    xanchor="left", xshift=6,
+                    font=attr(size=11, color=e.color),
+                ))
+            end
+
+            # Terrain: a faint full-height tint anchors each stage column to its type,
+            # with monochrome icons in a thin ribbon strip above the plot (the ribbon
+            # cell carries a slightly stronger tint so the icon ties to its column).
             shapes = []
+            images = []
+            push!(shapes, attr(
+                type="line", xref="paper", yref="paper",
+                x0=0, x1=1, y0=1.013, y1=1.013,
+                line=attr(color="#e4e7ea", width=1),
+            ))
             if !isempty(stages)
                 for s in stages
                     push!(shapes, attr(
                         type="rect", xref="x", yref="paper",
                         x0=s.stage_number - 0.5, x1=s.stage_number + 0.5,
                         y0=0, y1=1,
-                        fillcolor=get(stage_type_colors, s.stage_type, "rgba(0,0,0,0)"),
+                        fillcolor=terrain_tint(s.stage_type, 0.14),
                         line=attr(width=0), layer="below",
+                    ))
+                    push!(shapes, attr(
+                        type="rect", xref="x", yref="paper",
+                        x0=s.stage_number - 0.5, x1=s.stage_number + 0.5,
+                        y0=1.015, y1=1.055,
+                        fillcolor=terrain_tint(s.stage_type, 0.26),
+                        line=attr(width=0),
+                    ))
+                    icon = stage_icon_datauri(s.stage_type)
+                    isempty(icon) && continue
+                    push!(images, attr(
+                        source=icon, xref="x", yref="paper",
+                        x=s.stage_number, y=1.035,
+                        xanchor="center", yanchor="middle",
+                        sizex=0.7, sizey=0.04, sizing="contain", layer="above",
                     ))
                 end
             end
-            # "Final" column shading
+            # Thin dotted rule separating the "Final" column from the stages.
             push!(shapes, attr(
-                type="rect", xref="x", yref="paper",
-                x0=final_stage - 0.5, x1=final_stage + 0.5,
+                type="line", xref="x", yref="paper",
+                x0=final_stage - 0.5, x1=final_stage - 0.5,
                 y0=0, y1=1,
-                fillcolor="rgba(158,158,158,0.10)",
-                line=attr(width=0), layer="below",
+                line=attr(color="#d9dde1", width=1, dash="dot"),
             ))
 
             layout = Layout(
-                xaxis_title="Stage", yaxis_title="Cumulative VG points",
                 hovermode="closest", template="plotly_white",
+                font=attr(family=REPORT_FONT, color="#2d3436"),
+                hoverlabel=report_hoverlabel(),
                 xaxis=attr(tickvals=tick_vals, ticktext=tick_labels,
-                    range=[0.5, final_stage + 0.5]),
+                    range=[0.5, final_stage + 0.5], showgrid=false,
+                    tickfont=attr(size=11, color="#54616b"),
+                    title=attr(text="Stage", font=attr(size=12, color="#54616b"))),
+                yaxis=attr(showgrid=true, gridcolor="#eef0f2", gridwidth=1, zeroline=false,
+                    tickformat=",", tickfont=attr(size=11, color="#54616b"),
+                    title=attr(text="Cumulative VG points", font=attr(size=12, color="#54616b"))),
                 shapes=shapes,
-                legend=attr(orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="left", x=0, font=attr(size=11)),
-                margin=attr(t=80),
+                images=images,
+                annotations=annotations,
+                showlegend=false,
+                margin=attr(t=64, r=96, b=56, l=64),
             )
-            write(io, plotly_html(traces, layout; id="plot-progression", height="550px"))
+            write(io, plotly_html(traces, layout; id="plot-progression", height="560px"))
         end
     end
+
+    # --- Top scorers + biggest hauls: companions to the progression chart ---
+    nrow(scorers) > 0 && _write_top_scorers!(io, scorers; has_class=has_class,
+        heading="Top scorers this race")
+    _write_biggest_hauls!(io, per_stage, stages)
 
     # --- Section 5: Points by stage type ---
     if per_stage !== nothing && !isempty(stages)
@@ -593,9 +850,9 @@ function stage_race_report_html(;
 
         rename!(type_summary,
             :stage_type => Symbol("Stage type"), :n_stages => :Stages,
-            :total_points => Symbol("Total points"), :avg_per_stage => Symbol("Avg points/stage"))
+            :total_points => Symbol("Total points"), :avg_per_stage => Symbol("Per stage"))
         write(io, html_table(type_summary[:, [Symbol("Stage type"), :Stages,
-            Symbol("Total points"), Symbol("Avg points/stage")]]))
+            Symbol("Total points"), Symbol("Per stage")]]))
 
         # Top scorer per stage type
         write(io, html_heading("Top scorer by stage type", 3))
@@ -645,46 +902,26 @@ function stage_race_report_html(;
                     marker=attr(
                         size=is_opt ? 12 : 7,
                         opacity=is_opt ? 0.9 : 0.5,
+                        color=is_opt ? COLOR_OPTIMAL : COLOR_OTHER,
                     ),
-                    text=["$(r.rider)<br>Stages scored: $(r.stages_scored)<br>Best stage: $(r.best_stage)<br>Total: $(r.total)" for r in eachrow(sub)],
+                    text=["$(r.rider)<br>Stages scored: $(r.stages_scored)<br>Best stage: $(commafmt(r.best_stage))<br>Total: $(commafmt(r.total))" for r in eachrow(sub)],
                     hoverinfo="text",
                 ))
             end
             write(io, plotly_html(traces_c, Layout(
-                    xaxis_title="Stages scored on", yaxis_title="Total VG points",
-                    hovermode="closest", template="plotly_white"); id="plot-consistency"))
+                    template="plotly_white", hovermode="closest",
+                    font=attr(family=REPORT_FONT, color="#2d3436"), hoverlabel=report_hoverlabel(),
+                    xaxis=report_xaxis("Stages scored on"), yaxis=report_yaxis("Total VG points")); id="plot-consistency"))
         end
     end
 
-    # --- Section 7: Classification performance ---
-    if has_class
-        write(io, html_heading("Classification performance", 2))
-        write(io, "<p>How each rider classification fared in terms of points and value.</p>\n")
-
-        class_stats = combine(
-            groupby(allriders, :class),
-            nrow => :riders,
-            :score => mean => :avg_score,
-            :cost => mean => :avg_cost,
-            :value => mean => :avg_value,
-        )
-        class_stats[!, :avg_score] = round.(class_stats.avg_score, digits=0)
-        class_stats[!, :avg_cost] = round.(class_stats.avg_cost, digits=1)
-        class_stats[!, :avg_value] = round.(class_stats.avg_value, digits=1)
-        sort!(class_stats, :avg_score, rev=true)
-        rename!(class_stats,
-            :class => :Class, :riders => :Riders, :avg_score => Symbol("Avg points"),
-            :avg_cost => Symbol("Avg cost"), :avg_value => Symbol("Avg pts/credit"))
-        write(io, html_table(class_stats))
-    end
-
-    # Shared sections
+    # --- Value for money: who was worth their price, who wasn't ---
     shared = _write_points_by_price!(io, allriders, optimal_keys)
-    _write_top_scorers!(io, scorers; has_class=has_class)
     _write_points_per_credit!(io, allriders, optimal_keys,
         shared.jitter, shared.costs_f, shared.mean_c, shared.x_min, shared.x_max)
     _write_best_value!(io, scorers; has_class=has_class)
-    _write_ones_to_avoid!(io, allriders)
+    _write_ones_to_avoid!(io, allriders, finishers, abandons)
+    _write_classification_performance!(io, allriders, has_class)
     _write_team_performance!(io, allriders)
 
     body = String(take!(io))
@@ -694,6 +931,7 @@ function stage_race_report_html(;
         body=body,
         include_plotly=true,
         home_url="../index.html",
+        accent=race_accent(pcs_slug),
     )
 end
 

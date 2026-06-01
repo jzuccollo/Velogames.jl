@@ -19,6 +19,24 @@ function html_heading(text::String, level::Int=2; id::String=_slugify(text))
     return "<h$level id=\"$id\">$text</h$level>\n"
 end
 
+const _CLASS_LABELS = Dict(
+    "allrounder" => "All-rounder", "climber" => "Climber",
+    "sprinter" => "Sprinter", "unclassed" => "Unclassed",
+)
+_class_label(slug::AbstractString) = get(_CLASS_LABELS, slug, uppercasefirst(slug))
+
+"""Format an integer with thousands separators, e.g. 2876 → "2,876"."""
+function commafmt(n::Integer)
+    neg = n < 0
+    s = string(abs(n))
+    out = ""
+    while length(s) > 3
+        out = "," * s[end-2:end] * out
+        s = s[1:end-3]
+    end
+    return (neg ? "-" : "") * s * out
+end
+
 """
     html_table(df; caption, team_cols) -> String
 
@@ -34,6 +52,10 @@ function html_table(
     round_numeric_columns!(display)
     clean_team_names!(display, intersect(team_cols, propertynames(display)))
 
+    # Numeric columns are right-aligned with tabular figures for clean place-value alignment.
+    numeric = Dict(col => (eltype(display[!, col]) <: Union{Missing,Number})
+                   for col in names(display))
+
     io = IOBuffer()
     write(io, "<table class=\"table table-striped table-sm\">\n")
     !isempty(caption) && write(io, "<caption>$caption</caption>\n")
@@ -41,7 +63,8 @@ function html_table(
     # Header
     write(io, "<thead><tr>")
     for col in names(display)
-        write(io, "<th>$col</th>")
+        cls = numeric[col] ? " class=\"num\"" : ""
+        write(io, "<th$cls>$col</th>")
     end
     write(io, "</tr></thead>\n<tbody>\n")
 
@@ -50,8 +73,16 @@ function html_table(
         write(io, "<tr>")
         for col in names(display)
             val = row[col]
-            cell = ismissing(val) ? "" : string(val)
-            write(io, "<td>$cell</td>")
+            if col == "Class" && !ismissing(val)
+                slug = lowercase(string(val))
+                cell = "<span class=\"badge badge-$slug\">$(_class_label(slug))</span>"
+            elseif numeric[col] && val isa Integer && abs(val) >= 1000 && !occursin("year", lowercase(col))
+                cell = commafmt(val)
+            else
+                cell = ismissing(val) ? "" : string(val)
+            end
+            cls = numeric[col] ? " class=\"num\"" : ""
+            write(io, "<td$cls>$cell</td>")
         end
         write(io, "</tr>\n")
     end
@@ -90,6 +121,10 @@ $header$content
 end
 
 const _TEMPLATES_DIR = joinpath(@__DIR__, "templates")
+# include_dependency so editing a template invalidates the precompiled cache.
+include_dependency(joinpath(_TEMPLATES_DIR, "page.css"))
+include_dependency(joinpath(_TEMPLATES_DIR, "toc.js"))
+include_dependency(joinpath(_TEMPLATES_DIR, "page.html"))
 const _HTML_PAGE_CSS = read(joinpath(_TEMPLATES_DIR, "page.css"), String)
 const _HTML_PAGE_TOC_JS = read(joinpath(_TEMPLATES_DIR, "toc.js"), String)
 const _HTML_PAGE_TEMPLATE = read(joinpath(_TEMPLATES_DIR, "page.html"), String)
@@ -105,6 +140,7 @@ function html_page(;
     body::String,
     include_plotly::Bool=false,
     home_url::String="",
+    accent::String="#d4a843",
 )
     plotly_script = include_plotly ? "\n<script src=\"https://cdn.plot.ly/plotly-2.35.2.min.js\"></script>" : ""
     subtitle_html = isempty(subtitle) ? "" : "<p class=\"subtitle\">$subtitle</p>\n"
@@ -117,7 +153,8 @@ function html_page(;
     page = replace(page, "{{home_link}}" => home_html)
     page = replace(page, "{{subtitle}}" => subtitle_html)
     page = replace(page, "{{body}}" => body)
-    page = replace(page, "{{toc_js}}" => _HTML_PAGE_TOC_JS)
+    page = replace(page, "{{accent}}" => accent)
+    page = replace(page, "{{toc_script}}" => "<script>\n$(_HTML_PAGE_TOC_JS)</script>")
     return page
 end
 
@@ -143,7 +180,7 @@ function plotly_html(
     )
     json_str = JSON3.write(spec)
     return """<div id="$id" style="width:$(width); height:$(height);"></div>
-<script>Plotly.newPlot('$id', $json_str.data, $json_str.layout, {responsive: true})</script>"""
+<script>Plotly.newPlot('$id', $json_str.data, $json_str.layout, {responsive: true, displayModeBar: false, displaylogo: false})</script>"""
 end
 
 # ---------------------------------------------------------------------------
@@ -306,7 +343,13 @@ Returns the modified DataFrame for chaining.
 function round_numeric_columns!(df::DataFrame; digits::Int=1)
     for col in names(df)
         if eltype(df[!, col]) <: Union{Missing,Number}
-            df[!, col] = round.(df[!, col]; digits=digits)
+            rounded = round.(df[!, col]; digits=digits)
+            # Integer-valued columns render without a trailing ".0".
+            if all(x -> ismissing(x) || x == round(x), rounded)
+                df[!, col] = [ismissing(x) ? missing : Int(round(x)) for x in rounded]
+            else
+                df[!, col] = rounded
+            end
         end
     end
     return df
@@ -1347,6 +1390,59 @@ function archive_stage_race_results(
             end
         catch e
             @warn "Failed to archive PCS stage profiles for $pcs_slug $year: $e"
+        end
+    end
+
+    # Archive PCS final GC results (for finisher / DNF detection). getpcsraceresults
+    # falls back to the /gc page for stage races and marks non-finishers as DNF_POSITION.
+    if load_race_snapshot("pcs_gc_results", pcs_slug, year) === nothing
+        try
+            gc = suppress_output() do
+                getpcsraceresults(pcs_slug, year; cache_config=cache_config)
+            end
+            nfin = gc === nothing ? 0 : sum(gc.position .< DNF_POSITION)
+            if nfin > 0
+                save_race_snapshot(gc[:, [:position, :rider, :team, :riderkey]],
+                    "pcs_gc_results", pcs_slug, year)
+                @info "Archived pcs_gc_results for $pcs_slug $year ($nfin finishers)"
+            else
+                @warn "PCS GC for $pcs_slug $year has no parseable finishers — skipping (DNF split disabled)"
+            end
+        catch e
+            @warn "Failed to archive PCS GC results for $pcs_slug $year: $e"
+        end
+    end
+
+    # Archive abandon stages: for each non-finisher, the stage after their last completed
+    # one (PCS per-stage results drop a rider's finishing position once they abandon).
+    if load_race_snapshot("pcs_abandons", pcs_slug, year) === nothing
+        try
+            res = suppress_output() do
+                getpcs_all_stage_results(pcs_slug, year, n_stages; cache_config=cache_config)
+            end
+            lastfin = Dict{String,Int}()
+            namemap = Dict{String,String}()
+            for (s, df) in res, r in eachrow(df)
+                namemap[r.riderkey] = r.rider
+                if r.position < DNF_POSITION
+                    lastfin[r.riderkey] = max(get(lastfin, r.riderkey, 0), s)
+                end
+            end
+            rows = NamedTuple{(:riderkey, :rider, :abandon_stage),Tuple{String,String,Int}}[]
+            for (k, lf) in lastfin
+                lf < n_stages && push!(rows, (riderkey=k, rider=namemap[k], abandon_stage=lf + 1))
+            end
+            # Guard against a bad parse: a real grand tour has ~140+ riders reaching the
+            # final stage. If almost none do, the stage pages didn't parse — skip.
+            final_finishers = count(==(n_stages), values(lastfin))
+            if !isempty(rows) && final_finishers >= 30
+                save_race_snapshot(DataFrame(rows), "pcs_abandons", pcs_slug, year)
+                @info "Archived pcs_abandons for $pcs_slug $year ($(length(rows)) abandons)"
+            elseif final_finishers < 30
+                @warn "PCS stage results for $pcs_slug $year look incomplete ($final_finishers reached the final stage) — skipping abandons"
+            end
+        catch e
+            @warn "Failed to archive PCS abandons for $pcs_slug $year: $e"
         end
     end
 end
