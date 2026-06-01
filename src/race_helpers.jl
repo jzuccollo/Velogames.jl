@@ -912,7 +912,7 @@ ttt_stage(n; km=30.0) =
 """Stage race VG slug mapping (PCS slug → VG slug)."""
 const _STAGE_RACE_VG_SLUGS = Dict(
     "tour-de-france" => "velogame",
-    "giro-d-italia" => "giro",
+    "giro-d-italia" => "italy",
     "vuelta-a-espana" => "spain",
     "paris-nice" => "pn",
     "tirreno-adriatico" => "tirreno-adriatico",
