@@ -538,7 +538,9 @@ end
     html = format_classification_table(diag, :gc, riders)
     @test occursin("Alpha", html)
     @test occursin("Bravo", html)
-    @test occursin("100.0", html)  # Win % for Alpha and Top-10 % for both
+    # Win % for Alpha and Top-10 % for both are 100. Integer-valued columns render
+    # without a trailing ".0" (see round_numeric_columns!), so the cell reads "100".
+    @test occursin(">100<", html)
 
     # Empty case: no riders with non-trivial probability
     empty_diag = Velogames.StageRaceDiagnostics(
@@ -566,5 +568,7 @@ end
     html = format_team_classification(diag)
     @test occursin("Alpha", html)
     @test occursin("Top-5 %", html)  # column name reflects 5-position scoring table
-    @test occursin("100.0", html)
+    # Alpha's Win % and both teams' Top-5 % are 100; integer-valued columns render
+    # without a trailing ".0" (see round_numeric_columns!), so the cell reads "100".
+    @test occursin(">100<", html)
 end
