@@ -43,11 +43,16 @@ getpcsraceresults("trofeo-laigueglia", 2026)
 function getpcsraceresults(
     pcs_race_slug::String,
     year::Int;
+    prefer_gc::Bool=false,
     force_refresh::Bool=false,
     cache_config::CacheConfig=DEFAULT_CACHE,
 )
 
-    pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/result"
+    base = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)"
+    # One-day races expose the finish at /result; stage races have no /result, so the GC
+    # archival path asks for /gc. We try the preferred page first and the other as fallback.
+    pageurl = prefer_gc ? "$base/gc" : "$base/result"
+    fallback_url = prefer_gc ? "$base/result" : "$base/gc"
 
     function fetch_race_results(url, params)
         # Parse directly with Gumbo to extract rider names from <a href="rider/..."> links.
@@ -64,9 +69,10 @@ function getpcsraceresults(
             breakaway_km=Union{Float64,Missing}[],
         )
 
-        # Try /result first (one-day races), fall back to /gc (stage races)
+        # Try the preferred page first, fall back to the other (one-day races have no /gc;
+        # stage races have no /result).
         page = nothing
-        for attempt_url in [url, replace(url, "/result" => "/gc")]
+        for attempt_url in [url, fallback_url]
             response = try
                 HTTP.get(attempt_url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
             catch e
@@ -80,8 +86,24 @@ function getpcsraceresults(
             end
         end
         page === nothing && return _empty_results()
-        tables = collect(eachmatch(sel"table", page.root))
-        rows = collect(eachmatch(sel"tr", tables[1]))[2:end]  # skip header
+
+        # PCS renders every classification (stage result, GC, points, KOM, …) as a tab on
+        # the same page, but only the active tab's div.resTab lacks the `hide` class. On
+        # /result that active tab is the finish; on /gc it is the general classification.
+        # Taking the first <table> blindly grabs a hidden tab (e.g. the latest-stage result
+        # shown above the GC), so we scope to the visible resTab and fall back to the first
+        # table only if the layout is missing.
+        active_tabs = filter(t -> !occursin("hide", getattr(t, "class", "")),
+            collect(eachmatch(sel"div.resTab", page.root)))
+        result_table = nothing
+        if !isempty(active_tabs)
+            inner = collect(eachmatch(sel"table", active_tabs[1]))
+            isempty(inner) || (result_table = inner[1])
+        end
+        if result_table === nothing
+            result_table = first(collect(eachmatch(sel"table", page.root)))
+        end
+        rows = collect(eachmatch(sel"tr", result_table))[2:end]  # skip header
 
         positions = Int[]
         riders = String[]
