@@ -438,6 +438,7 @@ nav#toc .toc-h3 {
     </header>
     <div class="page-body">
       <main class="content"><p>A look back at each race in the season: who delivered, who disappointed, and what the perfect team would have been.</p>
+<p style="margin:1.2em 0 0.4em"><a href="riders.html" style="display:inline-block;background:var(--navy);color:#fff;font-weight:600;padding:0.6em 1.2em;border-radius:8px;text-decoration:none">Look up any rider&rsquo;s season &rarr;</a></p>
 <h2 id="2026-season">2026 season</h2>
 <h3 id="grand-tours">Grand tours</h3>
 <table class="table table-sm">
@@ -553,6 +554,25 @@ document.addEventListener("DOMContentLoaded", function () {
   window.addEventListener("scroll", update, { passive: true });
   window.addEventListener("resize", update);
 });
+</script>
+<script>
+// When a race-report page is reached from a rider dossier (…?rider=<key>&name=<name>),
+// inject a "← Back to <name>" link into the masthead. No-op when the params are absent,
+// so direct visits, the index and the lookup page are unaffected.
+(function () {
+  var p = new URLSearchParams(location.search);
+  var key = p.get("rider");
+  if (!key) return;
+  var name = p.get("name") || "rider";
+  var hc = document.querySelector(".page-header .header-content");
+  if (!hc) return;
+  var a = document.createElement("a");
+  a.className = "home-link";
+  a.style.marginRight = "1.1em";
+  a.href = "../riders.html#" + encodeURIComponent(key);
+  a.textContent = "← Back to " + name;
+  hc.insertBefore(a, hc.firstChild);
+})();
 </script>
   </body>
 </html>
