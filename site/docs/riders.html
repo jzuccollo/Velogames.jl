@@ -525,6 +525,39 @@ nav#toc .toc-h3 {
   .stat .v.dnf { color: #a23b34; }
   .stat .l { font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: var(--ink-soft); margin-top: 0.25em; }
 
+  /* Info badge + tooltip explaining each stat's calculation */
+  .info {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 1.2em; height: 1.2em; margin-left: 0.4em; vertical-align: -0.18em;
+    border: 1px solid currentColor; border-radius: 50%;
+    font-family: var(--font-display); font-style: italic; font-weight: 700;
+    font-size: 0.92em; line-height: 1; text-transform: none; letter-spacing: 0;
+    color: var(--ink-soft); opacity: 0.5; cursor: help; user-select: none;
+    transition: opacity 0.12s;
+  }
+  .info:hover, .info:focus { opacity: 0.95; outline: none; }
+  .info .tip {
+    position: absolute; top: 168%; left: 50%;
+    transform: translateX(-50%) translateY(-3px);
+    width: max-content; max-width: 15em;
+    background: var(--navy); color: #fff; padding: 0.55em 0.75em; border-radius: 7px;
+    font: 400 0.8rem/1.45 var(--font-body); text-transform: none; letter-spacing: 0;
+    text-align: left; white-space: normal; text-shadow: none;
+    opacity: 0; visibility: hidden; pointer-events: none; z-index: 40;
+    box-shadow: 0 6px 22px rgba(15, 35, 55, 0.22);
+    transition: opacity 0.14s, transform 0.14s;
+  }
+  .info .tip::after {
+    content: ""; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-bottom-color: var(--navy);
+  }
+  .info:hover .tip, .info:focus .tip {
+    opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+  }
+  @media (max-width: 560px) {
+    .info .tip { max-width: 13em; }
+  }
+
   .season-label {
     font-family: var(--font-display); font-size: 1.25em; font-weight: 600; color: var(--ink);
     margin: 1.7em 0 0.2em; display: flex; align-items: center; gap: 0.8em;
@@ -796,8 +829,11 @@ nav#toc .toc-h3 {
     d.classList.remove("show"); void d.offsetWidth; d.classList.add("show");
   }
 
-  function stat(value, label, dnfStyle) {
-    return '<div class="stat"><div class="v' + (dnfStyle ? " dnf" : "") + '">' + esc(value) + '</div><div class="l">' + esc(label) + "</div></div>";
+  function stat(value, label, info) {
+    var badge = info
+      ? ' <span class="info" tabindex="0" role="note" aria-label="' + esc(info) + '">i<span class="tip">' + esc(info) + "</span></span>"
+      : "";
+    return '<div class="stat"><div class="v">' + esc(value) + '</div><div class="l">' + esc(label) + badge + "</div></div>";
   }
 
   // A labelled VG-performance row for one discipline (Velogames pts, avg, value, best haul),
@@ -805,16 +841,31 @@ nav#toc .toc-h3 {
   function discStrip(label, arr, avgLabel) {
     if (!arr.length) return "";
     var tot = arr.reduce(function (s, r) { return s + r.points; }, 0);
-    var cost = arr.reduce(function (s, r) { return s + (r.cost || 0); }, 0);
     var best = arr.reduce(function (m, r) { return Math.max(m, r.points); }, 0);
-    var ppc = cost ? (tot / cost) : 0;
+    // Credits committed: a rider's price is paid once per game, not per race. The classics
+    // game charges one season-long price (so all of a year's one-day races share it), while
+    // each grand tour is its own game. Count each distinct game's cost once.
+    var seen = {}, credits = 0;
+    arr.forEach(function (r) {
+      var gk = r.type === "tour" ? (r.year + "|" + r.event) : ("oneday|" + r.year);
+      if (!seen[gk]) { seen[gk] = true; credits += (r.cost || 0); }
+    });
+    var ppc = credits ? (tot / credits) : 0;
+    var isTour = arr[0].type === "tour";
+    var noun = isTour ? "grand tour" : "classic";
+    var infoTot = "Total Velogames points across every " + noun + " we have data for — all archived seasons combined, not a single year.";
+    var infoAvg = "Total points ÷ the number of " + (isTour ? "grand tours" : "classics") + " ridden (across all archived seasons).";
+    var infoPpc = isTour
+      ? "Total points ÷ credits, counting each grand tour’s price once (a grand tour is one game)."
+      : "Total points ÷ credits. The classics price buys the rider for the whole season, so it’s counted once per season — not once per race.";
+    var infoBest = "The most Velogames points scored in a single " + noun + ".";
     return '<div class="disc"><div class="disc-label">' + esc(label) + " &middot; " + arr.length +
       (arr.length === 1 ? " race" : " races") + "</div>" +
       '<div class="statstrip">' +
-        stat(fmt(tot), "Velogames pts") +
-        stat(fmt(Math.round(tot / arr.length)), avgLabel) +
-        stat(ppc.toFixed(1), "Points / credit") +
-        stat(fmt(best), "Best haul") +
+        stat(fmt(tot), "Velogames pts", infoTot) +
+        stat(fmt(Math.round(tot / arr.length)), avgLabel, infoAvg) +
+        stat(ppc.toFixed(1), "Points / credit", infoPpc) +
+        stat(fmt(best), "Best haul", infoBest) +
       "</div></div>";
   }
 })();
