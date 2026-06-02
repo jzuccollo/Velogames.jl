@@ -47,14 +47,24 @@ function html_table(
     df::DataFrame;
     caption::String="",
     team_cols::Vector{Symbol}=[:team, :Team],
+    rider_link_base::String="",
 )
     display = copy(df)
     round_numeric_columns!(display)
     clean_team_names!(display, intersect(team_cols, propertynames(display)))
 
+    cols = names(display)
+    # Optional rider-name hyperlinks: when a base is given and the frame carries both a
+    # rider-name column and a riderkey column, link each name to its dossier and hide the key.
+    keycol = findfirst(c -> lowercase(c) == "riderkey", cols)
+    ridercol = findfirst(c -> lowercase(c) in ("rider", "name"), cols)
+    linking = !isempty(rider_link_base) && keycol !== nothing && ridercol !== nothing
+    keyname = keycol === nothing ? "" : cols[keycol]
+    ridername = ridercol === nothing ? "" : cols[ridercol]
+    render_cols = linking ? filter(!=(keyname), cols) : cols
+
     # Numeric columns are right-aligned with tabular figures for clean place-value alignment.
-    numeric = Dict(col => (eltype(display[!, col]) <: Union{Missing,Number})
-                   for col in names(display))
+    numeric = Dict(col => (eltype(display[!, col]) <: Union{Missing,Number}) for col in cols)
 
     io = IOBuffer()
     write(io, "<table class=\"table table-striped table-sm\">\n")
@@ -62,7 +72,7 @@ function html_table(
 
     # Header
     write(io, "<thead><tr>")
-    for col in names(display)
+    for col in render_cols
         cls = numeric[col] ? " class=\"num\"" : ""
         write(io, "<th$cls>$col</th>")
     end
@@ -71,11 +81,13 @@ function html_table(
     # Rows
     for row in eachrow(display)
         write(io, "<tr>")
-        for col in names(display)
+        for col in render_cols
             val = row[col]
             if col == "Class" && !ismissing(val)
                 slug = lowercase(string(val))
                 cell = "<span class=\"badge badge-$slug\">$(_class_label(slug))</span>"
+            elseif linking && col == ridername && !ismissing(val)
+                cell = "<a href=\"$(rider_link_base)$(row[keyname])\">$(string(val))</a>"
             elseif numeric[col] && val isa Integer && abs(val) >= 1000 && !occursin("year", lowercase(col))
                 cell = commafmt(val)
             else
@@ -124,9 +136,11 @@ const _TEMPLATES_DIR = joinpath(@__DIR__, "templates")
 # include_dependency so editing a template invalidates the precompiled cache.
 include_dependency(joinpath(_TEMPLATES_DIR, "page.css"))
 include_dependency(joinpath(_TEMPLATES_DIR, "toc.js"))
+include_dependency(joinpath(_TEMPLATES_DIR, "rider-backlink.js"))
 include_dependency(joinpath(_TEMPLATES_DIR, "page.html"))
 const _HTML_PAGE_CSS = read(joinpath(_TEMPLATES_DIR, "page.css"), String)
 const _HTML_PAGE_TOC_JS = read(joinpath(_TEMPLATES_DIR, "toc.js"), String)
+const _HTML_PAGE_RIDER_BACKLINK_JS = read(joinpath(_TEMPLATES_DIR, "rider-backlink.js"), String)
 const _HTML_PAGE_TEMPLATE = read(joinpath(_TEMPLATES_DIR, "page.html"), String)
 
 """
@@ -154,7 +168,8 @@ function html_page(;
     page = replace(page, "{{subtitle}}" => subtitle_html)
     page = replace(page, "{{body}}" => body)
     page = replace(page, "{{accent}}" => accent)
-    page = replace(page, "{{toc_script}}" => "<script>\n$(_HTML_PAGE_TOC_JS)</script>")
+    page = replace(page, "{{toc_script}}" =>
+        "<script>\n$(_HTML_PAGE_TOC_JS)</script>\n<script>\n$(_HTML_PAGE_RIDER_BACKLINK_JS)</script>")
     return page
 end
 
@@ -1393,12 +1408,12 @@ function archive_stage_race_results(
         end
     end
 
-    # Archive PCS final GC results (for finisher / DNF detection). getpcsraceresults
-    # falls back to the /gc page for stage races and marks non-finishers as DNF_POSITION.
+    # Archive PCS final GC results (for finisher / DNF detection). prefer_gc fetches the
+    # /gc page and scopes to its general-classification tab (not the latest-stage result).
     if load_race_snapshot("pcs_gc_results", pcs_slug, year) === nothing
         try
             gc = suppress_output() do
-                getpcsraceresults(pcs_slug, year; cache_config=cache_config)
+                getpcsraceresults(pcs_slug, year; prefer_gc=true, cache_config=cache_config)
             end
             nfin = gc === nothing ? 0 : sum(gc.position .< DNF_POSITION)
             if nfin > 0
@@ -1413,36 +1428,61 @@ function archive_stage_race_results(
         end
     end
 
-    # Archive abandon stages: for each non-finisher, the stage after their last completed
-    # one (PCS per-stage results drop a rider's finishing position once they abandon).
-    if load_race_snapshot("pcs_abandons", pcs_slug, year) === nothing
+    # Archive per-stage PCS results and the derived abandon stages. Both come from a single
+    # fetch of every stage's finishing table: pcs_stage_results keeps the positions (used by
+    # the rider dossier to show where a grand tour's VG points came from), pcs_abandons keeps
+    # only the stage each non-finisher last completed.
+    need_stage_results = load_race_snapshot("pcs_stage_results", pcs_slug, year) === nothing
+    need_abandons = load_race_snapshot("pcs_abandons", pcs_slug, year) === nothing
+    if need_stage_results || need_abandons
         try
             res = suppress_output() do
                 getpcs_all_stage_results(pcs_slug, year, n_stages; cache_config=cache_config)
             end
-            lastfin = Dict{String,Int}()
-            namemap = Dict{String,String}()
-            for (s, df) in res, r in eachrow(df)
-                namemap[r.riderkey] = r.rider
-                if r.position < DNF_POSITION
-                    lastfin[r.riderkey] = max(get(lastfin, r.riderkey, 0), s)
+
+            if need_stage_results && !isempty(res)
+                stage_rows = DataFrame(
+                    riderkey=String[], rider=String[], team=String[],
+                    position=Int[], stage=Int[],
+                )
+                for (s, df) in res, r in eachrow(df)
+                    push!(stage_rows, (r.riderkey, r.rider, r.team, r.position, s))
+                end
+                if nrow(stage_rows) > 0
+                    save_race_snapshot(stage_rows, "pcs_stage_results", pcs_slug, year)
+                    @info "Archived pcs_stage_results for $pcs_slug $year ($(nrow(stage_rows)) rider-stages)"
                 end
             end
-            rows = NamedTuple{(:riderkey, :rider, :abandon_stage),Tuple{String,String,Int}}[]
-            for (k, lf) in lastfin
-                lf < n_stages && push!(rows, (riderkey=k, rider=namemap[k], abandon_stage=lf + 1))
-            end
-            # Guard against a bad parse: a real grand tour has ~140+ riders reaching the
-            # final stage. If almost none do, the stage pages didn't parse — skip.
-            final_finishers = count(==(n_stages), values(lastfin))
-            if !isempty(rows) && final_finishers >= 30
-                save_race_snapshot(DataFrame(rows), "pcs_abandons", pcs_slug, year)
-                @info "Archived pcs_abandons for $pcs_slug $year ($(length(rows)) abandons)"
-            elseif final_finishers < 30
-                @warn "PCS stage results for $pcs_slug $year look incomplete ($final_finishers reached the final stage) — skipping abandons"
+
+            if need_abandons
+                lastfin = Dict{String,Int}()
+                namemap = Dict{String,String}()
+                for (s, df) in res, r in eachrow(df)
+                    namemap[r.riderkey] = r.rider
+                    if r.position < DNF_POSITION
+                        lastfin[r.riderkey] = max(get(lastfin, r.riderkey, 0), s)
+                    end
+                end
+                # Anchor on the last stage with a real classification, not n_stages: some final
+                # stages are neutralised (e.g. the 2025 Vuelta's Madrid finale, protested) and
+                # carry no finishing positions, so every finisher's last classified stage is the
+                # one before. A healthy stage classifies ~140+ riders.
+                classified = [s for (s, df) in res if sum(df.position .< DNF_POSITION) >= 30]
+                final_stage = isempty(classified) ? 0 : maximum(classified)
+                rows = NamedTuple{(:riderkey, :rider, :abandon_stage),Tuple{String,String,Int}}[]
+                for (k, lf) in lastfin
+                    lf < final_stage && push!(rows, (riderkey=k, rider=namemap[k], abandon_stage=lf + 1))
+                end
+                final_finishers = count(==(final_stage), values(lastfin))
+                if !isempty(rows) && final_finishers >= 30
+                    save_race_snapshot(DataFrame(rows), "pcs_abandons", pcs_slug, year)
+                    @info "Archived pcs_abandons for $pcs_slug $year ($(length(rows)) abandons, final classified stage $final_stage of $n_stages)"
+                else
+                    @warn "PCS stage results for $pcs_slug $year look incomplete ($final_finishers reached the last classified stage) — skipping abandons"
+                end
             end
         catch e
-            @warn "Failed to archive PCS abandons for $pcs_slug $year: $e"
+            @warn "Failed to archive PCS stage results / abandons for $pcs_slug $year: $e"
         end
     end
 end

@@ -13,12 +13,17 @@ Generates standalone HTML pages directly (no Quarto dependency).
 Auto-archives VG/PCS results if not already archived.
 """
 
-using Velogames, DataFrames, Dates, Statistics, TOML, Base64
+using Velogames, DataFrames, Dates, Statistics, TOML, Base64, JSON3
 using PlotlyBase
 
 const commafmt = Velogames.commafmt
 
 const FRESH = "--fresh" in ARGS
+
+# Rider tables in race reports link each name to its dossier. Reports live in docs/reports/,
+# so the lookup page is one level up. `df` must carry a `riderkey` column (html_table hides it).
+const _RIDER_LINK = "../riders.html#"
+rider_html_table(df; kwargs...) = html_table(df; rider_link_base=_RIDER_LINK, kwargs...)
 
 function load_league_winners()
     toml_path = joinpath(@__DIR__, "..", "data", "league_winners.toml")
@@ -146,7 +151,7 @@ function _write_top_scorers!(io::IOBuffer, scorers::DataFrame;
     has_class::Bool=false, heading::String="Top scorers")
     write(io, html_heading(heading, 3))
     top_n = min(15, nrow(scorers))
-    top_cols = [:rider, :team, :cost, :score, :value]
+    top_cols = [:rider, :team, :cost, :score, :value, :riderkey]
     has_class && push!(top_cols, :class)
     top = scorers[1:top_n, top_cols]
     top[!, :value] = round.(Int, top.value)
@@ -154,7 +159,7 @@ function _write_top_scorers!(io::IOBuffer, scorers::DataFrame;
         :score => :Points, :value => :Value]
     has_class && push!(col_renames, :class => :Class)
     rename!(top, col_renames...)
-    write(io, html_table(top))
+    write(io, rider_html_table(top))
 end
 
 """Set of riderkeys who finished the race (from archived PCS GC results), or `nothing`
@@ -188,8 +193,9 @@ function _write_biggest_hauls!(io::IOBuffer, per_stage, stages)
         Stage=top.stage,
         Type=[get(type_map, s, "—") for s in top.stage],
         Points=top.score,
+        riderkey=top.riderkey,
     )
-    write(io, html_table(df))
+    write(io, rider_html_table(df))
 end
 
 """Write best value picks table."""
@@ -197,7 +203,7 @@ function _write_best_value!(io::IOBuffer, scorers::DataFrame; has_class::Bool=fa
     write(io, html_heading("Best value picks", 3))
     write(io, "<p>The ten riders who scored the most points per credit spent.</p>\n")
     best_value = sort(scorers, :value, rev=true)
-    bv_cols = [:rider, :team, :cost, :score, :value]
+    bv_cols = [:rider, :team, :cost, :score, :value, :riderkey]
     has_class && push!(bv_cols, :class)
     top_val = best_value[1:min(10, nrow(best_value)), bv_cols]
     top_val[!, :value] = round.(Int, top_val.value)
@@ -205,7 +211,7 @@ function _write_best_value!(io::IOBuffer, scorers::DataFrame; has_class::Bool=fa
         :score => :Points, :value => :Value]
     has_class && push!(col_renames, :class => :Class)
     rename!(top_val, col_renames...)
-    write(io, html_table(top_val))
+    write(io, rider_html_table(top_val))
 end
 
 """Write "The ones to avoid" section: priciest blanks and premium disappointments.
@@ -224,9 +230,9 @@ function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame, finishers=not
     if nrow(pricey_zeroes) > 0
         write(io, "<p>The most expensive riders who $(fin_clause)failed to score a single point.</p>\n")
         sort!(pricey_zeroes, :cost, rev=true)
-        display_df = pricey_zeroes[1:min(5, nrow(pricey_zeroes)), [:rider, :team, :cost, :score]]
+        display_df = pricey_zeroes[1:min(5, nrow(pricey_zeroes)), [:rider, :team, :cost, :score, :riderkey]]
         rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Points)
-        write(io, html_table(display_df))
+        write(io, rider_html_table(display_df))
     elseif finishers !== nothing
         write(io, "<p>Every rider priced at 8+ credits who finished the race scored at least once &mdash; the priciest blanks all abandoned (see below).</p>\n")
     else
@@ -238,11 +244,11 @@ function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame, finishers=not
     premium = filter(row -> row.cost >= 8 && row.score > 0, blame)
     if nrow(premium) > 0
         sort!(premium, :value)
-        display_df = premium[1:min(5, nrow(premium)), [:rider, :team, :cost, :score, :value]]
+        display_df = premium[1:min(5, nrow(premium)), [:rider, :team, :cost, :score, :value, :riderkey]]
         display_df[!, :value] = round.(Int, display_df.value)
         rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost,
             :score => :Points, :value => :Value)
-        write(io, html_table(display_df))
+        write(io, rider_html_table(display_df))
     end
 
     # Expensive riders who abandoned — separated from genuine underperformance.
@@ -253,12 +259,13 @@ function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame, finishers=not
             write(io, "<p>Pricey picks who crashed out or withdrew before the finish. Points shown are what they managed beforehand &mdash; lost potential rather than necessarily a bad pick.</p>\n")
             sort!(dnf, :value)  # most credits wasted first; big-scoring late abandons last
             top = dnf[1:min(8, nrow(dnf)), :]
-            display_df = DataFrame(Rider=top.rider, Team=top.team, Cost=top.cost, Points=top.score)
+            display_df = DataFrame(Rider=top.rider, Team=top.team, Cost=top.cost,
+                Points=top.score, riderkey=top.riderkey)
             if abandons !== nothing
                 display_df[!, Symbol("Abandoned on")] =
                     [haskey(abandons, k) ? "Stage $(abandons[k])" : "—" for k in top.riderkey]
             end
-            write(io, html_table(display_df))
+            write(io, rider_html_table(display_df))
         end
     end
 end
@@ -404,10 +411,10 @@ function report_html(;
         diff_str = winner_score > 0 ? " That's <strong>$(commafmt(optimal_score - winner_score))</strong> points more than our league winner." : ""
         write(io, "<p>The perfect team scores <strong>$(commafmt(optimal_score))</strong> points, costing <strong>$(optimal_cost)</strong> out of 100 credits.$diff_str</p>\n")
 
-        display_df = sort(optimal_team[:, [:rider, :team, :cost, :score, :value]], :score, rev=true)
+        display_df = sort(optimal_team[:, [:rider, :team, :cost, :score, :value, :riderkey]], :score, rev=true)
         display_df[!, :value] = round.(Int, display_df.value)
         rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Points, :value => :Value)
-        write(io, html_table(display_df))
+        write(io, rider_html_table(display_df))
     end
 
     # Cheapest winning team
@@ -418,10 +425,10 @@ function report_html(;
         write(io, html_heading("The cheapest winning team", 2))
         write(io, "<p>What's the minimum investment that could have beaten <strong>$(winner_name)</strong>? This team scores <strong>$(commafmt(cheapest_score))</strong> points for just <strong>$(cheapest_cost)</strong> credits, leaving <strong>$(100 - cheapest_cost)</strong> credits on the table.</p>\n")
 
-        display_df = sort(cheapest_team[:, [:rider, :team, :cost, :score, :value]], :score, rev=true)
+        display_df = sort(cheapest_team[:, [:rider, :team, :cost, :score, :value, :riderkey]], :score, rev=true)
         display_df[!, :value] = round.(Int, display_df.value)
         rename!(display_df, :rider => :Rider, :team => :Team, :cost => :Cost, :score => :Points, :value => :Value)
-        write(io, html_table(display_df))
+        write(io, rider_html_table(display_df))
     end
 
     # Shared sections
@@ -623,7 +630,7 @@ function stage_race_report_html(;
         diff_str = winner_score > 0 ? " That's <strong>$(commafmt(optimal_score - winner_score))</strong> points more than our league winner." : ""
         write(io, "<p>The perfect team scores <strong>$(commafmt(optimal_score))</strong> points, costing <strong>$(optimal_cost)</strong> out of 100 credits.$diff_str</p>\n")
 
-        opt_cols = [:rider, :team, :cost, :score, :value]
+        opt_cols = [:rider, :team, :cost, :score, :value, :riderkey]
         has_class && push!(opt_cols, :class)
         display_df = sort(optimal_team[:, opt_cols], :score, rev=true)
         display_df[!, :value] = round.(Int, display_df.value)
@@ -631,7 +638,7 @@ function stage_race_report_html(;
             :score => :Points, :value => :Value]
         has_class && push!(col_renames, :class => :Class)
         rename!(display_df, col_renames...)
-        write(io, html_table(display_df))
+        write(io, rider_html_table(display_df))
     end
 
     # --- Section 3: Cheapest winning team ---
@@ -642,7 +649,7 @@ function stage_race_report_html(;
         write(io, html_heading("The cheapest winning team", 2))
         write(io, "<p>What's the minimum investment that could have beaten <strong>$(winner_name)</strong>? This team scores <strong>$(commafmt(cheapest_score))</strong> points for just <strong>$(cheapest_cost)</strong> credits, leaving <strong>$(100 - cheapest_cost)</strong> credits on the table.</p>\n")
 
-        ch_cols = [:rider, :team, :cost, :score, :value]
+        ch_cols = [:rider, :team, :cost, :score, :value, :riderkey]
         has_class && push!(ch_cols, :class)
         display_df = sort(cheapest_team[:, ch_cols], :score, rev=true)
         display_df[!, :value] = round.(Int, display_df.value)
@@ -650,7 +657,7 @@ function stage_race_report_html(;
             :score => :Points, :value => :Value]
         has_class && push!(col_renames, :class => :Class)
         rename!(display_df, col_renames...)
-        write(io, html_table(display_df))
+        write(io, rider_html_table(display_df))
     end
 
     # --- Section 4: Stage-by-stage progression ---
@@ -943,11 +950,537 @@ function _find_grand_tour(pcs_slug::String)
     return nothing
 end
 
+# ---------------------------------------------------------------------------
+# Rider lookup: cross-event "how did rider X do?" data + search page
+# ---------------------------------------------------------------------------
+
+function _ordinal(n::Integer)
+    n <= 0 && return "—"
+    suffix = (n % 100 in 11:13) ? "th" : get(Dict(1 => "st", 2 => "nd", 3 => "rd"), n % 10, "th")
+    return "$n$suffix"
+end
+
+"""riderkey => (rank, label) for a one-day race, from archived PCS finishing positions."""
+function _oneday_finish_lookup(pcs_slug, year)
+    d = Dict{String,Tuple{Int,String}}()
+    pcs = load_race_snapshot("pcs_results", pcs_slug, year)
+    pcs === nothing && return d
+    for r in eachrow(pcs)
+        pos = r.position
+        d[r.riderkey] = pos >= Velogames.DNF_POSITION ? (Velogames.DNF_POSITION, "DNF") : (pos, _ordinal(pos))
+    end
+    return d
+end
+
+"""riderkey => (rank, label) for a stage race, from archived GC results and abandons.
+Abandons take precedence over a GC placing (a rider who abandoned has no GC time)."""
+function _stage_finish_lookup(pcs_slug, year)
+    d = Dict{String,Tuple{Int,String}}()
+    gc = load_race_snapshot("pcs_gc_results", pcs_slug, year)
+    if gc !== nothing
+        for r in eachrow(gc)
+            r.position < Velogames.DNF_POSITION || continue
+            d[r.riderkey] = (r.position, "GC " * _ordinal(r.position))
+        end
+    end
+    abandons = load_race_snapshot("pcs_abandons", pcs_slug, year)
+    if abandons !== nothing
+        for r in eachrow(abandons)
+            d[r.riderkey] = (Velogames.DNF_POSITION, "DNF · st $(r.abandon_stage)")
+        end
+    end
+    return d
+end
+
+"""Collect one normalised row per (rider, race) across one-day classics and grand tours,
+reconciling the two result schemas into a single shape the lookup page can search."""
+function collect_rider_rows(years)
+    rows = Any[]
+
+    # One-day classics
+    for r in eachrow(list_completed_races(years))
+        df = try
+            load_report_data(r.pcs_slug, r.year; cache_config=_report_cache)
+        catch e
+            @warn "lookup: skipped one-day $(r.pcs_slug) $(r.year): $e"
+            nothing
+        end
+        df === nothing && continue
+        finish = _oneday_finish_lookup(r.pcs_slug, r.year)
+        for rr in eachrow(df)
+            rank, label = get(finish, rr.riderkey, (0, ""))
+            (rank == 0 && rr.score == 0) && continue  # neither a recorded finish nor any points
+            push!(rows, (
+                rider=rr.rider, key=rr.riderkey, team=rr.team,
+                event=r.name, year=r.year, type="oneday", date=r.date,
+                cost=rr.cost, points=rr.score, finish=label, rank=rank,
+                report="reports/$(r.pcs_slug)-$(r.year).html",
+            ))
+        end
+    end
+
+    # Grand tours
+    for gt in GRAND_TOUR_RACES, year in years
+        load_race_snapshot("vg_stage_totals", gt.pcs_slug, year) === nothing && continue
+        df = try
+            load_stage_race_report_data(gt.pcs_slug, year; cache_config=_report_cache)
+        catch e
+            @warn "lookup: skipped stage $(gt.pcs_slug) $year: $e"
+            nothing
+        end
+        df === nothing && continue
+        finish = _stage_finish_lookup(gt.pcs_slug, year)
+        date = "$year-$(lpad(gt.month, 2, '0'))-15"
+        for rr in eachrow(df)
+            rank, label = get(finish, rr.riderkey, (0, "Finished"))
+            (rank == 0 && rr.score == 0) && continue
+            push!(rows, (
+                rider=rr.rider, key=rr.riderkey, team=rr.team,
+                event=gt.name, year=year, type="tour", date=date, slug=gt.pcs_slug,
+                cost=rr.cost, points=rr.score, finish=label, rank=rank,
+                report="reports/$(gt.pcs_slug)-$year.html",
+            ))
+        end
+    end
+
+    return rows
+end
+
+"""Per-stage grand-tour detail for the dossier, keyed "<riderkey>|<slug>|<year>" => array of
+(s, pos, pts, win): per-stage VG points joined to the rider's PCS stage finish. Built only for
+riders who scored VG points in that grand tour (the relevant set); lazy-loaded by the page."""
+function collect_stage_rows(years)
+    out = Dict{String,Vector{Any}}()
+    for gt in GRAND_TOUR_RACES, year in years
+        vg = load_race_snapshot("vg_stage_results", gt.pcs_slug, year)
+        vg === nothing && continue
+        pcs = load_race_snapshot("pcs_stage_results", gt.pcs_slug, year)
+
+        posmap = Dict{Tuple{String,Int},Int}()
+        if pcs !== nothing
+            for r in eachrow(pcs)
+                posmap[(r.riderkey, r.stage)] = r.position
+            end
+        end
+        vgmap = Dict{Tuple{String,Int},Int}()
+        riders = String[]
+        for r in eachrow(vg)
+            vgmap[(r.riderkey, r.stage)] = r.score
+            push!(riders, r.riderkey)
+        end
+
+        for key in unique(riders)
+            entries = Any[]
+            for s in 1:gt.n_stages
+                pts = get(vgmap, (key, s), 0)
+                p = get(posmap, (key, s), Velogames.DNF_POSITION)
+                has_pos = p < Velogames.DNF_POSITION
+                (pts == 0 && !has_pos) && continue
+                push!(entries, (s=s, pos=has_pos ? _ordinal(p) : "", pts=pts, win=has_pos && p == 1))
+            end
+            isempty(entries) || (out["$key|$(gt.pcs_slug)|$year"] = entries)
+        end
+    end
+    return out
+end
+
+const _LOOKUP_BODY = raw"""
+<style>
+  /* Lookup page sits on the shared masthead/paper card; widen it and drop the empty TOC. */
+  nav#toc { display: none; }
+  .page-body { max-width: 1060px; }
+  main.content { max-width: none; }
+
+  .lookup-intro { color: var(--ink-soft); margin: 0 0 1.6em; max-width: 46em; }
+
+  /* ---- Search field ---- */
+  .search-wrap { position: relative; max-width: 30em; margin: 0 0 1.1em; }
+  .search-wrap .ico {
+    position: absolute; left: 1em; top: 50%; transform: translateY(-50%);
+    width: 18px; height: 18px; color: var(--ink-soft); pointer-events: none;
+  }
+  #q {
+    width: 100%; font-family: var(--font-body); font-size: 1.08em; color: var(--ink);
+    padding: 0.85em 1em 0.85em 2.9em; background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 10px; outline: none;
+    box-shadow: 0 1px 2px rgba(15, 35, 55, 0.05); transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  #q::placeholder { color: #aab1b8; }
+  #q:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+
+  .suggest {
+    list-style: none; margin: 0.4em 0 0; padding: 0.3em; position: absolute; z-index: 20;
+    left: 0; right: 0; background: var(--paper); border: 1px solid var(--rule);
+    border-radius: 10px; box-shadow: 0 10px 30px rgba(15, 35, 55, 0.12); display: none;
+  }
+  .suggest.open { display: block; }
+  .suggest li {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 1em;
+    padding: 0.55em 0.8em; border-radius: 7px; cursor: pointer; margin: 0;
+  }
+  .suggest li.on, .suggest li:hover { background: #f3efe6; box-shadow: inset 2px 0 0 var(--accent); }
+  .suggest .s-name { font-weight: 600; color: var(--ink); }
+  .suggest .s-team { font-size: 0.82em; color: var(--ink-soft); text-align: right; }
+
+  /* ---- Example chips ---- */
+  .examples { display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center; margin: 0 0 0.5em; }
+  .examples .ex-label {
+    font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.09em;
+    font-weight: 700; color: var(--ink-soft); margin-right: 0.2em;
+  }
+  .chip {
+    font-family: var(--font-body); font-size: 0.86em; color: var(--navy); cursor: pointer;
+    background: #faf8f3; border: 1px solid var(--rule); border-radius: 999px;
+    padding: 0.34em 0.95em; transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .chip:hover { background: var(--navy); border-color: var(--navy); color: #fff; }
+
+  /* ---- Empty state ---- */
+  .empty-state {
+    margin-top: 2.4em; padding: 2.2em 0 1em; border-top: 1px solid var(--rule-soft);
+    color: var(--ink-soft);
+  }
+  .empty-state .big {
+    font-family: var(--font-display); font-size: 1.5em; color: var(--navy);
+    margin: 0 0 0.3em; font-weight: 600;
+  }
+
+  /* ---- Dossier ---- */
+  .dossier { margin-top: 1.8em; opacity: 0; }
+  .dossier.show { animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+
+  .dossier-head { border-bottom: 2px solid var(--accent); padding-bottom: 0.7em; margin-bottom: 1.4em; }
+  .dossier-head .eyebrow {
+    font-size: 0.76em; text-transform: uppercase; letter-spacing: 0.1em;
+    font-weight: 700; color: var(--ink-soft); margin: 0 0 0.25em;
+  }
+  .dossier-head h2 {
+    font-family: var(--font-display); font-size: clamp(2em, 5vw, 2.9em); line-height: 1.04;
+    letter-spacing: -0.015em; color: var(--navy); margin: 0; border: none; padding: 0;
+  }
+
+  .disc { margin: 0 0 1.5em; }
+  .disc-label {
+    font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700;
+    color: var(--ink-soft); margin: 0 0 0.55em; padding-bottom: 0.4em; border-bottom: 1px solid var(--rule-soft);
+  }
+  .statstrip { display: flex; flex-wrap: wrap; gap: 0; margin: 0; }
+  .disc:last-of-type { margin-bottom: 1.8em; }
+  .stat { flex: 1 1 0; min-width: 8em; padding: 0.2em 1.3em 0.2em 0; border-right: 1px solid var(--rule-soft); }
+  .stat:last-child { border-right: none; }
+  .stat .v { font-family: var(--font-display); font-size: 1.95em; font-weight: 600; color: var(--navy); line-height: 1.1; }
+  .stat .v.dnf { color: #a23b34; }
+  .stat .l { font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: var(--ink-soft); margin-top: 0.25em; }
+
+  .season-label {
+    font-family: var(--font-display); font-size: 1.25em; font-weight: 600; color: var(--ink);
+    margin: 1.7em 0 0.2em; display: flex; align-items: center; gap: 0.8em;
+  }
+  .season-label::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+
+  table.ledger { table-layout: fixed; }
+  table.ledger th.c-pts, table.ledger td.c-pts { text-align: right; }
+  table.ledger td.c-event { font-weight: 600; }
+  table.ledger td.c-event .ev-tour { font-weight: 400; font-size: 0.8em; color: var(--ink-soft); margin-left: 0.5em; letter-spacing: 0.02em; }
+  table.ledger td.c-date { color: var(--ink-soft); white-space: nowrap; }
+
+  .res { display: inline-block; padding: 0.12em 0.7em; border-radius: 999px; font-size: 0.82em; font-weight: 700; white-space: nowrap; }
+  .res-podium { background: color-mix(in srgb, var(--accent) 26%, transparent); color: #8a6400; }
+  .res-top { background: rgba(10, 106, 168, 0.12); color: #0a5a8f; }
+  .res-pack { color: var(--ink-soft); font-weight: 600; }
+  .res-dnf { background: rgba(162, 59, 52, 0.12); color: #a23b34; }
+
+  .ptscell { display: flex; align-items: center; justify-content: flex-end; gap: 0.7em; }
+  .ptscell .pv { font-variant-numeric: tabular-nums; min-width: 2.6em; text-align: right; font-weight: 600; }
+  .ptscell .pv.zero { color: #aab1b8; font-weight: 400; }
+  .spark { width: 4.5em; height: 7px; border-radius: 4px; background: var(--rule-soft); overflow: hidden; }
+  .spark > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #c0712a)); border-radius: 4px; }
+
+  .footnote { font-size: 0.78em; color: var(--ink-soft); margin-top: 1.6em; padding-top: 0.9em; border-top: 1px solid var(--rule-soft); }
+
+  /* Expandable grand-tour rows */
+  table.ledger tr.tour-row { cursor: pointer; }
+  table.ledger tr.tour-row:hover { background: #f3efe6; }
+  table.ledger tr.tour-row .caret {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.6em; height: 1.6em; margin-right: 0.55em; vertical-align: middle;
+    border-radius: 6px; background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: #8a6400; font-size: 0.78em; font-weight: 700;
+    transition: background 0.12s;
+  }
+  table.ledger tr.tour-row:hover .caret { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+  table.ledger tr.tour-row.open .caret { background: var(--accent); color: #fff; }
+  tr.stage-detail > td { background: #faf8f3; padding: 0.5em 1.1em 0.9em; }
+  .stage-wrap { max-width: 34em; }
+  table.stage-table { width: 100%; border-collapse: collapse; margin: 0; font-size: 0.86em; box-shadow: none; border-radius: 0; }
+  table.stage-table th { background: transparent; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.86em; border-bottom: 1px solid var(--rule); padding: 0.3em 0.7em; }
+  table.stage-table td { padding: 0.32em 0.7em; border-bottom: 1px solid var(--rule-soft); }
+  table.stage-table tbody tr:last-child td { border-bottom: none; }
+  table.stage-table td.st-n { color: var(--ink-soft); white-space: nowrap; font-weight: 600; }
+  .st-pos { color: var(--ink-soft); }
+  .st-none { color: var(--ink-soft); font-size: 0.9em; margin: 0.2em 0; }
+
+  .dossier.show .season-block { animation: rise 0.4s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+
+  @media (max-width: 560px) {
+    .stat { flex-basis: 50%; border-right: none; }
+    .spark { display: none; }
+  }
+</style>
+
+<p class="lookup-intro">Type a rider&rsquo;s name to see every race they rode this season &mdash; where they finished, and how many Velogames points they scored. Share a dossier by copying its link.</p>
+
+<div class="search-wrap">
+  <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+  <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Search a rider — e.g. Pogačar, Ballerini" aria-label="Search for a rider" />
+  <ul id="sugg" class="suggest" role="listbox"></ul>
+</div>
+<div id="examples" class="examples"></div>
+
+<div id="dossier" class="dossier"></div>
+<div id="empty" class="empty-state">
+  <p class="big">Who are you looking for?</p>
+  <p>Search by surname or full name. Results cover every classic and grand tour we have data for.</p>
+</div>
+
+<script>
+(function () {
+  var norm = function (s) { return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(); };
+  var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); };
+  var ord = function (n) { var s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+  var fmt = function (n) { return n.toLocaleString("en-GB"); };
+  var fmtDate = function (iso) { var d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); };
+
+  var RIDERS = new Map();
+  var LIST = [];
+  var q = document.getElementById("q");
+  var sugg = document.getElementById("sugg");
+  var matches = [], active = -1;
+
+  fetch("riders.json").then(function (r) { return r.json(); }).then(function (rows) {
+    rows.forEach(function (r) {
+      if (!RIDERS.has(r.key)) RIDERS.set(r.key, { name: r.rider, key: r.key, team: r.team, races: [], _y: -1 });
+      var e = RIDERS.get(r.key);
+      e.races.push(r);
+      if (r.year > e._y) { e._y = r.year; e.team = r.team; }  // display the most recent team
+    });
+    LIST = Array.from(RIDERS.values()).map(function (e) {
+      return { name: e.name, key: e.key, team: e.team, n: norm(e.name) };
+    }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+    buildExamples();
+    if (location.hash.length > 1) {
+      var k = decodeURIComponent(location.hash.slice(1));
+      if (RIDERS.has(k)) { q.value = RIDERS.get(k).name; render(k); }
+    }
+  });
+
+  function buildExamples() {
+    var tops = Array.from(RIDERS.values()).map(function (e) {
+      return { key: e.key, name: e.name, pts: e.races.reduce(function (s, r) { return s + r.points; }, 0) };
+    }).sort(function (a, b) { return b.pts - a.pts; }).slice(0, 5);
+    var box = document.getElementById("examples");
+    box.innerHTML = '<span class="ex-label">Try</span>' + tops.map(function (t) {
+      return '<button class="chip" data-key="' + esc(t.key) + '">' + esc(t.name) + "</button>";
+    }).join("");
+    Array.prototype.forEach.call(box.querySelectorAll(".chip"), function (b) {
+      b.onclick = function () { select(b.getAttribute("data-key")); };
+    });
+  }
+
+  function renderSugg() {
+    if (!matches.length) { closeSugg(); return; }
+    sugg.innerHTML = matches.map(function (m, i) {
+      return '<li role="option" data-key="' + esc(m.key) + '" class="' + (i === active ? "on" : "") + '">' +
+        '<span class="s-name">' + esc(m.name) + '</span><span class="s-team">' + esc(m.team) + "</span></li>";
+    }).join("");
+    sugg.classList.add("open");
+    Array.prototype.forEach.call(sugg.querySelectorAll("li"), function (li) {
+      li.onmousedown = function (e) { e.preventDefault(); select(li.getAttribute("data-key")); };
+    });
+  }
+  function closeSugg() { sugg.classList.remove("open"); sugg.innerHTML = ""; matches = []; active = -1; }
+
+  q.addEventListener("input", function () {
+    var v = norm(q.value.trim());
+    if (!v) { closeSugg(); return; }
+    matches = LIST.filter(function (e) { return e.n.indexOf(v) !== -1; }).slice(0, 8);
+    active = -1; renderSugg();
+  });
+  q.addEventListener("keydown", function (e) {
+    if (!matches.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); active = (active + 1) % matches.length; renderSugg(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; renderSugg(); }
+    else if (e.key === "Enter") { e.preventDefault(); select(matches[active >= 0 ? active : 0].key); }
+    else if (e.key === "Escape") { closeSugg(); }
+  });
+  document.addEventListener("click", function (e) { if (!e.target.closest(".search-wrap")) closeSugg(); });
+
+  function select(key) {
+    var e = RIDERS.get(key);
+    if (!e) return;
+    q.value = e.name; closeSugg();
+    history.replaceState(null, "", "#" + encodeURIComponent(key));
+    render(key);
+  }
+
+  function resClass(r) {
+    if (r.rank >= 1 && r.rank <= 3) return "res res-podium";
+    if (/^DNF/.test(r.finish)) return "res res-dnf";
+    if (r.rank >= 1 && r.rank <= 10) return "res res-top";
+    return "res-pack";
+  }
+
+  // Per-stage grand-tour detail (lazy-loaded once, on first expand).
+  var STAGES = null, stagesP = null;
+  function loadStages() {
+    if (STAGES) return Promise.resolve(STAGES);
+    if (!stagesP) stagesP = fetch("stages.json").then(function (r) { return r.json(); }).then(function (m) { STAGES = m; return m; });
+    return stagesP;
+  }
+
+  function reportHref(r, e) {
+    return r.report + "?rider=" + encodeURIComponent(e.key) + "&name=" + encodeURIComponent(e.name);
+  }
+
+  function stageDetailHtml(entries) {
+    var maxP = entries.reduce(function (m, x) { return Math.max(m, x.pts); }, 1);
+    var body = entries.map(function (x) {
+      var w = Math.round((x.pts / maxP) * 100);
+      var bar = x.pts > 0 ? '<span class="spark"><span style="width:' + w + '%"></span></span>' : "";
+      var pv = '<span class="pv' + (x.pts > 0 ? "" : " zero") + '">' + fmt(x.pts) + "</span>";
+      var pos = x.pos
+        ? '<span class="' + (x.win ? "res res-podium" : "st-pos") + '">' + esc(x.pos) + (x.win ? " · win" : "") + "</span>"
+        : '<span class="st-pos">—</span>';
+      return '<tr><td class="st-n">Stage ' + x.s + "</td><td>" + pos +
+        '</td><td class="c-pts"><span class="ptscell">' + bar + pv + "</span></td></tr>";
+    }).join("");
+    return '<table class="stage-table"><thead><tr><th>Stage</th><th>Finish</th>' +
+      '<th class="c-pts">VG pts</th></tr></thead><tbody>' + body + "</tbody></table>";
+  }
+
+  function toggleStage(row) {
+    var open = row.classList.toggle("open");
+    var caret = row.querySelector(".caret");
+    if (caret) caret.textContent = open ? "▾" : "▸";
+    var next = row.nextElementSibling;
+    if (!open) { if (next && next.className === "stage-detail") next.remove(); return; }
+    var dr = document.createElement("tr");
+    dr.className = "stage-detail";
+    dr.innerHTML = '<td colspan="4"><div class="stage-wrap">Loading…</div></td>';
+    row.parentNode.insertBefore(dr, row.nextSibling);
+    loadStages().then(function (map) {
+      var entries = map[row.getAttribute("data-stagekey")];
+      dr.querySelector(".stage-wrap").innerHTML =
+        entries && entries.length ? stageDetailHtml(entries) : '<p class="st-none">No per-stage VG points recorded.</p>';
+    });
+  }
+
+  // One delegated handler survives dossier re-renders (#dossier itself is never replaced).
+  document.getElementById("dossier").addEventListener("click", function (ev) {
+    var row = ev.target.closest(".tour-row");
+    if (!row || ev.target.closest("a")) return;  // let the race-name link navigate
+    toggleStage(row);
+  });
+
+  function render(key) {
+    var e = RIDERS.get(key);
+    if (!e) return;
+    document.getElementById("empty").style.display = "none";
+
+    var races = e.races.slice().sort(function (a, b) { return b.date.localeCompare(a.date); });
+    var oneday = races.filter(function (r) { return r.type === "oneday"; });
+    var tours = races.filter(function (r) { return r.type === "tour"; });
+    var maxPts = Math.max(1, Math.max.apply(null, races.map(function (r) { return r.points; })));
+    var hasTour = tours.length > 0;
+
+    var years = Array.from(new Set(races.map(function (r) { return r.year; }))).sort(function (a, b) { return b - a; });
+
+    var html = "";
+    html += '<div class="dossier-head"><p class="eyebrow">' + esc(e.team) + '</p><h2>' + esc(e.name) + "</h2></div>";
+
+    // Separate VG-performance rows per discipline — classics and grand tours are on different
+    // points scales, so blending them into one average is misleading. A row is shown only when
+    // the rider has races of that type.
+    html += discStrip("Classics", oneday, "Avg pts / race");
+    html += discStrip("Grand tours", tours, "Avg pts / tour");
+
+    years.forEach(function (yr, yi) {
+      var yrRaces = races.filter(function (r) { return r.year === yr; });
+      html += '<div class="season-block" style="animation-delay:' + (yi * 0.06) + 's">';
+      html += '<div class="season-label">' + yr + " season</div>";
+      html += '<table class="table ledger"><thead><tr>' +
+        '<th>Race</th><th>Date</th><th>Result</th><th class="c-pts">Velogames pts</th>' +
+        "</tr></thead><tbody>";
+      yrRaces.forEach(function (r) {
+        var w = Math.round((r.points / maxPts) * 100);
+        var isTour = r.type === "tour";
+        var caret = isTour ? '<span class="caret">▸</span>' : "";
+        var tourTag = isTour ? '<span class="ev-tour">Grand Tour</span>' : "";
+        var spark = r.points > 0 ? '<span class="spark"><span style="width:' + w + '%"></span></span>' : "";
+        var pv = '<span class="pv' + (r.points > 0 ? "" : " zero") + '">' + fmt(r.points) + "</span>";
+        var stagekey = isTour ? (key + "|" + r.slug + "|" + r.year) : "";
+        html += "<tr" + (isTour ? ' class="tour-row" data-stagekey="' + esc(stagekey) + '"' : "") + ">" +
+          '<td class="c-event">' + caret + '<a href="' + esc(reportHref(r, e)) + '">' + esc(r.event) + "</a>" + tourTag + "</td>" +
+          '<td class="c-date">' + fmtDate(r.date) + "</td>" +
+          '<td><span class="' + resClass(r) + '">' + esc(r.finish || "—") + "</span></td>" +
+          '<td class="c-pts"><span class="ptscell">' + spark + pv + "</span></td>" +
+          "</tr>";
+      });
+      html += "</tbody></table></div>";
+    });
+
+    var notes = [];
+    if (races.some(function (r) { return !r.finish; })) {
+      notes.push("A dash (—) means the finishing position for that race hasn’t been recorded — PCS placings were archived from 2026, so earlier one-day races show Velogames points only.");
+    }
+    if (hasTour) {
+      notes.push("Grand-tour points are full-race totals; click a grand tour to break it down by stage.");
+    }
+    if (notes.length) html += '<p class="footnote">' + notes.join(" ") + "</p>";
+
+    var d = document.getElementById("dossier");
+    d.innerHTML = html;
+    d.classList.remove("show"); void d.offsetWidth; d.classList.add("show");
+  }
+
+  function stat(value, label, dnfStyle) {
+    return '<div class="stat"><div class="v' + (dnfStyle ? " dnf" : "") + '">' + esc(value) + '</div><div class="l">' + esc(label) + "</div></div>";
+  }
+
+  // A labelled VG-performance row for one discipline (Velogames pts, avg, value, best haul),
+  // all computed within that discipline. Returns "" when the rider has no races of the type.
+  function discStrip(label, arr, avgLabel) {
+    if (!arr.length) return "";
+    var tot = arr.reduce(function (s, r) { return s + r.points; }, 0);
+    var cost = arr.reduce(function (s, r) { return s + (r.cost || 0); }, 0);
+    var best = arr.reduce(function (m, r) { return Math.max(m, r.points); }, 0);
+    var ppc = cost ? (tot / cost) : 0;
+    return '<div class="disc"><div class="disc-label">' + esc(label) + " &middot; " + arr.length +
+      (arr.length === 1 ? " race" : " races") + "</div>" +
+      '<div class="statstrip">' +
+        stat(fmt(tot), "Velogames pts") +
+        stat(fmt(Math.round(tot / arr.length)), avgLabel) +
+        stat(ppc.toFixed(1), "Points / credit") +
+        stat(fmt(best), "Best haul") +
+      "</div></div>";
+  }
+})();
+</script>
+"""
+
+lookup_page_html() = html_page(;
+    title="Rider lookup",
+    subtitle="How did any rider do? Search every race of the season",
+    body=_LOOKUP_BODY,
+    home_url="index.html",
+)
+
 function index_html(; reports_dir)
     report_files = isdir(reports_dir) ? filter(f -> endswith(f, ".html"), readdir(reports_dir)) : String[]
 
     io = IOBuffer()
     write(io, "<p>A look back at each race in the season: who delivered, who disappointed, and what the perfect team would have been.</p>\n")
+    write(io, "<p style=\"margin:1.2em 0 0.4em\"><a href=\"riders.html\" style=\"display:inline-block;background:var(--navy);color:#fff;font-weight:600;padding:0.6em 1.2em;border-radius:8px;text-decoration:none\">Look up any rider&rsquo;s season &rarr;</a></p>\n")
 
     if isempty(report_files)
         write(io, "<p>No race reports generated yet.</p>\n")
@@ -1137,6 +1670,18 @@ function main()
             end
         end
     end
+
+    # Rider lookup data + page (always rebuilt — the JSON must cover every race)
+    rider_rows = collect_rider_rows(years)
+    open(joinpath(docs_dir, "riders.json"), "w") do io
+        JSON3.write(io, rider_rows)
+    end
+    stage_detail = collect_stage_rows(years)
+    open(joinpath(docs_dir, "stages.json"), "w") do io
+        JSON3.write(io, stage_detail)
+    end
+    write(joinpath(docs_dir, "riders.html"), lookup_page_html())
+    println("  Generated riders.json ($(length(rider_rows)) rows), stages.json ($(length(stage_detail)) rider-tours) and riders.html")
 
     # Generate index page
     index = index_html(; reports_dir=reports_dir)
