@@ -47,14 +47,24 @@ function html_table(
     df::DataFrame;
     caption::String="",
     team_cols::Vector{Symbol}=[:team, :Team],
+    rider_link_base::String="",
 )
     display = copy(df)
     round_numeric_columns!(display)
     clean_team_names!(display, intersect(team_cols, propertynames(display)))
 
+    cols = names(display)
+    # Optional rider-name hyperlinks: when a base is given and the frame carries both a
+    # rider-name column and a riderkey column, link each name to its dossier and hide the key.
+    keycol = findfirst(c -> lowercase(c) == "riderkey", cols)
+    ridercol = findfirst(c -> lowercase(c) in ("rider", "name"), cols)
+    linking = !isempty(rider_link_base) && keycol !== nothing && ridercol !== nothing
+    keyname = keycol === nothing ? "" : cols[keycol]
+    ridername = ridercol === nothing ? "" : cols[ridercol]
+    render_cols = linking ? filter(!=(keyname), cols) : cols
+
     # Numeric columns are right-aligned with tabular figures for clean place-value alignment.
-    numeric = Dict(col => (eltype(display[!, col]) <: Union{Missing,Number})
-                   for col in names(display))
+    numeric = Dict(col => (eltype(display[!, col]) <: Union{Missing,Number}) for col in cols)
 
     io = IOBuffer()
     write(io, "<table class=\"table table-striped table-sm\">\n")
@@ -62,7 +72,7 @@ function html_table(
 
     # Header
     write(io, "<thead><tr>")
-    for col in names(display)
+    for col in render_cols
         cls = numeric[col] ? " class=\"num\"" : ""
         write(io, "<th$cls>$col</th>")
     end
@@ -71,11 +81,13 @@ function html_table(
     # Rows
     for row in eachrow(display)
         write(io, "<tr>")
-        for col in names(display)
+        for col in render_cols
             val = row[col]
             if col == "Class" && !ismissing(val)
                 slug = lowercase(string(val))
                 cell = "<span class=\"badge badge-$slug\">$(_class_label(slug))</span>"
+            elseif linking && col == ridername && !ismissing(val)
+                cell = "<a href=\"$(rider_link_base)$(row[keyname])\">$(string(val))</a>"
             elseif numeric[col] && val isa Integer && abs(val) >= 1000 && !occursin("year", lowercase(col))
                 cell = commafmt(val)
             else
@@ -124,9 +136,11 @@ const _TEMPLATES_DIR = joinpath(@__DIR__, "templates")
 # include_dependency so editing a template invalidates the precompiled cache.
 include_dependency(joinpath(_TEMPLATES_DIR, "page.css"))
 include_dependency(joinpath(_TEMPLATES_DIR, "toc.js"))
+include_dependency(joinpath(_TEMPLATES_DIR, "rider-backlink.js"))
 include_dependency(joinpath(_TEMPLATES_DIR, "page.html"))
 const _HTML_PAGE_CSS = read(joinpath(_TEMPLATES_DIR, "page.css"), String)
 const _HTML_PAGE_TOC_JS = read(joinpath(_TEMPLATES_DIR, "toc.js"), String)
+const _HTML_PAGE_RIDER_BACKLINK_JS = read(joinpath(_TEMPLATES_DIR, "rider-backlink.js"), String)
 const _HTML_PAGE_TEMPLATE = read(joinpath(_TEMPLATES_DIR, "page.html"), String)
 
 """
@@ -154,7 +168,8 @@ function html_page(;
     page = replace(page, "{{subtitle}}" => subtitle_html)
     page = replace(page, "{{body}}" => body)
     page = replace(page, "{{accent}}" => accent)
-    page = replace(page, "{{toc_script}}" => "<script>\n$(_HTML_PAGE_TOC_JS)</script>")
+    page = replace(page, "{{toc_script}}" =>
+        "<script>\n$(_HTML_PAGE_TOC_JS)</script>\n<script>\n$(_HTML_PAGE_RIDER_BACKLINK_JS)</script>")
     return page
 end
 
