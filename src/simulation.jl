@@ -407,6 +407,12 @@ const SIGNAL_DIMENSION_WEIGHTS = (
     # counterparts, but consumed with the sharper `odds_variance`.
     odds_points  = (flat=0.4, hilly=0.1, mountain=0.0, itt=0.0, gc=0.0),
     odds_kom     = (flat=0.0, hilly=0.0, mountain=1.0, itt=0.0, gc=0.0),
+    # Prior-edition classification standings (history, not market). A strong
+    # past points-jersey finish is evidence of flat/hilly stage ability; a strong
+    # past KOM finish is evidence of mountain ability. Same dimension routing as
+    # the jersey oracles.
+    points_history = (flat=0.4, hilly=0.1, mountain=0.0, itt=0.0, gc=0.0),
+    kom_history    = (flat=0.0, hilly=0.0, mountain=1.0, itt=0.0, gc=0.0),
 )
 
 """
@@ -469,6 +475,13 @@ remain as separate arguments to `estimate_rider_strength`.
     points_odds_implied_prob::Float64 = 0.0
     kom_odds_implied_prob::Float64 = 0.0
     stagewin_odds_implied_prob::Float64 = 0.0
+    # Prior-edition classification history (multi-dim only).
+    points_history::Vector{Float64} = Float64[]
+    points_history_years_ago::Vector{Int} = Int[]
+    points_history_penalties::Vector{Float64} = Float64[]
+    kom_history::Vector{Float64} = Float64[]
+    kom_history_years_ago::Vector{Int} = Int[]
+    kom_history_penalties::Vector{Float64} = Float64[]
 end
 
 """
@@ -849,6 +862,7 @@ function estimate_rider_strength_multidim(
             :pcs, :vg, :form, :history, :vg_history,
             :oracle_gc, :oracle_points, :oracle_kom, :qualitative,
             :odds, :odds_points, :odds_kom, :odds_stagewin,
+            :points_history, :kom_history,
         )
     )
 
@@ -927,6 +941,33 @@ function estimate_rider_strength_multidim(
         end
     end
     shifts[:history] = posterior.mean .- mean_before
+
+    # --- Points/KOM classification history (fixed dimension routing) ---
+    # Prior-edition points-jersey and KOM standings, routed to the dimensions
+    # they inform (points → flat/hilly, KOM → mountain) via SIGNAL_DIMENSION_WEIGHTS
+    # rather than the rider's class — a past green-jersey finish is direct
+    # evidence of flat/hilly ability regardless of how the rider is classed.
+    for (sig_key, obs, yrs, pens) in (
+        (:points_history, signals.points_history, signals.points_history_years_ago, signals.points_history_penalties),
+        (:kom_history, signals.kom_history, signals.kom_history_years_ago, signals.kom_history_penalties),
+    )
+        mean_before = copy(posterior.mean)
+        if !isempty(obs)
+            w_nt = getfield(SIGNAL_DIMENSION_WEIGHTS, sig_key)
+            for (i, (hist_strength, years_ago)) in enumerate(zip(obs, yrs))
+                penalty = i <= length(pens) ? pens[i] : 0.0
+                base_var = (hist_base_variance(config) + config.hist_decay_rate * years_ago + penalty) * md
+                for dsym in STRENGTH_DIMENSIONS
+                    w = getfield(w_nt, dsym)
+                    w == 0.0 && continue
+                    v = base_var / w
+                    posterior = bayesian_update_multidim_dim(posterior, hist_strength, v, dsym)
+                    precisions[sig_key][_DIM_INDEX[dsym]] += 1.0 / v
+                end
+            end
+        end
+        shifts[sig_key] = posterior.mean .- mean_before
+    end
 
     # --- VG race history (per-class projection, mirrors VG season points) ---
     mean_before = copy(posterior.mean)
@@ -2003,6 +2044,8 @@ struct AssembledSignals
 
     history_lookup::Dict{String,Vector{Tuple{Float64,Int,Float64}}}
     vg_history_lookup::Dict{String,Vector{Tuple{Float64,Int}}}
+    points_history_lookup::Dict{String,Vector{Tuple{Float64,Int,Float64}}}
+    kom_history_lookup::Dict{String,Vector{Tuple{Float64,Int,Float64}}}
     odds_lookup::Dict{String,Float64}
     oracle_lookup::Dict{String,Float64}
     points_oracle_lookup::Dict{String,Float64}
@@ -2049,6 +2092,8 @@ function _assemble_signals(
     kom_odds_df::Union{DataFrame,Nothing}=nothing,
     stagewin_odds_df::Union{DataFrame,Nothing}=nothing,
     vg_history_df::Union{DataFrame,Nothing}=nothing,
+    points_history_df::Union{DataFrame,Nothing}=nothing,
+    kom_history_df::Union{DataFrame,Nothing}=nothing,
     seasons_df::Union{DataFrame,Nothing}=nothing,
     bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
     race_year::Union{Int,Nothing}=nothing,
@@ -2265,12 +2310,32 @@ function _assemble_signals(
         end
     end
 
+    # --- Classification history lookups (points jersey, KOM) — same shape as
+    # race history: position → strength, recency, variance penalty. ---
+    function _class_hist(cls_df)
+        lookup = Dict{String,Vector{Tuple{Float64,Int,Float64}}}()
+        cls_df === nothing && return lookup
+        all(c -> c in propertynames(cls_df), (:riderkey, :position, :year)) || return lookup
+        has_pen = :variance_penalty in propertynames(cls_df)
+        for row in eachrow(cls_df)
+            (ismissing(row.position) || ismissing(row.year)) && continue
+            (row.position > 0 && row.position < 900) || continue
+            push!(get!(lookup, row.riderkey, Tuple{Float64,Int,Float64}[]),
+                (position_to_strength(row.position, n_starters), current_year - row.year,
+                    has_pen ? Float64(coalesce(row.variance_penalty, 0.0)) : 0.0))
+        end
+        return lookup
+    end
+    points_history_lookup = _class_hist(points_history_df)
+    kom_history_lookup = _class_hist(kom_history_df)
+
     return AssembledSignals(
         n_riders, n_starters, current_year,
         vg_z, effective_vg_variance,
         has_pcs, classes,
         currency_factors, rider_currency, seasons_keys,
         history_lookup, vg_history_lookup,
+        points_history_lookup, kom_history_lookup,
         odds_lookup, oracle_lookup, points_oracle_lookup, kom_oracle_lookup,
         points_odds_lookup, kom_odds_lookup, stagewin_odds_lookup,
         odds_floor, oracle_floor, points_oracle_floor, kom_oracle_floor,
@@ -2299,6 +2364,8 @@ function _estimate_strengths_multidim(
     kom_odds_df::Union{DataFrame,Nothing}=nothing,
     stagewin_odds_df::Union{DataFrame,Nothing}=nothing,
     vg_history_df::Union{DataFrame,Nothing}=nothing,
+    points_history_df::Union{DataFrame,Nothing}=nothing,
+    kom_history_df::Union{DataFrame,Nothing}=nothing,
     seasons_df::Union{DataFrame,Nothing}=nothing,
     bayesian_config::BayesianConfig=DEFAULT_BAYESIAN_CONFIG,
     race_year::Union{Int,Nothing}=nothing,
@@ -2317,6 +2384,8 @@ function _estimate_strengths_multidim(
         kom_odds_df=kom_odds_df,
         stagewin_odds_df=stagewin_odds_df,
         vg_history_df=vg_history_df,
+        points_history_df=points_history_df,
+        kom_history_df=kom_history_df,
         seasons_df=seasons_df,
         bayesian_config=bayesian_config,
         race_year=race_year,
@@ -2357,7 +2426,7 @@ function _estimate_strengths_multidim(
     vars_per_dim = [Vector{Float64}(undef, n_riders) for _ in 1:D]
     shifts_storage = Dict{Symbol,Vector{Vector{Float64}}}()
     precisions_storage = Dict{Symbol,Vector{Vector{Float64}}}()
-    for sig_key in (:pcs, :vg, :form, :history, :vg_history, :oracle_gc, :oracle_points, :oracle_kom, :qualitative, :odds, :odds_points, :odds_kom, :odds_stagewin)
+    for sig_key in (:pcs, :vg, :form, :history, :vg_history, :points_history, :kom_history, :oracle_gc, :oracle_points, :oracle_kom, :qualitative, :odds, :odds_points, :odds_kom, :odds_stagewin)
         shifts_storage[sig_key] = Vector{Vector{Float64}}(undef, n_riders)
         precisions_storage[sig_key] = Vector{Vector{Float64}}(undef, n_riders)
     end
@@ -2373,6 +2442,9 @@ function _estimate_strengths_multidim(
         vg_hist = get(sig.vg_history_lookup, key, Tuple{Float64,Int}[])
         vg_hist_strengths = Float64[h[1] for h in vg_hist]
         vg_hist_years = Int[h[2] for h in vg_hist]
+
+        pts_hist = get(sig.points_history_lookup, key, Tuple{Float64,Int,Float64}[])
+        kom_hist = get(sig.kom_history_lookup, key, Tuple{Float64,Int,Float64}[])
 
         odds_prob = get(sig.odds_lookup, key, 0.0)
         oracle_prob = get(sig.oracle_lookup, key, 0.0)
@@ -2407,6 +2479,12 @@ function _estimate_strengths_multidim(
             vg_points=sig.vg_z[i],
             vg_race_history=vg_hist_strengths,
             vg_race_history_years_ago=vg_hist_years,
+            points_history=Float64[h[1] for h in pts_hist],
+            points_history_years_ago=Int[h[2] for h in pts_hist],
+            points_history_penalties=Float64[h[3] for h in pts_hist],
+            kom_history=Float64[h[1] for h in kom_hist],
+            kom_history_years_ago=Int[h[2] for h in kom_hist],
+            kom_history_penalties=Float64[h[3] for h in kom_hist],
             odds_implied_prob=odds_prob,
             oracle_implied_prob=oracle_prob,
             points_oracle_implied_prob=points_prob,
@@ -2584,6 +2662,8 @@ function estimate_strengths(
     kom_odds_df::Union{DataFrame,Nothing}=nothing,
     stagewin_odds_df::Union{DataFrame,Nothing}=nothing,
     vg_history_df::Union{DataFrame,Nothing}=nothing,
+    points_history_df::Union{DataFrame,Nothing}=nothing,
+    kom_history_df::Union{DataFrame,Nothing}=nothing,
     qualitative_df::Union{DataFrame,Nothing}=nothing,
     form_df::Union{DataFrame,Nothing}=nothing,
     seasons_df::Union{DataFrame,Nothing}=nothing,
@@ -2607,6 +2687,8 @@ function estimate_strengths(
             kom_odds_df=kom_odds_df,
             stagewin_odds_df=stagewin_odds_df,
             vg_history_df=vg_history_df,
+            points_history_df=points_history_df,
+            kom_history_df=kom_history_df,
             seasons_df=seasons_df,
             bayesian_config=bayesian_config,
             race_year=race_year,
@@ -2857,6 +2939,8 @@ function estimate_strengths(
         kom_odds_df=data.kom_odds_df,
         stagewin_odds_df=data.stagewin_odds_df,
         vg_history_df=data.vg_history_df,
+        points_history_df=data.points_history_df,
+        kom_history_df=data.kom_history_df,
         qualitative_df=data.qualitative_df,
         form_df=data.form_df,
         seasons_df=data.seasons_df,

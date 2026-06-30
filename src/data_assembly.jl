@@ -54,6 +54,9 @@ standard data container between fetching and prediction.
     points_odds_df::Union{DataFrame,Nothing} = nothing
     kom_odds_df::Union{DataFrame,Nothing} = nothing
     stagewin_odds_df::Union{DataFrame,Nothing} = nothing
+    # Prior-edition classification history (stage races): points jersey + KOM standings
+    points_history_df::Union{DataFrame,Nothing} = nothing
+    kom_history_df::Union{DataFrame,Nothing} = nothing
 end
 
 
@@ -114,6 +117,7 @@ function assemble_pcs_race_history(
     race_year::Int,
     history_years::Int;
     race_date::Union{Date,Nothing} = nothing,
+    include_gt_history::Bool = true,
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
 )
@@ -146,11 +150,12 @@ function assemble_pcs_race_history(
     #     grand-tour cross-history (larger penalty). GT GC form transfers more
     #     noisily than a terrain-matched classic, so its observations carry more
     #     variance; recency decay on top is applied per-edition downstream. ---
+    gt_slugs = include_gt_history ? get(GT_SIMILAR_RACES, pcs_slug, String[]) : String[]
     similar_specs = vcat(
         [(slug = s, penalty = SIMILAR_RACE_VARIANCE_PENALTY, prefer_gc = false)
          for s in get(SIMILAR_RACES, pcs_slug, String[])],
         [(slug = s, penalty = GT_SIMILAR_VARIANCE_PENALTY, prefer_gc = true)
-         for s in get(GT_SIMILAR_RACES, pcs_slug, String[])],
+         for s in gt_slugs],
     )
 
     # --- Prior-year similar-race history ---
@@ -211,6 +216,59 @@ function assemble_pcs_race_history(
     end
 
     return race_history_df
+end
+
+
+"""
+    assemble_pcs_classification_history(pcs_slug, race_year, history_years, classification; ...)
+
+Fetch prior-edition standings for a grand-tour secondary classification
+(`:points` or `:kom`): same-race prior editions (penalty 0) plus grand-tour
+cross-history (Giro/Vuelta ↔ Tour, penalty `GT_SIMILAR_VARIANCE_PENALTY`),
+prior-year and within-year (gated on `race_date`). Returns a DataFrame with
+`riderkey`, `position`, `year`, `variance_penalty`, or `nothing`.
+"""
+function assemble_pcs_classification_history(
+    pcs_slug::String,
+    race_year::Int,
+    history_years::Int,
+    classification::Symbol;
+    race_date::Union{Date,Nothing} = nothing,
+    include_gt_history::Bool = true,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    isempty(pcs_slug) && return nothing
+    history_years <= 0 && return nothing
+    years = collect((race_year-history_years):(race_year-1))
+    result = nothing
+
+    function add!(slug, yrs, penalty)
+        for y in yrs
+            try
+                df = getpcsraceresults(slug, y; classification = classification,
+                    cache_config = cache_config, force_refresh = force_refresh)
+                nrow(df) == 0 && continue
+                df[!, :year] .= y
+                df[!, :variance_penalty] .= penalty
+                result = result === nothing ? df : vcat(result, df; cols = :union)
+            catch _e
+                # Skip unavailable editions
+            end
+        end
+    end
+
+    add!(pcs_slug, years, 0.0)                      # same-race prior editions
+    if include_gt_history                            # grand-tour cross-history
+        for other in get(GT_SIMILAR_RACES, pcs_slug, String[])
+            add!(other, years, GT_SIMILAR_VARIANCE_PENALTY)
+            other_date = resolve_race_date(other, race_year)
+            if other_date !== nothing && race_date !== nothing && other_date < race_date
+                add!(other, [race_year], GT_SIMILAR_VARIANCE_PENALTY)
+            end
+        end
+    end
+    return result
 end
 
 

@@ -44,15 +44,24 @@ function getpcsraceresults(
     pcs_race_slug::String,
     year::Int;
     prefer_gc::Bool=false,
+    classification::Symbol=:default,
     force_refresh::Bool=false,
     cache_config::CacheConfig=DEFAULT_CACHE,
 )
 
     base = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)"
-    # One-day races expose the finish at /result; stage races have no /result, so the GC
-    # archival path asks for /gc. We try the preferred page first and the other as fallback.
-    pageurl = prefer_gc ? "$base/gc" : "$base/result"
-    fallback_url = prefer_gc ? "$base/result" : "$base/gc"
+    # A grand tour's secondary classifications live at /points and /kom. When a
+    # classification is requested explicitly, fetch that page directly (PCS scopes
+    # the visible resTab to the requested standings). Otherwise: one-day races
+    # expose the finish at /result; stage races have no /result, so the GC path
+    # asks for /gc, and we try the preferred page first with the other as fallback.
+    if classification in (:points, :kom)
+        pageurl = "$base/$(classification)"
+        fallback_url = pageurl
+    else
+        pageurl = prefer_gc ? "$base/gc" : "$base/result"
+        fallback_url = prefer_gc ? "$base/result" : "$base/gc"
+    end
 
     function fetch_race_results(url, params)
         # Parse directly with Gumbo to extract rider names from <a href="rider/..."> links.

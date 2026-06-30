@@ -218,6 +218,7 @@ function _prepare_rider_data(
     force_refresh::Bool;
     pcs_check_col::Symbol=:oneday,
     filter_startlist::Bool=true,
+    include_gt_history::Bool=true,
     qualitative_df::Union{DataFrame,Nothing}=nothing,
     odds_df::Union{DataFrame,Nothing}=nothing,
     points_oracle_url::String="",
@@ -322,6 +323,7 @@ function _prepare_rider_data(
         config.year,
         history_years;
         race_date=race_date,
+        include_gt_history=include_gt_history,
         cache_config=cache_config,
         force_refresh=force_refresh,
     )
@@ -337,6 +339,20 @@ function _prepare_rider_data(
         cache_config=cache_config,
         force_refresh=force_refresh,
     )
+
+    # --- 3b-ii. Fetch prior-edition points/KOM classification history (stage races) ---
+    points_history_df = nothing
+    kom_history_df = nothing
+    if config.type == :stage && !isempty(config.pcs_slug)
+        points_history_df = assemble_pcs_classification_history(
+            config.pcs_slug, config.year, history_years, :points;
+            race_date=race_date, include_gt_history=include_gt_history,
+            cache_config=cache_config, force_refresh=force_refresh)
+        kom_history_df = assemble_pcs_classification_history(
+            config.pcs_slug, config.year, history_years, :kom;
+            race_date=race_date, include_gt_history=include_gt_history,
+            cache_config=cache_config, force_refresh=force_refresh)
+    end
 
     # --- 3c. Fetch PCS form scores (automatic) ---
     form_df = nothing
@@ -526,6 +542,8 @@ function _prepare_rider_data(
         points_odds_df=points_odds_df,
         kom_odds_df=kom_odds_df,
         stagewin_odds_df=stagewin_odds_df,
+        points_history_df=points_history_df,
+        kom_history_df=kom_history_df,
     )
 end
 
@@ -668,6 +686,7 @@ function solve_stage(
     simulation_df::Union{Int,Nothing}=nothing,
     cross_stage_alpha::Float64=0.7,
     stage_scoring::Union{StageRaceScoringTable,Nothing}=nothing,
+    include_gt_history::Bool=true,
 )
     data = _prepare_rider_data(
         config,
@@ -680,6 +699,7 @@ function solve_stage(
         force_refresh;
         pcs_check_col=:gc,
         filter_startlist=filter_startlist,
+        include_gt_history=include_gt_history,
         qualitative_df=qualitative_df,
         odds_df=odds_df,
         points_oracle_url=points_oracle_url,
