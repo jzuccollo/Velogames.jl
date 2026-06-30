@@ -1626,16 +1626,34 @@ function format_stage_podium_picks(
     rider_names = String.(riders.rider)
     n_sims = diagnostics.n_sims
 
-    function _pick(stage_idx::Int, rank::Int)
-        counts = diagnostics.stage_finish_counts[stage_idx, :, rank]
-        i = argmax(counts)
-        prob = counts[i] / n_sims
-        prob < 0.005 && return ""
-        return "$(rider_names[i]) ($(round(Int, 100 * prob))%)"
+    # Pick the modal occupant of each podium position, but exclude riders
+    # already shown in a higher column so the three cells name distinct riders
+    # (a dominant favourite is otherwise the modal occupant of 1st, 2nd AND 3rd,
+    # which just repeats one name). The percentage is still P(rider finishes in
+    # exactly that position).
+    function _picks(stage_idx::Int)
+        used = Int[]
+        out = String[]
+        for rank in 1:3
+            counts = copy(diagnostics.stage_finish_counts[stage_idx, :, rank])
+            for u in used
+                counts[u] = -1
+            end
+            i = argmax(counts)
+            prob = counts[i] / n_sims
+            if counts[i] <= 0 || prob < 0.005
+                push!(out, "")
+            else
+                push!(used, i)
+                push!(out, "$(rider_names[i]) ($(round(Int, 100 * prob))%)")
+            end
+        end
+        return out
     end
 
     rows = Dict{String,Any}[]
     for (idx, s) in enumerate(stages)
+        picks = _picks(idx)
         push!(rows, Dict{String,Any}(
             "Stage" => s.stage_number,
             "Type" => String(s.stage_type),
@@ -1645,9 +1663,9 @@ function format_stage_podium_picks(
             "Summit" => s.is_summit_finish ? "Yes" : "",
             "HC" => s.n_hc_climbs > 0 ? string(s.n_hc_climbs) : "",
             "Cat1" => s.n_cat1_climbs > 0 ? string(s.n_cat1_climbs) : "",
-            "Likely 1st" => _pick(idx, 1),
-            "Likely 2nd" => _pick(idx, 2),
-            "Likely 3rd" => _pick(idx, 3),
+            "Likely 1st" => picks[1],
+            "Likely 2nd" => picks[2],
+            "Likely 3rd" => picks[3],
         ))
     end
     return DataFrame(rows)
