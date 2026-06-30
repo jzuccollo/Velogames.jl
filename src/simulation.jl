@@ -1339,9 +1339,10 @@ end
     for i in 1:n_riders
         stage_pts[i] += daily_gc_points_for_position(gc_positions[i], scoring)
     end
-    if stype != :itt && stype != :ttt
+    assist_depth = length(scoring.gc_assist_points)
+    if stype != :itt && stype != :ttt && assist_depth > 0
         for i in 1:n_riders
-            if gc_positions[i] <= 3
+            if gc_positions[i] <= assist_depth
                 for j in 1:n_riders
                     if j != i && teams[j] == teams[i]
                         stage_pts[j] += scoring.gc_assist_points[gc_positions[i]]
@@ -1349,6 +1350,48 @@ end
                 end
             end
         end
+    end
+    return nothing
+end
+
+# Team time trial: the whole squad rides together and shares one result, so the
+# outcome is a ranking of TEAMS (by mean TT strength), not individuals. Every
+# rider takes their team's placing as their finishing position.
+function _assign_team_positions!(
+    positions::Vector{Int},
+    noisy::Vector{Float64},
+    teams::Vector{String},
+    n_riders::Int,
+)
+    team_sum = Dict{String,Float64}()
+    team_n = Dict{String,Int}()
+    for i in 1:n_riders
+        team_sum[teams[i]] = get(team_sum, teams[i], 0.0) + noisy[i]
+        team_n[teams[i]] = get(team_n, teams[i], 0) + 1
+    end
+    ranked = sort(collect(keys(team_sum)), by=t -> team_sum[t] / team_n[t], rev=true)
+    team_rank = Dict(t => r for (r, t) in enumerate(ranked))
+    for i in 1:n_riders
+        positions[i] = team_rank[teams[i]]
+    end
+    return nothing
+end
+
+# Score a team time trial: every rider earns the points for their team's
+# placing. Uses the dedicated `ttt_team_points` table, falling back to the
+# normal stage-finish table if VG published no TTT-specific scoring.
+@inline function _score_ttt_team!(
+    stage_pts::Vector{Float64},
+    positions::Vector{Int},
+    scoring::StageRaceScoringTable,
+    n_riders::Int,
+)
+    fill!(stage_pts, 0.0)
+    pts_table = isempty(scoring.ttt_team_points) ? scoring.stage_finish_points :
+                scoring.ttt_team_points
+    depth = length(pts_table)
+    for i in 1:n_riders
+        positions[i] <= depth && (stage_pts[i] += pts_table[positions[i]])
     end
     return nothing
 end
@@ -1444,10 +1487,14 @@ function stage_dimension_weights(stage::StageProfile)
                                                (flat=0.0, hilly=1.0, mountain=0.0, itt=0.0)
     end
     ps = Float64(stage.profile_score)
-    if ps <= 20.0
+    # Flat-to-hilly ramp starts at PS 40 (not 20): a rolling sprint stage with a
+    # modest ProfileScore (~50-60) is still won by sprinters in a bunch finish,
+    # so it should stay majority-flat rather than tipping puncheurs/GC riders
+    # onto the podium. PS 58 → ~64% flat / 36% hilly.
+    if ps <= 40.0
         f, h, m = 1.0, 0.0, 0.0
     elseif ps <= 90.0
-        h = (ps - 20.0) / 70.0
+        h = (ps - 40.0) / 50.0
         f = 1.0 - h
         m = 0.0
     elseif ps <= 250.0
@@ -1582,9 +1629,15 @@ function simulate_stage_race(
             end
 
             # Rank by noisy stage strength → positions, record podium/top-10.
+            # A team time trial is scored as a ranking of teams: every rider
+            # shares their squad's placing.
             order = sortperm(noisy, rev=true)
-            for (pos, rider_idx) in enumerate(order)
-                positions[rider_idx] = pos
+            if stype == :ttt
+                _assign_team_positions!(positions, noisy, teams, n_riders)
+            else
+                for (pos, rider_idx) in enumerate(order)
+                    positions[rider_idx] = pos
+                end
             end
             for i in 1:n_riders
                 p = positions[i]
@@ -1596,7 +1649,11 @@ function simulate_stage_race(
                 end
             end
 
-            _score_stage_finish_and_assists!(stage_pts, positions, teams, scoring, stype, n_riders)
+            if stype == :ttt
+                _score_ttt_team!(stage_pts, positions, scoring, n_riders)
+            else
+                _score_stage_finish_and_assists!(stage_pts, positions, teams, scoring, stype, n_riders)
+            end
 
             # Cumulative GC ranking after this stage.
             gc_order = sortperm(cumulative_gc_score, rev=true)
@@ -1634,7 +1691,7 @@ function simulate_stage_race(
 
         # Final points classification (Tipo A/B/C-weighted points-jersey total)
         sprint_order = sortperm(points_jersey_total, rev=true)
-        for rank in 1:min(10, n_riders)
+        for rank in 1:min(length(scoring.final_points_class), n_riders)
             rider_idx = sprint_order[rank]
             if points_jersey_total[rider_idx] > 0
                 rider_total_pts[rider_idx] += scoring.final_points_class[rank]
@@ -1646,7 +1703,7 @@ function simulate_stage_race(
 
         # Final mountains classification (mountain top-5 count proxy)
         kom_order = sortperm(mountain_top5_counts, rev=true)
-        for rank in 1:min(10, n_riders)
+        for rank in 1:min(length(scoring.final_mountains_class), n_riders)
             rider_idx = kom_order[rank]
             if mountain_top5_counts[rider_idx] > 0
                 rider_total_pts[rider_idx] += scoring.final_mountains_class[rank]
