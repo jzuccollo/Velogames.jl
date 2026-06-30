@@ -48,9 +48,9 @@ struct StageRaceScoringTable
     breakaway_points::Int                    # points per rider in break at 50%
 
     # Assist points (stage finish, GC, team classification)
-    stage_assist_points::Vector{Int}         # length 3: teammate in stage top 3
-    gc_assist_points::Vector{Int}            # length 3: teammate in GC top 3
-    team_class_assist_points::Vector{Int}    # length 3: team in team class top 3
+    stage_assist_points::Vector{Int}         # teammate in stage top N (length varies by scraped scoring)
+    gc_assist_points::Vector{Int}            # teammate in GC top N (length varies by scraped scoring)
+    team_class_assist_points::Vector{Int}    # team in team class top N (length varies by scraped scoring)
 
     # Final classification bonuses (end of race)
     final_gc_points::Vector{Int}             # length 30: final GC positions 1-30
