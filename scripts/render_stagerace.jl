@@ -173,7 +173,8 @@ if using_per_stage
             "HC", "Cat1", "Likely 1st", "Likely 2nd", "Likely 3rd",
         ]
         write(io, html_callout(
-            "<p>Most likely podium finishers per stage, alongside basic stage details. Probabilities in parentheses are the share of $(diagnostics.n_sims) simulations in which the named rider finished in that exact position.</p>\n" *
+            "<p>Most likely podium finishers per stage, alongside basic stage details. Probabilities in parentheses are the share of $(diagnostics.n_sims) simulations in which the named rider finished in that exact position. Each column names a distinct rider (the modal occupant of that position, excluding riders already shown to its left).</p>\n" *
+            "<p><em>Caveat:</em> the simulation does not model breakaway wins, which take a large share of real hilly and mountain stages. Treat these as the favourites' odds <em>conditional on the stage being contested by the front group</em> — actual single-stage win rates are lower and more spread out.</p>\n" *
             html_table(stage_df[:, stage_col_order]);
             title="Stage details and podium picks", collapsed=false))
     end
