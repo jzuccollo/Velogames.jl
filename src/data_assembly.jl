@@ -10,6 +10,21 @@ container.
 
 
 # ---------------------------------------------------------------------------
+# Similar-race variance penalties (added to a history observation's variance to
+# reflect how cleanly form transfers from a different race).
+# ---------------------------------------------------------------------------
+
+"""Variance penalty for a terrain-matched classics similar-race result."""
+const SIMILAR_RACE_VARIANCE_PENALTY = 1.0
+
+"""Variance penalty for a grand-tour cross-history result (Giro/Vuelta → Tour,
+etc.). Larger than the classics penalty because GT GC form transfers more
+noisily; recency decay is applied per-edition on top of this. Tuning knob for
+the GT cross-history experiment."""
+const GT_SIMILAR_VARIANCE_PENALTY = 3.0
+
+
+# ---------------------------------------------------------------------------
 # Shared data container
 # ---------------------------------------------------------------------------
 
@@ -108,11 +123,16 @@ function assemble_pcs_race_history(
     years = collect((race_year-history_years):(race_year-1))
     race_history_df = nothing
 
+    # Grand tours expose their result at /gc; /result returns the final stage's
+    # sprint, not the GC. Fetch the GC explicitly for stage races.
+    primary_prefer_gc = haskey(GT_SIMILAR_RACES, pcs_slug)
+
     # --- Prior-year primary race history ---
     try
         race_history_df = getpcsracehistory(
             pcs_slug,
             years;
+            prefer_gc = primary_prefer_gc,
             cache_config = cache_config,
             force_refresh = force_refresh,
         )
@@ -122,20 +142,31 @@ function assemble_pcs_race_history(
         @warn "Failed to fetch race history for $pcs_slug: $e"
     end
 
+    # --- Similar-race history: terrain-matched classics (penalty 1.0) plus
+    #     grand-tour cross-history (larger penalty). GT GC form transfers more
+    #     noisily than a terrain-matched classic, so its observations carry more
+    #     variance; recency decay on top is applied per-edition downstream. ---
+    similar_specs = vcat(
+        [(slug = s, penalty = SIMILAR_RACE_VARIANCE_PENALTY, prefer_gc = false)
+         for s in get(SIMILAR_RACES, pcs_slug, String[])],
+        [(slug = s, penalty = GT_SIMILAR_VARIANCE_PENALTY, prefer_gc = true)
+         for s in get(GT_SIMILAR_RACES, pcs_slug, String[])],
+    )
+
     # --- Prior-year similar-race history ---
-    similar_slugs = get(SIMILAR_RACES, pcs_slug, String[])
-    if !isempty(similar_slugs)
-        @info "Fetching similar-race history from: $(join(similar_slugs, ", "))..."
-        for slug in similar_slugs
+    if !isempty(similar_specs)
+        @info "Fetching similar-race history from: $(join([s.slug for s in similar_specs], ", "))..."
+        for spec in similar_specs
             try
                 similar_df = getpcsracehistory(
-                    slug,
+                    spec.slug,
                     years;
+                    prefer_gc = spec.prefer_gc,
                     cache_config = cache_config,
                     force_refresh = force_refresh,
                 )
                 if nrow(similar_df) > 0
-                    similar_df[!, :variance_penalty] .= 1.0
+                    similar_df[!, :variance_penalty] .= spec.penalty
                     if race_history_df === nothing
                         race_history_df = similar_df
                     else
@@ -147,35 +178,34 @@ function assemble_pcs_race_history(
             end
         end
         n_similar =
-            race_history_df !== nothing ? count(==(1.0), race_history_df.variance_penalty) :
+            race_history_df !== nothing ? count(>(0.0), race_history_df.variance_penalty) :
             0
         @info "Got $n_similar similar-race history results"
     end
 
     # --- Within-year similar race results (PCS) ---
-    if race_date !== nothing && !isempty(similar_slugs)
-        for slug in similar_slugs
-            similar_info = _find_race_by_slug(slug)
-            similar_info === nothing && continue
-            similar_date = _race_date_for_year(similar_info, race_year)
-            similar_date >= race_date && continue
+    if race_date !== nothing && !isempty(similar_specs)
+        for spec in similar_specs
+            similar_date = resolve_race_date(spec.slug, race_year)
+            (similar_date === nothing || similar_date >= race_date) && continue
             try
                 similar_df = getpcsraceresults(
-                    slug,
+                    spec.slug,
                     race_year;
+                    prefer_gc = spec.prefer_gc,
                     cache_config = cache_config,
                     force_refresh = force_refresh,
                 )
                 if nrow(similar_df) > 0
                     similar_df[!, :year] .= race_year
-                    similar_df[!, :variance_penalty] .= 1.0
+                    similar_df[!, :variance_penalty] .= spec.penalty
                     race_history_df =
                         race_history_df === nothing ? similar_df :
                         vcat(race_history_df, similar_df; cols = :union)
-                    @debug "Added $(nrow(similar_df)) within-year PCS results from $slug ($race_year)"
+                    @debug "Added $(nrow(similar_df)) within-year PCS results from $(spec.slug) ($race_year)"
                 end
             catch e
-                @debug "Failed to fetch within-year PCS results for $slug $race_year: $e"
+                @debug "Failed to fetch within-year PCS results for $(spec.slug) $race_year: $e"
             end
         end
     end

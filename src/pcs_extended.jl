@@ -498,6 +498,7 @@ getpcsracehistory("paris-roubaix", [2021, 2022, 2023, 2024])
 function getpcsracehistory(
     pcs_race_slug::String,
     years::Vector{Int};
+    prefer_gc::Bool=false,
     force_refresh::Bool=false,
     cache_config::CacheConfig=DEFAULT_CACHE,
 )
@@ -509,6 +510,7 @@ function getpcsracehistory(
             year_df = getpcsraceresults(
                 pcs_race_slug,
                 year;
+                prefer_gc=prefer_gc,
                 force_refresh=force_refresh,
                 cache_config=cache_config,
             )

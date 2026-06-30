@@ -1007,3 +1007,48 @@ function _race_date_for_year(ri::RaceInfo, year::Int)
     template = Date(ri.date)
     return Date(year, Dates.month(template), Dates.day(template))
 end
+
+# ---------------------------------------------------------------------------
+# Grand-tour cross-history
+# ---------------------------------------------------------------------------
+
+"""
+Grand-tour cross-history mapping. A rider's GC result in one grand tour is
+weak-but-real evidence about another. Kept separate from the terrain-based
+`SIMILAR_RACES` (classics) so it can carry a larger variance penalty: GT GC form
+transfers more noisily than a terrain-matched classic, and the recency decay
+already applied to race history downweights older editions automatically.
+"""
+const GT_SIMILAR_RACES = Dict{String,Vector{String}}(
+    "tour-de-france" => ["giro-d-italia", "vuelta-a-espana"],
+    "giro-d-italia" => ["tour-de-france", "vuelta-a-espana"],
+    "vuelta-a-espana" => ["tour-de-france", "giro-d-italia"],
+)
+
+"""
+Approximate grand-tour start dates `(month, day)`. Exact dates shift a little
+year to year, but only the ordering relative to the target race matters for the
+within-year similar-race gate (a May Giro precedes a July Tour; a late-August
+Vuelta follows it). Also used to give grand tours a `race_date` at all — they
+are absent from the classics schedule, so without this their within-year
+similar-race channel never fires.
+"""
+const _GT_APPROX_DATE = Dict{String,Tuple{Int,Int}}(
+    "giro-d-italia" => (5, 9),
+    "tour-de-france" => (7, 1),
+    "vuelta-a-espana" => (8, 23),
+)
+
+"""
+    resolve_race_date(pcs_slug, year) -> Union{Date,Nothing}
+
+Resolve an approximate date for a race, covering both the classics schedule
+(`CLASSICS_RACES_2026`) and grand tours (`_GT_APPROX_DATE`). Returns `nothing`
+for unknown slugs.
+"""
+function resolve_race_date(pcs_slug::AbstractString, year::Int)
+    ri = _find_race_by_slug(pcs_slug)
+    ri !== nothing && return _race_date_for_year(ri, year)
+    haskey(_GT_APPROX_DATE, pcs_slug) && return Date(year, _GT_APPROX_DATE[pcs_slug]...)
+    return nothing
+end

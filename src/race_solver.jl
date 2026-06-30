@@ -316,8 +316,7 @@ function _prepare_rider_data(
 
     # --- 3. Fetch PCS race history (primary + similar + within-year) ---
     race_info = _find_race_by_slug(config.pcs_slug)
-    race_date =
-        race_info !== nothing ? _race_date_for_year(race_info, config.year) : nothing
+    race_date = resolve_race_date(config.pcs_slug, config.year)
     race_history_df = assemble_pcs_race_history(
         config.pcs_slug,
         config.year,
