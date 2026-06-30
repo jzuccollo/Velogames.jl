@@ -1687,6 +1687,8 @@ function format_signal_impact_per_dim(
         ("VG season points", :vg),
         ("PCS race history", :history),
         ("VG race history", :vg_history),
+        ("Points-class history", :points_history),
+        ("KOM-class history", :kom_history),
         ("Oracle GC", :oracle_gc),
         ("Oracle Points", :oracle_points),
         ("Oracle KOM", :oracle_kom),

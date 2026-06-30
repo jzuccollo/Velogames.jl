@@ -341,16 +341,20 @@ function _prepare_rider_data(
     )
 
     # --- 3b-ii. Fetch prior-edition points/KOM classification history (stage races) ---
+    # Same-race only: the isolation backtest (scripts/eval_classification_history.jl)
+    # found same-race jersey history predictive (ρ≈0.33) but GT cross-history
+    # harmful for jerseys (KOM no-harm Δρ −0.10) — jersey roles are parcours- and
+    # team-specific and transfer poorly across grand tours, unlike GC ability.
     points_history_df = nothing
     kom_history_df = nothing
     if config.type == :stage && !isempty(config.pcs_slug)
         points_history_df = assemble_pcs_classification_history(
             config.pcs_slug, config.year, history_years, :points;
-            race_date=race_date, include_gt_history=include_gt_history,
+            race_date=race_date, include_gt_history=false,
             cache_config=cache_config, force_refresh=force_refresh)
         kom_history_df = assemble_pcs_classification_history(
             config.pcs_slug, config.year, history_years, :kom;
-            race_date=race_date, include_gt_history=include_gt_history,
+            race_date=race_date, include_gt_history=false,
             cache_config=cache_config, force_refresh=force_refresh)
     end
 
