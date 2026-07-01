@@ -884,6 +884,87 @@ struct StageRaceConfig
     cache::CacheConfig
 end
 
+"""
+    StageSimConfig
+
+Tuneable constants for the per-stage grand-tour simulator (`simulate_stage_race`).
+Consolidates values that were previously module-level constants so they can be
+threaded like `stage_scoring` and calibrated (see roadmap Phase 6 / C1).
+
+Fields:
+- `aleatoric_noise` — per-dimension race-day scatter scale (`a_type`). This is the
+  coefficient on the independent per-stage Student-t(5) noise draw; the SD it
+  contributes to a rider's stage performance is `a_type · √(5/3)`. A stage's
+  scalar scale is blended across dimensions by the stage's `stage_dimension_weights`.
+  Fitted by Plackett–Luce ranking-likelihood MLE on archived GT finishing orders
+  (A1b, June 2026): hilly is the most stochastic, ITT the least.
+- `breakaway_noise` — per-event, per-dimension breakaway σ (decoupled from GC).
+- `points_jersey_allocation` — per-stage-type points-jersey allocation vectors.
+- `intermediate_sprint_points` — intermediate-sprint banner allocation.
+"""
+struct StageSimConfig
+    aleatoric_noise::NamedTuple
+    breakaway_noise::NamedTuple
+    points_jersey_allocation::NamedTuple
+    intermediate_sprint_points::Vector{Float64}
+    attrition_hazard::NamedTuple        # per-rider-stage DNF hazard by stage type
+    attrition_class_mult::NamedTuple    # hazard multiplier by rider class (×field)
+    attrition_shock_shape::Float64      # Gamma shape of the shared brutal-day shock (mean 1)
+    aleatoric_df::Int                   # Student-t df for the aleatoric race-day draw
+    gc_favourite_protection::Float64    # DNF hazard reduction for strong GC favourites
+    gc_protection_floor::Float64        # min hazard multiplier — irreducible crash risk
+end
+
+function StageSimConfig(;
+    aleatoric_noise=(flat=0.8, hilly=1.1, mountain=0.7, itt=0.5),
+    breakaway_noise=(
+        stage_finish=(flat=0.0, hilly=1.0, mountain=1.5, itt=0.0),
+        points_jersey=(flat=0.0, hilly=1.5, mountain=2.5, itt=0.0),
+    ),
+    points_jersey_allocation=(
+        flat=[50.0, 35.0, 25.0, 18.0, 14.0, 12.0, 10.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        hilly=[25.0, 18.0, 12.0, 8.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        mountain=[15.0, 12.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        itt=[15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
+        ttt=[15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
+    ),
+    intermediate_sprint_points=[20.0, 12.0, 8.0, 6.0, 4.0, 2.0, 1.0],
+    # Attrition (A2, July 2026): per-rider-stage DNF hazard fitted from archived
+    # pcs_abandons across 4 GTs (giro/tour/vuelta 2025 + giro 2026). Field DNF
+    # ~15%, concentrated on hard days. A shared per-stage Gamma shock (shape 2 →
+    # mean 1, var 0.5) reproduces the observed over-dispersion (per-stage abandon
+    # var/mean ≈ 1.66) so sprinters can be eliminated in cohorts on brutal days.
+    attrition_hazard=(flat=0.0035, hilly=0.0075, mountain=0.0092, itt=0.0018, ttt=0.002),
+    attrition_class_mult=(sprinter=1.29, climber=1.19, allrounder=1.53, unclassed=0.86),
+    attrition_shock_shape=2.0,
+    # Student-t df for the aleatoric race-day scatter. This is a calibrated model
+    # property, NOT the global `simulation_df`: the aleatoric term models fat-
+    # tailed race-day chaos (crashes/echelons) and is distinct from the Gaussian
+    # epistemic wobble, so it has its own tail. `aleatoric_noise` (a_type) is
+    # calibrated against df=5; change them together.
+    aleatoric_df=5,
+    # GC-favourite protection: strong GC favourites don't strategically abandon
+    # (they're contending/winning), but the class hazard would still DNF them at
+    # their class rate — over-attritioning the durable race leader and capping
+    # his GC top-10% at his class finish rate. Reduce hazard by exp(-k·max(0, gc_z−1)),
+    # where gc_z is the rider's GC-strength z-score, so only genuine favourites
+    # (>1 SD above the field) are protected and the field-wide survival rate is
+    # essentially unchanged. Empirically ~0 for the field, strong for the top 2–3.
+    gc_favourite_protection=1.2,
+    # …but floored: even the most dominant leader keeps an irreducible crash-out
+    # risk. Historically GC favourites DNF meaningfully (Roglič 2021/22/24,
+    # Pinot 2019, Mas 2025; mass-crash years take out marquee names), so the
+    # protection multiplier bottoms out at this floor rather than →0. 0.35 leaves
+    # a class-17.6% climber favourite at ~6% DNF (top-10 ~94%), not ~1.6%.
+    gc_protection_floor=0.35,
+)
+    StageSimConfig(aleatoric_noise, breakaway_noise, points_jersey_allocation,
+        intermediate_sprint_points, attrition_hazard, attrition_class_mult,
+        attrition_shock_shape, aleatoric_df, gc_favourite_protection, gc_protection_floor)
+end
+
+const DEFAULT_STAGE_SIM_CONFIG = StageSimConfig()
+
 # Convenience constructors for stage profiles
 flat_stage(n; km=180.0, ps=15, vert=1000, sprints=1) =
     StageProfile(n, :flat, km, ps, vert, 0.2, 0, 0, sprints, false)
@@ -1006,4 +1087,49 @@ end
 function _race_date_for_year(ri::RaceInfo, year::Int)
     template = Date(ri.date)
     return Date(year, Dates.month(template), Dates.day(template))
+end
+
+# ---------------------------------------------------------------------------
+# Grand-tour cross-history
+# ---------------------------------------------------------------------------
+
+"""
+Grand-tour cross-history mapping. A rider's GC result in one grand tour is
+weak-but-real evidence about another. Kept separate from the terrain-based
+`SIMILAR_RACES` (classics) so it can carry a larger variance penalty: GT GC form
+transfers more noisily than a terrain-matched classic, and the recency decay
+already applied to race history downweights older editions automatically.
+"""
+const GT_SIMILAR_RACES = Dict{String,Vector{String}}(
+    "tour-de-france" => ["giro-d-italia", "vuelta-a-espana"],
+    "giro-d-italia" => ["tour-de-france", "vuelta-a-espana"],
+    "vuelta-a-espana" => ["tour-de-france", "giro-d-italia"],
+)
+
+"""
+Approximate grand-tour start dates `(month, day)`. Exact dates shift a little
+year to year, but only the ordering relative to the target race matters for the
+within-year similar-race gate (a May Giro precedes a July Tour; a late-August
+Vuelta follows it). Also used to give grand tours a `race_date` at all — they
+are absent from the classics schedule, so without this their within-year
+similar-race channel never fires.
+"""
+const _GT_APPROX_DATE = Dict{String,Tuple{Int,Int}}(
+    "giro-d-italia" => (5, 9),
+    "tour-de-france" => (7, 1),
+    "vuelta-a-espana" => (8, 23),
+)
+
+"""
+    resolve_race_date(pcs_slug, year) -> Union{Date,Nothing}
+
+Resolve an approximate date for a race, covering both the classics schedule
+(`CLASSICS_RACES_2026`) and grand tours (`_GT_APPROX_DATE`). Returns `nothing`
+for unknown slugs.
+"""
+function resolve_race_date(pcs_slug::AbstractString, year::Int)
+    ri = _find_race_by_slug(pcs_slug)
+    ri !== nothing && return _race_date_for_year(ri, year)
+    haskey(_GT_APPROX_DATE, pcs_slug) && return Date(year, _GT_APPROX_DATE[pcs_slug]...)
+    return nothing
 end

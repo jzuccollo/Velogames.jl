@@ -466,24 +466,114 @@ end
 # Helpers extracted in May 2026 cleanup
 # =========================================================================
 
-@testset "BREAKAWAY_NOISE_BY_EVENT lookup" begin
-    # Direct constants — pin them so refactors don't silently change scoring
-    @test Velogames.BREAKAWAY_NOISE_BY_EVENT.stage_finish.flat == 0.0
-    @test Velogames.BREAKAWAY_NOISE_BY_EVENT.stage_finish.hilly == 1.0
-    @test Velogames.BREAKAWAY_NOISE_BY_EVENT.stage_finish.mountain == 1.5
-    @test Velogames.BREAKAWAY_NOISE_BY_EVENT.points_jersey.flat == 0.0
-    @test Velogames.BREAKAWAY_NOISE_BY_EVENT.points_jersey.hilly == 1.5
-    @test Velogames.BREAKAWAY_NOISE_BY_EVENT.points_jersey.mountain == 2.5
+@testset "StageSimConfig breakaway noise + _breakaway_sd" begin
+    bn = Velogames.DEFAULT_STAGE_SIM_CONFIG.breakaway_noise
+    # Default breakaway σ — pin them so refactors don't silently change scoring
+    @test bn.stage_finish.flat == 0.0
+    @test bn.stage_finish.hilly == 1.0
+    @test bn.stage_finish.mountain == 1.5
+    @test bn.points_jersey.flat == 0.0
+    @test bn.points_jersey.hilly == 1.5
+    @test bn.points_jersey.mountain == 2.5
 
     # Pure flat stage gets zero breakaway noise on both events
     flat_w = (flat=1.0, hilly=0.0, mountain=0.0, itt=0.0)
-    @test Velogames._breakaway_sd(:stage_finish, flat_w) == 0.0
-    @test Velogames._breakaway_sd(:points_jersey, flat_w) == 0.0
+    @test Velogames._breakaway_sd(:stage_finish, flat_w, bn) == 0.0
+    @test Velogames._breakaway_sd(:points_jersey, flat_w, bn) == 0.0
 
     # Pure mountain stage gets the full mountain σ
     mtn_w = (flat=0.0, hilly=0.0, mountain=1.0, itt=0.0)
-    @test Velogames._breakaway_sd(:stage_finish, mtn_w) == 1.5
-    @test Velogames._breakaway_sd(:points_jersey, mtn_w) == 2.5
+    @test Velogames._breakaway_sd(:stage_finish, mtn_w, bn) == 1.5
+    @test Velogames._breakaway_sd(:points_jersey, mtn_w, bn) == 2.5
+
+    # Aleatoric scale blends per-dimension a_type by stage weights
+    an = Velogames.DEFAULT_STAGE_SIM_CONFIG.aleatoric_noise
+    @test Velogames._aleatoric_sd(flat_w, an) == an.flat
+    @test Velogames._aleatoric_sd(mtn_w, an) == an.mountain
+end
+
+@testset "attrition helpers (_norm_class, _rand_gamma)" begin
+    # Real VG class labels normalise to the attrition_class_mult keys.
+    @test Velogames._norm_class("All Rounder") == :allrounder
+    @test Velogames._norm_class("Sprinter") == :sprinter
+    @test Velogames._norm_class("Climber") == :climber
+    @test Velogames._norm_class("Unclassed") == :unclassed
+    # Unknown labels fall back to :unclassed.
+    @test Velogames._norm_class("GC") == :unclassed
+    @test Velogames._norm_class("") == :unclassed
+
+    # Gamma sampler (shape ≥ 1): strictly positive, terminates, mean ≈ shape.
+    rng = Random.MersenneTwister(1)
+    g = [Velogames._rand_gamma(rng, 2.0) for _ in 1:20000]
+    @test all(g .> 0.0)
+    @test all(isfinite, g)
+    @test abs(mean(g) - 2.0) < 0.1
+end
+
+@testset "daily mountains classification scoring" begin
+    scoring = SCORING_GRAND_TOUR
+    n = 8
+    mountain_s = collect(range(3.0, -3.0, length=n))  # rider 1 = best climber
+    noisy = copy(mountain_s)
+    blend = copy(mountain_s)                            # noise component = noisy - blend = 0
+    kom_str = zeros(n)
+
+    # Mountain stage: top climbers bank daily_mountains_class points.
+    stage_pts = zeros(n)
+    Velogames._score_daily_mountains!(stage_pts, mountain_s, noisy, blend, kom_str,
+        scoring, :mountain, n)
+    @test stage_pts[1] == scoring.daily_mountains_class[1]        # best climber → top KOM
+    @test stage_pts[6] == scoring.daily_mountains_class[6]        # 6th → last scoring slot
+    @test stage_pts[7] == 0 && stage_pts[8] == 0                  # outside top 6
+
+    # Hilly stage also scores; ITT / flat do not.
+    stage_pts = zeros(n)
+    Velogames._score_daily_mountains!(stage_pts, mountain_s, noisy, blend, kom_str,
+        scoring, :hilly, n)
+    @test stage_pts[1] == scoring.daily_mountains_class[1]
+    for st in (:flat, :itt, :ttt)
+        stage_pts = zeros(n)
+        Velogames._score_daily_mountains!(stage_pts, mountain_s, noisy, blend, kom_str,
+            scoring, st, n)
+        @test all(stage_pts .== 0)
+    end
+end
+
+@testset "attrition freeze-out + gate" begin
+    scoring = SCORING_GRAND_TOUR
+    stages = [mountain_stage(1), mountain_stage(2), mountain_stage(3), mountain_stage(4)]
+    n_riders = 10
+    base = collect(range(2.0, -2.0, length=n_riders))
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base), :hilly => copy(base),
+        :mountain => copy(base), :itt => copy(base), :ttt => copy(base),
+    )
+    unc = fill(0.5, n_riders)
+    teams = repeat(["A", "B"], 5)
+
+    # Attrition OFF (empty rider_classes) — reproduces pre-A2 behaviour.
+    rng1 = Random.MersenneTwister(99)
+    sim_off, _ = simulate_stage_race(stages, stage_strengths, unc, teams, scoring;
+        n_sims=100, rng=rng1, rider_classes=String[])
+    # Gate is deterministic: same seed + empty classes ⇒ identical output.
+    rng2 = Random.MersenneTwister(99)
+    sim_off2, _ = simulate_stage_race(stages, stage_strengths, unc, teams, scoring;
+        n_sims=100, rng=rng2, rider_classes=String[])
+    @test sim_off == sim_off2
+
+    # Attrition ON with a high hazard ⇒ riders abandon and stop scoring.
+    hi = StageSimConfig(
+        attrition_hazard=(flat=0.5, hilly=0.5, mountain=0.5, itt=0.5, ttt=0.5),
+    )
+    rng3 = Random.MersenneTwister(99)
+    sim_on, _ = simulate_stage_race(stages, stage_strengths, unc, teams, scoring;
+        n_sims=100, rng=rng3, rider_classes=fill("sprinter", n_riders), sim_config=hi)
+
+    @test all(isfinite, sim_off)                 # no NaN / Inf leaks into totals
+    @test all(isfinite, sim_on)
+    @test all(sim_on .>= 0.0)
+    # Heavy attrition removes post-abandon scoring ⇒ strictly fewer total points.
+    @test sum(sim_on) < sum(sim_off)
 end
 
 @testset "simulate_stage_race always returns (matrix, diagnostics)" begin
