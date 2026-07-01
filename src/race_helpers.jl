@@ -912,6 +912,7 @@ struct StageSimConfig
     attrition_shock_shape::Float64      # Gamma shape of the shared brutal-day shock (mean 1)
     aleatoric_df::Int                   # Student-t df for the aleatoric race-day draw
     gc_favourite_protection::Float64    # DNF hazard reduction for strong GC favourites
+    gc_protection_floor::Float64        # min hazard multiplier — irreducible crash risk
 end
 
 function StageSimConfig(;
@@ -950,10 +951,16 @@ function StageSimConfig(;
     # (>1 SD above the field) are protected and the field-wide survival rate is
     # essentially unchanged. Empirically ~0 for the field, strong for the top 2–3.
     gc_favourite_protection=1.2,
+    # …but floored: even the most dominant leader keeps an irreducible crash-out
+    # risk. Historically GC favourites DNF meaningfully (Roglič 2021/22/24,
+    # Pinot 2019, Mas 2025; mass-crash years take out marquee names), so the
+    # protection multiplier bottoms out at this floor rather than →0. 0.35 leaves
+    # a class-17.6% climber favourite at ~6% DNF (top-10 ~94%), not ~1.6%.
+    gc_protection_floor=0.35,
 )
     StageSimConfig(aleatoric_noise, breakaway_noise, points_jersey_allocation,
         intermediate_sprint_points, attrition_hazard, attrition_class_mult,
-        attrition_shock_shape, aleatoric_df, gc_favourite_protection)
+        attrition_shock_shape, aleatoric_df, gc_favourite_protection, gc_protection_floor)
 end
 
 const DEFAULT_STAGE_SIM_CONFIG = StageSimConfig()

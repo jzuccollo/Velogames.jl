@@ -1653,7 +1653,8 @@ function simulate_stage_race(
         if s > 0
             for i in 1:n_riders
                 gc_z = (gc_strengths[i] - μ) / s
-                class_mult[i] *= exp(-sim_config.gc_favourite_protection * max(0.0, gc_z - 1.0))
+                prot = exp(-sim_config.gc_favourite_protection * max(0.0, gc_z - 1.0))
+                class_mult[i] *= max(sim_config.gc_protection_floor, prot)
             end
         end
     end
