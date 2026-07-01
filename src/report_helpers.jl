@@ -1534,9 +1534,10 @@ classifications produced by `simulate_stage_race` (`:gc`, `:points`,
 `:mountains`). Returns the HTML table as a String, or a fallback `<p>` when
 no rider has non-trivial probability mass.
 
-Sorting: by P(rider finishes top-`top_label`) descending, with P(win) breaking
-ties — so an evenly-matched group ahead of the field is then ordered by
-who's most likely to win outright.
+Sorting: `:gc` sorts by P(win) descending (then top-`top_label`), because a GC
+contender's top-N rate collapses onto their finish rate and would otherwise rank
+by DNF hazard rather than GC quality. `:points`/`:mountains` sort by P(finishes
+top-`top_label`) descending with P(win) breaking ties.
 """
 function format_classification_table(
     diagnostics,
@@ -1562,7 +1563,14 @@ function format_classification_table(
 
     any_pos = vec(sum(pos_counts[:, 1:min(top_label, top_k)], dims=2)) ./ n_sims
     win = pos_counts[:, 1] ./ n_sims
-    order = sortperm(collect(zip(any_pos, win)); rev=true)
+    # GC: sort by P(win) first, then top-N. For a genuine contender, top-N ≈ their
+    # finish rate (they place top-N whenever they don't abandon), so sorting GC by
+    # top-N would rank by DNF hazard rather than GC quality and push the actual
+    # favourites below younger low-attrition riders. Win% is the true GC signal.
+    # Points/mountains stay top-N-first (consistency is what those reward).
+    order = classification == :gc ?
+        sortperm(collect(zip(win, any_pos)); rev=true) :
+        sortperm(collect(zip(any_pos, win)); rev=true)
 
     rows = Dict{String,Any}[]
     for rank in 1:min(n_show, length(order))

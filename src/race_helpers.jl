@@ -911,6 +911,7 @@ struct StageSimConfig
     attrition_class_mult::NamedTuple    # hazard multiplier by rider class (×field)
     attrition_shock_shape::Float64      # Gamma shape of the shared brutal-day shock (mean 1)
     aleatoric_df::Int                   # Student-t df for the aleatoric race-day draw
+    gc_favourite_protection::Float64    # DNF hazard reduction for strong GC favourites
 end
 
 function StageSimConfig(;
@@ -941,10 +942,18 @@ function StageSimConfig(;
     # epistemic wobble, so it has its own tail. `aleatoric_noise` (a_type) is
     # calibrated against df=5; change them together.
     aleatoric_df=5,
+    # GC-favourite protection: strong GC favourites don't strategically abandon
+    # (they're contending/winning), but the class hazard would still DNF them at
+    # their class rate — over-attritioning the durable race leader and capping
+    # his GC top-10% at his class finish rate. Reduce hazard by exp(-k·max(0, gc_z−1)),
+    # where gc_z is the rider's GC-strength z-score, so only genuine favourites
+    # (>1 SD above the field) are protected and the field-wide survival rate is
+    # essentially unchanged. Empirically ~0 for the field, strong for the top 2–3.
+    gc_favourite_protection=1.2,
 )
     StageSimConfig(aleatoric_noise, breakaway_noise, points_jersey_allocation,
         intermediate_sprint_points, attrition_hazard, attrition_class_mult,
-        attrition_shock_shape, aleatoric_df)
+        attrition_shock_shape, aleatoric_df, gc_favourite_protection)
 end
 
 const DEFAULT_STAGE_SIM_CONFIG = StageSimConfig()

@@ -1643,6 +1643,20 @@ function simulate_stage_race(
     else
         Float64[]
     end
+    # GC-favourite protection: fold a per-rider hazard multiplier ≤ 1 into the
+    # class multiplier so strong GC favourites (high GC-strength z-score) rarely
+    # abandon — they're contending, not strategically pulling out. Only riders
+    # >1 SD above the field are protected, so field survival is ~unchanged.
+    if attrition_on && !isempty(gc_strengths) && sim_config.gc_favourite_protection > 0
+        μ = mean(gc_strengths)
+        s = std(gc_strengths)
+        if s > 0
+            for i in 1:n_riders
+                gc_z = (gc_strengths[i] - μ) / s
+                class_mult[i] *= exp(-sim_config.gc_favourite_protection * max(0.0, gc_z - 1.0))
+            end
+        end
+    end
 
     # If gc_strengths not supplied, fall back to per-rider mean across stage types.
     # Production callers always supply gc_strengths via `compute_stage_strengths`;
