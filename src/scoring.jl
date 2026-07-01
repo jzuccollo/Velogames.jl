@@ -32,7 +32,9 @@ end
 Holds the Velogames scoring rules for grand tour stage races (TDF, Giro, Vuelta).
 Scoring is identical across all three grand tours.
 
-VG uses a single scoring table for ALL stage types — no variation by flat/mountain/ITT.
+VG uses one scoring table across stage types, with the sole exception of team
+time trials, which score off `ttt_team_points` (every rider shares the squad's
+placing). Flat/mountain/ITT stages share the same finish/GC/bonus tables.
 """
 struct StageRaceScoringTable
     # Per-stage scoring (applied every stage)
