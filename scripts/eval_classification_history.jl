@@ -1,5 +1,11 @@
 #!/usr/bin/env julia
 """
+TEMPORARY — see roadmap.md, residual issue "No stage-race backtesting path".
+This is a standalone workaround: `backtest.jl` covers one-day classics only, so
+GT signal validation has no home in the framework yet. To be folded into a
+stage-race signal-isolation harness in `backtest.jl` + `render_backtesting.jl`,
+after which this script collapses to a thin caller or is deleted.
+
 Assessment harness for the Phase 2 points/KOM classification-history signal.
 
 The Phase 2 analogue of `eval_gt_history.jl`. For each completed grand tour and
