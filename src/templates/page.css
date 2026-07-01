@@ -217,6 +217,16 @@ a:hover {
 }
 
 /* ---- Tables ---- */
+/* Wide tables (e.g. the 11-column stage profile) scroll horizontally inside
+   this wrapper rather than squeezing cell text onto multiple lines. */
+.table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 1.4em 0;
+}
+.table-wrap > table {
+  margin: 0;
+}
 table {
   border-collapse: collapse;
   width: 100%;
@@ -226,6 +236,11 @@ table {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 0 0 1px var(--rule);
+}
+/* Keep data-table cells on a single line so wide tables scroll cleanly
+   instead of ballooning row height. */
+.table td {
+  white-space: nowrap;
 }
 thead {
   background: #faf8f3;

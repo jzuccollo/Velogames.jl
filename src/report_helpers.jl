@@ -67,6 +67,9 @@ function html_table(
     numeric = Dict(col => (eltype(display[!, col]) <: Union{Missing,Number}) for col in cols)
 
     io = IOBuffer()
+    # Wrap in a scroll container so wide tables (e.g. the 11-column stage profile)
+    # scroll horizontally rather than squeezing cell text onto multiple lines.
+    write(io, "<div class=\"table-wrap\">\n")
     write(io, "<table class=\"table table-striped table-sm\">\n")
     !isempty(caption) && write(io, "<caption>$caption</caption>\n")
 
@@ -99,6 +102,7 @@ function html_table(
         write(io, "</tr>\n")
     end
     write(io, "</tbody></table>\n")
+    write(io, "</div>\n")
     return String(take!(io))
 end
 
