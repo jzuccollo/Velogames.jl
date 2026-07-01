@@ -30,6 +30,149 @@ Breakaway points are estimated heuristically from simulated finishing positions,
 
 The impact is larger than previously thought. In MSR 2026, 8 riders scored exactly 120 VG points each purely from breakaway sectors (Tarozzi, Maestri, Marcellusi, Faure Prost, Belletta, Milesi, Moro, Tronchon). The model predicted these riders at 0.5–65 expected VG points. PCS breakaway data for the race was entirely missing (zero riders flagged), so the model fell back on the position-based heuristic alone. For Cat 1 races where breakaway points are 60 per sector (max 240 per rider), the heuristic is inadequate.
 
+### Stage-race sprinter over-prediction: the aleatoric-noise diagnosis (June 2026)
+
+A full investigation into why the stage-race model over-rates grand-tour sprinters. The headline conclusion is that **the simulator's per-stage outcome noise is 2.5–3× too small**, and the fix is a per-stage-type aleatoric noise calibrated to observed dispersion. This is the single most important stage-race calibration finding to date. Everything a future analyst needs to reproduce, act on, or extend it is below.
+
+#### The symptom
+
+The 2026 Tour predictor put four sprinters (Philipsen 1670, Kooij 1429, Merlier 1301, Pedersen 1289) at near-green-jersey level, compressed into a 1.3× band. Reality (TdF/Giro 2023–2025): one sprinter dominates at 1.5–2× the next, the sprint field is deep, and ~32% of elite sprinters abandon before Paris (persistent, not a 2025 artefact — measured across 6 GTs). So the model both over-predicted the *level* and over-compressed the *spread* of sprinter scores.
+
+#### Theoretical framework: epistemic vs aleatoric noise
+
+A rider's expected VG score is
+
+$$\mathbb{E}[\text{VG}_i]=\sum_{\text{stages}}\sum_k f(k)\,P(\text{rank}_{i,\text{stage}}=k),$$
+
+where $f$ is the VG scoring table — dominated by stage-finish points, which are **shallow at the top** (220/180/160/140/120 for positions 1–5, down to 60 at 10th). The simulator generates $P(\text{rank})$ by sorting $X_i=\mu_i+\text{noise}$. The behaviour is governed by a single ratio: **(strength gap between riders) / (noise scale)**.
+
+The critical error is that the model uses one quantity — the Bayesian posterior standard deviation $\sigma_i$ (≈0.68 for most riders) — for two conceptually distinct roles:
+
+- **Epistemic uncertainty**: how unsure we are of a rider's *mean* ability. This correctly belongs in the resample/optimise outer loop (draw $\theta_i\sim N(\mu_i,\sigma_i)$) and in the persistent cross-stage term ($\alpha$-correlated noise, $\alpha=0.7$).
+- **Aleatoric variability**: the genuine race-day scatter of finishing positions (positioning, crashes, echelons, breakaways, sitting up). This should drive the *per-stage* noise, and it is **much larger** than the epistemic $\sigma$. It is a property of the race, not of how much data we hold on the rider.
+
+Because the per-stage aleatoric term is scaled by the epistemic $\sigma_i$ (via the $\beta$ component), it is far too small. With the sprinter-to-field strength gap ≈2.2 and $\sigma$≈0.68, the ratio ≈3.2. At a ratio ≫1, $P(\text{top-}10)$ collapses to a **step function**: →1 for the top ~6 riders, →0 for the rest. The placing floor **saturates** — the same handful of riders lock the top-10 on every flat stage. Saturation destroys information: when four sprinters all sit at $P(\text{top-}10)\approx1$, their true strength differences cannot express, so their scores inflate to a common high level and compress together.
+
+This framework explains every observation: the win-share was actually fine (Philipsen won 39% of simulated flat stages vs Pedersen 7% — wins are decided at the very top by small gaps plus a little noise), but the *placing floor* — 92% of a sprinter's EVG — was saturated.
+
+#### What was ruled out — the strength ($\mu$) axis
+
+Three interventions on the strength estimates were tried and **none moved the symptom**, which is itself the key diagnostic that the problem is on the noise axis, not the strength axis:
+
+- **Softening the `log1p` transform on PCS specialty.** PCS specialty is `rider_currency`-scaled then `log1p`-transformed then z-scored (`simulation.jl` ~L2412), which compresses all good sprinters into a narrow ~1.4–2.0 band. Softening the transform *sharpens the top* (Philipsen 2.1→4.5 at λ=0.5) but does **not** lift the second tier — z-scoring lets the top outliers inflate the field SD, so mid-tier riders stagnate. It also blows up the GC dimension (Vingegaard 2.4→4.3). Net: makes the cliff worse.
+- **Per-rider / per-dimension market discount.** The `market_discount` (×8) is applied race-wide, not per-rider (`simulation.jl` L855 / L561), so a rider with no odds still has their PCS variance inflated because *other* riders have a market. A per-rider + per-dimension version was prototyped (config flags `market_discount_per_dim`, `market_discount_routing_threshold`; helper `_market_discount_dims`) and **verified correct**, but it moved second-tier sprinters by only ~0.05. Removing the discount globally actually *lowers* elite sprinters (Philipsen 3.4→2.7) — its real job is to let the market signal dominate for priced riders. The prototype was reverted. It remains a principled cleanup (and would fix a backtest train/serve inconsistency: backtests have no odds, so `race_has_market=false` and non-market riders keep full signal, unlike production) but it is not the sprinter fix.
+- The `rider_currency` decline factor works correctly (Gaviria's career sprint score exceeds Kooij's, but after currency 0.47 vs 0.83 Kooij correctly ranks above — the model is not naively using career-cumulative specialty).
+
+#### Calibration: real dispersion targets and the fitted noise
+
+The saturation was measured directly. For real GT stages (2023–2025, 6 GTs, classified by PCS stage profile), the **mean top-10 overlap between same-type stage pairs** (1.0 = identical top-10 every stage = fully saturated; lower = more rotation):
+
+| stage type | real top-10 overlap | interpretation |
+|------------|--------------------|----------------|
+| flat | 0.37 | recurring sprinters + rotating lead-outs |
+| hilly | 0.15 | most chaotic — breakaways, varied puncheur terrain |
+| mountain | 0.37 | stable GC core + rotating breakaway winners |
+| itt | 0.53 | most deterministic — same TT specialists (small sample) |
+
+For flat specifically, direct sprinter metrics: the *best* sprinter each race finishes top-10 on 0.70–0.88 of sprint stages, the typical elite sprinter on 0.42 (median 0.38), and ~5.2–5.8 recognised fast-finishers occupy the top-10 per stage. The current model gives 0.93–1.00 top-10 rates and 8.8 distinct — fully saturated.
+
+Fitting the added stage-finish aleatoric SD on the 2026 field to match these targets gives:
+
+| stage type | **fitted `a`** (added SD) | current `BREAKAWAY_NOISE_BY_EVENT.stage_finish` | total per-stage noise, fitted ($\sqrt{0.68^2+a^2}$) |
+|------------|--------------------------|-------------------------------------------------|------|
+| flat | **1.5** | 0.0 | ~1.65 |
+| hilly | **2.1** | 1.0 | ~2.20 |
+| mountain | **1.2** | 1.5 | ~1.38 |
+| itt | **0.4** | 0.0 | ~0.79 |
+
+The existing hand-tuned values had the **ranking inverted**: they use mountain > hilly > flat = 0, but the data says **hilly > flat ≈ mountain > itt**. The biggest miss is flat (0 → 1.5, the entire sprinter bug); mountain is slightly *over*-noised. At the fitted flat noise the sprinter stage-finish EVG (797/662/631/601) almost exactly reproduces the real TdF-2025 haul (Milan 800 / Van Aert 710 / De Lie 655 / Groves 639) — the simulator, given the right noise, reconstructs the observed distribution.
+
+Note that fitting corrects the *level* (the dominant error) but leaves the residual ~1.3× spread among the top four sprinters. That residual is **not a bug** — real TdF-2025 also had four sprinters bunched at 639–800 (1.25×), with the green-jersey winner rising above only via the jersey bonus the simulator adds separately. Once the level is right, a mild cluster of co-favourites is exactly what the data shows.
+
+#### Validation: impact by rider archetype
+
+Running the full `simulate_stage_race` on the 2026 field, current noise vs fitted noise (mean EVG over top-50 riders by archetype; field total EVG conserved at 45.7k — this is redistribution, not inflation):
+
+| archetype | current → fitted | change | notes |
+|-----------|------------------|--------|-------|
+| Sprinter | 688 → 527 | **−23%** | elite −34% (Philipsen 1662→1089); 2nd-tier Gaviria +10% (field thickens) |
+| GC / all-rounder | 1808 → 1734 | −4% | most flat; Pogačar −11% (see below) |
+| Climber | 506 → 546 | +8% | Carapaz +9%, L. Martinez +8% |
+| Puncheur / classics | 459 → 477 | +4% | Healy +26% — breakaway/puncheur types get the top-10s the data says they earn |
+| TT | 343 → 360 | +5% | — |
+
+The fix deflates the over-predicted elite sprinters, thickens the field (second-tier sprinters, puncheurs, breakaway climbers gain), and behaves sensibly for every archetype.
+
+#### The Pogačar check, and why ability-margin-dependent noise was rejected
+
+The one non-trivial GC move was Pogačar −11% (4185→3735). Verified against his real 2025 stage-finish points by type (flat 152 / hilly 760 / mountain 860 / itt 400 = **2172**): the fitted model gives 436/536/1145/77 = **2194 ≈ real**, whereas the current model gives 2781 — over-crediting him by ~600, chiefly via an absurd **0.97 top-10 rate on bunch sprints** (real ~0.17; he sits up in the peloton). So the −11% is a **genuine correction**. His residual total shortfall (3735 vs real 4153) is in the GC/jersey scoring components, which the noise change does not touch — a *separate* issue.
+
+The only soft spot is that fitted noise under-shoots Pogačar's hilly points (536 vs real 760) by spreading his hilly results across placings rather than letting him win decisively. This motivated a prototype of **ability-margin-dependent dispersion** (reduce the aleatoric noise for riders with a large stage-strength margin, so dominant riders hold their level). It was **rejected**: raising the margin sensitivity does pull Pogačar's hilly up (536→689 at γ=0.25) but simultaneously **re-saturates the sprinter floor** (Philipsen flat top-10 rate springs back 0.70→0.89, EVG 672→868 — undoing the fix) and *worsens* his mountain over-prediction (1143→1389). The reason: margin is measured against the whole field, and sprinters are high-margin-on-flat too, so reducing "dominant rider" noise re-locks the sprint top-10. Separating the "contest among genuine contenders" from the "breakaway lottery" would need substantially more machinery for a small, self-cancelling gain. **Uniform per-type noise is the sweet spot.**
+
+#### Recommended change
+
+Wire the fitted per-type stage-finish aleatoric noise into `simulate_stage_race` as a config-driven parameter (fold `BREAKAWAY_NOISE_BY_EVENT` into the proposed `StageRaceConfig`, see Phase 6), defaulting to `stage_finish = (flat=1.5, hilly=2.1, mountain=1.2, itt=0.4)`. Conceptually this term is the *aleatoric* per-stage scatter and should be documented as decoupled from the epistemic posterior $\sigma$ (which remains the resample and $\alpha$-persistent term). Prototyped by editing the `const` directly and reverted; not yet in production.
+
+#### SHIPPED (July 2026 — Phase A1)
+
+Implemented. `simulate_stage_race` per-stage performance is now `α·σ·rider_noise` (persistent epistemic, correlated across stages) `+ a_stage·stage_noise` (independent aleatoric, a flat per-type scale NOT scaled by σ, drawn `_rand_t(rng, 5)` for fat tails), replacing the old `σ·(α·rider + β·stage)`. The aleatoric scale, breakaway noise, jersey allocation, and intermediate-sprint points live in a new `StageSimConfig` (`race_helpers.jl`, `DEFAULT_STAGE_SIM_CONFIG`), threaded `render_stagerace`→`solve_stage`→`resample_optimise_stage`→`simulate_stage_race`.
+
+`a_type` was **re-fitted by top-K (K=20) Plackett–Luce ranking-likelihood MLE** on archived GT finishing orders (finishers only; μ reconstructed via `estimate_strengths(:stage)` on archived specialty), superseding the overlap-matched estimates above. The top-K PL ignores the meaningless flat bunch-sprint tail, giving much smaller, K-robust values — clean giro-2026 fit: flat 0.54 / hilly 1.06 / mtn 0.50 / itt 0.49 (ordering hilly>flat≈mtn>itt; itt under-identified). Because `a_type ∝ μ-scale` (an identifiability confound the sweep bounds) and specialty-only μ understates production sprinter sharpening, the **shipped defaults sit at the upper-middle of the fitted range: `aleatoric_noise = (flat=0.8, hilly=1.1, mountain=0.7, itt=0.5)`**. Validation (giro-2026, market-sharpened μ): the dominant sprinter's flat top-10 rate de-saturates from 1.00 (a_type≈0) to 0.82 under the fitted config vs real 0.67; do-no-harm top-20 EVG↔actual ρ unchanged within noise. **Pre-registered revisit trigger: if the next 2 GTs show top sprinters now under-predicting, or top-20 ρ drops materially, revisit `a_type` (esp. flat).** Next: B1 (oneday→flat trim), then A2 (correlated attrition).
+
+#### A2 SHIPPED (July 2026 — attrition / DNF hazard)
+
+Implemented in `simulate_stage_race` via a new `rider_classes` kwarg (gates attrition; empty = off, so tests keep old behaviour) threaded from `resample_optimise_stage` (reads `df.classraw`). Per not-yet-abandoned rider each stage, DNF hazard = `base_type × class_mult × brutal_day_shock`; abandoned riders are frozen out (`-Inf`) of every per-stage event and all final classifications, but keep points earned before abandoning. A single shared per-stage Gamma(shape 2)/2 shock (mean 1, var 0.5) eliminates sprinters in correlated cohorts. Params live in `StageSimConfig` (`attrition_hazard`, `attrition_class_mult`, `attrition_shock_shape`).
+
+**Empirical hazards** (fitted from archived `pcs_abandons` × VG class labels, 4 GTs): base per-rider-stage by type flat 0.0035 / hilly 0.0075 / mtn 0.0092 / itt 0.0018; class multipliers sprinter 1.29 / climber 1.19 / allrounder 1.53 / unclassed 0.86 (field DNF 14.8%). **Important reset of the plan's premise: the *VG sprinter class* DNFs at only 19% (1.29× field), not the assumed 32% — that figure is elite-only.** Validation: simulated field survival 0.86-0.87 (obs 0.82-0.88), sprinter survival 0.83 (obs mean 0.82), over-dispersion 1.82 (obs 1.66). EVG impact: top riders −5 to −8% (expected haircut < DNF rate, since pre-abandon points stand), survivors redistribute upward, field total ~conserved.
+
+**Residual (logged, not fixed): class-based hazard mis-attritions the tails.** It under-attritions elite sprinters (they DNF ~32%, get the class's 19%) and over-attritions the exceptionally-durable GC leader (Pogačar −8%, though he rarely abandons) — class can't identify exceptional durability/fragility. An "elite-aware" hazard (scale with strength/cost within class) was offered and deliberately not chosen (thin data). This slightly worsens the C2 GC-star under-prediction below.
+
+**Ability-based hazard tested and rejected (July 2026).** The intuitive hypothesis — DNF hazard should fall with climbing quality (weak climbers time-cut on mountains) — is **contradicted by the data**: corr(cost, DNF) = +0.066, corr(overall-quality, DNF) = +0.124, corr(climber, DNF) = +0.056 (giro-2026); quality tertiles run worst 11.5% → best 27.4% DNF. Stronger/marquee riders abandon *more* (strategic abandonment once goals evaporate), not less; climbing ability offers no protection, and the durable exception is simply the rider still winning — which no ability variable can identify ex-ante. Decision: **keep the class-based hazard**; do not re-propose a climbing-quality hazard without new evidence. (Data-consistent alternatives, if revisited: market-favourite GC protection, or a quality-*increasing* hazard paired with favourite protection.)
+
+#### Separate residual issues surfaced (do not conflate with the noise fix)
+
+1. **GC/jersey scoring under-predicts dominant all-rounders.** After stage-finish is corrected, Pogačar's total still trails real by ~400 in the daily-GC/final-GC/points-jersey terms. Independent of the noise model.
+
+   **C2 INVESTIGATED (July 2026) — the daily/final-GC hypothesis does NOT hold; the real omission was daily KOM.** Decomposing Pogačar's simulated points by component: **daily GC 626 (≈ the 630 max — he leads GC nearly every day) and final GC 599 (≈600 — wins ~99.8%) are near-maximal, not under-predicted.** The genuine gap was that the per-stage sim scored *none* of `daily_mountains_class`, `hc_climb_points`, or `cat1_climb_points` — only a crude `mountain_top5_counts` proxy feeding the final KOM. **Fix shipped: daily mountains classification** (`_score_daily_mountains!`) now awards `daily_mountains_class` (up to 33/climbing-stage) ranked by climbing ability + stage luck on mountain/hilly stages — ~100/tour for Pogačar, up to ~252 for a KOM specialist, materially lifting pure climbers/polka-dot contenders who were badly under-scored. **HC/Cat-1 per-climb points remain unscoreable** — the PCS scraper leaves `n_hc_climbs`/`n_cat1_climbs` at 0, so there's no per-climb data (a scraper-side fix would be a prerequisite). Any residual Pogačar gap is now attributable to points-jersey contribution + A2's durable-GC-leader over-attrition, not GC scoring.
+2. **Flat-strength leakage.** GC ability leaks into the `:flat` dimension (Pogačar's flat strength 2.43 sits above every second-tier sprinter; his fitted-model flat top-10 rate is 0.49 vs real 0.17). A `SIGNAL_DIMENSION_WEIGHTS` / routing cleanup, on the $\mu$ axis.
+
+   **B1 SHIPPED (July 2026) — `pcs_oneday → :flat` weight 0.2 → 0.0.** Swept the weight on the TdF-2026 field. Two findings: (a) A1's aleatoric noise already de-saturated the *backtest-regime* symptom — Pogačar's PCS-only flat top-10 was 0.13 even at weight 0.2, not 0.49 (the 0.49 was pre-A1). (b) The trim is the right conceptual cleanup regardless: it removes the all-rounder one-day → flat-sprint leak (Pogačar backtest flat 1.02 → 0.75) with **elite-sprinter flat strength unchanged** (Philipsen 2.12→2.15, Kooij 1.52→1.68 — their flat comes from `pcs_sprint`, weight 1.0). It is **inert in production** (Pogačar production flat = 2.46 at both 0.0 and 0.2, since `market_discount` suppresses PCS for priced riders), so it only helps backtests, as the plan anticipated.
+
+   **NEW residual surfaced by the sweep — the real *production* flat leak is `odds_points → :flat` (weight 0.4), not `pcs_oneday`.** Pogačar is listed in the green-jersey (points) betting market (info_share_odds_points ≈ 0.155), and that pricing routes onto `:flat`, giving him a production flat top-10 rate of ≈0.50. B1 does not touch this (market signals bypass `market_discount`). A future cleanup could route `odds_points`/`oracle_points` to `:flat` only for riders *classed* as sprinters (as B2's stage-win channel does via `RACE_HISTORY_CLASS_PROJECTION`), so a GC rider's green-jersey pricing informs points-jersey scoring without inflating his flat-sprint ability. Not in this plan's scope; logged for a future μ-routing pass.
+3. **`points_jersey` noise not recalibrated (C1 — BLOCKED on data, July 2026).** Only `stage_finish` was fitted. The points-jersey breakaway shock (`StageSimConfig.breakaway_noise.points_jersey`, hilly 1.5 / mtn 2.5) plus `points_jersey_allocation` / `intermediate_sprint_points` drive green-jersey scoring. The A1b-style ranking-likelihood recalibration is **blocked**: no per-stage points/KOM classification standings are archived (only the `odds_points`/`oracle_points` betting markets, which are predictions not results), so there's no target to fit. Prerequisite: a PCS scraper for daily points/mountains classification standings. Also note post-A1 the points-jersey shock now stacks on top of the new aleatoric `noisy`, so it may be mildly over-dispersed — revisit once classification data exists.
+
+#### How to reproduce or recalibrate (e.g. for Giro/Vuelta specifics)
+
+1. **Real targets.** For target GTs: `getpcs_all_stage_results(slug, year, 21)` + `getpcs_stage_profiles(slug, year)` to classify stages; compute the mean top-10 overlap between same-type stage pairs, and for flat also the per-sprinter top-10 rate and distinct-fast-finishers-in-top-10. Watch out: the `vg_results` archive for GTs is stale/wrong (classics-game numbers, max ~585, no Pogačar) — use PCS stage results as ground truth, not that archive.
+2. **Fit.** Run `simulate_stage_race` (or a per-stage Monte Carlo replicating the stage-finish ranking) on the target field, sweep the added aleatoric SD per stage type, and match the model's overlap to the real targets.
+3. The fitted values were measured across TdF + Giro 2023–2025 and are treated as race-type-general; the *method* is the deliverable, so Giro/Vuelta can be re-checked if their dispersion differs. This is the empirical calibration of `BREAKAWAY_NOISE_BY_EVENT.stage_finish` that Phase 6 called for — now done for `stage_finish`; `points_jersey` remains.
+
+---
+
+## Validation philosophy
+
+Cycling supplies only ~3 grand tours and a few dozen classics a year, and market signals cover even fewer races. We will never have large-sample statistical power for most changes, so validation is deliberately pragmatic: **match the rigour of the check to the change's effect size × mechanistic clarity, never to a race count.** A "wait for N races" gate is a counsel of perfection that freezes all progress; it is justified only where the effect is genuinely too small to see.
+
+### Triage each change
+
+- **Large, mechanistically-understood bias** — e.g. the June 2026 aleatoric-noise fix (model sprinter top-10 rate ~0.98 vs real ~0.42, a factor-of-two error with a clear mechanism). The effect dwarfs sampling noise. Ship on theory + directional confirmation + do-no-harm, then monitor. Does **not** need power.
+- **Small metric-chasing tuning** — e.g. non-uniform market discount (overall ρ 0.518 vs 0.473, within 1–2 SEs, tuning a threshold on ~6 races). Genuinely needs power. Defer — but on the grounds of **effect size**, revisited when it looks material, not merely when a race counter ticks over.
+
+### The toolkit (all cheap; none needs a large sample)
+
+1. **Directional + magnitude reality checks** on the races we have — right sign, sensible size, consistent across races. Evaluate at the rider-stage level (thousands of observations) where possible; "6 GTs" badly undercounts the information (a per-stage-type dispersion fit uses ~40 stages and every placement).
+2. **Do-no-harm guard rails** — top-~20 rank ρ must not degrade (the model's value rests on ranking the top riders); no absurd outputs (a domestique winning bunch sprints, a sprinter leading GC); field totals conserved (mechanical — a sanity check that catches bugs, **not** evidence of correctness).
+3. **Selection-impact, read directionally** — does a team chosen under the change beat the current model's pick on held-out actuals? This is the decision-relevant signal; 5/6 in the right direction is meaningful without significance, and it answers the standing objection that point-level calibration "changes budget allocation but not selection" (it flows through the optimiser into team composition).
+4. **Leave-one-out as information, not a veto** — does a fit on the other races roughly predict the held-out one? A wild miss flags a race to investigate.
+5. **Estimate ranges, not points** — when fitting a parameter, use a likelihood/CI to bound what is identifiable and pick a defensible value in range; don't agonise over a point estimate the data cannot distinguish.
+6. **Ship-then-monitor** — the prospective harness (`src/prospective_eval.jl`) is the real long-run validator and accumulates each race. Ship the well-justified change with a **pre-registered revisit trigger** (e.g. "if the next 2 GTs show sprinters now under-predicting, or top-20 ρ drops, revisit"). Monitoring is non-blocking.
+
+Metric note: rank correlation (ρ) is invariant to the monotonic EVG-level changes that calibration fixes make, so it **cannot** confirm them — use points-level metrics (PIT, team-points-captured) as the acceptance criterion for those.
+
+### Sequencing
+
+Ship one change at a time, for **attribution** (so prospective movement is interpretable and debuggable), not to accumulate power. Each ships behind its own directional + do-no-harm judgement call, then is monitored before the next lands.
+
 ---
 
 ## Improvement plan

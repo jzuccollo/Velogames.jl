@@ -210,6 +210,10 @@ This is a small, personal package. Avoid overengineering:
 - **Minimal error handling** — let Julia's built-in errors propagate naturally. Only catch errors at boundaries where you can do something useful.
 - **No boilerplate** — skip docstrings for obvious functions, skip type annotations where Julia infers fine, skip comments that restate the code.
 
+## Validating model changes
+
+Match validation rigour to **effect size × mechanistic clarity, not to a sample/race count** — cycling gives ~3 grand tours a year, so a "wait for N races" gate freezes all progress. Ship large, well-understood changes on theory + directional + do-no-harm checks (top-~20 rank ρ must not degrade; no absurd outputs), then monitor prospectively with a pre-registered revisit trigger. Defer only genuinely small metric-chases, until the effect looks material. Rank ρ is invariant to EVG-level changes, so judge those on points-level metrics (PIT, team-points-captured). See `roadmap.md` "Validation philosophy".
+
 ## Roadmap
 
 See `roadmap.md` for known issues, planned improvements, ablation findings, and evidence base.
