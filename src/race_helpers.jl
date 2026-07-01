@@ -884,6 +884,71 @@ struct StageRaceConfig
     cache::CacheConfig
 end
 
+"""
+    StageSimConfig
+
+Tuneable constants for the per-stage grand-tour simulator (`simulate_stage_race`).
+Consolidates values that were previously module-level constants so they can be
+threaded like `stage_scoring` and calibrated (see roadmap Phase 6 / C1).
+
+Fields:
+- `aleatoric_noise` — per-dimension race-day scatter scale (`a_type`). This is the
+  coefficient on the independent per-stage Student-t(5) noise draw; the SD it
+  contributes to a rider's stage performance is `a_type · √(5/3)`. A stage's
+  scalar scale is blended across dimensions by the stage's `stage_dimension_weights`.
+  Fitted by Plackett–Luce ranking-likelihood MLE on archived GT finishing orders
+  (A1b, June 2026): hilly is the most stochastic, ITT the least.
+- `breakaway_noise` — per-event, per-dimension breakaway σ (decoupled from GC).
+- `points_jersey_allocation` — per-stage-type points-jersey allocation vectors.
+- `intermediate_sprint_points` — intermediate-sprint banner allocation.
+"""
+struct StageSimConfig
+    aleatoric_noise::NamedTuple
+    breakaway_noise::NamedTuple
+    points_jersey_allocation::NamedTuple
+    intermediate_sprint_points::Vector{Float64}
+    attrition_hazard::NamedTuple        # per-rider-stage DNF hazard by stage type
+    attrition_class_mult::NamedTuple    # hazard multiplier by rider class (×field)
+    attrition_shock_shape::Float64      # Gamma shape of the shared brutal-day shock (mean 1)
+    aleatoric_df::Int                   # Student-t df for the aleatoric race-day draw
+end
+
+function StageSimConfig(;
+    aleatoric_noise=(flat=0.8, hilly=1.1, mountain=0.7, itt=0.5),
+    breakaway_noise=(
+        stage_finish=(flat=0.0, hilly=1.0, mountain=1.5, itt=0.0),
+        points_jersey=(flat=0.0, hilly=1.5, mountain=2.5, itt=0.0),
+    ),
+    points_jersey_allocation=(
+        flat=[50.0, 35.0, 25.0, 18.0, 14.0, 12.0, 10.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        hilly=[25.0, 18.0, 12.0, 8.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        mountain=[15.0, 12.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        itt=[15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
+        ttt=[15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
+    ),
+    intermediate_sprint_points=[20.0, 12.0, 8.0, 6.0, 4.0, 2.0, 1.0],
+    # Attrition (A2, July 2026): per-rider-stage DNF hazard fitted from archived
+    # pcs_abandons across 4 GTs (giro/tour/vuelta 2025 + giro 2026). Field DNF
+    # ~15%, concentrated on hard days. A shared per-stage Gamma shock (shape 2 →
+    # mean 1, var 0.5) reproduces the observed over-dispersion (per-stage abandon
+    # var/mean ≈ 1.66) so sprinters can be eliminated in cohorts on brutal days.
+    attrition_hazard=(flat=0.0035, hilly=0.0075, mountain=0.0092, itt=0.0018, ttt=0.002),
+    attrition_class_mult=(sprinter=1.29, climber=1.19, allrounder=1.53, unclassed=0.86),
+    attrition_shock_shape=2.0,
+    # Student-t df for the aleatoric race-day scatter. This is a calibrated model
+    # property, NOT the global `simulation_df`: the aleatoric term models fat-
+    # tailed race-day chaos (crashes/echelons) and is distinct from the Gaussian
+    # epistemic wobble, so it has its own tail. `aleatoric_noise` (a_type) is
+    # calibrated against df=5; change them together.
+    aleatoric_df=5,
+)
+    StageSimConfig(aleatoric_noise, breakaway_noise, points_jersey_allocation,
+        intermediate_sprint_points, attrition_hazard, attrition_class_mult,
+        attrition_shock_shape, aleatoric_df)
+end
+
+const DEFAULT_STAGE_SIM_CONFIG = StageSimConfig()
+
 # Convenience constructors for stage profiles
 flat_stage(n; km=180.0, ps=15, vert=1000, sprints=1) =
     StageProfile(n, :flat, km, ps, vert, 0.2, 0, 0, sprints, false)

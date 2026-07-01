@@ -315,10 +315,15 @@ function resample_optimise_stage(
     rng::AbstractRNG=Random.default_rng(),
     max_per_team::Int=0,
     risk_aversion::Float64=0.5,
+    sim_config::StageSimConfig=DEFAULT_STAGE_SIM_CONFIG,
 )
     n_riders = nrow(df)
     uncertainties = Float64.(df.uncertainty)
     teams = String.(df.team)
+    # Rider classes drive the attrition hazard (A2). Prefer :classraw, fall back
+    # to :class; empty when neither is present (attrition then disabled).
+    rider_classes = :classraw in propertynames(df) ? String.(df.classraw) :
+                    :class in propertynames(df) ? String.(df.class) : String[]
 
     # Run all simulations at once. simulate_stage_race always returns
     # (vg_points, diagnostics); we surface diagnostics for per-stage podium
@@ -326,7 +331,8 @@ function resample_optimise_stage(
     sim_vg_points, diagnostics = simulate_stage_race(
         stages, stage_strengths, uncertainties, teams, scoring;
         n_sims=n_resamples, cross_stage_alpha=cross_stage_alpha,
-        gc_strengths=gc_strengths, rng=rng,
+        gc_strengths=gc_strengths, rng=rng, sim_config=sim_config,
+        rider_classes=rider_classes,
     )
 
     # Track selection frequency and accumulate points

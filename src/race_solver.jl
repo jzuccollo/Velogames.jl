@@ -92,6 +92,8 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :info_share_form,
             :info_share_history,
             :info_share_vg_history,
+            :info_share_points_history,
+            :info_share_kom_history,
             :info_share_oracle,
             :info_share_oracle_gc,
             :info_share_oracle_points,
@@ -690,6 +692,7 @@ function solve_stage(
     simulation_df::Union{Int,Nothing}=nothing,
     cross_stage_alpha::Float64=0.7,
     stage_scoring::Union{StageRaceScoringTable,Nothing}=nothing,
+    sim_config::StageSimConfig=DEFAULT_STAGE_SIM_CONFIG,
     include_gt_history::Bool=true,
 )
     data = _prepare_rider_data(
@@ -766,6 +769,7 @@ function solve_stage(
             gc_strengths=gc_strengths_vec,
             max_per_team=max_per_team,
             risk_aversion=risk_aversion,
+            sim_config=sim_config,
         )
     else
         # --- Aggregate fallback ---
