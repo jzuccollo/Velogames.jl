@@ -533,7 +533,8 @@ function format_signal_waterfall(df::DataFrame; max_riders::Int=10)
     info_share_cols = is_stage ? _INFO_SHARE_COLS_STAGE : _INFO_SHARE_COLS
 
     lines = String[]
-    push!(lines, "<table style='border-collapse:collapse; font-size:0.85em; width:100%'>")
+    push!(lines, "<div class=\"table-wrap\">")
+    push!(lines, "<table style='border-collapse:collapse; font-size:0.85em; min-width:100%; width:max-content'>")
     push!(lines, "<thead><tr style='border-bottom:2px solid #666'>")
     push!(lines, "<th style='text-align:left; padding:4px'>Rider</th>")
     push!(lines, "<th style='text-align:right; padding:4px'>Cost</th>")
@@ -591,6 +592,7 @@ function format_signal_waterfall(df::DataFrame; max_riders::Int=10)
     end
 
     push!(lines, "</tbody></table>")
+    push!(lines, "</div>")
     return join(lines, "\n")
 end
 
@@ -1791,7 +1793,8 @@ function format_info_share_per_dim(
     dim_syms::Vector{Symbol}=[:flat, :hilly, :mountain, :itt, :gc, :kom],
 )
     lines = String[]
-    push!(lines, "<table style='border-collapse:collapse; font-size:0.78em; width:100%'>")
+    push!(lines, "<div class=\"table-wrap\">")
+    push!(lines, "<table style='border-collapse:collapse; font-size:0.78em; min-width:100%; width:max-content'>")
     # Two-row header: signal labels (spanning per-dim columns) + dim sub-labels
     push!(lines, "<thead>")
     push!(lines, "<tr style='border-bottom:1px solid #999'>")
@@ -1822,5 +1825,6 @@ function format_info_share_per_dim(
     end
 
     push!(lines, "</tbody></table>")
+    push!(lines, "</div>")
     return join(lines, "\n")
 end
