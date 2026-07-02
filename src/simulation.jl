@@ -2565,20 +2565,29 @@ function _estimate_strengths_multidim(
     end
 
     # --- Per-source PCS specialty z-scores (log1p, then z-score across field) ---
-    # Each rider's career specialty is scaled by their currency factor before
-    # log1p+z-scoring, so a rider in decline ranks lower than their career
-    # numbers alone would suggest.
+    # Preferred: a recency-weighted per-season specialty score in `<col>_r`
+    # (decay-weighted sum of points earned per season — current form beats stale
+    # palmarès), used as-is. Fallback (backtest / no recency data): career-
+    # cumulative specialty × the currency ratio, so a rider in decline ranks
+    # lower than their lifetime numbers alone would suggest.
     pcs_cols = (:sprint, :oneday, :climber, :tt, :gc)
     pcs_z = Dict{Symbol,Vector{Float64}}()
     for col in pcs_cols
-        if col in propertynames(df)
-            raw = Float64.(coalesce.(df[!, col], 0.0)) .* sig.rider_currency
+        recency_col = Symbol(col, "_r")
+        raw = if recency_col in propertynames(df)
+            Float64.(coalesce.(df[!, recency_col], 0.0))
+        elseif col in propertynames(df)
+            Float64.(coalesce.(df[!, col], 0.0)) .* sig.rider_currency
+        else
+            nothing
+        end
+        if raw === nothing
+            pcs_z[col] = zeros(n_riders)
+        else
             logged = log1p.(max.(raw, 0.0))
             μ = mean(logged)
             σ = std(logged)
             pcs_z[col] = σ > 0 ? (logged .- μ) ./ σ : zeros(n_riders)
-        else
-            pcs_z[col] = zeros(n_riders)
         end
     end
 
