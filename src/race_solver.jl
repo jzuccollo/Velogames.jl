@@ -211,22 +211,27 @@ DataFrame (e.g. Oddschecker paste) passed via the `odds_df` keyword.
 Returns a `RaceData` struct or `nothing` if fewer than `min_riders` remain
 after filtering.
 """
-# Recency-weight the stage-race PCS specialties. For each rider and each of
-# climber/gc/tt, fetch per-season points and collapse to a decay-weighted sum
-# (recent seasons dominate) using the default `pcs_season_decay`. Adds
-# `:climber_r`, `:gc_r`, `:tt_r` columns. Riders with no PCS profile / no
-# specialty results get 0 (consistent with the career-specialty path, where they
-# are `missing`→0). Logs coverage so a scrape regression is visible.
+# Recency-weight all five PCS specialties. For each rider and specialty, fetch
+# per-season points and collapse to a decay-weighted sum (recent seasons
+# dominate) using the default `pcs_season_decay`. Adds `:<spec>_r` columns
+# consumed by the multidim z-scoring. Riders with no PCS profile / no specialty
+# results get 0 (consistent with the career-specialty path, where they are
+# `missing`→0). Returns the raw per-season data in long format
+# (riderkey, specialty, year, points) so the caller can archive it for
+# backtest temporal integrity. Logs coverage so a scrape regression is visible.
 function _apply_pcs_recency!(
     riderdf::DataFrame,
     pcs_slug_map::Dict{String,String},
     current_year::Int;
-    specialties=(:climber, :gc, :tt),
+    specialties=(:climber, :gc, :tt, :sprint, :oneday),
     decay::Float64=DEFAULT_BAYESIAN_CONFIG.pcs_season_decay,
     cache_config::CacheConfig=DEFAULT_CACHE,
     force_refresh::Bool=false,
 )
     n = nrow(riderdf)
+    seasons_long = DataFrame(
+        riderkey=String[], specialty=String[], year=Int[], points=Float64[],
+    )
     for spec in specialties
         scores = zeros(Float64, n)
         covered = 0
@@ -247,11 +252,14 @@ function _apply_pcs_recency!(
             w = exp.(-decay .* (current_year .- df.year))
             scores[i] = sum(w .* df.points)
             covered += 1
+            for r in eachrow(df)
+                push!(seasons_long, (key, String(spec), r.year, r.points))
+            end
         end
         riderdf[!, Symbol(spec, "_r")] = scores
         @info "PCS recency ($spec): $covered/$n riders with per-season points"
     end
-    return riderdf
+    return seasons_long
 end
 
 function _prepare_rider_data(
@@ -353,10 +361,10 @@ function _prepare_rider_data(
 
     riderdf = join_pcs_specialty!(riderdf, pcsriderpts)
 
-    # Recency-weight the stage-race specialties (climber/gc/tt) from per-season
-    # PCS points, so current form outweighs stale career palmarès. Adds
-    # :climber_r / :gc_r / :tt_r columns consumed by the multidim z-scoring.
-    _apply_pcs_recency!(
+    # Recency-weight all five PCS specialties from per-season points, so current
+    # form outweighs stale career palmarès. Adds :<spec>_r columns consumed by
+    # the multidim z-scoring; returns the raw per-season data for archival.
+    pcs_seasons = _apply_pcs_recency!(
         riderdf, pcs_slug_map, config.year;
         cache_config=cache_config, force_refresh=force_refresh,
     )
@@ -367,6 +375,16 @@ function _prepare_rider_data(
             save_race_snapshot(pcsriderpts, "pcs_specialty", config.pcs_slug, config.year)
         catch e
             @debug "Failed to archive PCS specialty data: $e"
+        end
+    end
+
+    # Archive per-season specialty points (long format) so backtests can
+    # recompute recency-weighted specialty scores as-of the race date.
+    if !isempty(config.pcs_slug) && nrow(pcs_seasons) > 0
+        try
+            save_race_snapshot(pcs_seasons, "pcs_specialty_seasons", config.pcs_slug, config.year)
+        catch e
+            @debug "Failed to archive PCS specialty seasons data: $e"
         end
     end
 
