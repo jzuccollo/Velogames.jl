@@ -454,6 +454,35 @@ const _INFO_SHARE_COLS = [
     :info_share_odds,
 ]
 
+# Stage-race (multidim) path splits several signals into per-market sub-channels
+# (GC / points / KOM / stage-win odds & oracle, points/KOM history). The scalar
+# 8-column view above collapses ORACLE→oracle_gc and ODDS→odds (GC) only, so its
+# rows do NOT sum to 100% — the hidden sub-channels silently pad the denominator.
+# When these columns are present, render the full set so the breakdown is
+# genuine and sums to 100%.
+const _SIGNAL_NAMES_STAGE = [
+    "PCS", "VG", "Form", "Hist", "VG hist", "Pts hist", "KOM hist",
+    "Oracle GC", "Oracle Pts", "Oracle KOM",
+    "Odds GC", "Odds Pts", "Odds KOM", "Odds Stage", "Qual",
+]
+const _INFO_SHARE_COLS_STAGE = [
+    :info_share_pcs,
+    :info_share_vg,
+    :info_share_form,
+    :info_share_history,
+    :info_share_vg_history,
+    :info_share_points_history,
+    :info_share_kom_history,
+    :info_share_oracle_gc,
+    :info_share_oracle_points,
+    :info_share_oracle_kom,
+    :info_share_odds,
+    :info_share_odds_points,
+    :info_share_odds_kom,
+    :info_share_odds_stagewin,
+    :info_share_qualitative,
+]
+
 """
     _shift_cell_style(value, max_abs)
 
@@ -497,12 +526,18 @@ heatmap; flags single-signal dominance > 60%.
 function format_signal_waterfall(df::DataFrame; max_riders::Int=10)
     subset = df[1:min(max_riders, nrow(df)), :]
 
+    # Stage-race path exposes per-market sub-channels; render the full set so the
+    # shares genuinely sum to 100%. One-day path falls back to the 8-column view.
+    is_stage = :info_share_odds_kom in propertynames(df)
+    signal_names = is_stage ? _SIGNAL_NAMES_STAGE : _SIGNAL_NAMES
+    info_share_cols = is_stage ? _INFO_SHARE_COLS_STAGE : _INFO_SHARE_COLS
+
     lines = String[]
     push!(lines, "<table style='border-collapse:collapse; font-size:0.85em; width:100%'>")
     push!(lines, "<thead><tr style='border-bottom:2px solid #666'>")
     push!(lines, "<th style='text-align:left; padding:4px'>Rider</th>")
     push!(lines, "<th style='text-align:right; padding:4px'>Cost</th>")
-    for name in _SIGNAL_NAMES
+    for name in signal_names
         push!(lines, "<th style='text-align:right; padding:4px'>$name</th>")
     end
     push!(lines, "<th style='text-align:right; padding:4px'>Str</th>")
@@ -511,12 +546,12 @@ function format_signal_waterfall(df::DataFrame; max_riders::Int=10)
     push!(lines, "</tr></thead><tbody>")
 
     for row in eachrow(subset)
-        shares = [Float64(row[c]) for c in _INFO_SHARE_COLS]
+        shares = [Float64(row[c]) for c in info_share_cols]
         n_active = count(>(0.001), shares)
 
         dominant_name, dominant_pct = if any(>(0.0), shares)
             idx = argmax(shares)
-            _SIGNAL_NAMES[idx], round(Int, 100 * shares[idx])
+            signal_names[idx], round(Int, 100 * shares[idx])
         else
             "none", 0
         end
@@ -1709,8 +1744,8 @@ function format_signal_impact_per_dim(
         ("Odds KOM", :odds_kom),
         ("Odds stage-win", :odds_stagewin),
     ],
-    dim_labels::Vector{String}=["Flat", "Hilly", "Mountain", "ITT", "GC"],
-    dim_syms::Vector{Symbol}=[:flat, :hilly, :mountain, :itt, :gc],
+    dim_labels::Vector{String}=["Flat", "Hilly", "Mountain", "ITT", "GC", "KOM"],
+    dim_syms::Vector{Symbol}=[:flat, :hilly, :mountain, :itt, :gc, :kom],
 )
     rms(v) = sqrt(mean(v .^ 2))
     rows = Dict{String,Any}[]
@@ -1752,8 +1787,8 @@ function format_info_share_per_dim(
         ("Odds KOM", :odds_kom),
         ("Odds Stage", :odds_stagewin),
     ],
-    dim_labels::Vector{String}=["F", "H", "M", "I", "G"],
-    dim_syms::Vector{Symbol}=[:flat, :hilly, :mountain, :itt, :gc],
+    dim_labels::Vector{String}=["F", "H", "M", "I", "G", "K"],
+    dim_syms::Vector{Symbol}=[:flat, :hilly, :mountain, :itt, :gc, :kom],
 )
     lines = String[]
     push!(lines, "<table style='border-collapse:collapse; font-size:0.78em; width:100%'>")

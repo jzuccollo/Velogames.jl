@@ -252,8 +252,8 @@ if :strength_flat in propertynames(predicted)
 
     if class_col !== nothing
         classes = sort(unique(lowercase.(string.(predicted[!, class_col]))))
-        type_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt, :strength_gc]
-        type_labels = ["Flat", "Hilly", "Mountain", "ITT", "GC"]
+        type_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt, :strength_gc, :strength_kom]
+        type_labels = ["Flat", "Hilly", "Mountain", "ITT", "GC", "KOM"]
 
         summary_rows = []
         for cls in classes
@@ -265,7 +265,7 @@ if :strength_flat in propertynames(predicted)
             push!(summary_rows, row)
         end
         summary_df = DataFrame(summary_rows)
-        col_order = intersect(["Class", "N", "Flat", "Hilly", "Mountain", "ITT", "GC"], names(summary_df))
+        col_order = intersect(["Class", "N", "Flat", "Hilly", "Mountain", "ITT", "GC", "KOM"], names(summary_df))
         write(io, html_table(summary_df[:, col_order]))
     end
 end
@@ -289,7 +289,7 @@ if nrow(chosenteam) > 0
 
     # Include per-dimension strengths in team table
     base_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :selection_frequency, :strength_gc, :uncertainty_gc]
-    dim_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt]
+    dim_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt, :strength_kom]
     all_display_cols = vcat(base_cols, dim_cols)
     display_cols = intersect(all_display_cols, propertynames(chosenteam))
     write(io, html_table(sort(chosenteam[:, display_cols], :expected_vg_points, rev=true)))
@@ -298,7 +298,7 @@ if nrow(chosenteam) > 0
     # total observed precision per rider). Sums to 100% across signals per rider.
     waterfall = format_signal_waterfall(sort(chosenteam, :expected_vg_points, rev=true))
     write(io, html_callout(
-        "<p>Each cell shows the share of total observed precision contributed by that signal — order-invariant, summing to 100% across signals per rider. A rider whose Odds cell shows 70% means bookmaker odds account for the majority of the information that shaped their posterior.</p>\n" * waterfall;
+        "<p>Each cell shows the share of total observed precision contributed by that signal — order-invariant, summing to 100% across signals per rider. Market signals are split by jersey (GC / points / KOM / stage-win), so a rider whose <em>Odds KOM</em> cell shows 70% is favoured mainly for the mountains classification, not the overall.</p>\n" * waterfall;
         title="Signal breakdown (info share)", collapsed=true))
 
     # Per-dimension info-share heatmap — diagnoses which signals drove which
@@ -306,7 +306,7 @@ if nrow(chosenteam) > 0
     # dim simulation, not just the scalar :gc strength).
     info_share_dim = format_info_share_per_dim(sort(chosenteam, :expected_vg_points, rev=true))
     write(io, html_callout(
-        "<p>Per-dimension info share for your team. Each signal block has 5 columns (F=flat, H=hilly, M=mountain, I=ITT, G=gc); cells show the percent of total observed precision on that dimension contributed by that signal. Order-invariant.</p>\n" * info_share_dim;
+        "<p>Per-dimension info share for your team. Each signal block has 6 columns (F=flat, H=hilly, M=mountain, I=ITT, G=gc, K=kom); cells show the percent of total observed precision on that dimension contributed by that signal. Order-invariant.</p>\n" * info_share_dim;
         title="Per-dimension info share (chosen team)", collapsed=true))
 else
     write(io, html_callout("No optimal team generated — check configuration and try again."; type="warning"))
@@ -318,7 +318,7 @@ write(io, html_heading("Full prediction rankings", 2))
 write(io, "<p>Top 30 riders by expected VG points:</p>\n")
 
 base_ranking_cols = [:rider, :team, :classraw, :cost, :expected_vg_points, :selection_frequency, :strength_gc, :uncertainty_gc, :chosen]
-dim_ranking_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt]
+dim_ranking_cols = [:strength_flat, :strength_hilly, :strength_mountain, :strength_itt, :strength_kom]
 all_ranking_cols = vcat(base_ranking_cols, dim_ranking_cols)
 ranking_cols = intersect(all_ranking_cols, propertynames(predicted))
 ranking = sort(predicted, :expected_vg_points, rev=true)
