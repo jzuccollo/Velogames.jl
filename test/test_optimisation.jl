@@ -322,7 +322,7 @@ end
     @test breakaway_sectors_from_km(257.0, 257.0) == 4  # all checkpoints
 end
 
-@testset "resample_optimise" begin
+@testset "resample_optimise!" begin
     rng = Random.MersenneTwister(42)
     rider_df = DataFrame(
         rider = ["R$i" for i = 1:12],
@@ -336,7 +336,7 @@ end
 
     strengths_df = estimate_strengths(rider_df)
 
-    result_df, top_teams, sim_vg_pts = resample_optimise(
+    result_df, top_teams, sim_vg_pts = resample_optimise!(
         strengths_df,
         SCORING_CAT2,
         build_model_oneday;

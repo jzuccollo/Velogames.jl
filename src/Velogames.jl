@@ -108,8 +108,8 @@ export solve_oneday,
     build_model_oneday,
     build_model_stage,
     minimise_cost_stage,
-    resample_optimise,
-    resample_optimise_stage
+    resample_optimise!,
+    resample_optimise_stage!
 
 # Simulation and strength estimation
 export BayesianConfig,

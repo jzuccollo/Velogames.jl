@@ -422,10 +422,10 @@ end
 end
 
 # =========================================================================
-# resample_optimise_stage
+# resample_optimise_stage!
 # =========================================================================
 
-@testset "resample_optimise_stage" begin
+@testset "resample_optimise_stage!" begin
     rng = Random.MersenneTwister(42)
     n_riders = 20
     scoring = SCORING_GRAND_TOUR
@@ -466,7 +466,7 @@ end
         :ttt => base .+ 0.05,
     )
 
-    result_df, top_teams, sim_vg_pts, _diag = resample_optimise_stage(
+    result_df, top_teams, sim_vg_pts, _diag = resample_optimise_stage!(
         rider_df,
         stages,
         stage_strengths,

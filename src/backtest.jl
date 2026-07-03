@@ -324,7 +324,7 @@ function prefetch_race_data(
             force_refresh = force_refresh,
         )
     end
-    riderdf = join_pcs_specialty!(riderdf, pcspts)
+    riderdf = join_pcs_specialty(riderdf, pcspts)
 
     # --- 4. Fetch PCS race history (prior years + similar + within-year) ---
     race_history_df = assemble_pcs_race_history(

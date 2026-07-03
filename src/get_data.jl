@@ -3,7 +3,7 @@
 
 Downloads and parses rider data from a **VeloGames** page. Uses VG-specific
 heuristics to select the right table (looks for rider/points/cost columns)
-and applies VG-specific column processing via `process_vg_table()`.
+and applies VG-specific column processing via `process_vg_table!()`.
 
 For PCS pages, use `scrape_pcs_table()` from pcs_scraper.jl instead.
 """
@@ -13,22 +13,16 @@ function gettable(pageurl::String)
     # Try to find the table with VG rider data using heuristics
     riderdf = nothing
     for (i, df) in enumerate(tables)
-        try
-            cols_lower = lowercase.(names(df))
-            has_rider = any(occursin("rider", c) || occursin("name", c) for c in cols_lower)
-            has_points =
-                any(occursin("point", c) || occursin("score", c) for c in cols_lower)
-            has_cost = any(occursin("cost", c) || occursin("price", c) for c in cols_lower)
-            reasonable_size = nrow(df) >= 10 && nrow(df) <= 2000
+        cols_lower = lowercase.(names(df))
+        has_rider = any(occursin("rider", c) || occursin("name", c) for c in cols_lower)
+        has_points = any(occursin("point", c) || occursin("score", c) for c in cols_lower)
+        has_cost = any(occursin("cost", c) || occursin("price", c) for c in cols_lower)
+        reasonable_size = nrow(df) >= 10 && nrow(df) <= 2000
 
-            if has_rider && (has_points || has_cost) && reasonable_size
-                @debug "Using table $i from $pageurl ($(nrow(df)) rows)"
-                riderdf = df
-                break
-            end
-        catch e
-            @debug "Failed to check table $i" exception = e
-            continue
+        if has_rider && (has_points || has_cost) && reasonable_size
+            @debug "Using table $i from $pageurl ($(nrow(df)) rows)"
+            riderdf = df
+            break
         end
     end
 
@@ -45,19 +39,19 @@ function gettable(pageurl::String)
         )
     end
 
-    return process_vg_table(riderdf)
+    return process_vg_table!(riderdf)
 end
 
 
 """
-    process_vg_table(riderdf::DataFrame) -> DataFrame
+    process_vg_table!(riderdf::DataFrame) -> DataFrame
 
 VeloGames-specific table processing. Lowercases column names, renames score→points,
 casts cost/rank/points to numeric types, and adds a riderkey column.
 
 This is for VG pages only. PCS pages use `find_column()` + caller-specific processing.
 """
-function process_vg_table(riderdf::DataFrame)
+function process_vg_table!(riderdf::DataFrame)
     # lowercase the column names and remove spaces
     rename!(riderdf, lowercase.(replace.(names(riderdf), " " => "", "#" => "rank")))
 
@@ -88,23 +82,15 @@ function process_vg_table(riderdf::DataFrame)
     # Process 'selected' column as numeric proportion, if it exists
     if hasproperty(riderdf, :selected)
         riderdf.selected = [
-            try
-                s = strip(s)
-                if occursin("%", s)
-                    parse(Float64, replace(s, "%" => "")) / 100
-                elseif tryparse(Float64, s) !== nothing
-                    parse(Float64, s)
-                else
-                    missing
-                end
-            catch _e
-                missing
+            let s = strip(s)
+                v = tryparse(Float64, replace(s, "%" => ""))
+                v === nothing ? missing : (occursin("%", s) ? v / 100 : v)
             end for s in riderdf.selected
         ]
     end
 
     # add a riderkey column based on the name
-    riderdf.riderkey = map(x -> createkey(x), riderdf.rider)
+    riderdf.riderkey = map(createkey, riderdf.rider)
 
     # drop duplicate riderkeys
     riderdf = unique(riderdf, :riderkey)
@@ -907,7 +893,7 @@ end
 
 # Walk the DOM in document order, pairing each <table> with the most recent
 # <b>/<h3> heading text seen before it.
-function _vg_walk_scoring(
+function _vg_walk_scoring!(
     node,
     heading::Ref{String},
     out::Vector{Tuple{String,Vector{Int}}},
@@ -922,7 +908,7 @@ function _vg_walk_scoring(
         return  # don't descend into table internals
     end
     for child in node.children
-        _vg_walk_scoring(child, heading, out)
+        _vg_walk_scoring!(child, heading, out)
     end
 end
 
@@ -939,7 +925,7 @@ function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
     page = Gumbo.parsehtml(String(response.body))
 
     pairs = Tuple{String,Vector{Int}}[]
-    _vg_walk_scoring(page.root, Ref(""), pairs)
+    _vg_walk_scoring!(page.root, Ref(""), pairs)
 
     fields = Dict{Symbol,Vector{Int}}()
     for (heading, pts) in pairs

@@ -298,7 +298,7 @@ end
     @test all(result_stage.expected_vg_points .>= 0)
 end
 
-@testset "join_pcs_specialty! tracks data provenance" begin
+@testset "join_pcs_specialty tracks data provenance" begin
     riderdf = DataFrame(rider = ["Found", "Missing"], riderkey = ["found", "missing"])
     pcsriderpts = DataFrame(
         riderkey = ["found", "missing"],
@@ -308,7 +308,7 @@ end
         sprint = [300, missing],
         climber = [500, missing],
     )
-    result = Velogames.join_pcs_specialty!(riderdf, pcsriderpts)
+    result = Velogames.join_pcs_specialty(riderdf, pcsriderpts)
     @test :has_pcs_data in propertynames(result)
     @test result.has_pcs_data[1] == true   # "Found" had real data
     @test result.has_pcs_data[2] == false  # "Missing" had all missing
@@ -319,7 +319,7 @@ end
     # Empty PCS data
     riderdf2 = DataFrame(rider = ["A"], riderkey = ["a"])
     pcsriderpts2 = DataFrame(riderkey = String[])
-    result2 = Velogames.join_pcs_specialty!(riderdf2, pcsriderpts2)
+    result2 = Velogames.join_pcs_specialty(riderdf2, pcsriderpts2)
     @test :has_pcs_data in propertynames(result2)
     @test result2.has_pcs_data[1] == false
 end

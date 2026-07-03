@@ -38,7 +38,7 @@ struct StageResult
 end
 
 """Extract the chosen team (highest selection_frequency riders) and mark all riders."""
-function _extract_chosen_team(predicted::DataFrame, top_teams::Vector{DataFrame})
+function _extract_chosen_team!(predicted::DataFrame, top_teams::Vector{DataFrame})
     if isempty(top_teams)
         predicted[!, :chosen] .= false
         return predicted, DataFrame()
@@ -62,12 +62,7 @@ function _race_has_happened(config::RaceConfig)
     config.year > Dates.year(today) && return false
     info = find_race(config.name)
     info === nothing && return true  # unknown date — protect by default
-    race_date = try
-        Dates.Date(info.date)
-    catch
-        return true
-    end
-    return race_date < today
+    return Dates.Date(info.date) < today
 end
 
 """Archive the predicted DataFrame for prospective evaluation."""
@@ -404,7 +399,7 @@ function _prepare_rider_data(
         force_refresh = force_refresh,
     )
 
-    riderdf = join_pcs_specialty!(riderdf, pcsriderpts)
+    riderdf = join_pcs_specialty(riderdf, pcsriderpts)
 
     # Recency-weight all five PCS specialties from per-season points, so current
     # form outweighs stale career palmarès. Adds :<spec>_r columns consumed by
@@ -734,7 +729,7 @@ function solve_oneday(
 
     # --- 7. Resampled optimisation ---
     @info "Running resampled optimisation ($n_resamples resamples)..."
-    predicted, top_teams, sim_vg_points = resample_optimise(
+    predicted, top_teams, sim_vg_points = resample_optimise!(
         predicted,
         scoring,
         build_model_oneday;
@@ -747,7 +742,7 @@ function solve_oneday(
         simulation_df = simulation_df,
     )
 
-    predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
+    predicted, chosenteam = _extract_chosen_team!(predicted, top_teams)
 
     # Archive after optimisation so chosen / selection_frequency / expected_vg_points are persisted
     _archive_predictions(predicted, config)
@@ -864,7 +859,7 @@ function solve_stage(
 
         scoring_table = stage_scoring !== nothing ? stage_scoring : SCORING_GRAND_TOUR
         @info "Running per-stage resampled optimisation ($n_resamples resamples, $(length(stages)) stages)..."
-        predicted, top_teams, sim_vg_points, diagnostics = resample_optimise_stage(
+        predicted, top_teams, sim_vg_points, diagnostics = resample_optimise_stage!(
             predicted,
             stages,
             stage_strengths,
@@ -885,7 +880,7 @@ function solve_stage(
         b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
 
         @info "Running aggregate resampled optimisation ($n_resamples resamples, class constraints)..."
-        predicted, top_teams, sim_vg_points = resample_optimise(
+        predicted, top_teams, sim_vg_points = resample_optimise!(
             predicted,
             scoring,
             build_model_stage;
@@ -900,7 +895,7 @@ function solve_stage(
         diagnostics = nothing
     end
 
-    predicted, chosenteam = _extract_chosen_team(predicted, top_teams)
+    predicted, chosenteam = _extract_chosen_team!(predicted, top_teams)
 
     # Archive after optimisation so chosen / selection_frequency / expected_vg_points are persisted
     _archive_predictions(predicted, config)

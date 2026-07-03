@@ -127,7 +127,7 @@ end
 
 Score a single simulated race outcome into `sim_pts` (length n_riders),
 overwriting it. The VG scoring rule, shared by the production selection score
-(`resample_optimise`) and the backtest score (`expected_vg_points`):
+(`resample_optimise!`) and the backtest score (`expected_vg_points`):
 
 - **Finish points** by finishing position (`positions[i]`).
 - **Assist points** to every teammate of each top-3 finisher

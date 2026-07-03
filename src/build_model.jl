@@ -56,7 +56,7 @@ end
 Cap the number of riders selected from any single team at `max_per_team`
 (0 = uncapped). `x` must be indexed by `df.riderkey`.
 """
-function _add_team_cap!(model, x, df::DataFrame, max_per_team::Int)
+function _add_team_cap!(model, x, df::DataFrame, max_per_team::Integer)
     if max_per_team > 0
         for team in unique(df.team)
             team_keys = df.riderkey[df.team .== team]
@@ -86,7 +86,7 @@ function build_model_oneday(
     points::Symbol = :expected_vg_points,
     cost::Symbol = :cost;
     totalcost::Integer = 100,
-    max_per_team::Int = 0,
+    max_per_team::Integer = 0,
 )
     model = JuMP.Model(HiGHS.Optimizer)
     JuMP.set_silent(model)
@@ -125,7 +125,7 @@ function build_model_stage(
     points::Symbol = :expected_vg_points,
     cost::Symbol = :cost;
     totalcost::Integer = 100,
-    max_per_team::Int = 0,
+    max_per_team::Integer = 0,
 )
     df = copy(inputdf)
 
@@ -148,7 +148,7 @@ function build_model_stage(
 end
 
 """
-    _resample_core(df, sim_vg_points, build_model_fn; team_size, max_per_team, risk_aversion)
+    _resample_core!(df, sim_vg_points, build_model_fn; team_size, max_per_team, risk_aversion)
         -> (df, top_teams)
 
 Shared tail of the resampled-optimisation pipeline, once the per-draw VG-points
@@ -159,12 +159,12 @@ then runs a final deterministic optimise on risk-adjusted points and returns the
 chosen team. The per-draw optimise is RNG-free, so building the matrix upfront
 (one-day) or via `simulate_stage_race` (stage) yields identical results.
 """
-function _resample_core(
+function _resample_core!(
     df::DataFrame,
     sim_vg_points::Matrix{Float64},
     build_model_fn::Function;
-    team_size::Int,
-    max_per_team::Int,
+    team_size::Integer,
+    max_per_team::Integer,
     risk_aversion::Float64,
 )
     n_riders, n_resamples = size(sim_vg_points)
@@ -250,7 +250,7 @@ function _resample_core(
 end
 
 """
-    resample_optimise(df, scoring, build_model_fn; n_resamples=500, rng, max_per_team=0)
+    resample_optimise!(df, scoring, build_model_fn; n_resamples=500, rng, max_per_team=0)
 
 Resampled optimisation: draw noisy strengths, score VG points for that draw,
 optimise per draw to compute selection frequencies and expected points that
@@ -265,14 +265,14 @@ Returns `(df, top_teams, sim_vg_points)` where:
 - `top_teams` is a `Vector{DataFrame}` containing the optimal team
 - `sim_vg_points` is a `Matrix{Float64}` (n_riders × n_resamples) of per-draw VG points
 """
-function resample_optimise(
+function resample_optimise!(
     df::DataFrame,
     scoring::ScoringTable,
     build_model_fn::Function;
-    team_size::Int = 6,
+    team_size::Integer = 6,
     n_resamples::Int = 500,
     rng::AbstractRNG = Random.default_rng(),
-    max_per_team::Int = 0,
+    max_per_team::Integer = 0,
     risk_aversion::Float64 = 0.5,
     breakaway_rates::Vector{Float64} = Float64[],
     breakaway_mean_sectors::Vector{Float64} = Float64[],
@@ -285,7 +285,7 @@ function resample_optimise(
 
     # Build the per-draw VG-points matrix: draw noisy strengths, rank to positions,
     # and score each draw. RNG is consumed only here; the optimisation tail
-    # (`_resample_core`) is deterministic.
+    # (`_resample_core!`) is deterministic.
     sim_vg_points = Matrix{Float64}(undef, n_riders, n_resamples)
     noisy_strengths = Vector{Float64}(undef, n_riders)
 
@@ -317,7 +317,7 @@ function resample_optimise(
         sim_vg_points[:, r] = sim_pts
     end
 
-    df, top_teams = _resample_core(
+    df, top_teams = _resample_core!(
         df,
         sim_vg_points,
         build_model_fn;
@@ -330,7 +330,7 @@ end
 
 
 """
-    resample_optimise_stage(df, stages, stage_strengths, scoring, build_model_fn; kwargs...)
+    resample_optimise_stage!(df, stages, stage_strengths, scoring, build_model_fn; kwargs...)
         -> (DataFrame, Vector{DataFrame}, Matrix{Float64}, StageRaceDiagnostics)
 
 Resampled optimisation for stage races: runs `simulate_stage_race` to get
@@ -341,18 +341,18 @@ Returns `(df, top_teams, sim_vg_points, diagnostics)` where df gains
 per-stage and per-classification position counts that reports surface as
 podium / top-K probabilities.
 """
-function resample_optimise_stage(
+function resample_optimise_stage!(
     df::DataFrame,
     stages::Vector{StageProfile},
     stage_strengths::Dict{Symbol,Vector{Float64}},
     scoring::StageRaceScoringTable,
     build_model_fn::Function;
-    team_size::Int = 9,
+    team_size::Integer = 9,
     n_resamples::Int = 500,
     cross_stage_alpha::Float64 = 0.7,
     gc_strengths::Vector{Float64} = Float64[],
     rng::AbstractRNG = Random.default_rng(),
-    max_per_team::Int = 0,
+    max_per_team::Integer = 0,
     risk_aversion::Float64 = 0.5,
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
 )
@@ -381,7 +381,7 @@ function resample_optimise_stage(
         rider_classes = rider_classes,
     )
 
-    df, top_teams = _resample_core(
+    df, top_teams = _resample_core!(
         df,
         sim_vg_points,
         build_model_fn;

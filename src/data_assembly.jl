@@ -65,13 +65,13 @@ end
 # ---------------------------------------------------------------------------
 
 """
-    join_pcs_specialty!(riderdf::DataFrame, pcsriderpts::DataFrame) -> DataFrame
+    join_pcs_specialty(riderdf::DataFrame, pcsriderpts::DataFrame) -> DataFrame
 
 Left-join PCS specialty columns (oneday, gc, tt, sprint, climber) onto `riderdf`
 by `:riderkey`, filling missing values with 0. Also adds a `:has_pcs_data` boolean
 column tracking whether PCS data was successfully retrieved (before coalescing).
 """
-function join_pcs_specialty!(riderdf::DataFrame, pcsriderpts::DataFrame)
+function join_pcs_specialty(riderdf::DataFrame, pcsriderpts::DataFrame)
     pcs_cols = intersect(
         names(pcsriderpts),
         ["riderkey", "oneday", "gc", "tt", "sprint", "climber"],
@@ -182,8 +182,8 @@ function assemble_pcs_race_history(
                         race_history_df = vcat(race_history_df, similar_df; cols = :union)
                     end
                 end
-            catch _e
-                # Skip unavailable similar races
+            catch e
+                @debug "Skipping unavailable similar race $(spec.slug)" exception = e
             end
         end
         n_similar =
@@ -261,8 +261,8 @@ function assemble_pcs_classification_history(
                 df[!, :year] .= y
                 df[!, :variance_penalty] .= penalty
                 result = result === nothing ? df : vcat(result, df; cols = :union)
-            catch _e
-                # Skip unavailable editions
+            catch e
+                @debug "Skipping unavailable edition $slug $y" exception = e
             end
         end
     end
@@ -352,7 +352,8 @@ function assemble_vg_race_history(
         if nrow(result) > 0 && !isempty(slug)
             try
                 save_race_snapshot(result, "vg_results", slug, yr)
-            catch _e
+            catch e
+                @debug "Failed to archive vg_results for $slug $yr" exception = e
             end
         end
         return result
