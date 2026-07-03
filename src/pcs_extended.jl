@@ -478,6 +478,84 @@ function getpcsriderseasons_batch(
 end
 
 
+# PCS specialty → results-page slug. These filterable results pages list every
+# result that earned points in that specialty, dated, so points can be aggregated
+# per season (unlike the profile page's career-cumulative `.xvalue` totals).
+const PCS_SPECIALTY_SLUG = Dict(
+    :climber => "climbers",
+    :gc => "gc",
+    :tt => "time-trial",
+    :sprint => "sprint",
+    :oneday => "one-day-races",
+)
+
+"""
+## `getpcs_specialty_by_season`
+
+Fetch a rider's per-season points in a single specialty from the PCS filterable
+results page (`/rider/{slug}/results/career-points-{specialty}`). Unlike the
+profile page's lifetime `.xvalue` totals, this dated result list lets us
+recency-weight a specialty — so current form outweighs stale palmarès.
+
+`specialty` is one of `:climber`, `:gc`, `:tt`, `:sprint`, `:oneday`.
+
+Returns a DataFrame with columns `year::Int`, `points::Float64` (points earned
+in that specialty that season). Empty if the rider/page has no such results.
+"""
+function getpcs_specialty_by_season(
+    pcs_slug::String,
+    specialty::Symbol;
+    force_refresh::Bool=false,
+    cache_config::CacheConfig=DEFAULT_CACHE,
+)
+    spec_slug = PCS_SPECIALTY_SLUG[specialty]
+    pageurl = "https://www.procyclingstats.com/rider/$(pcs_slug)/results/career-points-$(spec_slug)"
+
+    function fetch_specialty(url, params)
+        response = try
+            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+        catch e
+            if e isa HTTP.Exceptions.StatusError && e.status in (400, 403, 404)
+                return DataFrame(year=Int[], points=Float64[])
+            end
+            rethrow()
+        end
+
+        page = parsehtml(String(response.body))
+        tables = collect(eachmatch(sel"table", page.root))
+        isempty(tables) && return DataFrame(year=Int[], points=Float64[])
+
+        header = [strip(nodeText(c)) for c in eachmatch(sel"th", tables[1])]
+        date_idx = findfirst(==("Date"), header)
+        pts_idx = findfirst(==("Points"), header)
+        (date_idx === nothing || pts_idx === nothing) &&
+            return DataFrame(year=Int[], points=Float64[])
+
+        by_year = Dict{Int,Float64}()
+        for row in collect(eachmatch(sel"tr", tables[1]))[2:end]
+            cells = [strip(nodeText(c)) for c in eachmatch(sel"td", row)]
+            length(cells) >= max(date_idx, pts_idx) || continue
+            yr = tryparse(Int, first(split(cells[date_idx], "-")))
+            yr === nothing && continue
+            pts = tryparse(Float64, cells[pts_idx])
+            pts === nothing && continue
+            by_year[yr] = get(by_year, yr, 0.0) + pts
+        end
+
+        years = sort(collect(keys(by_year)))
+        return DataFrame(year=years, points=[by_year[y] for y in years])
+    end
+
+    params = Dict("slug" => pcs_slug, "specialty" => String(specialty))
+    return cached_fetch(
+        fetch_specialty,
+        pageurl,
+        params;
+        cache_config=cache_config,
+        force_refresh=force_refresh,
+    )
+end
+
 """
 ## `getpcsracehistory`
 

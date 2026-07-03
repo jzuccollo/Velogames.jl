@@ -662,3 +662,140 @@ end
     # without a trailing ".0" (see round_numeric_columns!), so the cell reads "100".
     @test occursin(">100<", html)
 end
+
+# =========================================================================
+# Review remediation (July 2026): abandonment/TTT, empty scoring tables,
+# market-discount mask, per-rider recency fallback.
+# =========================================================================
+
+@testset "_assign_team_positions! excludes abandoned riders" begin
+    # Team A holds the single strongest active rider but also an abandoned
+    # (-Inf) teammate; team B is uniformly mid. The abandoned rider must not
+    # drag team A to the bottom — team A ranks on its ACTIVE riders' mean.
+    n = 4
+    noisy = [5.0, -Inf, 1.0, 1.0]
+    teams = ["A", "A", "B", "B"]
+    abandoned = [false, true, false, false]
+    positions = zeros(Int, n)
+    Velogames._assign_team_positions!(positions, noisy, teams, abandoned, n)
+    @test positions[1] == 1          # team A first (active mean 5.0 > B's 1.0)
+    @test positions[3] == 2 && positions[4] == 2
+
+    # A team with NO active riders left ranks last (mean -Inf).
+    noisy2 = [-Inf, -Inf, 1.0, 1.0]
+    abandoned2 = [true, true, false, false]
+    positions2 = zeros(Int, n)
+    Velogames._assign_team_positions!(positions2, noisy2, teams, abandoned2, n)
+    @test positions2[3] == 1 && positions2[4] == 1
+    @test positions2[1] == 2 && positions2[2] == 2
+end
+
+@testset "TTT after abandonment stays finite" begin
+    # Mountain stage (high hazard forces abandonment) then a TTT: exercises the
+    # team-mean path with -Inf teammates present. Must not leak -Inf/NaN into
+    # totals nor throw.
+    scoring = SCORING_GRAND_TOUR
+    stages = [mountain_stage(1), ttt_stage(2)]
+    n_riders = 10
+    base = collect(range(2.0, -2.0, length=n_riders))
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base), :hilly => copy(base),
+        :mountain => copy(base), :itt => copy(base), :ttt => copy(base),
+    )
+    unc = fill(0.3, n_riders)
+    teams = repeat(["A", "B"], 5)
+    hi = StageSimConfig(
+        attrition_hazard=(flat=0.4, hilly=0.4, mountain=0.4, itt=0.0, ttt=0.0),
+    )
+    rng = Random.MersenneTwister(7)
+    sim, _ = simulate_stage_race(stages, stage_strengths, unc, teams, scoring;
+        n_sims=200, rng=rng, rider_classes=fill("sprinter", n_riders), sim_config=hi)
+    @test all(isfinite, sim)
+    @test all(sim .>= 0.0)
+    @test sum(sim) > 0.0
+end
+
+@testset "format_classification_table handles empty scoring table" begin
+    # A classification whose VG scoring table is empty (heading unmatched, or the
+    # race publishes no such jersey) yields a zero-column position-count matrix;
+    # the table renderer must not index column 1 (BoundsError) but degrade.
+    n_riders = 3
+    riders = DataFrame(rider=["A", "B", "C"], team=["T1", "T2", "T3"])
+    diag = Velogames.StageRaceDiagnostics(
+        100,
+        zeros(Int, 0, 0, 0), zeros(Int, 0, 0),
+        zeros(Int, n_riders, 30),   # gc: populated
+        zeros(Int, n_riders, 0),    # points: EMPTY (0 scoring positions)
+        zeros(Int, n_riders, 10),   # mountains
+        Dict{String,Vector{Int}}(),
+    )
+    html = format_classification_table(diag, :points, riders)
+    @test occursin("No points classification scoring available", html)
+end
+
+@testset "market discount threshold keeps KOM sharp" begin
+    W = Velogames.SIGNAL_DIMENSION_WEIGHTS
+    θ = Velogames.MARKET_DIM_THRESHOLD
+    # A GC market materially informs :gc and :mountain (rightly discounted) ...
+    @test W.odds_gc.gc >= θ
+    @test W.odds_gc.mountain >= θ
+    # ... but its incidental cross-routes into :kom and :hilly must stay below θ,
+    # so a race carrying only GC odds does NOT discount and collapse the KOM
+    # channel field-wide (the regression fixed in July 2026).
+    @test W.odds_gc.kom < θ
+    @test W.odds_gc.hilly < θ
+    @test W.oracle_gc.kom < θ
+    # A dedicated KOM market does inform :kom.
+    @test W.odds_kom.kom >= θ
+    # No market routes to :itt at all ⇒ PCS-TT stays sharp regardless.
+    @test W.odds_gc.itt == 0.0 && W.odds_points.itt == 0.0 && W.odds_kom.itt == 0.0
+end
+
+@testset "recency per-rider fallback to career specialty" begin
+    # Two identical strong climbers; rider B's per-season recency scrape "failed"
+    # (climber_r missing). B must fall back to career climber points, not collapse
+    # to a spurious zero that would sink its mountain strength below a sprinter's.
+    rider_df = DataFrame(
+        rider=["Climber A", "Climber B", "Sprinter"],
+        riderkey=["a", "b", "s"],
+        team=["A", "B", "C"],
+        cost=[18, 18, 16],
+        classraw=["Climber", "Climber", "Sprinter"],
+        points=[800.0, 800.0, 1200.0],
+        gc=[800.0, 800.0, 200.0],
+        tt=[400.0, 400.0, 300.0],
+        sprint=[100.0, 100.0, 2000.0],
+        climber=[2000.0, 2000.0, 100.0],
+        oneday=[600.0, 600.0, 800.0],
+        has_pcs_data=[true, true, true],
+        climber_r=[1500.0, missing, 50.0],   # B's recency scrape failed
+    )
+    result = estimate_strengths(rider_df; race_type=:stage)
+    # B (missing recency, strong career) still out-climbs the sprinter on :mountain.
+    @test result.strength_mountain[2] > result.strength_mountain[3]
+    # And B reads as a climber (mountain > flat), i.e. not zeroed out.
+    @test result.strength_mountain[2] > result.strength_flat[2]
+end
+
+@testset "aleatoric GC noise gated to separating stages" begin
+    # Race-day scatter feeds cumulative GC only in proportion to how much a stage
+    # separates GC. With identical strengths/uncertainty, the favourite should
+    # win final GC MORE often over flat stages (gc_sep≈0, no aleatoric GC noise)
+    # than over mountain stages (gc_sep≈1, full aleatoric GC time gaps).
+    scoring = SCORING_GRAND_TOUR
+    n_riders = 8
+    base = collect(range(3.0, -3.0, length=n_riders))   # rider 1 is the favourite
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base), :hilly => copy(base),
+        :mountain => copy(base), :itt => copy(base), :ttt => copy(base),
+    )
+    unc = fill(1.5, n_riders)                            # large ⇒ noise bites
+    teams = ["T$i" for i in 1:n_riders]
+
+    _, diag_flat = simulate_stage_race([flat_stage(i) for i in 1:4],
+        stage_strengths, unc, teams, scoring; n_sims=2000, rng=Random.MersenneTwister(3))
+    _, diag_mtn = simulate_stage_race([mountain_stage(i) for i in 1:4],
+        stage_strengths, unc, teams, scoring; n_sims=2000, rng=Random.MersenneTwister(3))
+
+    @test diag_flat.final_gc_position_counts[1, 1] > diag_mtn.final_gc_position_counts[1, 1]
+end

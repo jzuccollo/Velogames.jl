@@ -388,11 +388,12 @@ function parse_oddschecker_odds(text::String)
         non_empty = [strip(t) for t in tokens if !isempty(strip(t))]
         length(non_empty) < 2 && return false
         valid = Float64[d for d in (to_decimal(t) for t in non_empty) if d !== nothing]
-        # Tolerate a minority of junk tokens (e.g. "9/2Bet" where a bookmaker's
-        # "Bet" button label glues onto the price, "100/ 30" with stray spaces).
-        # A genuine bookmaker row has many price columns, so ≥3 decodable odds is
-        # a reliable signal; downstream parsing re-filters the junk tokens.
-        length(valid) >= 3 && return true
+        # Tolerate a MINORITY of junk tokens (e.g. "9/2Bet" where a bookmaker's
+        # "Bet" button label glues onto the price, "100/ 30" with stray spaces):
+        # a genuine bookmaker row is mostly prices. Requiring the decodable tokens
+        # to be at least half keeps that tolerance while rejecting a stray line
+        # that merely happens to contain a few numbers among mostly non-odds text.
+        length(valid) >= 3 && 2 * length(valid) >= length(non_empty) && return true
         # Two-token line: only accept if every token decodes and both agree
         length(valid) == length(non_empty) && length(valid) == 2 && valid[1] == valid[2]
     end
@@ -928,6 +929,17 @@ function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String="")
         get_vec(:final_points_class), get_vec(:final_mountains_class),
         get_vec(:final_team_class), get_vec(:ttt_team_points),
     )
+
+    # Heading-based mapping silently yields empty vectors when a section label
+    # changes, which would collapse a whole scoring component to zero with no
+    # error. The stage-finish and final-GC tables are the two the simulator
+    # cannot do without, so fail loudly if either failed to parse.
+    if isempty(scoring.stage_finish_points) || isempty(scoring.final_gc_points)
+        error("getvg_scoring($vg_slug, $year): missing essential scoring table " *
+              "(stage_finish=$(length(scoring.stage_finish_points)), " *
+              "final_gc=$(length(scoring.final_gc_points))). " *
+              "VG section headings may have changed — check $url.")
+    end
 
     if !isempty(pcs_slug)
         try
