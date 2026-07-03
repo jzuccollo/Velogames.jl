@@ -74,7 +74,13 @@ end
 
 cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
 pcs_stage_scrape = get(_cfg["optimisation"], "pcs_stage_scrape", true)
+# GT VG-history signal (Option A prototype, July 2026 — see roadmap.md). Default
+# off ⇒ pipeline behaviour unchanged. Set `gt_vg_history = true` in the
+# [optimisation] block of race_config.toml to inject each rider's own prior GT
+# VG totals as a role/propensity strength signal.
+use_gt_vg_history = get(_cfg["optimisation"], "gt_vg_history", false)
 
+breakaway_dir = joinpath(DEFAULT_ARCHIVE_DIR, "pcs_breakaways")
 race_cache = CacheConfig(DEFAULT_CACHE_DIR, FRESH ? 0 : 6)
 
 # ---------------------------------------------------------------------------
@@ -133,10 +139,12 @@ result = solve_stage(
     simulation_df = simulation_df,
     cross_stage_alpha = cross_stage_alpha,
     stage_scoring = stage_scoring,
+    breakaway_dir = breakaway_dir,
     odds_df = odds_df,
     points_odds_df = points_odds_df,
     kom_odds_df = kom_odds_df,
     stagewin_odds_df = stagewin_odds_df,
+    use_gt_vg_history = use_gt_vg_history,
 )
 
 predicted = result.predicted

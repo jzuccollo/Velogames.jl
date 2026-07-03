@@ -356,6 +356,7 @@ function _prepare_rider_data(
     points_odds_df::Union{DataFrame,Nothing} = nothing,
     kom_odds_df::Union{DataFrame,Nothing} = nothing,
     stagewin_odds_df::Union{DataFrame,Nothing} = nothing,
+    use_gt_vg_history::Bool = false,
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -527,6 +528,23 @@ function _prepare_rider_data(
         )
     end
 
+    # --- 3b-iii. Fetch this grand tour's own prior-edition VG totals (Option A
+    # prototype, July 2026 — see roadmap.md "GT VG-history strength signal").
+    # A rider's own prior GT VG success is a role-conditional (lower-bias) proxy
+    # for their GT VG points than their role-blind general ability is. Gated by
+    # `use_gt_vg_history` (default off ⇒ nothing ⇒ signal inert), stage races only.
+    gt_vg_history_df = nothing
+    if use_gt_vg_history && config.type == :stage
+        vg_slug = get(_STAGE_RACE_VG_SLUGS, config.pcs_slug, "")
+        gt_vg_history_df = assemble_gt_vg_history(
+            vg_slug,
+            config.year,
+            history_years;
+            cache_config = cache_config,
+            force_refresh = force_refresh,
+        )
+    end
+
     # --- 3c. Fetch PCS form scores (automatic) ---
     form_df = nothing
     if !isempty(config.pcs_slug)
@@ -692,6 +710,7 @@ function _prepare_rider_data(
         stagewin_odds_df = stagewin_odds_df,
         points_history_df = points_history_df,
         kom_history_df = kom_history_df,
+        gt_vg_history_df = gt_vg_history_df,
     )
 end
 
@@ -845,6 +864,7 @@ function solve_stage(
     stage_scoring::Union{StageRaceScoringTable,Nothing} = nothing,
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
     include_gt_history::Bool = true,
+    use_gt_vg_history::Bool = false,
 )
     data = _prepare_rider_data(
         config,
@@ -865,6 +885,7 @@ function solve_stage(
         points_odds_df = points_odds_df,
         kom_odds_df = kom_odds_df,
         stagewin_odds_df = stagewin_odds_df,
+        use_gt_vg_history = use_gt_vg_history,
     )
     if data === nothing
         return StageResult(

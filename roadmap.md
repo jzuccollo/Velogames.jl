@@ -40,6 +40,37 @@ The empirical trigger: real historical VG scores (`getvg_stage_race_totals`) for
 
 **Not yet validated** — this is a design/prototype pass, not a calibrated model. Per the Validation philosophy below, this is an EVG-level (points-level) change, not a strength-level one, so it should be judged on points-level metrics (PIT, team-points-captured, and specifically whether Eenkhoorn/Russo-shaped riders' predicted EVG moves toward, not past, their real historical range) rather than top-20 rank ρ. `STAGE_BREAKAWAY_MAX_RATE` (0.15) and `breakaway_stage_boost` (2.5) are first-pass estimates with no backtest behind them yet; HC/Cat1 climb points are NOT modelled for breakaways (`StageProfile.n_hc_climbs`/`n_cat1_climbs` are always 0 from the current PCS scraper — same limitation already documented for `_score_daily_mountains!`). `render_stagerace.jl` now passes `breakaway_dir` into `solve_stage` so the feature is live next time it runs; recommend a dry run against an archived past grand tour (e.g. re-predict TDF 2025 with these riders' pre-race data) before trusting it for a live 2026 prediction.
 
+### GT VG-history strength signal (Option A prototype, July 2026)
+
+**Problem.** The stage-race strength model is built from role-BLIND general-performance signals (PCS specialty, VG season points, classics race history, betting odds). In a grand tour, VG points are generated ROLE-conditionally: protected leaders convert strength→points at full efficiency, but break-hunters/opportunists score via spiky breakaway/stage-win points largely decoupled from bunch-finish strength. So the model badly under-scores cheap perennial break-hunters while getting leaders right (verified 2026 pre-signal EVG: Pogačar 3776 vs real 3841/4153 — good; Eenkhoorn 33 vs real 290/295, Russo 105 vs real 241/245, Abrahamsen 217 vs real 300/606/460 — huge misses).
+
+**Hypothesis (tested).** A rider's OWN prior GT VG total is a lower-bias proxy for their GT VG points than their general ability is, because a prior GT total is role-conditional *by construction* (a rider who domestiqued/break-hunted last year scored like one).
+
+**Mechanism** (`gt_vg_history` signal; flag `use_gt_vg_history`, default off). New same-tour VG-history signal in the multidim estimator. Data: `assemble_gt_vg_history(vg_slug, year, history_years)` (`src/data_assembly.jl`) re-fetches each prior edition's full-field VG totals via `getvg_stage_race_totals` (the corrupted `vg_results` GT archive was deleted). `_assemble_signals` log1p-z-scores each edition's field (GT totals are heavily right-skewed; log stops the 4000-pt leader dominating σ and compressing the field to z≈0). Each rider's own z-entries update the posterior conjugately in `estimate_rider_strength_multidim`, recency-decayed by `vg_hist_decay_rate`; multiple editions give ~n× precision (sparsity handled by the mechanism, no bolt-on). Base variance `gt_vg_hist_base_variance = 1.5` (unscaled by any precision-group factor).
+
+Three design decisions that make it do-no-harm (all in `src/bayesian_core.jl` / `src/strength_pipeline.jl`):
+1. **Routing** `(hilly=1.0, mountain=1.0, kom=0.5)`, ZERO on `:gc`, `:itt`, `:flat`. A GT total is a role/propensity factor, not terrain-specific — but routing it to `:gc` would fake a break-hunter into a GC threat (inflating daily/final-GC scoring), and to `:flat` would inflate a GC leader's bunch-sprint strength (their huge total comes from mountains). GT breakaways are a hilly/mountain phenomenon.
+2. **Runs AFTER the market updates.** Placed before them, the extra precision it adds on `:mountain`/`:hilly` *dampens* the later GC-odds/oracle lift and silently pulls leaders DOWN (Pogačar −238 EVG in the first cut — a precision effect, not a mean effect). After the market, a leader's already-lifted posterior mean is compared against the observation and (3) skips it.
+3. **UPWARD-ONLY clamp.** A dimension updates only when the observation would RAISE its mean. Prior GT success is evidence of *extra* propensity on top of ability; it must never drag down a rider whose ability estimate already exceeds their historical-VG z. Consequence: the INVERSE case (elite classics rider on locked domestique duty whose LOW GT history *should* pull them down) is deliberately NOT handled — the two-sided version reintroduces leader harm; that correction belongs in an EVG-stage layer (Option B).
+4. **Exempt from `market_discount`** — orthogonal to what the market prices for unpriced domestiques, so the double-counting inflation must not gut it.
+
+**Validation** (seeded `MersenneTwister(20260703)` sim, breakaway feature OFF to isolate the strength effect, n_sims=2500; `scratchpad/validate.jl` reproduces). EVG before→after against real Tour totals:
+
+| Rider | cost | EVG off→on | real Tour totals | verdict |
+|---|---|---|---|---|
+| Eenkhoorn | 4 | 33→72 | 295/290 | toward, ~25% of gap closed |
+| Russo | 4 | 105→141 | 241/245 | toward |
+| Turgis | 6 | 267→313 | 54/644/407 | toward |
+| Abrahamsen | 6 | 217→338 | 300/606/460 | into range |
+| Simmons | 6 | 54→90 | 16/380 | toward (mixed record limits it) |
+| Pogačar | 34 | 3776→3688 | 2979/3841/4153 | strength IDENTICAL; −2.3% EVG = field crowding |
+| Vingegaard | 24 | 2325→2237 | 2946/2703/3200 | strength IDENTICAL; −3.8% = crowding |
+| Van Dijke (debutant) | 4 | 162→156 | — | strength IDENTICAL (no GT history) |
+
+Do-no-harm rank ρ (predicted 2026 EVG vs real 2025 totals, signal restricted to ≤2024 to avoid leaking the 2025 target, 96 riders in both): overall 0.691→**0.700** (improves), **top-20 0.469→0.466 (flat — passes the gate)**, top-40 0.610→0.546 (mild degradation in the volatile mid-band — riders whose 2024 was strong but 2025 collapsed to injury get lifted wrongly; inherent to a 1-year-ahead check).
+
+**Verdict.** Option A does no harm (leader strengths byte-identical; top-20 ρ preserved; debutants untouched) and closes a MEANINGFUL FRACTION of the gap — it roughly doubles the flagged break-hunters' EVG and moves each *toward*, never past, their real range. But it does NOT fully close it: a strength nudge can only lift a rider's finish-position ranking so far, and these riders' 200–300-pt hauls come from breakaway/stage-win points the finish-position simulator barely generates for a mid-pack rider. The residual is exactly what the **breakaway prototype** (above) and/or **Option B** (a points-propensity layer applied at the `expected_vg_points` stage, which could also deliver the inverse pull-down that the upward-only strength nudge cannot) should stack on top of. Recommendation: keep Option A on (it is the cheap, do-no-harm half), and pursue Option B for the remaining gap and the role-DECOUPLING (strong-domestique) direction. Flag default OFF pending a prospective revisit; `gt_vg_hist_base_variance` (1.5) and the routing weights are un-backtested first-pass estimates.
+
 ### Stage-race sprinter over-prediction: the aleatoric-noise diagnosis (June 2026)
 
 A full investigation into why the stage-race model over-rates grand-tour sprinters. The headline conclusion is that **the simulator's per-stage outcome noise is 2.5–3× too small**, and the fix is a per-stage-type aleatoric noise calibrated to observed dispersion. This is the single most important stage-race calibration finding to date. Everything a future analyst needs to reproduce, act on, or extend it is below.

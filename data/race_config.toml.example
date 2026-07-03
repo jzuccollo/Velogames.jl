@@ -44,6 +44,7 @@ excluded_riders = []
 # --- stage races only ---
 cross_stage_alpha = 0.7      # Cross-stage noise correlation (0 = independent, 1 = identical)
 pcs_stage_scrape = true      # Scrape stage profiles from PCS (false = use manual stages)
+gt_vg_history = false        # Option A prototype: inject each rider's own prior GT VG totals as a role/propensity strength signal (see roadmap.md)
 
 [team_assessor]
 vg_race_number = 0           # 0 = auto-detect, -1 = skip, or set manually (e.g. 3)

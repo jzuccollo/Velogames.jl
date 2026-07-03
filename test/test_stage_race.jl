@@ -687,6 +687,59 @@ end
 # "GT VG-history strength signal")
 # =========================================================================
 
+@testset "GT VG-history signal: lifts break-hunter, clamps leader, inert off" begin
+    rider_df = DataFrame(
+        rider = ["Star", "Breaker", "Neutral"],
+        riderkey = ["star", "breaker", "neutral"],
+        team = ["A", "B", "C"],
+        cost = [20, 4, 8],
+        classraw = ["Climber", "Unclassed", "Unclassed"],
+        points = [1500.0, 100.0, 400.0],
+        gc = [2000.0, 100.0, 500.0],
+        tt = [1000.0, 100.0, 400.0],
+        sprint = [200.0, 150.0, 300.0],
+        climber = [2000.0, 120.0, 400.0],
+        oneday = [1500.0, 200.0, 600.0],
+        has_pcs_data = [true, true, true],
+    )
+    # One prior edition. Breaker posted a huge VG total (break-hunter role);
+    # Star a modest one (his ability far exceeds it); f1-f3 shape the within-year
+    # z-score distribution. Star and the filler riders sit BELOW Star's ability
+    # estimate, Breaker's z sits ABOVE Breaker's (weak) ability estimate.
+    gt = DataFrame(
+        riderkey = ["breaker", "star", "f1", "f2", "f3"],
+        score = [1500, 250, 300, 150, 80],
+        year = [2025, 2025, 2025, 2025, 2025],
+    )
+
+    off = estimate_strengths(rider_df; race_type = :stage, race_year = 2026)
+    on = estimate_strengths(
+        rider_df;
+        race_type = :stage,
+        race_year = 2026,
+        gt_vg_history_df = gt,
+    )
+
+    bi = findfirst(==("breaker"), on.riderkey)
+    si = findfirst(==("star"), on.riderkey)
+    ni = findfirst(==("neutral"), on.riderkey)
+
+    # Break-hunter's mountain/hilly strength lifted upward by their strong GT history
+    @test on.strength_mountain[bi] > off.strength_mountain[bi]
+    @test on.strength_hilly[bi] > off.strength_hilly[bi]
+    # Upward-only clamp: the strong climber, whose mountain estimate already exceeds
+    # his (low) GT-history z, is untouched — the leader do-no-harm guarantee.
+    @test on.strength_mountain[si] ≈ off.strength_mountain[si]
+    # Rider absent from GT history keeps the prior unchanged (do-no-harm).
+    @test on.strength_mountain[ni] ≈ off.strength_mountain[ni]
+    # Never routes to :gc, :itt or :flat for anyone.
+    @test on.strength_gc ≈ off.strength_gc
+    @test on.strength_itt ≈ off.strength_itt
+    @test on.strength_flat ≈ off.strength_flat
+    # Passing no GT history at all is fully inert.
+    @test on.strength_gc == off.strength_gc
+end
+
 @testset "attrition helpers (_norm_class, _rand_gamma)" begin
     # Real VG class labels normalise to the attrition_class_mult keys.
     @test Velogames._norm_class("All Rounder") == :allrounder

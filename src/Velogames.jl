@@ -90,7 +90,8 @@ export ScoringTable,
     stage_finish_points_for_position,
     daily_gc_points_for_position,
     final_gc_points_for_position,
-    compute_breakaway_rates
+    compute_breakaway_rates,
+    STAGE_BREAKAWAY_MAX_RATE
 
 # Solvers and optimisation
 export solve_oneday,
