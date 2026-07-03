@@ -182,8 +182,29 @@ function archive_race_results(
         @warn "Failed to archive PCS results for $pcs_slug $year: $e"
     end
 
-    # Archive VG race results if race number provided
-    if vg_race_number > 0
+    # Archive VG race results. Stage races (grand tours / week-long races) run
+    # their own separate VG competition from the one-day classics — fetching
+    # via `getvg_race_results` (which always hits the classics competition
+    # URL) would silently archive an unrelated one-day race's scores under
+    # this stage race's pcs_slug. Route stage races to `getvg_stage_race_totals`
+    # with the correct VG slug instead; `vg_race_number` is a one-day-only
+    # concept (the classics `st` parameter) and is ignored for stage races.
+    vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
+    if !isempty(vg_slug)
+        try
+            vg_results = getvg_stage_race_totals(
+                year,
+                vg_slug;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            if nrow(vg_results) > 0
+                save_race_snapshot(vg_results, "vg_results", pcs_slug, year)
+            end
+        catch e
+            @warn "Failed to archive VG stage totals for $pcs_slug $year: $e"
+        end
+    elseif vg_race_number > 0
         try
             vg_results = getvg_race_results(
                 year,
@@ -441,17 +462,26 @@ function _prepare_rider_data(
         force_refresh = force_refresh,
     )
 
-    # --- 3b. Fetch VG race history (automatic) ---
+    # --- 3b. Fetch VG race history (automatic; one-day classics only) ---
+    # Grand tours / week-long stage races have no entry in CLASSICS_RACES_2026,
+    # so `race_info` is always `nothing` and `race_name` would be "". Skip
+    # entirely for stage races rather than looking up VG race history under a
+    # blank name — that VG competition (`sixes-classics`) is unrelated to a
+    # stage race's own VG competition, and this signal is one-day-specific.
     race_name = race_info !== nothing ? race_info.name : ""
-    vg_history_df = assemble_vg_race_history(
-        race_name,
-        config.pcs_slug,
-        config.year,
-        history_years;
-        race_date = race_date,
-        cache_config = cache_config,
-        force_refresh = force_refresh,
-    )
+    vg_history_df = if config.type == :stage
+        nothing
+    else
+        assemble_vg_race_history(
+            race_name,
+            config.pcs_slug,
+            config.year,
+            history_years;
+            race_date = race_date,
+            cache_config = cache_config,
+            force_refresh = force_refresh,
+        )
+    end
 
     # --- 3b-ii. Fetch prior-edition points/KOM classification history (stage races) ---
     # Same-race only: the isolation backtest (scripts/eval_classification_history.jl)

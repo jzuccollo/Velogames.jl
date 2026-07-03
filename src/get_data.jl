@@ -687,6 +687,11 @@ Returns the `race_number` (the `st` parameter) or `nothing` if no match found.
 """
 function match_vg_race_number(race_name::String, vg_racelist::DataFrame)
     target_key = normalise_race_name(race_name)
+    # An empty key (e.g. a stage race with no entry in the classics schedule,
+    # passed through as "") would otherwise substring-match every row via
+    # `occursin("", row.namekey)`, silently returning the first race in the
+    # list. Bail out instead of returning a bogus match.
+    isempty(target_key) && return nothing
     for row in eachrow(vg_racelist)
         if row.namekey == target_key
             return row.race_number

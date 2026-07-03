@@ -2286,9 +2286,17 @@ function main()
 
     league_winners = load_league_winners()
 
-    # Archive results for any league winners not yet in the archive
+    # Archive results for any league winners not yet in the archive.
+    # Grand tours are excluded: `_ensure_results_archived` auto-detects the VG
+    # race number against the one-day classics race list, which a stage race
+    # (with no entry in that list) would fuzzy-match to the wrong race. Grand
+    # tour results are archived separately below via `stage_race_report_html`
+    # → `archive_stage_race_results` (data type `vg_stage_totals`, fetched from
+    # the correct stage-race VG competition).
+    gt_pcs_slugs = Set(gt.pcs_slug for gt in GRAND_TOUR_RACES)
     for ((pcs_slug, year), _) in league_winners
         year in years || continue
+        pcs_slug in gt_pcs_slugs && continue
         if load_race_snapshot("vg_results", pcs_slug, year) === nothing
             println("  Archiving results for $pcs_slug $year...")
             _ensure_results_archived(pcs_slug, year)
