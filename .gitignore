@@ -43,3 +43,6 @@ data/race_config.toml.*
 data/league_winners.toml
 
 /.quarto/
+
+# Local refactor plan (working notes, not version controlled)
+REFACTOR_PLAN.md
