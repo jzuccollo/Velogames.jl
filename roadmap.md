@@ -286,7 +286,7 @@ Per-stage simulation replaces the aggregate GC-position model for stage races. E
 - PCS stage results scraper (`getpcs_stage_results`, `getpcs_all_stage_results`) for per-stage finishing positions
 - VG per-stage results fetcher (`getvg_stage_results`) and overall totals (`getvg_stage_race_totals`)
 - Stage type classification from PCS profile codes: p1=flat, p2/p3=hilly, p4/p5=mountain, with ITT/TTT detection from stage name
-- `getpcsraceresults` falls back from `/result` to `/gc` URL for stage races where PCS uses a different results page structure
+- `getpcs_race_results` falls back from `/result` to `/gc` URL for stage races where PCS uses a different results page structure
 
 #### Stage-type strength modifiers (deprecated — replaced in Phase 5)
 

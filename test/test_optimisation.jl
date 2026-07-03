@@ -4,10 +4,10 @@
 
 @testset "Model Building Functions" begin
     sample_df = DataFrame(
-        rider=["Rider A", "Rider B", "Rider C", "Rider D"],
-        cost=[10, 15, 20, 25],
-        points=[50.0, 75.0, 100.0, 125.0],
-        riderkey=["ridera", "riderb", "riderc", "riderd"],
+        rider = ["Rider A", "Rider B", "Rider C", "Rider D"],
+        cost = [10, 15, 20, 25],
+        points = [50.0, 75.0, 100.0, 125.0],
+        riderkey = ["ridera", "riderb", "riderc", "riderd"],
     )
 
     @testset "build_model_oneday" begin
@@ -15,7 +15,7 @@
         @test result isa JuMP.Containers.DenseAxisArray
         @test length(result) == 4
 
-        result2 = build_model_oneday(sample_df, 2, :points, :cost, totalcost=50)
+        result2 = build_model_oneday(sample_df, 2, :points, :cost, totalcost = 50)
         @test result2 isa JuMP.Containers.DenseAxisArray
         @test length(result2) == 4
     end
@@ -40,7 +40,7 @@
 
     @testset "build_model_stage for historical analysis" begin
         test_data = DataFrame(
-            rider=[
+            rider = [
                 "Rider A",
                 "Rider B",
                 "Rider C",
@@ -51,7 +51,7 @@
                 "Rider H",
                 "Rider I",
             ],
-            riderkey=[
+            riderkey = [
                 "ridera",
                 "riderb",
                 "riderc",
@@ -62,9 +62,9 @@
                 "riderh",
                 "rideri",
             ],
-            points=[500, 400, 300, 250, 200, 150, 100, 50, 25],
-            cost=[20, 16, 14, 12, 10, 8, 6, 4, 2],
-            class=[
+            points = [500, 400, 300, 250, 200, 150, 100, 50, 25],
+            cost = [20, 16, 14, 12, 10, 8, 6, 4, 2],
+            class = [
                 "All rounder",
                 "All rounder",
                 "Climber",
@@ -77,7 +77,7 @@
             ],
         )
 
-        result = build_model_stage(test_data, 9, :points, :cost; totalcost=100)
+        result = build_model_stage(test_data, 9, :points, :cost; totalcost = 100)
         @test result !== nothing
         @test length(result) == nrow(test_data)
 
@@ -94,7 +94,7 @@
 
     @testset "minimise_cost_stage" begin
         test_data = DataFrame(
-            rider=[
+            rider = [
                 "Rider A",
                 "Rider B",
                 "Rider C",
@@ -105,7 +105,7 @@
                 "Rider H",
                 "Rider I",
             ],
-            riderkey=[
+            riderkey = [
                 "ridera",
                 "riderb",
                 "riderc",
@@ -116,9 +116,9 @@
                 "riderh",
                 "rideri",
             ],
-            points=[500, 400, 300, 250, 200, 150, 100, 50, 25],
-            cost=[20, 16, 14, 12, 10, 8, 6, 4, 2],
-            class=[
+            points = [500, 400, 300, 250, 200, 150, 100, 50, 25],
+            cost = [20, 16, 14, 12, 10, 8, 6, 4, 2],
+            class = [
                 "All rounder",
                 "All rounder",
                 "Climber",
@@ -133,7 +133,7 @@
 
         target_score = 1000
         result =
-            minimise_cost_stage(test_data, target_score, 9, :points, :cost; totalcost=100)
+            minimise_cost_stage(test_data, target_score, 9, :points, :cost; totalcost = 100)
 
         @test result !== nothing
         @test length(result) == nrow(test_data)
@@ -151,14 +151,13 @@
 
     @testset "minimise_cost_stage without classification columns" begin
         test_data = DataFrame(
-            rider=["R$i" for i in 1:10],
-            riderkey=["r$i" for i in 1:10],
-            points=[500, 400, 300, 250, 200, 150, 100, 80, 60, 40],
-            cost=[18, 16, 14, 12, 10, 8, 6, 5, 4, 3],
+            rider = ["R$i" for i = 1:10],
+            riderkey = ["r$i" for i = 1:10],
+            points = [500, 400, 300, 250, 200, 150, 100, 80, 60, 40],
+            cost = [18, 16, 14, 12, 10, 8, 6, 5, 4, 3],
         )
 
-        result =
-            minimise_cost_stage(test_data, 1000, 9, :points, :cost; totalcost=100)
+        result = minimise_cost_stage(test_data, 1000, 9, :points, :cost; totalcost = 100)
         @test result !== nothing
 
         chosen = [result[rk] > 0.5 for rk in test_data.riderkey]
@@ -169,18 +168,18 @@
 
     @testset "Insufficient data returns nothing" begin
         insufficient_data = DataFrame(
-            rider=["Rider A", "Rider B"],
-            riderkey=["ridera", "riderb"],
-            points=[500, 400],
-            cost=[20, 16],
-            class=["All rounder", "Climber"],
+            rider = ["Rider A", "Rider B"],
+            riderkey = ["ridera", "riderb"],
+            points = [500, 400],
+            cost = [20, 16],
+            class = ["All rounder", "Climber"],
         )
 
-        result1 = build_model_stage(insufficient_data, 9, :points, :cost; totalcost=100)
+        result1 = build_model_stage(insufficient_data, 9, :points, :cost; totalcost = 100)
         @test result1 === nothing
 
         result2 =
-            minimise_cost_stage(insufficient_data, 100, 9, :points, :cost; totalcost=100)
+            minimise_cost_stage(insufficient_data, 100, 9, :points, :cost; totalcost = 100)
         @test result2 === nothing
     end
 end
@@ -192,17 +191,17 @@ end
 @testset "predict + build_model_oneday integration" begin
     rng = Random.MersenneTwister(42)
     rider_df = DataFrame(
-        rider=["R$i" for i = 1:12],
-        team=repeat(["A", "B", "C", "D"], 3),
-        cost=[20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2],
-        points=Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 60, 40, 20]),
-        riderkey=["r$i" for i = 1:12],
-        oneday=[2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 150, 100, 50],
+        rider = ["R$i" for i = 1:12],
+        team = repeat(["A", "B", "C", "D"], 3),
+        cost = [20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2],
+        points = Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 60, 40, 20]),
+        riderkey = ["r$i" for i = 1:12],
+        oneday = [2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 150, 100, 50],
     )
-    predicted = predict_expected_points(rider_df, SCORING_CAT2; n_sims=5000, rng=rng)
+    predicted = predict_expected_points(rider_df, SCORING_CAT2; n_sims = 5000, rng = rng)
     @test :expected_vg_points in propertynames(predicted)
 
-    sol = build_model_oneday(predicted, 6, :expected_vg_points, :cost; totalcost=100)
+    sol = build_model_oneday(predicted, 6, :expected_vg_points, :cost; totalcost = 100)
     @test sol !== nothing
 
     chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
@@ -213,12 +212,12 @@ end
 @testset "predict + build_model_stage integration" begin
     rng = Random.MersenneTwister(42)
     rider_df = DataFrame(
-        rider=["R$i" for i = 1:20],
-        team=repeat(["A", "B", "C", "D"], 5),
-        cost=repeat([15, 12, 10, 8, 5], 4),
-        points=Float64.(repeat([400, 300, 200, 100, 50], 4)),
-        riderkey=["r$i" for i = 1:20],
-        classraw=repeat(
+        rider = ["R$i" for i = 1:20],
+        team = repeat(["A", "B", "C", "D"], 5),
+        cost = repeat([15, 12, 10, 8, 5], 4),
+        points = Float64.(repeat([400, 300, 200, 100, 50], 4)),
+        riderkey = ["r$i" for i = 1:20],
+        classraw = repeat(
             [
                 "All Rounder",
                 "All Rounder",
@@ -233,22 +232,22 @@ end
             ],
             2,
         ),
-        gc=Float64.(repeat([1500, 1200, 800, 600, 400], 4)),
-        tt=Float64.(repeat([1000, 800, 600, 400, 200], 4)),
-        climber=Float64.(repeat([500, 400, 1200, 1000, 800], 4)),
-        sprint=Float64.(repeat([200, 150, 100, 500, 300], 4)),
-        oneday=Float64.(repeat([800, 600, 400, 300, 200], 4)),
+        gc = Float64.(repeat([1500, 1200, 800, 600, 400], 4)),
+        tt = Float64.(repeat([1000, 800, 600, 400, 200], 4)),
+        climber = Float64.(repeat([500, 400, 1200, 1000, 800], 4)),
+        sprint = Float64.(repeat([200, 150, 100, 500, 300], 4)),
+        oneday = Float64.(repeat([800, 600, 400, 300, 200], 4)),
     )
     predicted = predict_expected_points(
         rider_df,
         SCORING_STAGE;
-        n_sims=5000,
-        race_type=:stage,
-        rng=rng,
+        n_sims = 5000,
+        race_type = :stage,
+        rng = rng,
     )
     @test :expected_vg_points in propertynames(predicted)
 
-    sol = build_model_stage(predicted, 9, :expected_vg_points, :cost; totalcost=100)
+    sol = build_model_stage(predicted, 9, :expected_vg_points, :cost; totalcost = 100)
     @test sol !== nothing
 
     chosen = filter(row -> JuMP.value(sol[row.riderkey]) > 0.5, predicted)
@@ -256,58 +255,55 @@ end
     @test sum(chosen.cost) <= 100
 end
 
-@testset "simulate_vg_points" begin
-    rng = Random.MersenneTwister(42)
-    strengths = [2.0, 1.0, 0.0, -1.0, -2.0]
-    uncertainties = fill(0.5, 5)
+@testset "_score_vg_draw!" begin
     teams = ["A", "A", "B", "B", "C"]
+    scoring = SCORING_CAT2
 
-    sim = simulate_race(strengths, uncertainties; n_sims=10000, rng=rng)
+    # Deterministic single draw: rider 1 wins, rider 3 second, rider 5 third
+    positions = [1, 4, 2, 5, 3]
+    sim_pts = zeros(Float64, 5)
+    Velogames._score_vg_draw!(sim_pts, positions, teams, scoring)
 
-    # Without breakaway should match expected_vg_points
-    mean_pts, std_pts, down_std = simulate_vg_points(sim, teams, SCORING_CAT2)
-    evg, evg_dsd = expected_vg_points(sim, teams, SCORING_CAT2)
-    @test length(mean_pts) == 5
-    @test length(std_pts) == 5
-    @test length(down_std) == 5
-    @test all(isapprox.(mean_pts, evg; atol=0.01))
-    @test all(std_pts .>= 0)
-    @test all(down_std .>= 0)
-    @test std_pts[1] > 0  # strong rider has non-zero SD
-    @test down_std[1] > 0  # strong rider has non-zero downside SD
-    # Downside semi-deviation <= full SD (only counts below-mean deviations)
-    @test all(down_std .<= std_pts .+ 0.01)
+    # Finish points for podium riders (no teammate finished top-3, so no assist added)
+    @test sim_pts[1] ≈ Float64(finish_points_for_position(1, scoring))
+    @test sim_pts[3] ≈ Float64(finish_points_for_position(2, scoring))
+    @test sim_pts[5] ≈ Float64(finish_points_for_position(3, scoring))
+    # Assist points: rider 2 (team A) for rider 1's win; rider 4 (team B) for rider 3's 2nd
+    @test sim_pts[2] ≈
+          Float64(finish_points_for_position(4, scoring)) + scoring.assist_points[1]
+    @test sim_pts[4] ≈
+          Float64(finish_points_for_position(5, scoring)) + scoring.assist_points[2]
 
-    # Stronger riders should have higher mean
-    @test mean_pts[1] > mean_pts[5]
-
-    # With empirical breakaway rates, mean should be >= no-breakaway (adds non-negative points)
-    rng2 = Random.MersenneTwister(99)
-    bk_rates = [0.3, 0.1, 0.1, 0.05, 0.0]
-    mean_secs = [2.0, 1.0, 1.0, 1.0, 0.0]
-    mean_brk, _, _ = simulate_vg_points(
-        sim,
+    # Breakaway: a guaranteed draw (rate 1.0) adds mean_sectors * breakaway_points
+    sim_pts_brk = zeros(Float64, 5)
+    rng = Random.MersenneTwister(1)
+    Velogames._score_vg_draw!(
+        sim_pts_brk,
+        positions,
         teams,
-        SCORING_CAT2;
-        breakaway_rates=bk_rates,
-        mean_sectors=mean_secs,
-        rng=rng2,
+        scoring;
+        breakaway_rates = [1.0, 0.0, 0.0, 0.0, 0.0],
+        mean_sectors = [3.0, 0.0, 0.0, 0.0, 0.0],
+        rng = rng,
     )
-    @test all(mean_brk .>= mean_pts .- 0.01)
-    @test mean_brk[5] ≈ mean_pts[5] atol = 0.01  # rate=0 → no breakaway points
+    @test sim_pts_brk[1] ≈ sim_pts[1] + 3.0 * scoring.breakaway_points
+    # Riders with rate 0 are unchanged from the no-breakaway score
+    @test sim_pts_brk[3] ≈ sim_pts[3]
 
-    # Stage race: breakaway_points==0, so Bernoulli draw has no effect
-    rng3 = Random.MersenneTwister(99)
-    mean_stage, _, _ = simulate_vg_points(sim, teams, SCORING_STAGE)
-    mean_stage_brk, _, _ = simulate_vg_points(
-        sim,
+    # Stage scoring has breakaway_points == 0, so the Bernoulli draw has no effect
+    sim_pts_stage = zeros(Float64, 5)
+    sim_pts_stage_brk = zeros(Float64, 5)
+    Velogames._score_vg_draw!(sim_pts_stage, positions, teams, SCORING_STAGE)
+    Velogames._score_vg_draw!(
+        sim_pts_stage_brk,
+        positions,
         teams,
         SCORING_STAGE;
-        breakaway_rates=bk_rates,
-        mean_sectors=mean_secs,
-        rng=rng3,
+        breakaway_rates = [1.0, 1.0, 1.0, 1.0, 1.0],
+        mean_sectors = [2.0, 2.0, 2.0, 2.0, 2.0],
+        rng = Random.MersenneTwister(7),
     )
-    @test all(isapprox.(mean_stage, mean_stage_brk; atol=0.01))
+    @test all(isapprox.(sim_pts_stage, sim_pts_stage_brk; atol = 1e-9))
 end
 
 @testset "breakaway_sectors_from_km" begin
@@ -329,13 +325,13 @@ end
 @testset "resample_optimise" begin
     rng = Random.MersenneTwister(42)
     rider_df = DataFrame(
-        rider=["R$i" for i = 1:12],
-        team=repeat(["A", "B", "C", "D"], 3),
-        cost=[20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 4, 4],
-        points=Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 0, 0, 0]),
-        riderkey=["r$i" for i = 1:12],
-        oneday=[2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 10, 10, 10],
-        has_pcs_data=[trues(9); trues(3)],
+        rider = ["R$i" for i = 1:12],
+        team = repeat(["A", "B", "C", "D"], 3),
+        cost = [20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 4, 4],
+        points = Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 0, 0, 0]),
+        riderkey = ["r$i" for i = 1:12],
+        oneday = [2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 10, 10, 10],
+        has_pcs_data = [trues(9); trues(3)],
     )
 
     strengths_df = estimate_strengths(rider_df)
@@ -344,9 +340,9 @@ end
         strengths_df,
         SCORING_CAT2,
         build_model_oneday;
-        team_size=6,
-        n_resamples=100,
-        rng=rng,
+        team_size = 6,
+        n_resamples = 100,
+        rng = rng,
     )
 
     @test :selection_frequency in propertynames(result_df)

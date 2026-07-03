@@ -6,7 +6,7 @@ column resolution — when PCS renames a column, add one string to the alias lis
 """
 
 """
-## `getpcsraceresults`
+## `getpcs_race_results`
 
 Downloads and parses the finishing results for a specific race edition from the PCS website.
 
@@ -37,16 +37,16 @@ Returns a DataFrame with the following columns:
 
 # Example
 ```julia
-getpcsraceresults("trofeo-laigueglia", 2026)
+getpcs_race_results("trofeo-laigueglia", 2026)
 ```
 """
-function getpcsraceresults(
+function getpcs_race_results(
     pcs_race_slug::String,
     year::Int;
-    prefer_gc::Bool=false,
-    classification::Symbol=:default,
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    prefer_gc::Bool = false,
+    classification::Symbol = :default,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
 
     base = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)"
@@ -70,12 +70,12 @@ function getpcsraceresults(
         # div.svg_shield breakaway indicators are only present in JavaScript-rendered HTML, not
         # in raw HTTP responses, so in_breakaway is always false.
         _empty_results() = DataFrame(
-            position=Int[],
-            rider=String[],
-            team=String[],
-            riderkey=String[],
-            in_breakaway=Bool[],
-            breakaway_km=Union{Float64,Missing}[],
+            position = Int[],
+            rider = String[],
+            team = String[],
+            riderkey = String[],
+            in_breakaway = Bool[],
+            breakaway_km = Union{Float64,Missing}[],
         )
 
         # Try the preferred page first, fall back to the other (one-day races have no /gc;
@@ -83,7 +83,10 @@ function getpcsraceresults(
         page = nothing
         for attempt_url in [url, fallback_url]
             response = try
-                HTTP.get(attempt_url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+                HTTP.get(
+                    attempt_url,
+                    ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"],
+                )
             catch e
                 e isa HTTP.Exceptions.StatusError && continue
                 error("Failed to fetch $attempt_url: $e")
@@ -102,8 +105,10 @@ function getpcsraceresults(
         # Taking the first <table> blindly grabs a hidden tab (e.g. the latest-stage result
         # shown above the GC), so we scope to the visible resTab and fall back to the first
         # table only if the layout is missing.
-        active_tabs = filter(t -> !occursin("hide", getattr(t, "class", "")),
-            collect(eachmatch(sel"div.resTab", page.root)))
+        active_tabs = filter(
+            t -> !occursin("hide", getattr(t, "class", "")),
+            collect(eachmatch(sel"div.resTab", page.root)),
+        )
         result_table = nothing
         if !isempty(active_tabs)
             inner = collect(eachmatch(sel"table", active_tabs[1]))
@@ -142,12 +147,12 @@ function getpcsraceresults(
         isempty(riders) && return _empty_results()
 
         result = DataFrame(
-            position=positions,
-            rider=riders,
-            team=teams,
-            riderkey=createkey.(riders),
-            in_breakaway=falses(length(riders)),
-            breakaway_km=Vector{Union{Float64,Missing}}(fill(missing, length(riders))),
+            position = positions,
+            rider = riders,
+            team = teams,
+            riderkey = createkey.(riders),
+            in_breakaway = falses(length(riders)),
+            breakaway_km = Vector{Union{Float64,Missing}}(fill(missing, length(riders))),
         )
         result = filter(row -> !isempty(row.riderkey), result)
         result = unique(result, :riderkey)
@@ -162,8 +167,8 @@ function getpcsraceresults(
         fetch_race_results,
         pageurl,
         params;
-        cache_config=cache_config,
-        force_refresh=force_refresh,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
     )
 end
 
@@ -186,11 +191,11 @@ function _extract_rider_slugs(pageurl::String)::Dict{String,String}
     return slug_map
 end
 
-function getpcsracestartlist(
+function getpcs_race_startlist(
     pcs_race_slug::String,
     year::Int;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
 
     pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/startlist/startlist-quality"
@@ -263,14 +268,14 @@ function getpcsracestartlist(
         fetch_startlist,
         pageurl,
         params;
-        cache_config=cache_config,
-        force_refresh=force_refresh,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
     )
 end
 
 
 """
-## `getpcsraceform`
+## `getpcs_race_form`
 
 Downloads and parses PCS form scores for riders on a race startlist.
 
@@ -295,11 +300,11 @@ Returns a DataFrame with columns:
 - `force_refresh` - bypass the cache and fetch fresh data (default: `false`)
 - `cache_config` - cache configuration (default: `DEFAULT_CACHE`)
 """
-function getpcsraceform(
+function getpcs_race_form(
     pcs_race_slug::String,
     year::Int;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
 
     pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/startlist/form"
@@ -344,14 +349,14 @@ function getpcsraceform(
         fetch_form,
         pageurl,
         params;
-        cache_config=cache_config,
-        force_refresh=force_refresh,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
     )
 end
 
 
 """
-## `getpcsriderseasons`
+## `getpcs_rider_seasons`
 
 Scrapes year-by-year PCS ranking points from a rider's profile page.
 
@@ -372,10 +377,10 @@ Returns a DataFrame with columns:
 - `force_refresh` - bypass the cache and fetch fresh data (default: `false`)
 - `cache_config` - cache configuration (default: `DEFAULT_CACHE`)
 """
-function getpcsriderseasons(
+function getpcs_rider_seasons(
     pcs_slug::String;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
     pageurl = "https://www.procyclingstats.com/rider/$(pcs_slug)"
 
@@ -384,7 +389,7 @@ function getpcsriderseasons(
             HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
         catch e
             if e isa HTTP.Exceptions.StatusError && e.status in (400, 403, 404)
-                return DataFrame(year=Int[], pcs_points=Float64[], pcs_rank=Int[])
+                return DataFrame(year = Int[], pcs_points = Float64[], pcs_rank = Int[])
             end
             rethrow()
         end
@@ -395,7 +400,7 @@ function getpcsriderseasons(
         tables = collect(eachmatch(sel"table", page.root))
         if length(tables) < 2
             @warn "No season summary table found on $url"
-            return DataFrame(year=Int[], pcs_points=Float64[], pcs_rank=Int[])
+            return DataFrame(year = Int[], pcs_points = Float64[], pcs_rank = Int[])
         end
 
         season_table = tables[2]
@@ -425,7 +430,7 @@ function getpcsriderseasons(
             push!(ranks, rnk)
         end
 
-        return DataFrame(year=years, pcs_points=points, pcs_rank=ranks)
+        return DataFrame(year = years, pcs_points = points, pcs_rank = ranks)
     end
 
     params = Dict("slug" => pcs_slug)
@@ -433,31 +438,31 @@ function getpcsriderseasons(
         fetch_seasons,
         pageurl,
         params;
-        cache_config=cache_config,
-        force_refresh=force_refresh,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
     )
 end
 
 
 """
-## `getpcsriderseasons_batch`
+## `getpcs_rider_seasons_batch`
 
 Batch version — get season-by-season PCS points for multiple riders.
 Returns a single DataFrame with an additional `riderkey` column.
 """
-function getpcsriderseasons_batch(
+function getpcs_rider_seasons_batch(
     rider_slugs::Dict{String,String};
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
     all_dfs = DataFrame[]
 
     for (riderkey, slug) in rider_slugs
         try
-            df = getpcsriderseasons(
+            df = getpcs_rider_seasons(
                 slug;
-                force_refresh=force_refresh,
-                cache_config=cache_config,
+                force_refresh = force_refresh,
+                cache_config = cache_config,
             )
             if nrow(df) > 0
                 df[!, :riderkey] .= riderkey
@@ -470,11 +475,11 @@ function getpcsriderseasons_batch(
 
     return isempty(all_dfs) ?
            DataFrame(
-        year=Int[],
-        pcs_points=Float64[],
-        pcs_rank=Int[],
-        riderkey=String[],
-    ) : vcat(all_dfs...; cols=:union)
+        year = Int[],
+        pcs_points = Float64[],
+        pcs_rank = Int[],
+        riderkey = String[],
+    ) : vcat(all_dfs...; cols = :union)
 end
 
 
@@ -505,8 +510,8 @@ in that specialty that season). Empty if the rider/page has no such results.
 function getpcs_specialty_by_season(
     pcs_slug::String,
     specialty::Symbol;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
     spec_slug = PCS_SPECIALTY_SLUG[specialty]
     pageurl = "https://www.procyclingstats.com/rider/$(pcs_slug)/results/career-points-$(spec_slug)"
@@ -516,20 +521,20 @@ function getpcs_specialty_by_season(
             HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
         catch e
             if e isa HTTP.Exceptions.StatusError && e.status in (400, 403, 404)
-                return DataFrame(year=Int[], points=Float64[])
+                return DataFrame(year = Int[], points = Float64[])
             end
             rethrow()
         end
 
         page = parsehtml(String(response.body))
         tables = collect(eachmatch(sel"table", page.root))
-        isempty(tables) && return DataFrame(year=Int[], points=Float64[])
+        isempty(tables) && return DataFrame(year = Int[], points = Float64[])
 
         header = [strip(nodeText(c)) for c in eachmatch(sel"th", tables[1])]
         date_idx = findfirst(==("Date"), header)
         pts_idx = findfirst(==("Points"), header)
         (date_idx === nothing || pts_idx === nothing) &&
-            return DataFrame(year=Int[], points=Float64[])
+            return DataFrame(year = Int[], points = Float64[])
 
         by_year = Dict{Int,Float64}()
         for row in collect(eachmatch(sel"tr", tables[1]))[2:end]
@@ -543,7 +548,7 @@ function getpcs_specialty_by_season(
         end
 
         years = sort(collect(keys(by_year)))
-        return DataFrame(year=years, points=[by_year[y] for y in years])
+        return DataFrame(year = years, points = [by_year[y] for y in years])
     end
 
     params = Dict("slug" => pcs_slug, "specialty" => String(specialty))
@@ -551,21 +556,21 @@ function getpcs_specialty_by_season(
         fetch_specialty,
         pageurl,
         params;
-        cache_config=cache_config,
-        force_refresh=force_refresh,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
     )
 end
 
 """
-## `getpcsracehistory`
+## `getpcs_race_history`
 
 Convenience function that fetches finishing results for a race across multiple years
 and combines them into a single DataFrame.
 
-Internally calls `getpcsraceresults` for each requested year. Years for which data
+Internally calls `getpcs_race_results` for each requested year. Years for which data
 cannot be retrieved are skipped with a warning rather than raising an error.
 
-Returns a DataFrame with all columns from `getpcsraceresults` plus:
+Returns a DataFrame with all columns from `getpcs_race_results` plus:
 
     * `year` - the race edition year (Int)
 
@@ -579,30 +584,30 @@ Returns a DataFrame with all columns from `getpcsraceresults` plus:
 
 # Example
 ```julia
-getpcsracehistory("paris-roubaix", [2021, 2022, 2023, 2024])
+getpcs_race_history("paris-roubaix", [2021, 2022, 2023, 2024])
 ```
 """
-function getpcsracehistory(
+function getpcs_race_history(
     pcs_race_slug::String,
     years::Vector{Int};
-    prefer_gc::Bool=false,
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    prefer_gc::Bool = false,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
 
     all_results = DataFrame()
 
     for year in years
         try
-            year_df = getpcsraceresults(
+            year_df = getpcs_race_results(
                 pcs_race_slug,
                 year;
-                prefer_gc=prefer_gc,
-                force_refresh=force_refresh,
-                cache_config=cache_config,
+                prefer_gc = prefer_gc,
+                force_refresh = force_refresh,
+                cache_config = cache_config,
             )
             year_df[!, :year] = fill(year, nrow(year_df))
-            all_results = vcat(all_results, year_df; cols=:union)
+            all_results = vcat(all_results, year_df; cols = :union)
         catch e
             @warn "Failed to fetch results for $pcs_race_slug $year: $e"
         end
@@ -649,7 +654,10 @@ function load_pcs_breakaway_stats(dir::String)::DataFrame
 
         # Decode quoted-printable: =XX hex escapes and soft line breaks (=\n)
         html = replace(raw, "=\r\n" => "", "=\n" => "")
-        html = replace(html, r"=([0-9A-Fa-f]{2})" => s -> string(Char(parse(UInt8, s[2:3], base=16))))
+        html = replace(
+            html,
+            r"=([0-9A-Fa-f]{2})" => s -> string(Char(parse(UInt8, s[2:3], base = 16))),
+        )
 
         # Extract year from title
         year_match = match(r"season\s+(\d{4})", html)
@@ -694,10 +702,10 @@ function load_pcs_breakaway_stats(dir::String)::DataFrame
         isempty(riders) && continue
 
         df = DataFrame(
-            rider=riders,
-            riderkey=createkey.(riders),
-            year=fill(year, length(riders)),
-            breakaway_km=km_values,
+            rider = riders,
+            riderkey = createkey.(riders),
+            year = fill(year, length(riders)),
+            breakaway_km = km_values,
         )
         push!(all_data, df)
     end
@@ -728,7 +736,7 @@ function _flip_pcs_name(pcs_name::AbstractString)::String
     surname_end >= length(parts) && return pcs_name
 
     surname_parts = parts[1:surname_end]
-    firstname_parts = parts[surname_end+1:end]
+    firstname_parts = parts[(surname_end+1):end]
     # Titlecase the surname parts
     surname = join(titlecase.(lowercase.(surname_parts)), " ")
     firstname = join(firstname_parts, " ")
@@ -755,8 +763,8 @@ Returns a vector of `StageProfile` structs, or an empty vector if scraping fails
 function getpcs_stage_profiles(
     pcs_slug::String,
     year::Int;
-    cache_config::CacheConfig=DEFAULT_CACHE,
-    force_refresh::Bool=false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
 )
     overview_url = "https://www.procyclingstats.com/race/$pcs_slug/$year"
 
@@ -801,7 +809,8 @@ function getpcs_stage_profiles(
                 # Detect ITT/TTT from stage name
                 name_upper = uppercase(stage_name)
                 is_itt = occursin("ITT", name_upper) || occursin("TIME TRIAL", name_upper)
-                is_ttt = occursin("TTT", name_upper) || occursin("TEAM TIME TRIAL", name_upper)
+                is_ttt =
+                    occursin("TTT", name_upper) || occursin("TEAM TIME TRIAL", name_upper)
 
                 # Extract profile code from span.icon.profile
                 profile_spans = collect(eachmatch(sel"span", row))
@@ -848,17 +857,28 @@ function getpcs_stage_profiles(
                     stage_type = :itt
                 end
 
-                push!(stages, StageProfile(
-                    stage_num, stage_type, distance, 0, 0, 0.0, 0, 0,
-                    stage_type in (:itt, :ttt) ? 0 : 1, false,
-                ))
+                push!(
+                    stages,
+                    StageProfile(
+                        stage_num,
+                        stage_type,
+                        distance,
+                        0,
+                        0,
+                        0.0,
+                        0,
+                        0,
+                        stage_type in (:itt, :ttt) ? 0 : 1,
+                        false,
+                    ),
+                )
             end
         end
 
         isempty(stages) && return DataFrame()
 
         # Sort by stage number and deduplicate
-        sort!(stages, by=s -> s.stage_number)
+        sort!(stages, by = s -> s.stage_number)
         unique!(s -> s.stage_number, stages)
 
         # Pass 2: fetch individual stage pages for detailed metadata
@@ -867,32 +887,45 @@ function getpcs_stage_profiles(
             stage_url = "https://www.procyclingstats.com/race/$pcs_slug/$year/stage-$(s.stage_number)"
             ps, vert, gradient, n_hc, n_cat1 = _fetch_stage_details(stage_url)
             is_summit = gradient > 3.0
-            push!(enriched, StageProfile(
-                s.stage_number, s.stage_type, s.distance_km > 0 ? s.distance_km : 180.0,
-                ps, vert, gradient, n_hc, n_cat1,
-                s.n_intermediate_sprints, is_summit,
-            ))
+            push!(
+                enriched,
+                StageProfile(
+                    s.stage_number,
+                    s.stage_type,
+                    s.distance_km > 0 ? s.distance_km : 180.0,
+                    ps,
+                    vert,
+                    gradient,
+                    n_hc,
+                    n_cat1,
+                    s.n_intermediate_sprints,
+                    is_summit,
+                ),
+            )
         end
 
         # Return as a DataFrame for caching (converted back to Vector{StageProfile} after)
         return DataFrame(
-            stage_number=[s.stage_number for s in enriched],
-            stage_type=[String(s.stage_type) for s in enriched],
-            distance_km=[s.distance_km for s in enriched],
-            profile_score=[s.profile_score for s in enriched],
-            vertical_meters=[s.vertical_meters for s in enriched],
-            gradient_final_km=[s.gradient_final_km for s in enriched],
-            n_hc_climbs=[s.n_hc_climbs for s in enriched],
-            n_cat1_climbs=[s.n_cat1_climbs for s in enriched],
-            n_intermediate_sprints=[s.n_intermediate_sprints for s in enriched],
-            is_summit_finish=[s.is_summit_finish for s in enriched],
+            stage_number = [s.stage_number for s in enriched],
+            stage_type = [String(s.stage_type) for s in enriched],
+            distance_km = [s.distance_km for s in enriched],
+            profile_score = [s.profile_score for s in enriched],
+            vertical_meters = [s.vertical_meters for s in enriched],
+            gradient_final_km = [s.gradient_final_km for s in enriched],
+            n_hc_climbs = [s.n_hc_climbs for s in enriched],
+            n_cat1_climbs = [s.n_cat1_climbs for s in enriched],
+            n_intermediate_sprints = [s.n_intermediate_sprints for s in enriched],
+            is_summit_finish = [s.is_summit_finish for s in enriched],
         )
     end
 
     params = Dict("slug" => pcs_slug, "year" => string(year), "type" => "stage_profiles")
     df = cached_fetch(
-        fetch_profiles, overview_url, params;
-        cache_config=cache_config, force_refresh=force_refresh,
+        fetch_profiles,
+        overview_url,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
     )
 
     nrow(df) == 0 && return StageProfile[]
@@ -910,8 +943,7 @@ function getpcs_stage_profiles(
             row.n_cat1_climbs,
             row.n_intermediate_sprints,
             row.is_summit_finish,
-        )
-        for row in eachrow(df)
+        ) for row in eachrow(df)
     ]
 end
 
@@ -965,7 +997,7 @@ end
 """
     getpcs_stage_results(pcs_slug, year, stage_number; kwargs...) -> DataFrame
 
-Fetch PCS results for a single stage. Same schema as `getpcsraceresults`.
+Fetch PCS results for a single stage. Same schema as `getpcs_race_results`.
 
 URL pattern: `https://www.procyclingstats.com/race/{slug}/{year}/stage-{n}`
 """
@@ -973,16 +1005,19 @@ function getpcs_stage_results(
     pcs_slug::String,
     year::Int,
     stage_number::Int;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
     pageurl = "https://www.procyclingstats.com/race/$pcs_slug/$year/stage-$stage_number"
 
     function fetch_stage_results(url, params)
         _empty() = DataFrame(
-            position=Int[], rider=String[], team=String[],
-            riderkey=String[], in_breakaway=Bool[],
-            breakaway_km=Union{Float64,Missing}[],
+            position = Int[],
+            rider = String[],
+            team = String[],
+            riderkey = String[],
+            in_breakaway = Bool[],
+            breakaway_km = Union{Float64,Missing}[],
         )
 
         response = try
@@ -1027,20 +1062,29 @@ function getpcs_stage_results(
         isempty(riders) && return _empty()
 
         result = DataFrame(
-            position=positions, rider=riders, team=teams,
-            riderkey=createkey.(riders),
-            in_breakaway=falses(length(riders)),
-            breakaway_km=Vector{Union{Float64,Missing}}(fill(missing, length(riders))),
+            position = positions,
+            rider = riders,
+            team = teams,
+            riderkey = createkey.(riders),
+            in_breakaway = falses(length(riders)),
+            breakaway_km = Vector{Union{Float64,Missing}}(fill(missing, length(riders))),
         )
         result = filter(row -> !isempty(row.riderkey), result)
         result = unique(result, :riderkey)
-        return result[:, [:position, :rider, :team, :riderkey, :in_breakaway, :breakaway_km]]
+        return result[
+            :,
+            [:position, :rider, :team, :riderkey, :in_breakaway, :breakaway_km],
+        ]
     end
 
-    params = Dict("slug" => pcs_slug, "year" => string(year), "stage" => string(stage_number))
+    params =
+        Dict("slug" => pcs_slug, "year" => string(year), "stage" => string(stage_number))
     return cached_fetch(
-        fetch_stage_results, pageurl, params;
-        cache_config=cache_config, force_refresh=force_refresh,
+        fetch_stage_results,
+        pageurl,
+        params;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
     )
 end
 
@@ -1054,14 +1098,19 @@ function getpcs_all_stage_results(
     pcs_slug::String,
     year::Int,
     n_stages::Int;
-    force_refresh::Bool=false,
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
     results = Dict{Int,DataFrame}()
-    for s in 1:n_stages
+    for s = 1:n_stages
         try
-            df = getpcs_stage_results(pcs_slug, year, s;
-                force_refresh=force_refresh, cache_config=cache_config)
+            df = getpcs_stage_results(
+                pcs_slug,
+                year,
+                s;
+                force_refresh = force_refresh,
+                cache_config = cache_config,
+            )
             if nrow(df) > 0
                 results[s] = df
             end

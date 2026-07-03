@@ -8,7 +8,7 @@
     @test f.stage_number == 1
     @test f.n_hc_climbs == 0
 
-    m = mountain_stage(5; hc=2, cat1=1, summit=true)
+    m = mountain_stage(5; hc = 2, cat1 = 1, summit = true)
     @test m.stage_type == :mountain
     @test m.n_hc_climbs == 2
     @test m.n_cat1_climbs == 1
@@ -51,7 +51,7 @@ end
     # Weights always sum to 1
     for s in (mild_hilly, hard_hilly, big_mtn, itt)
         w = stage_dimension_weights(s)
-        @test isapprox(w.flat + w.hilly + w.mountain + w.itt, 1.0; atol=1e-9)
+        @test isapprox(w.flat + w.hilly + w.mountain + w.itt, 1.0; atol = 1e-9)
     end
 
     # Fallback when profile_score is missing/0: discrete stage_type lookup.
@@ -97,21 +97,21 @@ end
 
 @testset "estimate_strengths multidim per-dimension shapes" begin
     rider_df = DataFrame(
-        rider=["GC Star", "Sprinter", "Climber", "Rouleur", "TT Spec"],
-        riderkey=["gc", "sprint", "climb", "rouleur", "ttspec"],
-        team=["A", "B", "C", "D", "E"],
-        cost=[20, 16, 18, 10, 14],
-        classraw=["All Rounder", "Sprinter", "Climber", "Unclassed", "All Rounder"],
-        points=[1500.0, 1200.0, 800.0, 400.0, 600.0],
-        gc=[2000.0, 200.0, 800.0, 600.0, 1200.0],
-        tt=[1500.0, 300.0, 400.0, 500.0, 2000.0],
-        sprint=[300.0, 2000.0, 100.0, 400.0, 200.0],
-        climber=[1200.0, 100.0, 2000.0, 300.0, 500.0],
-        oneday=[1800.0, 800.0, 600.0, 700.0, 1000.0],
-        has_pcs_data=[true, true, true, true, true],
+        rider = ["GC Star", "Sprinter", "Climber", "Rouleur", "TT Spec"],
+        riderkey = ["gc", "sprint", "climb", "rouleur", "ttspec"],
+        team = ["A", "B", "C", "D", "E"],
+        cost = [20, 16, 18, 10, 14],
+        classraw = ["All Rounder", "Sprinter", "Climber", "Unclassed", "All Rounder"],
+        points = [1500.0, 1200.0, 800.0, 400.0, 600.0],
+        gc = [2000.0, 200.0, 800.0, 600.0, 1200.0],
+        tt = [1500.0, 300.0, 400.0, 500.0, 2000.0],
+        sprint = [300.0, 2000.0, 100.0, 400.0, 200.0],
+        climber = [1200.0, 100.0, 2000.0, 300.0, 500.0],
+        oneday = [1800.0, 800.0, 600.0, 700.0, 1000.0],
+        has_pcs_data = [true, true, true, true, true],
     )
 
-    result = estimate_strengths(rider_df; race_type=:stage)
+    result = estimate_strengths(rider_df; race_type = :stage)
 
     # All per-dim columns are present
     for dsym in (:flat, :hilly, :mountain, :itt, :gc)
@@ -138,28 +138,28 @@ end
     # on :flat by the GC oracle floor (the architectural fix in Phase 1).
     n_riders = 20
     rider_df = DataFrame(
-        rider=["Pedersen-shape"; ["Filler $i" for i in 1:n_riders-1]],
-        riderkey=["pedersen"; ["filler$i" for i in 1:n_riders-1]],
-        team=["TeamA"; fill("Other", n_riders-1)],
-        cost=[20; fill(8, n_riders-1)],
-        classraw=["Sprinter"; fill("Unclassed", n_riders-1)],
-        points=[2500.0; fill(500.0, n_riders-1)],
-        gc=[200.0; fill(400.0, n_riders-1)],
-        tt=[300.0; fill(400.0, n_riders-1)],
-        sprint=[3500.0; fill(200.0, n_riders-1)],
-        climber=[100.0; fill(300.0, n_riders-1)],
-        oneday=[2500.0; fill(500.0, n_riders-1)],
-        has_pcs_data=fill(true, n_riders),
+        rider = ["Pedersen-shape"; ["Filler $i" for i = 1:(n_riders-1)]],
+        riderkey = ["pedersen"; ["filler$i" for i = 1:(n_riders-1)]],
+        team = ["TeamA"; fill("Other", n_riders-1)],
+        cost = [20; fill(8, n_riders-1)],
+        classraw = ["Sprinter"; fill("Unclassed", n_riders-1)],
+        points = [2500.0; fill(500.0, n_riders-1)],
+        gc = [200.0; fill(400.0, n_riders-1)],
+        tt = [300.0; fill(400.0, n_riders-1)],
+        sprint = [3500.0; fill(200.0, n_riders-1)],
+        climber = [100.0; fill(300.0, n_riders-1)],
+        oneday = [2500.0; fill(500.0, n_riders-1)],
+        has_pcs_data = fill(true, n_riders),
     )
 
     # Synthetic GC oracle covering only 3 GC contenders (none of them Pedersen)
     oracle_df = DataFrame(
-        rider=["GC Contender 1", "GC Contender 2", "GC Contender 3"],
-        riderkey=["filler1", "filler2", "filler3"],
-        win_prob=[0.30, 0.20, 0.15],
+        rider = ["GC Contender 1", "GC Contender 2", "GC Contender 3"],
+        riderkey = ["filler1", "filler2", "filler3"],
+        win_prob = [0.30, 0.20, 0.15],
     )
 
-    result = estimate_strengths(rider_df; oracle_df=oracle_df, race_type=:stage)
+    result = estimate_strengths(rider_df; oracle_df = oracle_df, race_type = :stage)
 
     # Pedersen-shape: strong flat, weak GC
     @test result.strength_flat[1] > 1.0
@@ -187,7 +187,7 @@ end
     stages = [flat_stage(1), mountain_stage(2), itt_stage(3)]
 
     # Create synthetic stage strengths
-    base = collect(range(2.0, -2.0, length=n_riders))
+    base = collect(range(2.0, -2.0, length = n_riders))
     stage_strengths = Dict{Symbol,Vector{Float64}}(
         :flat => base .+ 0.3 .* randn(rng, n_riders),
         :hilly => base .+ 0.3 .* randn(rng, n_riders),
@@ -200,8 +200,14 @@ end
 
     rng2 = Random.MersenneTwister(123)
     sim, _diag = simulate_stage_race(
-        stages, stage_strengths, uncertainties, teams, scoring;
-        n_sims=n_sims, cross_stage_alpha=0.7, rng=rng2,
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = n_sims,
+        cross_stage_alpha = 0.7,
+        rng = rng2,
     )
 
     # Correct output dimensions
@@ -211,15 +217,15 @@ end
     @test all(sim .>= 0.0)
 
     # Stronger riders should average more points
-    mean_pts = vec(mean(sim, dims=2))
+    mean_pts = vec(mean(sim, dims = 2))
     @test mean_pts[1] > mean_pts[n_riders]
 
     # At least some riders score non-zero in every simulation
-    @test all(sum(sim, dims=1) .> 0)
+    @test all(sum(sim, dims = 1) .> 0)
 
     # Total points per sim should be reasonable (stage finish + GC + assists + finals)
     # Each stage awards at least positions 1-20 worth of points
-    total_per_sim = vec(sum(sim, dims=1))
+    total_per_sim = vec(sum(sim, dims = 1))
     @test all(total_per_sim .> 0)
 end
 
@@ -242,11 +248,16 @@ end
     teams = ["A", "A", "B", "B", "C"]
 
     sim, _diag = simulate_stage_race(
-        stages, stage_strengths, uncertainties, teams, scoring;
-        n_sims=500, rng=rng,
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 500,
+        rng = rng,
     )
 
-    mean_pts = vec(mean(sim, dims=2))
+    mean_pts = vec(mean(sim, dims = 2))
 
     # Rider 1 should dominate
     @test mean_pts[1] > mean_pts[2]
@@ -271,18 +282,23 @@ end
 
     # 5 distinct teams, 3 riders each
     stage_strengths = Dict{Symbol,Vector{Float64}}(
-        :flat => collect(range(3.0, -3.0, length=n_riders)),
-        :hilly => collect(range(3.0, -3.0, length=n_riders)),
-        :mountain => collect(range(3.0, -3.0, length=n_riders)),
-        :itt => collect(range(3.0, -3.0, length=n_riders)),
-        :ttt => collect(range(3.0, -3.0, length=n_riders)),
+        :flat => collect(range(3.0, -3.0, length = n_riders)),
+        :hilly => collect(range(3.0, -3.0, length = n_riders)),
+        :mountain => collect(range(3.0, -3.0, length = n_riders)),
+        :itt => collect(range(3.0, -3.0, length = n_riders)),
+        :ttt => collect(range(3.0, -3.0, length = n_riders)),
     )
     uncertainties = fill(0.01, n_riders)  # near-deterministic
     teams = repeat(["T1", "T2", "T3", "T4", "T5"], 3)
 
     sim, _diag = simulate_stage_race(
-        stages, stage_strengths, uncertainties, teams, scoring;
-        n_sims=100, rng=rng,
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 100,
+        rng = rng,
     )
 
     # With near-zero uncertainty, the team ranking is deterministic.
@@ -290,7 +306,7 @@ end
     # Before the fix, teams ranked 4th and 5th would get team_class_assist_points[3] = 2
     # instead of final_team_class[4] = 20 and final_team_class[5] = 10.
     team_totals = Dict{String,Float64}()
-    mean_pts = vec(mean(sim, dims=2))
+    mean_pts = vec(mean(sim, dims = 2))
     for (i, t) in enumerate(teams)
         team_totals[t] = get(team_totals, t, 0.0) + mean_pts[i]
     end
@@ -320,22 +336,32 @@ end
     teams = ["A", "A", "A", "A"]
 
     sim_itt, _diag_itt = simulate_stage_race(
-        stages, stage_strengths, uncertainties, teams, scoring;
-        n_sims=100, rng=rng,
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 100,
+        rng = rng,
     )
 
     # Compare with flat stage (same strengths, but assists should apply)
     rng2 = Random.MersenneTwister(42)
     stages_flat = [flat_stage(1)]
     sim_flat, _diag_flat = simulate_stage_race(
-        stages_flat, stage_strengths, uncertainties, teams, scoring;
-        n_sims=100, rng=rng2,
+        stages_flat,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 100,
+        rng = rng2,
     )
 
     # Teammates (riders 2-4) should score more on flat (with assists) than ITT
     # (Rider 1 wins both, but teammates only get assists on flat)
-    mean_itt = vec(mean(sim_itt, dims=2))
-    mean_flat = vec(mean(sim_flat, dims=2))
+    mean_itt = vec(mean(sim_itt, dims = 2))
+    mean_flat = vec(mean(sim_flat, dims = 2))
 
     # Riders 2-4 are teammates of the winner; they get assist on flat but not ITT
     @test mean_flat[2] > mean_itt[2]
@@ -349,7 +375,7 @@ end
     stages = [flat_stage(1), mountain_stage(2), hilly_stage(3)]
     n_riders = 8
 
-    base = collect(range(2.0, -2.0, length=n_riders))
+    base = collect(range(2.0, -2.0, length = n_riders))
     stage_strengths = Dict{Symbol,Vector{Float64}}(
         :flat => copy(base),
         :hilly => copy(base),
@@ -362,20 +388,32 @@ end
 
     rng1 = Random.MersenneTwister(42)
     sim_high, _diag_high = simulate_stage_race(
-        stages, stage_strengths, uncertainties, teams, scoring;
-        n_sims=500, cross_stage_alpha=0.95, rng=rng1,
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 500,
+        cross_stage_alpha = 0.95,
+        rng = rng1,
     )
 
     rng2 = Random.MersenneTwister(42)
     sim_low, _diag_low = simulate_stage_race(
-        stages, stage_strengths, uncertainties, teams, scoring;
-        n_sims=500, cross_stage_alpha=0.1, rng=rng2,
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 500,
+        cross_stage_alpha = 0.1,
+        rng = rng2,
     )
 
     # Different alpha values should produce different point distributions
-    mean_high = vec(mean(sim_high, dims=2))
-    mean_low = vec(mean(sim_low, dims=2))
-    @test !all(isapprox.(mean_high, mean_low; atol=1.0))
+    mean_high = vec(mean(sim_high, dims = 2))
+    mean_low = vec(mean(sim_low, dims = 2))
+    @test !all(isapprox.(mean_high, mean_low; atol = 1.0))
 
     # Both should still have correct output shape and non-negative values
     @test size(sim_high) == (n_riders, 500)
@@ -395,17 +433,27 @@ end
 
     # Build a rider DataFrame with classification columns
     rider_df = DataFrame(
-        rider=["R$i" for i in 1:n_riders],
-        riderkey=["r$i" for i in 1:n_riders],
-        team=repeat(["A", "B", "C", "D"], 5),
-        cost=repeat([15, 12, 10, 8, 5], 4),
-        classraw=repeat(
-            ["All Rounder", "All Rounder", "Climber", "Climber", "Climber",
-                "Sprinter", "Sprinter", "Unclassed", "Unclassed", "Unclassed"],
+        rider = ["R$i" for i = 1:n_riders],
+        riderkey = ["r$i" for i = 1:n_riders],
+        team = repeat(["A", "B", "C", "D"], 5),
+        cost = repeat([15, 12, 10, 8, 5], 4),
+        classraw = repeat(
+            [
+                "All Rounder",
+                "All Rounder",
+                "Climber",
+                "Climber",
+                "Climber",
+                "Sprinter",
+                "Sprinter",
+                "Unclassed",
+                "Unclassed",
+                "Unclassed",
+            ],
             2,
         ),
-        strength=Float64.(repeat([2.0, 1.5, 1.2, 0.8, 0.4], 4)),
-        uncertainty=fill(0.5, n_riders),
+        strength = Float64.(repeat([2.0, 1.5, 1.2, 0.8, 0.4], 4)),
+        uncertainty = fill(0.5, n_riders),
     )
 
     # Create stage strengths
@@ -424,10 +472,10 @@ end
         stage_strengths,
         scoring,
         build_model_stage;
-        team_size=9,
-        n_resamples=50,
-        rng=rng,
-        risk_aversion=0.5,
+        team_size = 9,
+        n_resamples = 50,
+        rng = rng,
+        risk_aversion = 0.5,
     )
 
     # Output columns are present
@@ -477,12 +525,12 @@ end
     @test bn.points_jersey.mountain == 2.5
 
     # Pure flat stage gets zero breakaway noise on both events
-    flat_w = (flat=1.0, hilly=0.0, mountain=0.0, itt=0.0)
+    flat_w = (flat = 1.0, hilly = 0.0, mountain = 0.0, itt = 0.0)
     @test Velogames._breakaway_sd(:stage_finish, flat_w, bn) == 0.0
     @test Velogames._breakaway_sd(:points_jersey, flat_w, bn) == 0.0
 
     # Pure mountain stage gets the full mountain σ
-    mtn_w = (flat=0.0, hilly=0.0, mountain=1.0, itt=0.0)
+    mtn_w = (flat = 0.0, hilly = 0.0, mountain = 1.0, itt = 0.0)
     @test Velogames._breakaway_sd(:stage_finish, mtn_w, bn) == 1.5
     @test Velogames._breakaway_sd(:points_jersey, mtn_w, bn) == 2.5
 
@@ -504,7 +552,7 @@ end
 
     # Gamma sampler (shape ≥ 1): strictly positive, terminates, mean ≈ shape.
     rng = Random.MersenneTwister(1)
-    g = [Velogames._rand_gamma(rng, 2.0) for _ in 1:20000]
+    g = [Velogames._rand_gamma(rng, 2.0) for _ = 1:20000]
     @test all(g .> 0.0)
     @test all(isfinite, g)
     @test abs(mean(g) - 2.0) < 0.1
@@ -513,28 +561,52 @@ end
 @testset "daily mountains classification scoring" begin
     scoring = SCORING_GRAND_TOUR
     n = 8
-    mountain_s = collect(range(3.0, -3.0, length=n))  # rider 1 = best climber
+    mountain_s = collect(range(3.0, -3.0, length = n))  # rider 1 = best climber
     noisy = copy(mountain_s)
     blend = copy(mountain_s)                            # noise component = noisy - blend = 0
     kom_str = zeros(n)
 
     # Mountain stage: top climbers bank daily_mountains_class points.
     stage_pts = zeros(n)
-    Velogames._score_daily_mountains!(stage_pts, mountain_s, noisy, blend, kom_str,
-        scoring, :mountain, n)
+    Velogames._score_daily_mountains!(
+        stage_pts,
+        mountain_s,
+        noisy,
+        blend,
+        kom_str,
+        scoring,
+        :mountain,
+        n,
+    )
     @test stage_pts[1] == scoring.daily_mountains_class[1]        # best climber → top KOM
     @test stage_pts[6] == scoring.daily_mountains_class[6]        # 6th → last scoring slot
     @test stage_pts[7] == 0 && stage_pts[8] == 0                  # outside top 6
 
     # Hilly stage also scores; ITT / flat do not.
     stage_pts = zeros(n)
-    Velogames._score_daily_mountains!(stage_pts, mountain_s, noisy, blend, kom_str,
-        scoring, :hilly, n)
+    Velogames._score_daily_mountains!(
+        stage_pts,
+        mountain_s,
+        noisy,
+        blend,
+        kom_str,
+        scoring,
+        :hilly,
+        n,
+    )
     @test stage_pts[1] == scoring.daily_mountains_class[1]
     for st in (:flat, :itt, :ttt)
         stage_pts = zeros(n)
-        Velogames._score_daily_mountains!(stage_pts, mountain_s, noisy, blend, kom_str,
-            scoring, st, n)
+        Velogames._score_daily_mountains!(
+            stage_pts,
+            mountain_s,
+            noisy,
+            blend,
+            kom_str,
+            scoring,
+            st,
+            n,
+        )
         @test all(stage_pts .== 0)
     end
 end
@@ -543,31 +615,59 @@ end
     scoring = SCORING_GRAND_TOUR
     stages = [mountain_stage(1), mountain_stage(2), mountain_stage(3), mountain_stage(4)]
     n_riders = 10
-    base = collect(range(2.0, -2.0, length=n_riders))
+    base = collect(range(2.0, -2.0, length = n_riders))
     stage_strengths = Dict{Symbol,Vector{Float64}}(
-        :flat => copy(base), :hilly => copy(base),
-        :mountain => copy(base), :itt => copy(base), :ttt => copy(base),
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
     )
     unc = fill(0.5, n_riders)
     teams = repeat(["A", "B"], 5)
 
     # Attrition OFF (empty rider_classes) — reproduces pre-A2 behaviour.
     rng1 = Random.MersenneTwister(99)
-    sim_off, _ = simulate_stage_race(stages, stage_strengths, unc, teams, scoring;
-        n_sims=100, rng=rng1, rider_classes=String[])
+    sim_off, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        unc,
+        teams,
+        scoring;
+        n_sims = 100,
+        rng = rng1,
+        rider_classes = String[],
+    )
     # Gate is deterministic: same seed + empty classes ⇒ identical output.
     rng2 = Random.MersenneTwister(99)
-    sim_off2, _ = simulate_stage_race(stages, stage_strengths, unc, teams, scoring;
-        n_sims=100, rng=rng2, rider_classes=String[])
+    sim_off2, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        unc,
+        teams,
+        scoring;
+        n_sims = 100,
+        rng = rng2,
+        rider_classes = String[],
+    )
     @test sim_off == sim_off2
 
     # Attrition ON with a high hazard ⇒ riders abandon and stop scoring.
     hi = StageSimConfig(
-        attrition_hazard=(flat=0.5, hilly=0.5, mountain=0.5, itt=0.5, ttt=0.5),
+        attrition_hazard = (flat = 0.5, hilly = 0.5, mountain = 0.5, itt = 0.5, ttt = 0.5),
     )
     rng3 = Random.MersenneTwister(99)
-    sim_on, _ = simulate_stage_race(stages, stage_strengths, unc, teams, scoring;
-        n_sims=100, rng=rng3, rider_classes=fill("sprinter", n_riders), sim_config=hi)
+    sim_on, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        unc,
+        teams,
+        scoring;
+        n_sims = 100,
+        rng = rng3,
+        rider_classes = fill("sprinter", n_riders),
+        sim_config = hi,
+    )
 
     @test all(isfinite, sim_off)                 # no NaN / Inf leaks into totals
     @test all(isfinite, sim_on)
@@ -583,14 +683,22 @@ end
     scoring = SCORING_GRAND_TOUR
     stages = [flat_stage(1), mountain_stage(2)]
     n_riders = 6
-    base = collect(range(2.0, -2.0, length=n_riders))
+    base = collect(range(2.0, -2.0, length = n_riders))
     stage_strengths = Dict{Symbol,Vector{Float64}}(
-        :flat => copy(base), :hilly => copy(base),
-        :mountain => copy(base), :itt => copy(base), :ttt => copy(base),
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
     )
     result = simulate_stage_race(
-        stages, stage_strengths, fill(0.5, n_riders),
-        repeat(["A", "B"], 3), scoring; n_sims=20, rng=rng,
+        stages,
+        stage_strengths,
+        fill(0.5, n_riders),
+        repeat(["A", "B"], 3),
+        scoring;
+        n_sims = 20,
+        rng = rng,
     )
 
     @test result isa Tuple
@@ -621,8 +729,8 @@ end
     )
 
     riders = DataFrame(
-        rider=["Alpha", "Bravo", "Charlie", "Delta", "Echo"],
-        team=["T1", "T2", "T3", "T4", "T5"],
+        rider = ["Alpha", "Bravo", "Charlie", "Delta", "Echo"],
+        team = ["T1", "T2", "T3", "T4", "T5"],
     )
 
     html = format_classification_table(diag, :gc, riders)
@@ -635,11 +743,17 @@ end
     # Empty case: no riders with non-trivial probability
     empty_diag = Velogames.StageRaceDiagnostics(
         n_sims,
-        zeros(Int, 0, 0, 0), zeros(Int, 0, 0),
-        zeros(Int, n_riders, 30), zeros(Int, n_riders, 10), zeros(Int, n_riders, 10),
+        zeros(Int, 0, 0, 0),
+        zeros(Int, 0, 0),
+        zeros(Int, n_riders, 30),
+        zeros(Int, n_riders, 10),
+        zeros(Int, n_riders, 10),
         Dict{String,Vector{Int}}(),
     )
-    @test occursin("No riders with non-trivial", format_classification_table(empty_diag, :gc, riders))
+    @test occursin(
+        "No riders with non-trivial",
+        format_classification_table(empty_diag, :gc, riders),
+    )
 end
 
 @testset "format_team_classification renders dynamic top-K column" begin
@@ -650,8 +764,11 @@ end
     )
     diag = Velogames.StageRaceDiagnostics(
         n_sims,
-        zeros(Int, 0, 0, 0), zeros(Int, 0, 0),
-        zeros(Int, 0, 0), zeros(Int, 0, 0), zeros(Int, 0, 0),
+        zeros(Int, 0, 0, 0),
+        zeros(Int, 0, 0),
+        zeros(Int, 0, 0),
+        zeros(Int, 0, 0),
+        zeros(Int, 0, 0),
         team_pos,
     )
 
@@ -697,19 +814,31 @@ end
     scoring = SCORING_GRAND_TOUR
     stages = [mountain_stage(1), ttt_stage(2)]
     n_riders = 10
-    base = collect(range(2.0, -2.0, length=n_riders))
+    base = collect(range(2.0, -2.0, length = n_riders))
     stage_strengths = Dict{Symbol,Vector{Float64}}(
-        :flat => copy(base), :hilly => copy(base),
-        :mountain => copy(base), :itt => copy(base), :ttt => copy(base),
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
     )
     unc = fill(0.3, n_riders)
     teams = repeat(["A", "B"], 5)
     hi = StageSimConfig(
-        attrition_hazard=(flat=0.4, hilly=0.4, mountain=0.4, itt=0.0, ttt=0.0),
+        attrition_hazard = (flat = 0.4, hilly = 0.4, mountain = 0.4, itt = 0.0, ttt = 0.0),
     )
     rng = Random.MersenneTwister(7)
-    sim, _ = simulate_stage_race(stages, stage_strengths, unc, teams, scoring;
-        n_sims=200, rng=rng, rider_classes=fill("sprinter", n_riders), sim_config=hi)
+    sim, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        unc,
+        teams,
+        scoring;
+        n_sims = 200,
+        rng = rng,
+        rider_classes = fill("sprinter", n_riders),
+        sim_config = hi,
+    )
     @test all(isfinite, sim)
     @test all(sim .>= 0.0)
     @test sum(sim) > 0.0
@@ -720,10 +849,11 @@ end
     # race publishes no such jersey) yields a zero-column position-count matrix;
     # the table renderer must not index column 1 (BoundsError) but degrade.
     n_riders = 3
-    riders = DataFrame(rider=["A", "B", "C"], team=["T1", "T2", "T3"])
+    riders = DataFrame(rider = ["A", "B", "C"], team = ["T1", "T2", "T3"])
     diag = Velogames.StageRaceDiagnostics(
         100,
-        zeros(Int, 0, 0, 0), zeros(Int, 0, 0),
+        zeros(Int, 0, 0, 0),
+        zeros(Int, 0, 0),
         zeros(Int, n_riders, 30),   # gc: populated
         zeros(Int, n_riders, 0),    # points: EMPTY (0 scoring positions)
         zeros(Int, n_riders, 10),   # mountains
@@ -756,21 +886,21 @@ end
     # (climber_r missing). B must fall back to career climber points, not collapse
     # to a spurious zero that would sink its mountain strength below a sprinter's.
     rider_df = DataFrame(
-        rider=["Climber A", "Climber B", "Sprinter"],
-        riderkey=["a", "b", "s"],
-        team=["A", "B", "C"],
-        cost=[18, 18, 16],
-        classraw=["Climber", "Climber", "Sprinter"],
-        points=[800.0, 800.0, 1200.0],
-        gc=[800.0, 800.0, 200.0],
-        tt=[400.0, 400.0, 300.0],
-        sprint=[100.0, 100.0, 2000.0],
-        climber=[2000.0, 2000.0, 100.0],
-        oneday=[600.0, 600.0, 800.0],
-        has_pcs_data=[true, true, true],
-        climber_r=[1500.0, missing, 50.0],   # B's recency scrape failed
+        rider = ["Climber A", "Climber B", "Sprinter"],
+        riderkey = ["a", "b", "s"],
+        team = ["A", "B", "C"],
+        cost = [18, 18, 16],
+        classraw = ["Climber", "Climber", "Sprinter"],
+        points = [800.0, 800.0, 1200.0],
+        gc = [800.0, 800.0, 200.0],
+        tt = [400.0, 400.0, 300.0],
+        sprint = [100.0, 100.0, 2000.0],
+        climber = [2000.0, 2000.0, 100.0],
+        oneday = [600.0, 600.0, 800.0],
+        has_pcs_data = [true, true, true],
+        climber_r = [1500.0, missing, 50.0],   # B's recency scrape failed
     )
-    result = estimate_strengths(rider_df; race_type=:stage)
+    result = estimate_strengths(rider_df; race_type = :stage)
     # B (missing recency, strong career) still out-climbs the sprinter on :mountain.
     @test result.strength_mountain[2] > result.strength_mountain[3]
     # And B reads as a climber (mountain > flat), i.e. not zeroed out.
@@ -784,18 +914,35 @@ end
     # than over mountain stages (gc_sep≈1, full aleatoric GC time gaps).
     scoring = SCORING_GRAND_TOUR
     n_riders = 8
-    base = collect(range(3.0, -3.0, length=n_riders))   # rider 1 is the favourite
+    base = collect(range(3.0, -3.0, length = n_riders))   # rider 1 is the favourite
     stage_strengths = Dict{Symbol,Vector{Float64}}(
-        :flat => copy(base), :hilly => copy(base),
-        :mountain => copy(base), :itt => copy(base), :ttt => copy(base),
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
     )
     unc = fill(1.5, n_riders)                            # large ⇒ noise bites
-    teams = ["T$i" for i in 1:n_riders]
+    teams = ["T$i" for i = 1:n_riders]
 
-    _, diag_flat = simulate_stage_race([flat_stage(i) for i in 1:4],
-        stage_strengths, unc, teams, scoring; n_sims=2000, rng=Random.MersenneTwister(3))
-    _, diag_mtn = simulate_stage_race([mountain_stage(i) for i in 1:4],
-        stage_strengths, unc, teams, scoring; n_sims=2000, rng=Random.MersenneTwister(3))
+    _, diag_flat = simulate_stage_race(
+        [flat_stage(i) for i = 1:4],
+        stage_strengths,
+        unc,
+        teams,
+        scoring;
+        n_sims = 2000,
+        rng = Random.MersenneTwister(3),
+    )
+    _, diag_mtn = simulate_stage_race(
+        [mountain_stage(i) for i = 1:4],
+        stage_strengths,
+        unc,
+        teams,
+        scoring;
+        n_sims = 2000,
+        rng = Random.MersenneTwister(3),
+    )
 
     @test diag_flat.final_gc_position_counts[1, 1] > diag_mtn.final_gc_position_counts[1, 1]
 end

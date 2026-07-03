@@ -202,7 +202,7 @@ function _build_pcs_slug_map(
 )
     slug_map = Dict{String,String}()
     try
-        startlist_df = getpcsracestartlist(pcs_slug, year; cache_config, force_refresh)
+        startlist_df = getpcs_race_startlist(pcs_slug, year; cache_config, force_refresh)
         if nrow(startlist_df) > 0 && :pcs_slug in propertynames(startlist_df)
             for row in eachrow(startlist_df)
                 if !isempty(row.pcs_slug)
@@ -243,7 +243,7 @@ function _supplement_missing_pcs!(
     isempty(missing_names) && return
 
     @debug "Supplementing $(length(missing_names)) riders with missing archived PCS data"
-    fresh = getpcsriderpts_batch(missing_names; slug_map, cache_config, force_refresh)
+    fresh = getpcs_rider_pts_batch(missing_names; slug_map, cache_config, force_refresh)
     for frow in eachrow(fresh)
         idx = findfirst(==(frow.riderkey), archived_pcs.riderkey)
         idx === nothing && continue
@@ -260,7 +260,7 @@ function prefetch_race_data(
     force_refresh::Bool = false,
 )
     # --- 1. Fetch actual PCS results (ground truth) ---
-    actual_df = getpcsraceresults(
+    actual_df = getpcs_race_results(
         race.pcs_slug,
         race.year;
         cache_config = cache_config,
@@ -317,7 +317,7 @@ function prefetch_race_data(
         archived_pcs
     else
         @debug "No archived PCS scores for $(race.name) $(race.year) — using current PCS data"
-        getpcsriderpts_batch(
+        getpcs_rider_pts_batch(
             rider_names;
             slug_map = pcs_slug_map,
             cache_config = cache_config,
@@ -358,7 +358,7 @@ function prefetch_race_data(
     else
         if !isempty(pcs_slug_map)
             try
-                seasons_df = getpcsriderseasons_batch(
+                seasons_df = getpcs_rider_seasons_batch(
                     pcs_slug_map;
                     cache_config = cache_config,
                     force_refresh = force_refresh,
@@ -391,15 +391,15 @@ function prefetch_race_data(
     end
 
     return RaceData(;
-        rider_df=riderdf,
-        race_history_df=race_history_df,
-        odds_df=odds_df,
-        oracle_df=oracle_df,
-        vg_history_df=vg_history_df,
-        qualitative_df=qualitative_df,
-        form_df=form_df,
-        seasons_df=seasons_df,
-        actual_df=actual_df,
+        rider_df = riderdf,
+        race_history_df = race_history_df,
+        odds_df = odds_df,
+        oracle_df = oracle_df,
+        vg_history_df = vg_history_df,
+        qualitative_df = qualitative_df,
+        form_df = form_df,
+        seasons_df = seasons_df,
+        actual_df = actual_df,
     )
 end
 
@@ -453,7 +453,7 @@ end
 # ---------------------------------------------------------------------------
 
 """
-    backtest_race(race, data::RaceData; signals, bayesian_config, n_sims) -> BacktestResult
+    backtest_race(race, data::RaceData; signals, config, n_sims) -> BacktestResult
 
 Evaluate predictions against actual results using pre-fetched data. No I/O —
 signal selection operates on copies of the pre-fetched data.
@@ -462,7 +462,7 @@ function backtest_race(
     race::BacktestRace,
     data::RaceData;
     signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
-    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     n_sims::Int = 2000,
     simulation_df::Union{Int,Nothing} = nothing,
     domestique_discount::Float64 = 0.0,
@@ -537,7 +537,7 @@ function backtest_race(
         seasons_df = seasons_df,
         n_sims = n_sims,
         race_type = :oneday,
-        bayesian_config = bayesian_config,
+        config = config,
         race_year = race.year,
         race_date = race.date,
         simulation_df = simulation_df,
@@ -691,7 +691,7 @@ for repeated evaluations of the same race.
 function backtest_race(
     race::BacktestRace;
     signals::Vector{Symbol} = [:pcs, :vg_season, :race_history],
-    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     n_sims::Int = 2000,
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
@@ -706,7 +706,7 @@ function backtest_race(
         race,
         data;
         signals = signals,
-        bayesian_config = bayesian_config,
+        config = config,
         n_sims = n_sims,
         simulation_df = simulation_df,
         domestique_discount = domestique_discount,
@@ -724,7 +724,7 @@ function _build_rider_df(
 )
     vg_url = vg_classics_url(race.year)
     try
-        vg_df = getvgriders(
+        vg_df = getvg_riders(
             vg_url;
             cache_config = cache_config,
             force_refresh = force_refresh,
@@ -772,7 +772,11 @@ function _compute_cumulative_vg_points(
 
     if vg_racelist === nothing
         vg_racelist = try
-            getvgracelist(race.year; cache_config = cache_config, force_refresh = force_refresh)
+            getvg_race_list(
+                race.year;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
         catch e
             @debug "Cannot fetch VG race list for $(race.year): $e"
             return nothing
@@ -792,7 +796,7 @@ function _compute_cumulative_vg_points(
 
         # Fetch results for this earlier race
         try
-            vg_df = getvgraceresults(
+            vg_df = getvg_race_results(
                 race.year,
                 row.race_number;
                 cache_config = cache_config,
@@ -866,7 +870,7 @@ function backtest_season(
     races::Vector{BacktestRace};
     race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
     signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
-    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     n_sims::Int = 2000,
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
@@ -883,7 +887,7 @@ function backtest_season(
                     race,
                     race_data[race];
                     signals = signals,
-                    bayesian_config = bayesian_config,
+                    config = config,
                     n_sims = n_sims,
                     simulation_df = simulation_df,
                     domestique_discount = domestique_discount,
@@ -894,7 +898,7 @@ function backtest_season(
                 backtest_race(
                     race;
                     signals = signals,
-                    bayesian_config = bayesian_config,
+                    config = config,
                     n_sims = n_sims,
                     cache_config = cache_config,
                     force_refresh = force_refresh,
@@ -995,322 +999,3 @@ function summarise_backtest(results::Vector{BacktestResult})
     end
     return df
 end
-
-# ---------------------------------------------------------------------------
-# Ablation study
-# ---------------------------------------------------------------------------
-
-"""Signal subsets for ablation study."""
-const _BASELINE_SIGNALS = [:pcs, :vg_season, :race_history, :vg_history, :form]
-
-const ABLATION_SETS = [
-    ("no_signals", Symbol[]),
-    ("pcs_only", [:pcs]),
-    ("no_pcs", filter(!=(:pcs), _BASELINE_SIGNALS)),
-    ("no_vg_season", filter(!=(:vg_season), _BASELINE_SIGNALS)),
-    ("no_race_history", filter(!=(:race_history), _BASELINE_SIGNALS)),
-    ("no_vg_history", filter(!=(:vg_history), _BASELINE_SIGNALS)),
-    ("no_form", filter(!=(:form), _BASELINE_SIGNALS)),
-    ("baseline", copy(_BASELINE_SIGNALS)),
-    ("baseline+odds", [_BASELINE_SIGNALS; :odds]),
-    ("baseline+oracle", [_BASELINE_SIGNALS; :oracle]),
-]
-
-"""
-    ablation_study(races::Vector{BacktestRace}; race_data=nothing, kwargs...) -> DataFrame
-
-Run backtesting with each signal subset to measure marginal signal value.
-
-When `race_data` is provided, skips the internal pre-fetch (avoiding redundant I/O).
-Otherwise pre-fetches all race data once, then iterates signal subsets using
-compute-only evaluation. Returns a DataFrame with a `signal_set` column.
-"""
-function ablation_study(
-    races::Vector{BacktestRace};
-    race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
-    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
-    n_sims::Int = 2000,
-    cache_config::CacheConfig = DEFAULT_CACHE,
-    force_refresh::Bool = false,
-    simulation_df::Union{Int,Nothing} = nothing,
-    domestique_discount::Float64 = 0.0,
-)
-    if race_data === nothing
-        @info "Ablation study: pre-fetching data for $(length(races)) races..."
-        race_data = prefetch_all_races(
-            races;
-            cache_config = cache_config,
-            force_refresh = force_refresh,
-        )
-    else
-        @info "Ablation study: using pre-fetched data for $(length(race_data)) races"
-    end
-
-    all_dfs = DataFrame[]
-    available_races = [r for r in races if haskey(race_data, r)]
-
-    for (label, sigs) in ABLATION_SETS
-        @info "Running ablation: $label (signals: $(join(string.(sigs), ", ")))"
-        results = backtest_season(
-            available_races;
-            race_data = race_data,
-            signals = sigs,
-            bayesian_config = bayesian_config,
-            n_sims = n_sims,
-            simulation_df = simulation_df,
-            domestique_discount = domestique_discount,
-        )
-        if !isempty(results)
-            summary = summarise_backtest(results)
-            summary[!, :signal_set] .= label
-            push!(all_dfs, summary)
-        end
-    end
-
-    return isempty(all_dfs) ? DataFrame() : vcat(all_dfs...; cols = :union)
-end
-
-# ---------------------------------------------------------------------------
-# Hyperparameter tuning
-# ---------------------------------------------------------------------------
-
-"""Bounded parameter ranges for hyperparameter search.
-
-Only 5 parameters: 3 precision scale factors (controlling signal group weights)
-plus 2 decay rates. The within-group ratios are fixed from domain knowledge.
-With ~100 historical observations, 5 parameters gives ~20 obs/param — far more
-reliable than the previous 12-parameter search.
-"""
-const PARAM_BOUNDS = (
-    market_precision_scale = (0.3, 3.0),
-    history_precision_scale = (0.3, 3.0),
-    ability_precision_scale = (0.3, 3.0),
-    hist_decay_rate = (0.3, 5.0),
-    vg_hist_decay_rate = (0.3, 3.0),
-)
-
-"""Sample a random BayesianConfig within PARAM_BOUNDS."""
-function _random_bayesian_config(rng::AbstractRNG = Random.default_rng())
-    _rand(bounds) = rand(rng) * (bounds[2] - bounds[1]) + bounds[1]
-    BayesianConfig(
-        market_precision_scale = _rand(PARAM_BOUNDS.market_precision_scale),
-        history_precision_scale = _rand(PARAM_BOUNDS.history_precision_scale),
-        ability_precision_scale = _rand(PARAM_BOUNDS.ability_precision_scale),
-        hist_decay_rate = _rand(PARAM_BOUNDS.hist_decay_rate),
-        vg_hist_decay_rate = _rand(PARAM_BOUNDS.vg_hist_decay_rate),
-    )
-end
-
-"""Extract tunable parameter values from a BayesianConfig."""
-function _config_to_dict(config::BayesianConfig)
-    Dict(
-        :market_precision_scale => config.market_precision_scale,
-        :history_precision_scale => config.history_precision_scale,
-        :ability_precision_scale => config.ability_precision_scale,
-        :hist_decay_rate => config.hist_decay_rate,
-        :vg_hist_decay_rate => config.vg_hist_decay_rate,
-    )
-end
-
-"""Compute an objective score from backtest results."""
-function _compute_objective_score(results::Vector{BacktestResult}, objective::Symbol)
-    base_metric = objective == :calibrated_rho ? :spearman_rho : objective
-    scores = _extract_metric(results, base_metric)
-    valid = filter(!isnan, scores)
-    score = isempty(valid) ? NaN : mean(valid)
-
-    if objective == :calibrated_rho && !isnan(score)
-        all_z = vcat([r.calibration_z_scores for r in results]...)
-        if length(all_z) > 10
-            z_std = std(all_z)
-            score -= 0.1 * (z_std - 1.0)^2
-        end
-    end
-
-    return score, length(valid)
-end
-
-"""
-    tune_hyperparameters(races; race_data, objective, n_iter, signals, n_sims, cv, ...) -> (BayesianConfig, DataFrame)
-
-Tune BayesianConfig via random search. When `cv=true`, uses leave-one-year-out
-cross-validation for honest out-of-sample estimates.
-
-Returns a tuple of (best BayesianConfig, evaluation log DataFrame).
-"""
-function tune_hyperparameters(
-    races::Vector{BacktestRace};
-    race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
-    objective::Symbol = :spearman_rho,
-    n_iter::Int = 100,
-    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
-    n_sims::Int = 2000,
-    cache_config::CacheConfig = DEFAULT_CACHE,
-    force_refresh::Bool = false,
-    rng::AbstractRNG = Random.default_rng(),
-    simulation_df::Union{Int,Nothing} = nothing,
-    domestique_discount::Float64 = 0.0,
-    cv::Bool = false,
-)
-    if race_data === nothing
-        @info "Tuning: pre-fetching data for $(length(races)) races..."
-        race_data = prefetch_all_races(
-            races;
-            cache_config = cache_config,
-            force_refresh = force_refresh,
-        )
-    else
-        @info "Tuning: using pre-fetched data for $(length(race_data)) races"
-    end
-    available_races = [r for r in races if haskey(race_data, r)]
-
-    cv_mode = cv ? "leave-one-year-out CV" : "in-sample"
-    @info "Random search: $n_iter candidates, $(length(available_races)) races ($cv_mode)"
-
-    # Include default config as candidate 0
-    candidates = BayesianConfig[DEFAULT_BAYESIAN_CONFIG]
-    for _ = 1:n_iter
-        push!(candidates, _random_bayesian_config(rng))
-    end
-
-    # Year folds for CV
-    years = sort(unique(r.year for r in available_races))
-
-    # Evaluate each candidate
-    log_rows = []
-    best_score = -Inf
-    best_config = DEFAULT_BAYESIAN_CONFIG
-
-    for (i, config) in enumerate(candidates)
-        label = i == 1 ? "default" : "random_$i"
-
-        score, n_races = if cv && length(years) > 1
-            # Leave-one-year-out: evaluate on held-out year only
-            fold_scores = Float64[]
-            fold_n = 0
-            for held_out_year in years
-                test_races = filter(r -> r.year == held_out_year, available_races)
-                results = backtest_season(
-                    test_races;
-                    race_data = race_data,
-                    signals = signals,
-                    bayesian_config = config,
-                    n_sims = n_sims,
-                    simulation_df = simulation_df,
-                    domestique_discount = domestique_discount,
-                )
-                if !isempty(results)
-                    s, n = _compute_objective_score(results, objective)
-                    if !isnan(s)
-                        push!(fold_scores, s)
-                        fold_n += n
-                    end
-                end
-            end
-            isempty(fold_scores) ? (NaN, 0) : (mean(fold_scores), fold_n)
-        else
-            results = backtest_season(
-                available_races;
-                race_data = race_data,
-                signals = signals,
-                bayesian_config = config,
-                n_sims = n_sims,
-                simulation_df = simulation_df,
-                domestique_discount = domestique_discount,
-            )
-            isempty(results) ? (NaN, 0) : _compute_objective_score(results, objective)
-        end
-
-        if n_races == 0
-            continue
-        end
-
-        params = _config_to_dict(config)
-        push!(
-            log_rows,
-            merge(
-                params,
-                Dict(:candidate => label, :mean_score => score, :n_races => n_races),
-            ),
-        )
-        @info "  [$i/$(length(candidates))] $label: $objective = $(round(score, digits=4))"
-
-        if !isnan(score) && score > best_score
-            best_score = score
-            best_config = config
-        end
-    end
-
-    log_df = DataFrame(log_rows)
-    sort!(log_df, :mean_score, rev = true)
-
-    @info "Best config: $(round(best_score, digits=4)) ($objective)"
-    return best_config, log_df
-end
-
-
-"""Extract a specific metric from BacktestResult vector."""
-function _extract_metric(results::Vector{BacktestResult}, metric::Symbol)
-    if metric == :spearman_rho
-        return [r.spearman_rho for r in results]
-    elseif metric == :top10_overlap
-        return Float64[r.top10_overlap for r in results]
-    elseif metric == :top5_overlap
-        return Float64[r.top5_overlap for r in results]
-    elseif metric == :points_captured_ratio
-        return [r.points_captured_ratio for r in results]
-    elseif metric == :mean_abs_rank_error
-        # Lower is better, so negate for maximisation
-        return [-r.mean_abs_rank_error for r in results]
-    else
-        error("Unknown metric: $metric")
-    end
-end
-
-# ---------------------------------------------------------------------------
-# Risk aversion tuning
-# ---------------------------------------------------------------------------
-
-"""
-    tune_domestique_discount(races; discounts, objective, ...) -> (Float64, DataFrame)
-
-Grid search over domestique discount values. Default objective is `points_captured_ratio`.
-"""
-function tune_domestique_discount(
-    races::Vector{BacktestRace};
-    discounts::Vector{Float64} = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0],
-    objective::Symbol = :points_captured_ratio,
-    race_data::Union{Dict{BacktestRace,RaceData},Nothing} = nothing,
-    signals::Vector{Symbol} = [:pcs, :vg_season, :race_history, :vg_history],
-    bayesian_config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
-    n_sims::Int = 2000,
-    simulation_df::Union{Int,Nothing} = nothing,
-)
-    best_discount = 0.0
-    best_score = -Inf
-    log_rows = NamedTuple{(:discount, :mean_score),Tuple{Float64,Float64}}[]
-
-    for d in discounts
-        results = backtest_season(
-            races;
-            race_data = race_data,
-            signals = signals,
-            bayesian_config = bayesian_config,
-            n_sims = n_sims,
-            simulation_df = simulation_df,
-            domestique_discount = d,
-        )
-        score, _ = _compute_objective_score(results, objective)
-        push!(log_rows, (discount = d, mean_score = score))
-        @info "discount=$(d): $objective=$(round(score, digits=4))"
-
-        if !isnan(score) && score > best_score
-            best_score = score
-            best_discount = d
-        end
-    end
-
-    @info "Best discount=$(best_discount) with $objective=$(round(best_score, digits=4))"
-    return best_discount, DataFrame(log_rows)
-end
-

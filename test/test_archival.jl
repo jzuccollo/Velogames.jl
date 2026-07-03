@@ -40,7 +40,8 @@
     for (data_type, df, check_col) in archive_cases
         year = data_type == "vg_results" ? 2024 : 2025
         save_race_snapshot(df, data_type, "test-race", year; archive_dir = test_archive)
-        loaded = load_race_snapshot(data_type, "test-race", year; archive_dir = test_archive)
+        loaded =
+            load_race_snapshot(data_type, "test-race", year; archive_dir = test_archive)
         @test loaded !== nothing
         @test nrow(loaded) == nrow(df)
         @test check_col in propertynames(loaded)

@@ -1,8 +1,9 @@
 """
 Prospective evaluation: compare archived predictions against actual race results.
 
-Loads predictions and results from `~/.velogames_archive/` and computes the same
-metrics as the backtesting framework (Spearman rho, top-N overlap, signal shifts).
+Loads predictions and results from the archive (`DEFAULT_ARCHIVE_DIR`, under
+`~/Dropbox/code/velogames/archive/`) and computes the same metrics as the
+backtesting framework (Spearman rho, top-N overlap, signal shifts).
 """
 
 struct ProspectiveResult
@@ -126,11 +127,18 @@ function prospective_season_summary(year::Int; archive_dir::String = DEFAULT_ARC
         isfile(feather_path) || continue
 
         # Auto-archive PCS results if predictions exist but results don't
-        if load_race_snapshot("pcs_results", pcs_slug, year; archive_dir = archive_dir) === nothing
+        if load_race_snapshot("pcs_results", pcs_slug, year; archive_dir = archive_dir) ===
+           nothing
             try
-                pcs_results = getpcsraceresults(pcs_slug, year)
+                pcs_results = getpcs_race_results(pcs_slug, year)
                 if nrow(pcs_results) > 0
-                    save_race_snapshot(pcs_results, "pcs_results", pcs_slug, year; archive_dir = archive_dir)
+                    save_race_snapshot(
+                        pcs_results,
+                        "pcs_results",
+                        pcs_slug,
+                        year;
+                        archive_dir = archive_dir,
+                    )
                     @info "Auto-archived PCS results for $pcs_slug $year"
                 end
             catch e
@@ -200,12 +208,18 @@ function prospective_pit_values(
             try
                 race_info = _find_race_by_slug(pcs_slug)
                 if race_info !== nothing
-                    vg_racelist = getvgracelist(year)
+                    vg_racelist = getvg_race_list(year)
                     race_num = match_vg_race_number(race_info.name, vg_racelist)
                     if race_num !== nothing
-                        vg_results = getvgraceresults(year, race_num)
+                        vg_results = getvg_race_results(year, race_num)
                         if vg_results !== nothing && nrow(vg_results) > 0
-                            save_race_snapshot(vg_results, "vg_results", pcs_slug, year; archive_dir = archive_dir)
+                            save_race_snapshot(
+                                vg_results,
+                                "vg_results",
+                                pcs_slug,
+                                year;
+                                archive_dir = archive_dir,
+                            )
                             @info "Auto-archived VG results for $pcs_slug $year"
                         end
                     end
@@ -262,7 +276,8 @@ function prospective_pit_values(
 
         # Regenerate draws
         sim_vg_points = simulate_vg_draws(
-            predictions, scoring;
+            predictions,
+            scoring;
             n_draws = n_draws,
             breakaway_rates = b_rates,
             breakaway_mean_sectors = b_sectors,
@@ -305,9 +320,7 @@ function prospective_pit_summary(pit_values::DataFrame; scored_only::Bool = true
 
     # Kolmogorov-Smirnov statistic against uniform(0,1)
     sorted = sort(pits)
-    ks = maximum(
-        max(abs(sorted[i] - (i - 1) / n), abs(sorted[i] - i / n)) for i in 1:n
-    )
+    ks = maximum(max(abs(sorted[i] - (i - 1) / n), abs(sorted[i] - i / n)) for i = 1:n)
 
     (;
         n = n,
@@ -347,7 +360,7 @@ function signal_value_analysis(year::Int; archive_dir::String = DEFAULT_ARCHIVE_
         predictions === nothing && continue
 
         shift_cols =
-            filter(c -> startswith(string(c), "shift_") && c != :shift_trajectory, propertynames(predictions))
+            filter(c -> startswith(string(c), "shift_"), propertynames(predictions))
         for col in shift_cols
             signal = Symbol(replace(string(col), "shift_" => ""))
             vals = abs.(predictions[!, col])
@@ -406,10 +419,7 @@ lack archived predictions or PCS results have `missing` in our columns.
 Caveat: Cycling Oracle is a signal in our model, so this measures
 "us-with-Oracle vs Oracle alone" rather than a clean head-to-head.
 """
-function oracle_2026_comparison(
-    year::Int = 2026;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
-)
+function oracle_2026_comparison(year::Int = 2026; archive_dir::String = DEFAULT_ARCHIVE_DIR)
     rows = []
     for pcs_slug in sort(collect(keys(ORACLE_2026_BASELINE)))
         oracle_pct = ORACLE_2026_BASELINE[pcs_slug]

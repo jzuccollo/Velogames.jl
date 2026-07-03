@@ -9,7 +9,7 @@ Returns true if all columns exist or were successfully created, false otherwise.
 """
 function ensure_classification_columns!(
     df::DataFrame;
-    required_classes::Vector{String}=["allrounder", "sprinter", "climber", "unclassed"],
+    required_classes::Vector{String} = ["allrounder", "sprinter", "climber", "unclassed"],
 )
     if !hasproperty(df, :class) && !hasproperty(df, :classraw)
         return false
@@ -34,6 +34,40 @@ end
 
 
 """
+    _add_class_constraints!(model, x, df, has_classes)
+
+Add the VG Sixes stage-race classification minimums (2 all-rounders, 1 sprinter,
+2 climbers, 3 unclassed; the 9th rider is a free wildcard) when class columns are
+present. `x` must be indexed by `df.riderkey`.
+"""
+function _add_class_constraints!(model, x, df::DataFrame, has_classes::Bool)
+    if has_classes
+        JuMP.@constraint(model, df[!, :allrounder]' * x >= 2)
+        JuMP.@constraint(model, df[!, :sprinter]' * x >= 1)
+        JuMP.@constraint(model, df[!, :climber]' * x >= 2)
+        JuMP.@constraint(model, df[!, :unclassed]' * x >= 3)
+    end
+    return model
+end
+
+"""
+    _add_team_cap!(model, x, df, max_per_team)
+
+Cap the number of riders selected from any single team at `max_per_team`
+(0 = uncapped). `x` must be indexed by `df.riderkey`.
+"""
+function _add_team_cap!(model, x, df::DataFrame, max_per_team::Int)
+    if max_per_team > 0
+        for team in unique(df.team)
+            team_keys = df.riderkey[df.team .== team]
+            JuMP.@constraint(model, sum(x[k] for k in team_keys) <= max_per_team)
+        end
+    end
+    return model
+end
+
+
+"""
     build_model_oneday(inputdf::DataFrame, n::Integer=6, points::Symbol=:expected_vg_points, cost::Symbol=:cost; totalcost::Integer=100)
 
 Build the optimisation model for one-day races in the velogames game.
@@ -48,11 +82,11 @@ Returns the optimisation solution values or nothing if no feasible solution exis
 """
 function build_model_oneday(
     inputdf::DataFrame,
-    n::Integer=6,
-    points::Symbol=:expected_vg_points,
-    cost::Symbol=:cost;
-    totalcost::Integer=100,
-    max_per_team::Int=0,
+    n::Integer = 6,
+    points::Symbol = :expected_vg_points,
+    cost::Symbol = :cost;
+    totalcost::Integer = 100,
+    max_per_team::Int = 0,
 )
     model = JuMP.Model(HiGHS.Optimizer)
     JuMP.set_silent(model)
@@ -60,12 +94,7 @@ function build_model_oneday(
     JuMP.@objective(model, Max, inputdf[!, points]' * x) # maximise the total score
     JuMP.@constraint(model, inputdf[!, cost]' * x <= totalcost) # cost must be <= totalcost
     JuMP.@constraint(model, sum(x) == n) # exactly n riders must be chosen
-    if max_per_team > 0
-        for team in unique(inputdf.team)
-            team_keys = inputdf.riderkey[inputdf.team.==team]
-            JuMP.@constraint(model, sum(x[k] for k in team_keys) <= max_per_team)
-        end
-    end
+    _add_team_cap!(model, x, inputdf, max_per_team)
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The model was not solved correctly.")
@@ -92,11 +121,11 @@ Returns the optimisation solution values or nothing if no feasible solution exis
 """
 function build_model_stage(
     inputdf::DataFrame,
-    n::Integer=9,
-    points::Symbol=:expected_vg_points,
-    cost::Symbol=:cost;
-    totalcost::Integer=100,
-    max_per_team::Int=0,
+    n::Integer = 9,
+    points::Symbol = :expected_vg_points,
+    cost::Symbol = :cost;
+    totalcost::Integer = 100,
+    max_per_team::Int = 0,
 )
     df = copy(inputdf)
 
@@ -108,24 +137,116 @@ function build_model_stage(
     JuMP.@objective(model, Max, df[!, points]' * x)
     JuMP.@constraint(model, df[!, cost]' * x <= totalcost)
     JuMP.@constraint(model, sum(x) == n)
-    if has_classes
-        JuMP.@constraint(model, df[!, :allrounder]' * x >= 2)
-        JuMP.@constraint(model, df[!, :sprinter]' * x >= 1)
-        JuMP.@constraint(model, df[!, :climber]' * x >= 2)
-        JuMP.@constraint(model, df[!, :unclassed]' * x >= 3)
-    end
-    if max_per_team > 0
-        for team in unique(df.team)
-            team_keys = df.riderkey[df.team.==team]
-            JuMP.@constraint(model, sum(x[k] for k in team_keys) <= max_per_team)
-        end
-    end
+    _add_class_constraints!(model, x, df, has_classes)
+    _add_team_cap!(model, x, df, max_per_team)
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The model was not solved correctly.")
         return nothing
     end
     return JuMP.value.(x)
+end
+
+"""
+    _resample_core(df, sim_vg_points, build_model_fn; team_size, max_per_team, risk_aversion)
+        -> (df, top_teams)
+
+Shared tail of the resampled-optimisation pipeline, once the per-draw VG-points
+matrix (`sim_vg_points`, n_riders × n_resamples) is known. Accumulates downside
+risk via Welford, optimises each draw to tally selection frequency, writes the
+`:selection_frequency`, `:expected_vg_points` and `:downside_semi_dev` columns,
+then runs a final deterministic optimise on risk-adjusted points and returns the
+chosen team. The per-draw optimise is RNG-free, so building the matrix upfront
+(one-day) or via `simulate_stage_race` (stage) yields identical results.
+"""
+function _resample_core(
+    df::DataFrame,
+    sim_vg_points::Matrix{Float64},
+    build_model_fn::Function;
+    team_size::Int,
+    max_per_team::Int,
+    risk_aversion::Float64,
+)
+    n_riders, n_resamples = size(sim_vg_points)
+    selection_counts = zeros(Int, n_riders)
+    vg_points_sum = vec(sum(sim_vg_points, dims = 2))
+    n_successful = 0
+
+    # Welford accumulators for downside semi-deviation (risk-adjusted scoring)
+    welford_mean = zeros(Float64, n_riders)
+    m2_down = zeros(Float64, n_riders)
+
+    resample_df = copy(df)
+
+    for r = 1:n_resamples
+        sim_pts = sim_vg_points[:, r]
+
+        for i = 1:n_riders
+            delta = sim_pts[i] - welford_mean[i]
+            welford_mean[i] += delta / r
+            delta2 = sim_pts[i] - welford_mean[i]
+            if sim_pts[i] < welford_mean[i]
+                m2_down[i] += delta * delta2
+            end
+        end
+
+        # Optimise for this draw's realised points
+        resample_df[!, :_resample_pts] = sim_pts
+        result = build_model_fn(
+            resample_df,
+            team_size,
+            :_resample_pts,
+            :cost;
+            totalcost = 100,
+            max_per_team = max_per_team,
+        )
+        result === nothing && continue
+        n_successful += 1
+
+        for (i, key) in enumerate(df.riderkey)
+            if JuMP.value(result[key]) > 0.5
+                selection_counts[i] += 1
+            end
+        end
+    end
+
+    # Expected VG points and risk-adjusted scoring: penalise riders whose high
+    # expected points come from volatile outcomes (many zeroes, occasional big
+    # scores). Uses downside coefficient of variation for a scale-invariant penalty.
+    expected_pts = vg_points_sum ./ n_resamples
+    downside_semi_dev = sqrt.(m2_down ./ n_resamples)
+    cv_down =
+        [ep > 0 ? dsd / ep : 0.0 for (ep, dsd) in zip(expected_pts, downside_semi_dev)]
+    risk_adjusted_pts = expected_pts ./ (1.0 .+ risk_aversion .* cv_down)
+
+    df[!, :selection_frequency] = round.(selection_counts ./ n_resamples, digits = 3)
+    df[!, :expected_vg_points] = round.(expected_pts, digits = 1)
+    df[!, :downside_semi_dev] = round.(downside_semi_dev, digits = 1)
+
+    @info "Resampled optimisation: $n_successful/$n_resamples successful"
+
+    # Final deterministic optimisation on risk-adjusted expected points. Per-resample
+    # team-frequency tracking is too noisy (hundreds of unique compositions with ~150
+    # riders), so we optimise once on points that account for both Jensen's inequality
+    # and uncertainty bias.
+    df[!, :_final_pts] = risk_adjusted_pts
+    top_teams = DataFrame[]
+    final_result = build_model_fn(
+        df,
+        team_size,
+        :_final_pts,
+        :cost;
+        totalcost = 100,
+        max_per_team = max_per_team,
+    )
+    if final_result !== nothing
+        final_keys = Set(k for k in df.riderkey if JuMP.value(final_result[k]) > 0.5)
+        final_team = filter(row -> row.riderkey in final_keys, df)
+        push!(top_teams, final_team)
+    end
+
+    select!(df, Not(:_final_pts))
+    return df, top_teams
 end
 
 """
@@ -148,32 +269,25 @@ function resample_optimise(
     df::DataFrame,
     scoring::ScoringTable,
     build_model_fn::Function;
-    team_size::Int=6,
-    n_resamples::Int=500,
-    rng::AbstractRNG=Random.default_rng(),
-    max_per_team::Int=0,
-    risk_aversion::Float64=0.5,
-    breakaway_rates::Vector{Float64}=Float64[],
-    breakaway_mean_sectors::Vector{Float64}=Float64[],
-    simulation_df::Union{Int,Nothing}=nothing,
+    team_size::Int = 6,
+    n_resamples::Int = 500,
+    rng::AbstractRNG = Random.default_rng(),
+    max_per_team::Int = 0,
+    risk_aversion::Float64 = 0.5,
+    breakaway_rates::Vector{Float64} = Float64[],
+    breakaway_mean_sectors::Vector{Float64} = Float64[],
+    simulation_df::Union{Int,Nothing} = nothing,
 )
     n_riders = nrow(df)
     strengths = Float64.(df.strength)
     uncertainties = Float64.(df.uncertainty)
     teams = String.(df.team)
 
-    # Track how often each rider is selected and accumulate VG points per resample
-    selection_counts = zeros(Int, n_riders)
-    vg_points_sum = zeros(Float64, n_riders)
+    # Build the per-draw VG-points matrix: draw noisy strengths, rank to positions,
+    # and score each draw. RNG is consumed only here; the optimisation tail
+    # (`_resample_core`) is deterministic.
     sim_vg_points = Matrix{Float64}(undef, n_riders, n_resamples)
-    n_successful = 0
-
-    # Welford accumulators for downside semi-deviation (risk-adjusted scoring)
-    welford_mean = zeros(Float64, n_riders)
-    m2_down = zeros(Float64, n_riders)
-
     noisy_strengths = Vector{Float64}(undef, n_riders)
-    resample_df = copy(df)
 
     for r = 1:n_resamples
         # 1. Draw noisy strengths from posterior
@@ -183,109 +297,34 @@ function resample_optimise(
         end
 
         # 2. Convert to finishing positions via sortperm
-        order = sortperm(noisy_strengths, rev=true)
+        order = sortperm(noisy_strengths, rev = true)
         positions = Vector{Int}(undef, n_riders)
         for (pos, rider_idx) in enumerate(order)
             positions[rider_idx] = pos
         end
 
-        # 3. Score VG points for this draw (finish + assist)
+        # 3. Score VG points for this draw (finish + assist + breakaway)
         sim_pts = zeros(Float64, n_riders)
-        for i = 1:n_riders
-            sim_pts[i] = Float64(finish_points_for_position(positions[i], scoring))
-        end
-        # Assist points: teammates of top-3 finishers
-        for i = 1:n_riders
-            if positions[i] <= 3
-                top_team = teams[i]
-                for j = 1:n_riders
-                    if j != i && teams[j] == top_team
-                        sim_pts[j] += scoring.assist_points[positions[i]]
-                    end
-                end
-            end
-        end
-
-        # Breakaway sector points (Bernoulli draw per rider)
-        if !isempty(breakaway_rates)
-            for i = 1:n_riders
-                if breakaway_rates[i] > 0.0 && rand(rng) < breakaway_rates[i]
-                    sim_pts[i] += breakaway_mean_sectors[i] * scoring.breakaway_points
-                end
-            end
-        end
-
-        # Accumulate for expected VG points calculation and Welford variance tracking
-        for i = 1:n_riders
-            sim_vg_points[i, r] = sim_pts[i]
-            vg_points_sum[i] += sim_pts[i]
-            delta = sim_pts[i] - welford_mean[i]
-            welford_mean[i] += delta / r
-            delta2 = sim_pts[i] - welford_mean[i]
-            if sim_pts[i] < welford_mean[i]
-                m2_down[i] += delta * delta2
-            end
-        end
-
-        # 4. Optimise for this draw's realised points
-        resample_df[!, :_resample_pts] = sim_pts
-        result = build_model_fn(
-            resample_df,
-            team_size,
-            :_resample_pts,
-            :cost;
-            totalcost=100,
-            max_per_team=max_per_team,
+        _score_vg_draw!(
+            sim_pts,
+            positions,
+            teams,
+            scoring;
+            breakaway_rates = breakaway_rates,
+            mean_sectors = breakaway_mean_sectors,
+            rng = rng,
         )
-        result === nothing && continue
-        n_successful += 1
-
-        # Record selected riders
-        for (i, key) in enumerate(df.riderkey)
-            if JuMP.value(result[key]) > 0.5
-                selection_counts[i] += 1
-            end
-        end
+        sim_vg_points[:, r] = sim_pts
     end
 
-    # Compute expected VG points as mean across resamples
-    expected_pts = vg_points_sum ./ n_resamples
-
-    # Risk-adjusted scoring: penalise riders whose high expected points come
-    # from volatile outcomes (many zeroes, occasional big scores).
-    # Uses downside coefficient of variation for scale-invariant penalty.
-    downside_semi_dev = sqrt.(m2_down ./ n_resamples)
-    cv_down =
-        [ep > 0 ? dsd / ep : 0.0 for (ep, dsd) in zip(expected_pts, downside_semi_dev)]
-    risk_adjusted_pts = expected_pts ./ (1.0 .+ risk_aversion .* cv_down)
-
-    df[!, :selection_frequency] = round.(selection_counts ./ n_resamples, digits=3)
-    df[!, :expected_vg_points] = round.(expected_pts, digits=1)
-    df[!, :downside_semi_dev] = round.(downside_semi_dev, digits=1)
-
-    @info "Resampled optimisation: $n_successful/$n_resamples successful"
-
-    # Final optimisation using risk-adjusted expected VG points.
-    # Per-resample team-frequency tracking is too noisy (hundreds of unique
-    # compositions with ~150 riders), so we optimise once on the risk-adjusted
-    # points that account for both Jensen's inequality and uncertainty bias.
-    df[!, :_final_pts] = risk_adjusted_pts
-    top_teams = DataFrame[]
-    final_result = build_model_fn(
+    df, top_teams = _resample_core(
         df,
-        team_size,
-        :_final_pts,
-        :cost;
-        totalcost=100,
-        max_per_team=max_per_team,
+        sim_vg_points,
+        build_model_fn;
+        team_size = team_size,
+        max_per_team = max_per_team,
+        risk_aversion = risk_aversion,
     )
-    if final_result !== nothing
-        final_keys = Set(k for k in df.riderkey if JuMP.value(final_result[k]) > 0.5)
-        final_team = filter(row -> row.riderkey in final_keys, df)
-        push!(top_teams, final_team)
-    end
-
-    select!(df, Not(:_final_pts))
     return df, top_teams, sim_vg_points
 end
 
@@ -308,99 +347,48 @@ function resample_optimise_stage(
     stage_strengths::Dict{Symbol,Vector{Float64}},
     scoring::StageRaceScoringTable,
     build_model_fn::Function;
-    team_size::Int=9,
-    n_resamples::Int=500,
-    cross_stage_alpha::Float64=0.7,
-    gc_strengths::Vector{Float64}=Float64[],
-    rng::AbstractRNG=Random.default_rng(),
-    max_per_team::Int=0,
-    risk_aversion::Float64=0.5,
-    sim_config::StageSimConfig=DEFAULT_STAGE_SIM_CONFIG,
+    team_size::Int = 9,
+    n_resamples::Int = 500,
+    cross_stage_alpha::Float64 = 0.7,
+    gc_strengths::Vector{Float64} = Float64[],
+    rng::AbstractRNG = Random.default_rng(),
+    max_per_team::Int = 0,
+    risk_aversion::Float64 = 0.5,
+    sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
 )
-    n_riders = nrow(df)
     uncertainties = Float64.(df.uncertainty)
     teams = String.(df.team)
     # Rider classes drive the attrition hazard (A2). Prefer :classraw, fall back
     # to :class; empty when neither is present (attrition then disabled).
-    rider_classes = :classraw in propertynames(df) ? String.(df.classraw) :
-                    :class in propertynames(df) ? String.(df.class) : String[]
+    rider_classes =
+        :classraw in propertynames(df) ? String.(df.classraw) :
+        :class in propertynames(df) ? String.(df.class) : String[]
 
     # Run all simulations at once. simulate_stage_race always returns
     # (vg_points, diagnostics); we surface diagnostics for per-stage podium
     # and classification top-K probabilities in reports.
     sim_vg_points, diagnostics = simulate_stage_race(
-        stages, stage_strengths, uncertainties, teams, scoring;
-        n_sims=n_resamples, cross_stage_alpha=cross_stage_alpha,
-        gc_strengths=gc_strengths, rng=rng, sim_config=sim_config,
-        rider_classes=rider_classes,
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = n_resamples,
+        cross_stage_alpha = cross_stage_alpha,
+        gc_strengths = gc_strengths,
+        rng = rng,
+        sim_config = sim_config,
+        rider_classes = rider_classes,
     )
 
-    # Track selection frequency and accumulate points
-    selection_counts = zeros(Int, n_riders)
-    vg_points_sum = vec(sum(sim_vg_points, dims=2))
-    n_successful = 0
-
-    # Welford accumulators for downside semi-deviation
-    welford_mean = zeros(Float64, n_riders)
-    m2_down = zeros(Float64, n_riders)
-
-    resample_df = copy(df)
-
-    for r in 1:n_resamples
-        sim_pts = sim_vg_points[:, r]
-
-        # Welford online variance for downside risk
-        for i in 1:n_riders
-            delta = sim_pts[i] - welford_mean[i]
-            welford_mean[i] += delta / r
-            delta2 = sim_pts[i] - welford_mean[i]
-            if sim_pts[i] < welford_mean[i]
-                m2_down[i] += delta * delta2
-            end
-        end
-
-        # Optimise for this draw's realised points
-        resample_df[!, :_resample_pts] = sim_pts
-        result = build_model_fn(
-            resample_df, team_size, :_resample_pts, :cost;
-            totalcost=100, max_per_team=max_per_team,
-        )
-        result === nothing && continue
-        n_successful += 1
-
-        for (i, key) in enumerate(df.riderkey)
-            if JuMP.value(result[key]) > 0.5
-                selection_counts[i] += 1
-            end
-        end
-    end
-
-    # Compute expected VG points and risk-adjusted scoring
-    expected_pts = vg_points_sum ./ n_resamples
-    downside_semi_dev = sqrt.(m2_down ./ n_resamples)
-    cv_down = [ep > 0 ? dsd / ep : 0.0 for (ep, dsd) in zip(expected_pts, downside_semi_dev)]
-    risk_adjusted_pts = expected_pts ./ (1.0 .+ risk_aversion .* cv_down)
-
-    df[!, :selection_frequency] = round.(selection_counts ./ n_resamples, digits=3)
-    df[!, :expected_vg_points] = round.(expected_pts, digits=1)
-    df[!, :downside_semi_dev] = round.(downside_semi_dev, digits=1)
-
-    @info "Resampled stage optimisation: $n_successful/$n_resamples successful"
-
-    # Final deterministic optimisation on risk-adjusted expected points
-    df[!, :_final_pts] = risk_adjusted_pts
-    top_teams = DataFrame[]
-    final_result = build_model_fn(
-        df, team_size, :_final_pts, :cost;
-        totalcost=100, max_per_team=max_per_team,
+    df, top_teams = _resample_core(
+        df,
+        sim_vg_points,
+        build_model_fn;
+        team_size = team_size,
+        max_per_team = max_per_team,
+        risk_aversion = risk_aversion,
     )
-    if final_result !== nothing
-        final_keys = Set(k for k in df.riderkey if JuMP.value(final_result[k]) > 0.5)
-        final_team = filter(row -> row.riderkey in final_keys, df)
-        push!(top_teams, final_team)
-    end
-
-    select!(df, Not(:_final_pts))
     return df, top_teams, sim_vg_points, diagnostics
 end
 
@@ -408,7 +396,7 @@ end
 """
     minimise_cost_stage(inputdf::DataFrame, target_score::Real, n::Integer=9, points::Symbol=:points, cost::Symbol=:cost; totalcost::Integer=100)
 
-Minimise team cost whilst achieving at least the target score.
+Minimise team cost while achieving at least the target score.
 Used for historical analysis to find the cheapest team that would have beaten a given benchmark.
 
 Returns the optimisation solution values or nothing if no feasible solution exists.
@@ -416,10 +404,10 @@ Returns the optimisation solution values or nothing if no feasible solution exis
 function minimise_cost_stage(
     inputdf::DataFrame,
     target_score::Real,
-    n::Integer=9,
-    points::Symbol=:points,
-    cost::Symbol=:cost;
-    totalcost::Integer=100,
+    n::Integer = 9,
+    points::Symbol = :points,
+    cost::Symbol = :cost;
+    totalcost::Integer = 100,
 )
     df = copy(inputdf)
 
@@ -431,16 +419,71 @@ function minimise_cost_stage(
     JuMP.@objective(model, Min, df[!, cost]' * x)
     JuMP.@constraint(model, df[!, points]' * x >= target_score + 1)
     JuMP.@constraint(model, sum(x) == n)
-    if has_classes
-        JuMP.@constraint(model, df[!, :allrounder]' * x >= 2)
-        JuMP.@constraint(model, df[!, :sprinter]' * x >= 1)
-        JuMP.@constraint(model, df[!, :climber]' * x >= 2)
-        JuMP.@constraint(model, df[!, :unclassed]' * x >= 3)
-    end
+    _add_class_constraints!(model, x, df, has_classes)
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The cost minimisation model was not solved correctly.")
         return nothing
     end
     return JuMP.value.(x)
+end
+
+# ---------------------------------------------------------------------------
+# Hindsight-optimal and cheapest-winning team selection (report retrospectives)
+# ---------------------------------------------------------------------------
+
+"""
+    compute_optimal_team(df) -> Union{DataFrame, Nothing}
+
+Find the hindsight-optimal one-day team (6 riders, cost <= 100) from actual results.
+"""
+function compute_optimal_team(df::DataFrame)
+    result = build_model_oneday(df, 6, :score, :cost; totalcost = 100)
+    result === nothing && return nothing
+    chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
+    return filter(row -> row.riderkey in chosen_keys, df)
+end
+
+"""
+    compute_cheapest_winning_team(df, target_score) -> Union{DataFrame, Nothing}
+
+Find the minimum-cost one-day team that beats `target_score`.
+"""
+function compute_cheapest_winning_team(df::DataFrame, target_score::Real)
+    model = JuMP.Model(HiGHS.Optimizer)
+    JuMP.set_silent(model)
+    JuMP.@variable(model, x[df.riderkey], Bin)
+    JuMP.@objective(model, Min, df.cost' * x)
+    JuMP.@constraint(model, df.score' * x >= target_score + 1)
+    JuMP.@constraint(model, sum(x) == 6)
+    JuMP.optimize!(model)
+    if JuMP.termination_status(model) != JuMP.OPTIMAL
+        return nothing
+    end
+    chosen_keys = Set(k for k in df.riderkey if JuMP.value(x[k]) > 0.5)
+    return filter(row -> row.riderkey in chosen_keys, df)
+end
+
+"""
+    compute_optimal_stage_team(df) -> Union{DataFrame, Nothing}
+
+Find the hindsight-optimal stage race team (9 riders, class constraints, cost <= 100).
+"""
+function compute_optimal_stage_team(df::DataFrame)
+    result = build_model_stage(df, 9, :score, :cost; totalcost = 100)
+    result === nothing && return nothing
+    chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
+    return filter(row -> row.riderkey in chosen_keys, df)
+end
+
+"""
+    compute_cheapest_winning_stage_team(df, target_score) -> Union{DataFrame, Nothing}
+
+Find the minimum-cost 9-rider team that beats `target_score` with class constraints.
+"""
+function compute_cheapest_winning_stage_team(df::DataFrame, target_score::Real)
+    result = minimise_cost_stage(df, target_score, 9, :score, :cost)
+    result === nothing && return nothing
+    chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
+    return filter(row -> row.riderkey in chosen_keys, df)
 end

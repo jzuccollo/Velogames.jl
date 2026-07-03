@@ -67,7 +67,12 @@ const CLASSICS_RACES_2026 = [
         "2026-03-07",
         2,
         "strade-bianche",
-        ["il-lombardia", "liege-bastogne-liege", "amstel-gold-race", "dwars-door-het-hageland"],
+        [
+            "il-lombardia",
+            "liege-bastogne-liege",
+            "amstel-gold-race",
+            "dwars-door-het-hageland",
+        ],
         215.0,
     ),
     RaceInfo(
@@ -249,7 +254,12 @@ const CLASSICS_RACES_2026 = [
         "2026-06-14",
         2,
         "copenhagen-sprint",
-        ["scheldeprijs", "classic-brugge-de-panne", "brussels-cycling-classic", "paris-tours"],
+        [
+            "scheldeprijs",
+            "classic-brugge-de-panne",
+            "brussels-cycling-classic",
+            "paris-tours",
+        ],
         178.0,
     ),
     # Punchy hilly (mixed terrain, moderate climbs)
@@ -486,7 +496,7 @@ Returns a RaceConfig with standard URLs and settings for common races.
 ```julia
 # Set up Vuelta 2025 stage race
 race = setup_race("vuelta", 2025, :stage)
-riders = getvgriders(race.current_url, cache_config=race.cache)
+riders = getvg_riders(race.current_url, cache_config=race.cache)
 
 # Set up Paris-Roubaix 2025 — auto-detected as one-day
 race = setup_race("roubaix", 2025)
@@ -499,11 +509,11 @@ One-day races: liege, roubaix, flanders, lombardia, sanremo, amstel, fleche
 function setup_race(
     race_name::String,
     year::Int,
-    race_type::Symbol=:auto;
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    race_type::Symbol = :auto;
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
     # Get URL pattern for this race (includes schedule fallback)
-    pattern = get_url_pattern(race_name; year=year)
+    pattern = get_url_pattern(race_name; year = year)
 
     # Build the current URL
     current_url = replace(pattern.template, "{year}" => string(year))
@@ -535,7 +545,8 @@ function setup_race(
 
     type_str = race_type == :stage ? "Stage Race" : "One-Day Race"
     scoring_str = category > 0 ? "Cat $category" : "unclassed"
-    @info "Race setup" race = titlecase(race_name) year type = type_str team_size scoring = scoring_str pcs_slug url = current_url cache_ttl = "$(cache_config.max_age_hours)h"
+    @info "Race setup" race = titlecase(race_name) year type = type_str team_size scoring =
+        scoring_str pcs_slug url = current_url cache_ttl = "$(cache_config.max_age_hours)h"
 
     return config
 end
@@ -552,93 +563,95 @@ vg_classics_url(
     year::Int,
 ) = "https://www.velogames.com/$(vg_classics_slug(year))/$year/riders.php"
 
-"""VG game ID for one-day classics ridescore URLs (may change with 2026 rebrand)."""
-vg_classics_game_id(year::Int) = 13  # Update if 2026 uses a different game ID
+"""VG game ID for one-day classics ridescore URLs."""
+vg_classics_game_id() = 13
 
 """Stage race URL patterns (separate VG competitions from one-day classics)."""
 const _STAGE_RACE_PATTERNS =
     Dict{String,NamedTuple{(:slug, :template),Tuple{String,String}}}(
         # Grand tours
         "tdf" => (
-            slug="velogame",
-            template="https://www.velogames.com/velogame/{year}/riders.php",
+            slug = "velogame",
+            template = "https://www.velogames.com/velogame/{year}/riders.php",
         ),
         "tour" => (
-            slug="velogame",
-            template="https://www.velogames.com/velogame/{year}/riders.php",
+            slug = "velogame",
+            template = "https://www.velogames.com/velogame/{year}/riders.php",
         ),
         "tourdefrance" => (
-            slug="velogame",
-            template="https://www.velogames.com/velogame/{year}/riders.php",
+            slug = "velogame",
+            template = "https://www.velogames.com/velogame/{year}/riders.php",
         ),
         "vuelta" => (
-            slug="spain",
-            template="https://www.velogames.com/spain/{year}/riders.php",
+            slug = "spain",
+            template = "https://www.velogames.com/spain/{year}/riders.php",
         ),
         "spain" => (
-            slug="spain",
-            template="https://www.velogames.com/spain/{year}/riders.php",
+            slug = "spain",
+            template = "https://www.velogames.com/spain/{year}/riders.php",
         ),
-        "giro" =>
-            (slug="italy", template="https://www.velogames.com/italy/{year}/riders.php"),
-        "giroditalia" =>
-            (slug="italy", template="https://www.velogames.com/italy/{year}/riders.php"),
+        "giro" => (
+            slug = "italy",
+            template = "https://www.velogames.com/italy/{year}/riders.php",
+        ),
+        "giroditalia" => (
+            slug = "italy",
+            template = "https://www.velogames.com/italy/{year}/riders.php",
+        ),
         # Week-long stage races
-        "parisnice" => (
-            slug="pn",
-            template="https://www.velogames.com/pn/{year}/riders.php",
-        ),
+        "parisnice" =>
+            (slug = "pn", template = "https://www.velogames.com/pn/{year}/riders.php"),
         "tirrenoadriatico" => (
-            slug="tirreno-adriatico",
-            template="https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
+            slug = "tirreno-adriatico",
+            template = "https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
         ),
         "tirreno" => (
-            slug="tirreno-adriatico",
-            template="https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
+            slug = "tirreno-adriatico",
+            template = "https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
         ),
         "catalunya" => (
-            slug="catalunya",
-            template="https://www.velogames.com/catalunya/{year}/riders.php",
+            slug = "catalunya",
+            template = "https://www.velogames.com/catalunya/{year}/riders.php",
         ),
         "voltaacatalunya" => (
-            slug="catalunya",
-            template="https://www.velogames.com/catalunya/{year}/riders.php",
+            slug = "catalunya",
+            template = "https://www.velogames.com/catalunya/{year}/riders.php",
         ),
         "itzulia" => (
-            slug="itzulia",
-            template="https://www.velogames.com/itzulia/{year}/riders.php",
+            slug = "itzulia",
+            template = "https://www.velogames.com/itzulia/{year}/riders.php",
         ),
         "itzuliabasquecountry" => (
-            slug="itzulia",
-            template="https://www.velogames.com/itzulia/{year}/riders.php",
+            slug = "itzulia",
+            template = "https://www.velogames.com/itzulia/{year}/riders.php",
         ),
         "romandie" => (
-            slug="romandie",
-            template="https://www.velogames.com/romandie/{year}/riders.php",
+            slug = "romandie",
+            template = "https://www.velogames.com/romandie/{year}/riders.php",
         ),
         "tourderomandie" => (
-            slug="romandie",
-            template="https://www.velogames.com/romandie/{year}/riders.php",
+            slug = "romandie",
+            template = "https://www.velogames.com/romandie/{year}/riders.php",
         ),
         "dauphine" => (
-            slug="criterium-du-dauphine",
-            template="https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+            slug = "criterium-du-dauphine",
+            template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
         ),
         "criteriumdudauphine" => (
-            slug="criterium-du-dauphine",
-            template="https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+            slug = "criterium-du-dauphine",
+            template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
         ),
         "tourauvergne" => (
-            slug="criterium-du-dauphine",
-            template="https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+            slug = "criterium-du-dauphine",
+            template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
         ),
         "suisse" => (
-            slug="suisse",
-            template="https://www.velogames.com/suisse/{year}/riders.php",
+            slug = "suisse",
+            template = "https://www.velogames.com/suisse/{year}/riders.php",
         ),
         "tourdesuisse" => (
-            slug="suisse",
-            template="https://www.velogames.com/suisse/{year}/riders.php",
+            slug = "suisse",
+            template = "https://www.velogames.com/suisse/{year}/riders.php",
         ),
     )
 
@@ -705,7 +718,7 @@ Returns a NamedTuple with (slug, template, category, pcs_slug, total_distance_km
 template uses {year} placeholder. Looks up classics aliases against the canonical
 race schedule; grand tours have their own URL patterns.
 """
-function get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
+function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()))
     race_lower = replace(lowercase(strip(race_name)), r"[-\s]" => "")
 
     # Stage races have their own URL templates
@@ -713,11 +726,11 @@ function get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
         gt = _STAGE_RACE_PATTERNS[race_lower]
         pcs_slug = get(_STAGE_RACE_PCS_SLUGS, race_lower, "")
         return (
-            slug=gt.slug,
-            template=gt.template,
-            category=0,
-            pcs_slug=pcs_slug,
-            total_distance_km=0.0,
+            slug = gt.slug,
+            template = gt.template,
+            category = 0,
+            pcs_slug = pcs_slug,
+            total_distance_km = 0.0,
         )
     end
 
@@ -730,11 +743,11 @@ function get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
         ri = _find_race_by_slug(pcs_slug)
         if ri !== nothing
             return (
-                slug=slug,
-                template=template,
-                category=ri.category,
-                pcs_slug=ri.pcs_slug,
-                total_distance_km=ri.total_distance_km,
+                slug = slug,
+                template = template,
+                category = ri.category,
+                pcs_slug = ri.pcs_slug,
+                total_distance_km = ri.total_distance_km,
             )
         end
     end
@@ -743,11 +756,11 @@ function get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
     ri = _find_race_by_slug(race_name)
     if ri !== nothing
         return (
-            slug=slug,
-            template=template,
-            category=ri.category,
-            pcs_slug=ri.pcs_slug,
-            total_distance_km=ri.total_distance_km,
+            slug = slug,
+            template = template,
+            category = ri.category,
+            pcs_slug = ri.pcs_slug,
+            total_distance_km = ri.total_distance_km,
         )
     end
 
@@ -755,11 +768,11 @@ function get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
     ri = find_race(race_name)
     if ri !== nothing
         return (
-            slug=slug,
-            template=template,
-            category=ri.category,
-            pcs_slug=ri.pcs_slug,
-            total_distance_km=ri.total_distance_km,
+            slug = slug,
+            template = template,
+            category = ri.category,
+            pcs_slug = ri.pcs_slug,
+            total_distance_km = ri.total_distance_km,
         )
     end
 
@@ -775,11 +788,11 @@ function get_url_pattern(race_name::String; year::Int=Dates.year(Dates.today()))
 
     sanitized = replace(race_lower, r"[^a-z0-9]" => "-")
     return (
-        slug=sanitized,
-        template="https://www.velogames.com/$sanitized/{year}/riders.php",
-        category=0,
-        pcs_slug="",
-        total_distance_km=0.0,
+        slug = sanitized,
+        template = "https://www.velogames.com/$sanitized/{year}/riders.php",
+        category = 0,
+        pcs_slug = "",
+        total_distance_km = 0.0,
     )
 end
 
@@ -803,7 +816,7 @@ last_year_url = get_historical_url(race, 1)  # 2024 Vuelta
 two_years_url = get_historical_url(race, 2)  # 2023 Vuelta
 ```
 """
-function get_historical_url(config::RaceConfig, years_back::Int=1)
+function get_historical_url(config::RaceConfig, years_back::Int = 1)
     historical_year = config.year - years_back
     # For one-day classics, reconstruct with the correct slug for that year
     # (slug changed from sixes-superclasico to sixes-classics in 2026).
@@ -916,33 +929,60 @@ struct StageSimConfig
 end
 
 function StageSimConfig(;
-    aleatoric_noise=(flat=0.8, hilly=1.1, mountain=0.7, itt=0.5),
-    breakaway_noise=(
-        stage_finish=(flat=0.0, hilly=1.0, mountain=1.5, itt=0.0),
-        points_jersey=(flat=0.0, hilly=1.5, mountain=2.5, itt=0.0),
+    aleatoric_noise = (flat = 0.8, hilly = 1.1, mountain = 0.7, itt = 0.5),
+    breakaway_noise = (
+        stage_finish = (flat = 0.0, hilly = 1.0, mountain = 1.5, itt = 0.0),
+        points_jersey = (flat = 0.0, hilly = 1.5, mountain = 2.5, itt = 0.0),
     ),
-    points_jersey_allocation=(
-        flat=[50.0, 35.0, 25.0, 18.0, 14.0, 12.0, 10.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
-        hilly=[25.0, 18.0, 12.0, 8.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
-        mountain=[15.0, 12.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
-        itt=[15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
-        ttt=[15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
+    points_jersey_allocation = (
+        flat = [
+            50.0,
+            35.0,
+            25.0,
+            18.0,
+            14.0,
+            12.0,
+            10.0,
+            8.0,
+            7.0,
+            6.0,
+            5.0,
+            4.0,
+            3.0,
+            2.0,
+            1.0,
+        ],
+        hilly = [25.0, 18.0, 12.0, 8.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        mountain = [15.0, 12.0, 9.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0],
+        itt = [15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
+        ttt = [15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
     ),
-    intermediate_sprint_points=[20.0, 12.0, 8.0, 6.0, 4.0, 2.0, 1.0],
+    intermediate_sprint_points = [20.0, 12.0, 8.0, 6.0, 4.0, 2.0, 1.0],
     # Attrition (A2, July 2026): per-rider-stage DNF hazard fitted from archived
     # pcs_abandons across 4 GTs (giro/tour/vuelta 2025 + giro 2026). Field DNF
     # ~15%, concentrated on hard days. A shared per-stage Gamma shock (shape 2 →
     # mean 1, var 0.5) reproduces the observed over-dispersion (per-stage abandon
     # var/mean ≈ 1.66) so sprinters can be eliminated in cohorts on brutal days.
-    attrition_hazard=(flat=0.0035, hilly=0.0075, mountain=0.0092, itt=0.0018, ttt=0.002),
-    attrition_class_mult=(sprinter=1.29, climber=1.19, allrounder=1.53, unclassed=0.86),
-    attrition_shock_shape=2.0,
+    attrition_hazard = (
+        flat = 0.0035,
+        hilly = 0.0075,
+        mountain = 0.0092,
+        itt = 0.0018,
+        ttt = 0.002,
+    ),
+    attrition_class_mult = (
+        sprinter = 1.29,
+        climber = 1.19,
+        allrounder = 1.53,
+        unclassed = 0.86,
+    ),
+    attrition_shock_shape = 2.0,
     # Student-t df for the aleatoric race-day scatter. This is a calibrated model
     # property, NOT the global `simulation_df`: the aleatoric term models fat-
     # tailed race-day chaos (crashes/echelons) and is distinct from the Gaussian
     # epistemic wobble, so it has its own tail. `aleatoric_noise` (a_type) is
     # calibrated against df=5; change them together.
-    aleatoric_df=5,
+    aleatoric_df = 5,
     # GC-favourite protection: strong GC favourites don't strategically abandon
     # (they're contending/winning), but the class hazard would still DNF them at
     # their class rate — over-attritioning the durable race leader and capping
@@ -950,45 +990,53 @@ function StageSimConfig(;
     # where gc_z is the rider's GC-strength z-score, so only genuine favourites
     # (>1 SD above the field) are protected and the field-wide survival rate is
     # essentially unchanged. Empirically ~0 for the field, strong for the top 2–3.
-    gc_favourite_protection=1.2,
+    gc_favourite_protection = 1.2,
     # …but floored: even the most dominant leader keeps an irreducible crash-out
     # risk. Historically GC favourites DNF meaningfully (Roglič 2021/22/24,
     # Pinot 2019, Mas 2025; mass-crash years take out marquee names), so the
     # protection multiplier bottoms out at this floor rather than →0. 0.35 leaves
     # a class-17.6% climber favourite at ~6% DNF (top-10 ~94%), not ~1.6%.
-    gc_protection_floor=0.35,
+    gc_protection_floor = 0.35,
 )
-    StageSimConfig(aleatoric_noise, breakaway_noise, points_jersey_allocation,
-        intermediate_sprint_points, attrition_hazard, attrition_class_mult,
-        attrition_shock_shape, aleatoric_df, gc_favourite_protection, gc_protection_floor)
+    StageSimConfig(
+        aleatoric_noise,
+        breakaway_noise,
+        points_jersey_allocation,
+        intermediate_sprint_points,
+        attrition_hazard,
+        attrition_class_mult,
+        attrition_shock_shape,
+        aleatoric_df,
+        gc_favourite_protection,
+        gc_protection_floor,
+    )
 end
 
 const DEFAULT_STAGE_SIM_CONFIG = StageSimConfig()
 
 # Convenience constructors for stage profiles
-flat_stage(n; km=180.0, ps=15, vert=1000, sprints=1) =
+flat_stage(n; km = 180.0, ps = 15, vert = 1000, sprints = 1) =
     StageProfile(n, :flat, km, ps, vert, 0.2, 0, 0, sprints, false)
 
 mountain_stage(
     n;
-    km=180.0,
-    ps=300,
-    vert=4000,
-    gradient=5.0,
-    hc=1,
-    cat1=1,
-    sprints=0,
-    summit=true,
+    km = 180.0,
+    ps = 300,
+    vert = 4000,
+    gradient = 5.0,
+    hc = 1,
+    cat1 = 1,
+    sprints = 0,
+    summit = true,
 ) = StageProfile(n, :mountain, km, ps, vert, gradient, hc, cat1, sprints, summit)
 
-hilly_stage(n; km=180.0, ps=100, vert=2500, gradient=1.0, cat1=1, sprints=1) =
+hilly_stage(n; km = 180.0, ps = 100, vert = 2500, gradient = 1.0, cat1 = 1, sprints = 1) =
     StageProfile(n, :hilly, km, ps, vert, gradient, 0, cat1, sprints, false)
 
-itt_stage(n; km=40.0, ps=15, vert=300) =
+itt_stage(n; km = 40.0, ps = 15, vert = 300) =
     StageProfile(n, :itt, km, ps, vert, 0.2, 0, 0, 0, false)
 
-ttt_stage(n; km=30.0) =
-    StageProfile(n, :ttt, km, 5, 200, 0.1, 0, 0, 0, false)
+ttt_stage(n; km = 30.0) = StageProfile(n, :ttt, km, 5, 200, 0.1, 0, 0, 0, false)
 
 """Stage race VG slug mapping (PCS slug → VG slug)."""
 const _STAGE_RACE_VG_SLUGS = Dict(
@@ -1044,7 +1092,7 @@ function setup_stage_race(
     race_name::String,
     year::Int,
     stages::Vector{StageProfile};
-    cache_config::CacheConfig=DEFAULT_CACHE,
+    cache_config::CacheConfig = DEFAULT_CACHE,
 )
     key = replace(lowercase(race_name), " " => "", "-" => "")
     pcs_slug = get(_STAGE_RACE_PCS_SLUGS, key, race_name)
@@ -1055,7 +1103,8 @@ function setup_stage_race(
     end
 
     n_stages = length(stages)
-    config = StageRaceConfig(race_name, year, pcs_slug, vg_slug, n_stages, stages, cache_config)
+    config =
+        StageRaceConfig(race_name, year, pcs_slug, vg_slug, n_stages, stages, cache_config)
 
     stage_types = [s.stage_type for s in stages]
     n_flat = count(==(:flat), stage_types)
@@ -1063,7 +1112,8 @@ function setup_stage_race(
     n_mountain = count(==(:mountain), stage_types)
     n_itt = count(==(:itt), stage_types)
     n_ttt = count(==(:ttt), stage_types)
-    @info "Stage race setup" race = race_name year n_stages flat = n_flat hilly = n_hilly mountain = n_mountain itt = n_itt ttt = n_ttt
+    @info "Stage race setup" race = race_name year n_stages flat = n_flat hilly = n_hilly mountain =
+        n_mountain itt = n_itt ttt = n_ttt
 
     return config
 end

@@ -4,22 +4,22 @@ using HTTP, DataFrames, Cascadia, Gumbo, Unicode, HiGHS, JuMP, Feather, Dates, J
 using Random, Statistics, PlotlyBase
 
 # Core data retrieval
-export getvgriders,
-    getvgracepoints,
-    getpcsriderpts,
-    getpcsriderpts_batch,
-    getpcsraceranking,
+export getvg_riders,
+    getvg_race_points,
+    getpcs_rider_pts,
+    getpcs_rider_pts_batch,
+    getpcs_race_ranking,
     parse_oddschecker_odds,
     get_cycling_oracle,
-    getvgracelist,
-    getvgraceresults,
+    getvg_race_list,
+    getvg_race_results,
     match_vg_race_number,
-    getpcsraceresults,
-    getpcsracestartlist,
-    getpcsraceform,
-    getpcsracehistory,
-    getpcsriderseasons,
-    getpcsriderseasons_batch,
+    getpcs_race_results,
+    getpcs_race_startlist,
+    getpcs_race_form,
+    getpcs_race_history,
+    getpcs_rider_seasons,
+    getpcs_rider_seasons_batch,
     getpcs_specialty_by_season,
     load_pcs_breakaway_stats,
     getpcs_stage_profiles,
@@ -43,6 +43,7 @@ export get_qualitative_auto,
 # Caching and archival
 export CacheConfig,
     DEFAULT_CACHE,
+    DEFAULT_CACHE_DIR,
     clear_cache,
     clear_memory_cache!,
     save_race_snapshot,
@@ -110,36 +111,24 @@ export solve_oneday,
     resample_optimise,
     resample_optimise_stage
 
-# Simulation and prediction (public API)
+# Simulation and strength estimation
 export BayesianConfig,
     DEFAULT_BAYESIAN_CONFIG,
     pcs_variance,
-    vg_variance,
-    form_variance,
     hist_base_variance,
-    vg_hist_base_variance,
-    odds_variance,
-    oracle_variance,
-    qualitative_base_variance,
     estimate_strengths,
     predict_expected_points,
     BayesianPosterior,
-    RiderSignalData,
     bayesian_update,
     estimate_rider_strength,
     position_to_strength,
     simulate_race,
     position_probabilities,
     expected_vg_points,
-    simulate_vg_points,
     STRENGTH_DIMENSIONS,
     STAGE_TYPES,
     SIGNAL_DIMENSION_WEIGHTS,
-    RACE_HISTORY_CLASS_PROJECTION,
-    MultiDimPosterior,
     MultiDimStrengthEstimate,
-    bayesian_update_multidim_dim,
-    multidim_prior,
     estimate_rider_strength_multidim,
     compute_stage_strengths,
     stage_dimension_weights,
@@ -163,9 +152,6 @@ export BacktestRace,
     backtest_race,
     backtest_season,
     summarise_backtest,
-    ablation_study,
-    tune_hyperparameters,
-    tune_domestique_discount,
     build_race_catalogue,
     prefetch_race_data,
     prefetch_all_races,
@@ -212,22 +198,31 @@ export html_page,
     rank_histogram_chart,
     line_chart
 
-# Include all modules (order matters for dependencies)
+# Includes. Julia resolves function calls at runtime, so most ordering is free.
+# The real constraints are eval-time: a file's structs/consts must be defined
+# before another file references them at load time (hence bayesian_core precedes
+# the strength pipeline, and scoring/race_helpers precede everything using them).
+# pcs_scraper precedes get_data because get_data calls into it.
 include("cache_utils.jl")
 include("utilities.jl")
 include("scoring.jl")
 include("race_helpers.jl")
 include("build_model.jl")
-include("get_data.jl")
 include("pcs_scraper.jl")
+include("get_data.jl")
 include("pcs_extended.jl")
 include("data_assembly.jl")
 include("qualitative.jl")
-include("simulation.jl")
+include("bayesian_core.jl")
+include("simulate_oneday.jl")
+include("simulate_stage.jl")
+include("strength_pipeline.jl")
 include("prior_checks.jl")
 include("backtest.jl")
 include("race_solver.jl")
 include("prospective_eval.jl")
-include("report_helpers.jl")
+include("report_html.jl")
+include("report_charts.jl")
+include("report_formatters.jl")
 
 end

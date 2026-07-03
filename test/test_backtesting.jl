@@ -115,28 +115,4 @@
         @test :calibration_mean in propertynames(df)
         @test :coverage_1sigma in propertynames(df)
     end
-
-    @testset "_random_bayesian_config produces valid configs" begin
-        rng = Random.MersenneTwister(42)
-        config = Velogames._random_bayesian_config(rng)
-        @test config.market_precision_scale >=
-              Velogames.PARAM_BOUNDS.market_precision_scale[1]
-        @test config.market_precision_scale <=
-              Velogames.PARAM_BOUNDS.market_precision_scale[2]
-        @test config.history_precision_scale >=
-              Velogames.PARAM_BOUNDS.history_precision_scale[1]
-        @test config.history_precision_scale <=
-              Velogames.PARAM_BOUNDS.history_precision_scale[2]
-        @test config.ability_precision_scale >=
-              Velogames.PARAM_BOUNDS.ability_precision_scale[1]
-        @test config.ability_precision_scale <=
-              Velogames.PARAM_BOUNDS.ability_precision_scale[2]
-        @test config.hist_decay_rate >= Velogames.PARAM_BOUNDS.hist_decay_rate[1]
-        @test config.hist_decay_rate <= Velogames.PARAM_BOUNDS.hist_decay_rate[2]
-        @test config.vg_hist_decay_rate >= Velogames.PARAM_BOUNDS.vg_hist_decay_rate[1]
-        @test config.vg_hist_decay_rate <= Velogames.PARAM_BOUNDS.vg_hist_decay_rate[2]
-        # Non-tuned parameters should retain defaults
-        @test config.odds_normalisation == DEFAULT_BAYESIAN_CONFIG.odds_normalisation
-        @test config.prior_variance == DEFAULT_BAYESIAN_CONFIG.prior_variance
-    end
 end

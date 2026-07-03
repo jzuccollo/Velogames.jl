@@ -16,9 +16,12 @@ struct CacheConfig
     max_age_hours::Int
 end
 
+# Default on-disk cache directory. Scripts reuse this and vary only the TTL.
+const DEFAULT_CACHE_DIR = joinpath(homedir(), ".velogames_cache")
+
 # Default cache configuration
 const DEFAULT_CACHE = CacheConfig(
-    joinpath(homedir(), ".velogames_cache"),
+    DEFAULT_CACHE_DIR,
     168,  # 7 days default cache lifetime
 )
 

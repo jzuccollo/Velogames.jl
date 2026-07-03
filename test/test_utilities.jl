@@ -2,9 +2,9 @@
 # Smoke test: VG rider scraping
 # =========================================================================
 
-@testset "getvgriders" begin
+@testset "getvg_riders" begin
     url = vg_classics_url(Dates.year(Dates.today()))
-    df = getvgriders(url, force_refresh = true)
+    df = getvg_riders(url, force_refresh = true)
     @test df isa DataFrame
     @test nrow(df) > 0
 
@@ -16,7 +16,7 @@
     @test length(unique(df.riderkey)) == length(df.riderkey)
 
     # Caching round-trip
-    df_cached = getvgriders(url)
+    df_cached = getvg_riders(url)
     @test size(df_cached) == size(df)
 
     # Stage race pages have class columns; one-day classics may not

@@ -31,9 +31,9 @@ end
 isempty(race_slugs) && (@info \"No \$year predictions found\"; exit(0))
 
 # Fetch VG racelist once for auto-detection
-cache = CacheConfig(joinpath(homedir(), \".velogames_cache\"), 6)
+cache = CacheConfig(DEFAULT_CACHE_DIR, 6)
 vg_racelist = try
-    getvgracelist(year; cache_config=cache)
+    getvg_race_list(year; cache_config=cache)
 catch e
     @warn \"Failed to fetch VG racelist: \$e\"
     nothing

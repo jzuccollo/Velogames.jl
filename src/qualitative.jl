@@ -225,7 +225,23 @@ function fetch_article_text(url::String)
 
     # Collect all text from each block element, filtering out short blocks (nav fragments)
     # but preserving short inline nodes (rider names in <a>/<strong> tags)
-    block_tags = Set(["p", "div", "article", "section", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td", "th", "figcaption", "blockquote"])
+    block_tags = Set([
+        "p",
+        "div",
+        "article",
+        "section",
+        "li",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "td",
+        "th",
+        "figcaption",
+        "blockquote",
+    ])
     skip_tags = Set(["script", "style", "nav", "footer", "header", "aside"])
     blocks = String[]
 

@@ -60,8 +60,8 @@ end
     end
 end
 
-@testset "getpcsraceresults schema" begin
-    # getpcsraceresults uses scrape_pcs_table (static HTML table parsing).
+@testset "getpcs_race_results schema" begin
+    # getpcs_race_results uses scrape_pcs_table (static HTML table parsing).
     # div.svg_shield breakaway indicators are JavaScript-rendered and not
     # present in raw HTTP responses, so in_breakaway is always false.
     result_cols = [:position, :rider, :team, :riderkey, :in_breakaway, :breakaway_km]

@@ -8,20 +8,25 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/get_data.jl` - Data scraping: VG riders, PCS rankings/specialty ratings, Oddschecker odds parsing, Cycling Oracle predictions, VG race results, VG race catalogue and per-race results
 - `src/pcs_scraper.jl` - PCS table scraping infrastructure and column aliases
 - `src/pcs_extended.jl` - Extended PCS scraping: race history results, startlists, form scores across multiple years
-- `src/data_assembly.jl` - Shared data assembly: `RaceData` struct, `join_pcs_specialty!`, `assemble_pcs_race_history`, `assemble_vg_race_history`, `prefetch_vg_racelists` (used by both production and backtesting pipelines)
+- `src/data_assembly.jl` - Shared data assembly: `RaceData` struct, `join_pcs_specialty!`, `assemble_pcs_race_history`, `assemble_vg_race_history`, `prefetch_vg_racelists` (used by both production and backtesting pipelines). Also report data loading and post-race archival: `load_report_data`, `load_stage_race_report_data`, `load_stage_race_per_stage_data`, `list_completed_races`, `compute_cumulative_scores`, `compute_stage_type_scores`, `archive_stage_race_results`, `load_stage_profiles`
 - `src/qualitative.jl` - Qualitative intelligence: YouTube transcript fetching (via yt-dlp), Claude API extraction, prompt generation, JSON response parsing, manual workflow support
 - `src/scoring.jl` - VG scoring tables by category (one-day Cat 1/2/3, stage race aggregate) and expected points functions
-- `src/simulation.jl` - Bayesian strength estimation (`estimate_strengths`): uninformative prior with PCS as observation, season-adaptive VG variance, class-aware PCS blending for stage races, domestique strength discount. `BayesianConfig` uses 3 precision scale factors (market, history, ability) with fixed within-group ratios; accessor functions compute effective variances. Block-correlation discount groups signals into the same 3 clusters. Trajectory signal removed April 2026 (negligible contribution). Also retains `predict_expected_points` (MC simulation) for backtesting compatibility.
+- `src/bayesian_core.jl` - `BayesianConfig` (3 precision scale factors — market, history, ability — with fixed within-group ratios) and variance accessors, `BayesianPosterior`/`StrengthEstimate`/`MultiDimPosterior`, `bayesian_update`, `bayesian_update_multidim_dim`, `multidim_prior`, and dimension tables (`STRENGTH_DIMENSIONS`, `SIGNAL_DIMENSION_WEIGHTS`, `RACE_HISTORY_CLASS_PROJECTION`). Block-correlation discount groups signals into the same 3 clusters.
+- `src/strength_pipeline.jl` - Bayesian strength estimation (`estimate_strengths`): uninformative prior with PCS as observation, season-adaptive VG variance, class-aware PCS blending for stage races, domestique strength discount. Signal assembly (`RiderSignalData`, `AssembledSignals`, `_assemble_signals`), scalar + multidim estimators, and `predict_expected_points` (MC simulation) for backtesting. Trajectory signal removed April 2026 (negligible contribution).
+- `src/simulate_oneday.jl` - One-day Monte Carlo race simulation (`simulate_race`, `position_to_strength`, `position_probabilities`) and expected VG points (`expected_vg_points`, `breakaway_sectors_from_km`). `_score_vg_draw!` is the shared finish+assist+breakaway scoring rule used by both `expected_vg_points` (backtest) and `resample_optimise` (production).
+- `src/simulate_stage.jl` - Per-stage grand tour simulation (`simulate_stage_race`, `StageRaceDiagnostics`, `stage_dimension_weights`) and stage-type strength projection (`compute_stage_strengths`).
 - `src/prior_checks.jl` - Prior predictive checks, sensitivity sweeps, and simulation-based calibration (SBC). Validates model behaviour by simulating from the generative process without historical data.
 - `src/prospective_eval.jl` - Prospective evaluation: compares archived pre-race predictions against actual results. Computes Spearman rho, top-N overlap, signal value analysis.
-- `src/build_model.jl` - JuMP optimisation models: `build_model_oneday` (6 riders), `build_model_stage` (9 riders + class constraints), `resample_optimise` (resampled optimisation that draws noisy strengths, scores VG points, and optimises per draw), `minimise_cost_stage`
+- `src/build_model.jl` - JuMP optimisation models: `build_model_oneday` (6 riders), `build_model_stage` (9 riders + class constraints), `resample_optimise` (resampled optimisation that draws noisy strengths, scores VG points, and optimises per draw), `minimise_cost_stage`. Also hindsight-optimal / cheapest-winning team selection for report retrospectives (`compute_optimal_team`, `compute_cheapest_winning_team`, `compute_optimal_stage_team`, `compute_cheapest_winning_stage_team`)
 - `src/race_solver.jl` - High-level solvers: `solve_oneday` and `solve_stage` (estimate strengths → resampled optimisation pipeline, returns top teams). Also archives predictions and qualitative data for prospective evaluation, and provides `archive_race_results` for post-race archival.
-- `src/cache_utils.jl` - Feather-based caching with configurable TTL (default ~/.velogames_cache, 24h), plus permanent archival storage (~/.velogames_archive) for odds/oracle snapshots
+- `src/cache_utils.jl` - Feather-based caching with configurable TTL (default ~/.velogames_cache, 7 days), plus permanent archival storage (`DEFAULT_ARCHIVE_DIR`, ~/Dropbox/code/velogames/archive) for odds/oracle snapshots
 - `src/classification_utils.jl` - Rider classification (allrounder/sprinter/climber/unclassed) column management
 - `src/race_helpers.jl` - `RaceInfo` struct (canonical race metadata), `RaceConfig` struct, `setup_race()`, URL alias lookup, `CLASSICS_RACES_2026` schedule, `SIMILAR_RACES` (derived from `RaceInfo`), year-aware VG slug/URL/game ID functions
-- `src/utilities.jl` - Name normalisation (`normalisename`), key creation (`createkey`), sentinel constants (`DNF_POSITION`, `UNRANKED_POSITION`)
-- `src/backtest.jl` - Backtesting framework: race catalogue, season-level evaluation, ablation study, hyperparameter tuning, calibration diagnostics, VG race history integration, cumulative VG season points, PCS specialty archiving
-- `src/report_helpers.jl` - HTML page generation (`html_page`, `html_table`, `html_callout`, `html_heading`), Plotly chart helpers, SVG chart functions (PIT histograms, scatter plots, rank histograms, line charts, box plots, team totals), signal waterfall, VG simulation draws
+- `src/utilities.jl` - Name normalisation (`normalisename`), key creation (`createkey`), sentinel constants (`DNF_POSITION`, `UNRANKED_POSITION`), and report/display utilities (`suppress_output`, `clean_team_names!`, `round_numeric_columns!`)
+- `src/backtest.jl` - Backtesting framework: race catalogue, season-level evaluation, calibration diagnostics, VG race history integration, cumulative VG season points, PCS specialty archiving
+- `src/report_html.jl` - HTML page generation primitives (`html_page`, `html_table`, `html_callout`, `html_heading`, `plotly_html`, `_slugify`, `commafmt`)
+- `src/report_charts.jl` - SVG/Plotly chart functions (PIT histograms, scatter plots, rank histograms, line charts, team totals, sim distributions), `compute_pit_values`, `simulate_vg_draws`
+- `src/report_formatters.jl` - Signal/classification/podium table formatters (`format_signal_waterfall`, `format_classification_table`, `format_stage_podium_picks`, per-dim helpers), `precision_budget`
 - `scripts/render_predictor.jl` - One-day prediction report: reads `race_config.toml`, runs prediction pipeline, writes `docs/predictor.html`
 - `scripts/render_assessor.jl` - Team assessor report: compares custom team vs optimal, retrospective analysis, writes `docs/assessor.html`
 - `scripts/render_stagerace.jl` - Stage race prediction report: reads `race_config.toml`, runs stage race pipeline, writes `docs/stagerace.html`
@@ -47,12 +52,12 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 ### Data scraping (src/get_data.jl)
 
 - `get_cycling_oracle(prediction_url)` - Scrape Cycling Oracle blog predictions, returns DataFrame(rider, win_prob, riderkey)
-- `getvgracelist(year)` - Scrape VG races.php for one-day classics, returns DataFrame(race_number, deadline, name, category, namekey)
-- `getvgraceresults(year, race_number)` - Fetch VG race results via year-aware ridescore URL
+- `getvg_race_list(year)` - Scrape VG races.php for one-day classics, returns DataFrame(race_number, deadline, name, category, namekey)
+- `getvg_race_results(year, race_number)` - Fetch VG race results via year-aware ridescore URL
 - `match_vg_race_number(race_name, vg_racelist)` - Match a race name to VG race number using normalised string comparison
 - `normalise_race_name(name)` - Normalise race names for cross-source matching (strips accents, hyphens, punctuation)
 
-### Simulation (src/simulation.jl)
+### Simulation (src/bayesian_core.jl, strength_pipeline.jl, simulate_oneday.jl, simulate_stage.jl)
 
 - `estimate_strengths(rider_df; ...)` / `estimate_strengths(data::RaceData; ...)` - Bayesian strength estimation pipeline. Returns DataFrame with `strength`, `uncertainty`, signal flags, signal shifts, and domestique penalty. Used by production solvers.
 - `predict_expected_points(df, scoring; ...)` - Backward-compatible wrapper: calls `estimate_strengths` then runs MC simulation to compute `expected_vg_points`. Used by backtesting.
@@ -87,7 +92,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Archival storage (src/cache_utils.jl)
 
-- `save_race_snapshot(df, data_type, pcs_slug, year)` - Permanently archive a DataFrame (e.g. odds, oracle) to `~/.velogames_archive/{data_type}/{pcs_slug}/{year}.feather`
+- `save_race_snapshot(df, data_type, pcs_slug, year)` - Permanently archive a DataFrame (e.g. odds, oracle) to `{DEFAULT_ARCHIVE_DIR}/{data_type}/{pcs_slug}/{year}.feather`
 - `load_race_snapshot(data_type, pcs_slug, year)` - Load archived data; returns `nothing` if not found
 - `archive_path(data_type, pcs_slug, year)` - Compute the archive file path
 
@@ -97,9 +102,6 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `prefetch_all_races(races)` - Bulk pre-fetch data (PCS results, rider info, race history, VG race history, cumulative VG season points, archived odds/oracle/PCS specialty)
 - `backtest_season(races; race_data, signals, ...)` - Evaluate predictions across all races
 - `summarise_backtest(results)` - Convert results to summary DataFrame with aggregates
-- `ablation_study(races; ...)` - Test 9 signal subsets to measure marginal signal value
-- `tune_hyperparameters(races; ...)` - Random search over 5 parameters (3 scale factors + 2 decay rates) with cross-validation. Directional guidance, not precision tuning.
-- `tune_domestique_discount(races; discounts, ...)` - Grid search over domestique discount values, optimising points_captured_ratio via backtest_season
 - `BacktestResult` includes: rank metrics (Spearman ρ, top-N overlap), VG team metrics (actual scoring tables), and calibration diagnostics (z-scores, coverage rates)
 
 ## Prediction model
@@ -112,10 +114,10 @@ The strength model combines multiple signals grouped into three precision famili
 
 | Signal | Source | Group | Base variance | Notes |
 | ------ | ------ | ----- | ------------- | ----- |
-| PCS seasons | `getpcsriderpts_batch()` | Ability | 7.9 | Z-scored across field. Best discriminator across all tiers (ρ=0.16–0.34). For stage races, each PCS specialty source (sprint/oneday/climber/tt/gc) is z-scored separately and routed to dimensions via `SIGNAL_DIMENSION_WEIGHTS`. |
-| VG season points | `getvgriders()` | Ability | 1.4×scale | Season-adaptive: `effective = vg_var * (1 + penalty * (1 - frac_nonzero))`. Strong for top-tier discrimination (ρ=0.287) |
-| PCS race history | `getpcsracehistory()` | History | 3.0+decay/yr | Recency-weighted. Strong for bottom/middle tiers (ρ=0.23–0.25), weak for top (ρ=0.004) |
-| Similar-race history | `getpcsracehistory()` | History | +penalty | Same as race history but with variance penalty. Races from `SIMILAR_RACES` terrain mapping |
+| PCS seasons | `getpcs_rider_pts_batch()` | Ability | 7.9 | Z-scored across field. Best discriminator across all tiers (ρ=0.16–0.34). For stage races, each PCS specialty source (sprint/oneday/climber/tt/gc) is z-scored separately and routed to dimensions via `SIGNAL_DIMENSION_WEIGHTS`. |
+| VG season points | `getvg_riders()` | Ability | 1.4×scale | Season-adaptive: `effective = vg_var * (1 + penalty * (1 - frac_nonzero))`. Strong for top-tier discrimination (ρ=0.287) |
+| PCS race history | `getpcs_race_history()` | History | 3.0+decay/yr | Recency-weighted. Strong for bottom/middle tiers (ρ=0.23–0.25), weak for top (ρ=0.004) |
+| Similar-race history | `getpcs_race_history()` | History | +penalty | Same as race history but with variance penalty. Races from `SIMILAR_RACES` terrain mapping |
 | Betting odds | `parse_oddschecker_odds()` | Market | 0.3 | Strongest top-tier signal (ρ=0.464 for top 25%). Applied uniformly when odds are present |
 | Odds floor | Derived (absence signal) | Market | var × 2.0 | When odds data exists but rider absent, floor observation from residual probability mass |
 | Cycling Oracle | `get_cycling_oracle()` | Market | `_odds_to_oracle_ratio`/scale | Broader coverage than bookmaker odds. Removal deferred: degrades middle-tier discrimination when combined with other changes. |
@@ -176,7 +178,7 @@ Normal-normal conjugate model (`estimate_rider_strength()`). Each signal updates
 - VG URLs: `https://www.velogames.com/{race-slug}/{year}/riders.php`
 - One-day classics races share one VG URL per year: `sixes-classics/{year}/riders.php` (2026+) or `sixes-superclasico/{year}/riders.php` (≤2025), with startlist hash filtering
 - Archival storage: `_prepare_rider_data` automatically archives odds/oracle/PCS specialty/qualitative data on successful fetch; solvers archive predictions after `estimate_strengths`; `archive_race_results` archives post-race PCS and VG results; `prefetch_race_data` loads archived data for backtesting
-- Archival paths: `~/.velogames_archive/{data_type}/{pcs_slug}/{year}.feather` — data_type includes odds, oracle, pcs_specialty, vg_results, qualitative, predictions, pcs_results
+- Archival paths: `{DEFAULT_ARCHIVE_DIR}/{data_type}/{pcs_slug}/{year}.feather` (DEFAULT_ARCHIVE_DIR = ~/Dropbox/code/velogames/archive) — data_type includes odds, oracle, pcs_specialty, vg_results, qualitative, predictions, pcs_results
 - VG race URLs: `ridescore.php?ga={game_id}&st={race_number}` where game_id is from `vg_classics_game_id(year)`, `st` is race number 1-44 from races.php
 - Backtesting temporal integrity: `estimate_strengths`/`predict_expected_points` accept `race_year`/`race_date` for correct recency weighting; cumulative VG season points prevent end-of-year leakage; archived PCS specialty scores prevent current-day leakage
 - Production pipeline: `estimate_strengths` → `resample_optimise` (avoids Jensen's inequality bias from scoring floor at position 31+). Backtesting pipeline: `predict_expected_points` (MC simulation) for rank-based metrics.

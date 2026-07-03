@@ -253,7 +253,38 @@ const SCORING_GRAND_TOUR = StageRaceScoringTable(
     # Team classification assists (team in top 3)
     [8, 4, 2],
     # Final GC (positions 1-30)
-    [600, 500, 400, 350, 300, 260, 220, 200, 180, 160, 140, 130, 120, 110, 100, 90, 80, 70, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10, 5],
+    [
+        600,
+        500,
+        400,
+        350,
+        300,
+        260,
+        220,
+        200,
+        180,
+        160,
+        140,
+        130,
+        120,
+        110,
+        100,
+        90,
+        80,
+        70,
+        60,
+        55,
+        50,
+        45,
+        40,
+        35,
+        30,
+        25,
+        20,
+        15,
+        10,
+        5,
+    ],
     # Final points classification (top 10)
     [120, 100, 80, 60, 40, 30, 20, 15, 10, 5],
     # Final mountains classification (top 10)
@@ -272,7 +303,8 @@ get_stage_race_scoring() = SCORING_GRAND_TOUR
 Return stage finish points for a given position. Positions outside 1-20 score 0.
 """
 function stage_finish_points_for_position(position::Int, scoring::StageRaceScoringTable)
-    1 <= position <= length(scoring.stage_finish_points) ? scoring.stage_finish_points[position] : 0
+    1 <= position <= length(scoring.stage_finish_points) ?
+    scoring.stage_finish_points[position] : 0
 end
 
 """
@@ -381,9 +413,9 @@ Other riders' rates are proportional to their average annual breakaway km.
 function compute_breakaway_rates(
     breakaway_df::DataFrame,
     startlist_keys::AbstractVector{<:AbstractString};
-    history_years::Int=3,
-    max_rate::Float64=0.35,
-    mean_sectors::Float64=2.0,
+    history_years::Int = 3,
+    max_rate::Float64 = 0.35,
+    mean_sectors::Float64 = 2.0,
 )
     # Filter to recent years and compute average annual km per rider
     max_year = maximum(breakaway_df.year)
