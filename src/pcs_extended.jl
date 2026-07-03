@@ -252,7 +252,8 @@ function getpcs_race_startlist(
             slug_map = _extract_rider_slugs(url)
             [get(slug_map, key, "") for key in result.riderkey]
         catch e
-            @debug "Could not extract PCS slugs from startlist: $e"
+            e isa HTTP.Exceptions.StatusError || rethrow()
+            @warn "Could not extract PCS slugs from startlist ($url): HTTP $(e.status)"
             fill("", nrow(result))
         end
 
@@ -958,8 +959,11 @@ function _fetch_stage_details(stage_url::String)
     response = try
         HTTP.get(stage_url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
     catch e
-        @debug "Failed to fetch stage details from $stage_url: $e"
-        return ps, vert, gradient, n_hc, n_cat1
+        if e isa HTTP.Exceptions.StatusError
+            @debug "HTTP $(e.status) fetching stage details from $stage_url"
+            return ps, vert, gradient, n_hc, n_cat1
+        end
+        error("Failed to fetch $stage_url: $e")
     end
 
     page = Gumbo.parsehtml(String(response.body))

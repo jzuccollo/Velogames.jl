@@ -84,7 +84,8 @@ function is_cache_valid(key::String, max_age_hours::Int, cache_dir::String)::Boo
         meta = JSON3.read(meta_content, CacheMetadata)
         age_hours = Dates.value(now() - meta.timestamp) / (1000 * 60 * 60)
         return age_hours < max_age_hours
-    catch _e
+    catch e
+        @warn "Failed to read cache metadata $meta_file, treating as invalid" exception = e
         return false
     end
 end
@@ -123,7 +124,8 @@ function load_from_cache(key::String, cache_dir::String)::Union{DataFrame,Nothin
     if isfile(data_file_feather)
         try
             return Feather.read(data_file_feather)
-        catch _e
+        catch e
+            @warn "Failed to read cached data $data_file_feather" exception = e
             return nothing
         end
     end

@@ -267,7 +267,9 @@ function prospective_pit_values(
             try
                 bdf = load_pcs_breakaway_stats(breakaway_dir)
                 compute_breakaway_rates(bdf, String.(predictions.riderkey))
-            catch
+            catch e
+                @warn "Failed to compute breakaway rates for $pcs_slug $year" exception =
+                    e
                 Float64[], Float64[]
             end
         else
@@ -300,7 +302,7 @@ function prospective_pit_values(
     end
 
     isempty(all_pit) && return DataFrame()
-    vcat(all_pit...)
+    reduce(vcat, all_pit)
 end
 
 """
