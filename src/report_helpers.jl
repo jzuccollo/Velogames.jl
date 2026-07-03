@@ -1598,6 +1598,10 @@ function format_classification_table(
     n_sims = diagnostics.n_sims
     top_k = size(pos_counts, 2)
 
+    # No scoring depth for this classification (VG published no table, or the
+    # scrape didn't match its heading) — nothing to rank.
+    top_k == 0 && return "<p>No $classification classification scoring available.</p>\n"
+
     any_pos = vec(sum(pos_counts[:, 1:min(top_label, top_k)], dims=2)) ./ n_sims
     win = pos_counts[:, 1] ./ n_sims
     # GC: sort by P(win) first, then top-N. For a genuine contender, top-N ≈ their

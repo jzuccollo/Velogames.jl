@@ -455,6 +455,13 @@ const RACE_HISTORY_CLASS_PROJECTION = Dict{String,NamedTuple}(
     "unclassed"  => (flat=0.2, hilly=0.5, mountain=0.0, itt=0.0, gc=0.3, kom=0.0),
 )
 
+# Minimum routing weight for a market signal to count as "informing" a dimension
+# for the double-counting discount. Above this, the market materially replaces
+# the PCS signal there (odds_points→flat 0.4, odds_gc→mountain 0.5/gc 1.0,
+# odds_kom→kom 1.0); below it, the market only trickles in as a small correction
+# (odds_gc→kom 0.1, hilly 0.05) and must not trigger the full discount.
+const MARKET_DIM_THRESHOLD = 0.3
+
 function _weights_to_vec(nt::NamedTuple)
     [Float64(getfield(nt, d)) for d in STRENGTH_DIMENSIONS]
 end
@@ -1429,15 +1436,22 @@ function _assign_team_positions!(
     positions::Vector{Int},
     noisy::Vector{Float64},
     teams::Vector{String},
+    abandoned::Vector{Bool},
     n_riders::Int,
 )
+    # Average TT strength over the riders still in the race. An abandoned rider's
+    # noisy is -Inf, so including them would collapse the whole squad's mean to
+    # -Inf and rank every active teammate last. A team with no active riders left
+    # ranks bottom (mean -Inf).
     team_sum = Dict{String,Float64}()
     team_n = Dict{String,Int}()
     for i in 1:n_riders
+        (!isempty(abandoned) && abandoned[i]) && continue
         team_sum[teams[i]] = get(team_sum, teams[i], 0.0) + noisy[i]
         team_n[teams[i]] = get(team_n, teams[i], 0) + 1
     end
-    ranked = sort(collect(keys(team_sum)), by=t -> team_sum[t] / team_n[t], rev=true)
+    team_mean(t) = get(team_n, t, 0) == 0 ? -Inf : team_sum[t] / team_n[t]
+    ranked = sort(unique(teams), by=team_mean, rev=true)
     team_rank = Dict(t => r for (r, t) in enumerate(ranked))
     for i in 1:n_riders
         positions[i] = team_rank[teams[i]]
@@ -1579,7 +1593,7 @@ hilly with PS=152.
 Anchor points (linear interpolation between), tuned against the empirical PS
 distribution seen on a real grand tour where PCS-flat stages score PS≈7-28,
 hilly score PS≈14-152, and mountain score PS≈89-396:
-- PS ≤ 20:   `flat = 1.0`
+- PS ≤ 40:   `flat = 1.0`
 - PS = 90:   `hilly = 1.0`
 - PS ≥ 250:  `mountain = 1.0`
 
@@ -1790,8 +1804,18 @@ function simulate_stage_race(
             # default 5) to capture crashes / breakaways / echelons — a distinct
             # noise source from the Gaussian epistemic wobble, hence its own tail
             # rather than the global `simulation_df`. SD contribution ≈ a_stage·√(df/(df-2)).
-            # The same noise term feeds cumulative GC so a good day also gains time.
+            #
+            # The aleatoric term feeds cumulative GC too ("a good day gains time"),
+            # but ONLY in proportion to how much the stage separates GC. On a flat
+            # bunch-sprint stage the whole peloton records the same GC time, so
+            # finishing 2nd vs 60th must not move GC — otherwise ~8 flat stages
+            # inject the largest source of spurious GC volatility from the days
+            # GC separates least. `gc_sep` = mountain + ITT weight (summit finishes
+            # already reallocate hilly→mountain), so flat/rolling days contribute
+            # ~no aleatoric GC time while mountains/ITTs contribute the full amount.
+            # The epistemic term (persistent ability) still feeds GC everywhere.
             a_stage = _aleatoric_sd(w, sim_config.aleatoric_noise)
+            gc_sep = clamp(w.mountain + w.itt, 0.0, 1.0)
             for i in 1:n_riders
                 stage_noise[i] = _rand_t(rng, sim_config.aleatoric_df)
                 if abandoned[i]
@@ -1800,9 +1824,10 @@ function simulate_stage_race(
                     cumulative_gc_score[i] = -Inf
                     continue
                 end
-                noise_term = uncertainties[i] * alpha * rider_noise[i] + a_stage * stage_noise[i]
-                noisy[i] = strengths_blend[i] + noise_term
-                cumulative_gc_score[i] += gc_strengths[i] + noise_term
+                epistemic = uncertainties[i] * alpha * rider_noise[i]
+                aleatoric = a_stage * stage_noise[i]
+                noisy[i] = strengths_blend[i] + epistemic + aleatoric
+                cumulative_gc_score[i] += gc_strengths[i] + epistemic + gc_sep * aleatoric
             end
 
             # Stage-finish breakaway noise (decoupled from GC).
@@ -1818,13 +1843,17 @@ function simulate_stage_race(
             # shares their squad's placing.
             order = sortperm(noisy, rev=true)
             if stype == :ttt
-                _assign_team_positions!(positions, noisy, teams, n_riders)
+                _assign_team_positions!(positions, noisy, teams, abandoned, n_riders)
             else
                 for (pos, rider_idx) in enumerate(order)
                     positions[rider_idx] = pos
                 end
             end
             for i in 1:n_riders
+                # Abandoned riders inherit their team's placing on a TTT, so
+                # exclude them here or a top-3 team would credit its abandoned
+                # members with a stage podium in the diagnostics.
+                abandoned[i] && continue
                 p = positions[i]
                 if p <= 3
                     diag_stage_finish[stage_idx, i, p] += 1
@@ -1864,8 +1893,13 @@ function simulate_stage_race(
                 uncertainties, alpha, a_stage, rider_noise, stage_noise, stype, n_riders,
                 sim_config.intermediate_sprint_points, abandoned)
 
+            # Abandoned riders are frozen out of every per-stage event: their
+            # finish/GC positions are already last (noisy = -Inf), but the
+            # teammate-assist loops still credit them, so skip accumulation
+            # entirely once they have left the race. Points banked on earlier
+            # stages remain in rider_total_pts.
             for i in 1:n_riders
-                rider_total_pts[i] += stage_pts[i]
+                abandoned[i] || (rider_total_pts[i] += stage_pts[i])
             end
         end
 
@@ -2312,10 +2346,16 @@ function _assemble_signals(
        :year in propertynames(seasons_df)
         for g in groupby(seasons_df, :riderkey)
             key = first(g.riderkey)
+            pts_all = Float64.(coalesce.(g.pcs_points, 0.0))
+            yrs_all = Int.(coalesce.(g.year, current_year))
+            # Drop post-race seasons: an archived per-season frame reconstructed
+            # for a past race can carry later-year rows that would leak future
+            # form (and, for year > current_year, flip the decay weight above 1).
+            keep = yrs_all .<= current_year
+            any(keep) || continue
             push!(seasons_keys, key)
-            pts = Float64.(coalesce.(g.pcs_points, 0.0))
-            yrs = Int.(coalesce.(g.year, current_year))
-            length(pts) == 0 && continue
+            pts = pts_all[keep]
+            yrs = yrs_all[keep]
             weights = exp.(-bayesian_config.pcs_season_decay .* (current_year .- yrs))
             decay_avg = sum(weights .* pts) / sum(weights)
             career_avg = mean(pts)
@@ -2567,27 +2607,48 @@ function _estimate_strengths_multidim(
     # --- Per-source PCS specialty z-scores (log1p, then z-score across field) ---
     # Preferred: a recency-weighted per-season specialty score in `<col>_r`
     # (decay-weighted sum of points earned per season — current form beats stale
-    # palmarès), used as-is. Fallback (backtest / no recency data): career-
-    # cumulative specialty × the currency ratio, so a rider in decline ranks
-    # lower than their lifetime numbers alone would suggest.
+    # palmarès). Fallback (backtest / failed scrape): career-cumulative specialty
+    # × the currency ratio, so a rider in decline ranks lower than their lifetime
+    # numbers alone would suggest.
+    #
+    # Standardise a raw specialty vector to a z-score using ONLY the riders who
+    # actually have data (raw>0) to set μ/σ: the many domestiques with none would
+    # otherwise drag the mean down and inflate the sd, compressing genuine
+    # specialists toward the pack. Riders with no data still receive the resulting
+    # (negative) z, which correctly ranks them below the field.
+    function _specialty_z(raw)
+        logged = log1p.(max.(raw, 0.0))
+        has_data = raw .> 0.0
+        ref = count(has_data) >= 2 ? logged[has_data] : logged
+        μ = mean(ref)
+        σ = std(ref)
+        σ > 0 ? (logged .- μ) ./ σ : zeros(length(raw))
+    end
+
     pcs_cols = (:sprint, :oneday, :climber, :tt, :gc)
     pcs_z = Dict{Symbol,Vector{Float64}}()
     for col in pcs_cols
         recency_col = Symbol(col, "_r")
-        raw = if recency_col in propertynames(df)
-            Float64.(coalesce.(df[!, recency_col], 0.0))
-        elseif col in propertynames(df)
-            Float64.(coalesce.(df[!, col], 0.0)) .* sig.rider_currency
-        else
+        has_career = col in propertynames(df)
+        career_z = has_career ?
+            _specialty_z(Float64.(coalesce.(df[!, col], 0.0)) .* sig.rider_currency) :
             nothing
-        end
-        if raw === nothing
-            pcs_z[col] = zeros(n_riders)
+
+        if recency_col in propertynames(df)
+            # Splice on the z-SCALE, not the raw scale: recency scores (decayed
+            # per-season sums) and career scores (all-time totals) are different
+            # magnitudes, so mixing raw values in one z-score would bias fallback
+            # riders. Standardise each separately, then take the recency z where a
+            # rider has one and the career z where the scrape failed (`missing`).
+            rcol = df[!, recency_col]
+            rec_z = _specialty_z([ismissing(v) ? 0.0 : Float64(v) for v in rcol])
+            pcs_z[col] = [ismissing(rcol[i]) ?
+                (career_z === nothing ? 0.0 : career_z[i]) : rec_z[i]
+                for i in 1:n_riders]
+        elseif career_z !== nothing
+            pcs_z[col] = career_z
         else
-            logged = log1p.(max.(raw, 0.0))
-            μ = mean(logged)
-            σ = std(logged)
-            pcs_z[col] = σ > 0 ? (logged .- μ) ./ σ : zeros(n_riders)
+            pcs_z[col] = zeros(n_riders)
         end
     end
 
@@ -2595,14 +2656,22 @@ function _estimate_strengths_multidim(
 
     # --- Dimension-aware market mask (Issue A) ---
     # A dimension is "market-informed" iff some market signal present in this race
-    # routes to it. The double-counting discount (`market_discount`) then applies
-    # per dimension: full weight kept on dimensions no market touches (notably
-    # :itt, which has no market at all → PCS-TT stays sharp). Determined once at
-    # the race level from which market lookups are populated, OR-ed through the
-    # fixed routing weights so it tracks whichever markets were actually supplied.
+    # routes to it *materially*. The double-counting discount (`market_discount`)
+    # then applies per dimension: full weight kept on dimensions no market touches
+    # (notably :itt, which has no market at all → PCS-TT stays sharp).
+    #
+    # The materiality threshold matters: markets cross-route weakly into adjacent
+    # dimensions (odds_gc → kom 0.1, hilly 0.05) as a small correction, but that
+    # trickle does NOT replace the primary PCS signal there, so discounting the
+    # whole dimension 8× on the strength of it collapses (e.g.) KOM toward the
+    # prior for the entire field whenever GC odds exist — defeating the point of
+    # a separate KOM channel. Only mark a dimension when a market's routing weight
+    # to it is ≥ MARKET_DIM_THRESHOLD (0.3): keeps odds_points→flat (0.4),
+    # odds_gc→{mountain 0.5, gc 1.0} and odds_kom→kom (1.0), but not the 0.05/0.1
+    # cross-routes.
     market_dims = fill(false, D)
     _mark_dims!(mask, wnt) = for (d, dsym) in enumerate(STRENGTH_DIMENSIONS)
-        getfield(wnt, dsym) > 0.0 && (mask[d] = true)
+        getfield(wnt, dsym) >= MARKET_DIM_THRESHOLD && (mask[d] = true)
     end
     if !isempty(sig.odds_lookup) || !isempty(sig.oracle_lookup)
         _mark_dims!(market_dims, SIGNAL_DIMENSION_WEIGHTS.odds_gc)
@@ -2615,9 +2684,12 @@ function _estimate_strengths_multidim(
     end
     if !isempty(sig.stagewin_odds_lookup)
         # Stage-win routing is per-rider class (RACE_HISTORY_CLASS_PROJECTION),
-        # spanning flat/hilly/mountain/gc across the field — mark those covered.
-        for dsym in (:flat, :hilly, :mountain, :gc)
-            market_dims[_DIM_INDEX[dsym]] = true
+        # so the market-informed set is the union of dimensions any class routes
+        # to materially — including :kom (climber 0.7) and :mountain (climber
+        # 0.7), which the old hardcoded flat/hilly/mountain/gc list missed while
+        # still applying the stage-win signal there.
+        for proj in values(RACE_HISTORY_CLASS_PROJECTION)
+            _mark_dims!(market_dims, proj)
         end
     end
 
@@ -2935,8 +3007,12 @@ function estimate_strengths(
        :year in propertynames(seasons_df)
         for g in groupby(seasons_df, :riderkey)
             key = first(g.riderkey)
-            weights = [exp(-bayesian_config.pcs_season_decay * (current_year - r.year)) for r in eachrow(g)]
-            weighted_pts = sum(weights .* g.pcs_points) / sum(weights)
+            # Only seasons up to the race year (temporal integrity for backtests
+            # / re-runs; see the currency-factor block above).
+            rows = [r for r in eachrow(g) if r.year <= current_year]
+            isempty(rows) && continue
+            weights = [exp(-bayesian_config.pcs_season_decay * (current_year - r.year)) for r in rows]
+            weighted_pts = sum(w * r.pcs_points for (w, r) in zip(weights, rows)) / sum(weights)
             idx = findfirst(==(key), df.riderkey)
             idx === nothing && continue
             pcs_z[idx] = weighted_pts

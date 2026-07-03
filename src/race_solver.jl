@@ -215,10 +215,11 @@ after filtering.
 # per-season points and collapse to a decay-weighted sum (recent seasons
 # dominate) using the default `pcs_season_decay`. Adds `:<spec>_r` columns
 # consumed by the multidim z-scoring. Riders with no PCS profile / no specialty
-# results get 0 (consistent with the career-specialty path, where they are
-# `missing`→0). Returns the raw per-season data in long format
-# (riderkey, specialty, year, points) so the caller can archive it for
-# backtest temporal integrity. Logs coverage so a scrape regression is visible.
+# results are left `missing` (NOT 0), so the z-scoring falls back to their
+# career specialty per-rider rather than reading a spurious zero. Returns the
+# raw per-season data in long format (riderkey, specialty, year, points) so the
+# caller can archive it for backtest temporal integrity. Logs coverage so a
+# scrape regression is visible.
 function _apply_pcs_recency!(
     riderdf::DataFrame,
     pcs_slug_map::Dict{String,String},
@@ -233,7 +234,12 @@ function _apply_pcs_recency!(
         riderkey=String[], specialty=String[], year=Int[], points=Float64[],
     )
     for spec in specialties
-        scores = zeros(Float64, n)
+        # `missing` (not 0.0) for riders whose scrape returned nothing, so the
+        # z-scoring downstream can fall back to career × currency per-rider
+        # rather than reading a spurious zero. A field-wide scrape regression
+        # then degrades gracefully to career data instead of zeroing the whole
+        # specialty dimension.
+        scores = Vector{Union{Missing,Float64}}(missing, n)
         covered = 0
         for i in 1:n
             key = riderdf.riderkey[i]
@@ -248,16 +254,29 @@ function _apply_pcs_recency!(
             catch
                 DataFrame(year=Int[], points=Float64[])
             end
-            nrow(df) == 0 && continue
-            w = exp.(-decay .* (current_year .- df.year))
-            scores[i] = sum(w .* df.points)
+            # Only seasons up to the race year. A per-season page can carry
+            # post-race results (re-run after the race, or a stale current_year);
+            # a year > current_year would also flip the decay weight above 1 and
+            # let a future season dominate. Filtering here also keeps the
+            # archived long-format seasons temporally clean for backtests.
+            keep = df.year .<= current_year
+            any(keep) || continue
+            yrs = df.year[keep]
+            pts = df.points[keep]
+            w = exp.(-decay .* (current_year .- yrs))
+            scores[i] = sum(w .* pts)
             covered += 1
-            for r in eachrow(df)
-                push!(seasons_long, (key, String(spec), r.year, r.points))
+            for (yr, p) in zip(yrs, pts)
+                push!(seasons_long, (key, String(spec), yr, p))
             end
         end
         riderdf[!, Symbol(spec, "_r")] = scores
-        @info "PCS recency ($spec): $covered/$n riders with per-season points"
+        if covered < n ÷ 2
+            @warn "PCS recency ($spec): only $covered/$n riders with per-season " *
+                  "points — check PCS slugs / scrape (falling back to career points)"
+        else
+            @info "PCS recency ($spec): $covered/$n riders with per-season points"
+        end
     end
     return seasons_long
 end
@@ -274,6 +293,7 @@ function _prepare_rider_data(
     pcs_check_col::Symbol=:oneday,
     filter_startlist::Bool=true,
     include_gt_history::Bool=true,
+    apply_recency::Bool=true,
     qualitative_df::Union{DataFrame,Nothing}=nothing,
     odds_df::Union{DataFrame,Nothing}=nothing,
     points_oracle_url::String="",
@@ -363,11 +383,26 @@ function _prepare_rider_data(
 
     # Recency-weight all five PCS specialties from per-season points, so current
     # form outweighs stale career palmarès. Adds :<spec>_r columns consumed by
-    # the multidim z-scoring; returns the raw per-season data for archival.
-    pcs_seasons = _apply_pcs_recency!(
-        riderdf, pcs_slug_map, config.year;
-        cache_config=cache_config, force_refresh=force_refresh,
-    )
+    # the multidim z-scoring; returns the raw per-season data for archival. Only
+    # the stage-race (multidim) path reads the :<spec>_r columns — the one-day
+    # scalar path uses its own single-dimension recency source — so skip the
+    # 5×N per-rider specialty fetches for one-day races.
+    if apply_recency
+        pcs_seasons = _apply_pcs_recency!(
+            riderdf, pcs_slug_map, config.year;
+            cache_config=cache_config, force_refresh=force_refresh,
+        )
+
+        # Archive per-season specialty points (long format) so backtests can
+        # recompute recency-weighted specialty scores as-of the race date.
+        if !isempty(config.pcs_slug) && nrow(pcs_seasons) > 0
+            try
+                save_race_snapshot(pcs_seasons, "pcs_specialty_seasons", config.pcs_slug, config.year)
+            catch e
+                @debug "Failed to archive PCS specialty seasons data: $e"
+            end
+        end
+    end
 
     # Archive PCS specialty scores for future backtesting
     if !isempty(config.pcs_slug) && nrow(pcsriderpts) > 0
@@ -375,16 +410,6 @@ function _prepare_rider_data(
             save_race_snapshot(pcsriderpts, "pcs_specialty", config.pcs_slug, config.year)
         catch e
             @debug "Failed to archive PCS specialty data: $e"
-        end
-    end
-
-    # Archive per-season specialty points (long format) so backtests can
-    # recompute recency-weighted specialty scores as-of the race date.
-    if !isempty(config.pcs_slug) && nrow(pcs_seasons) > 0
-        try
-            save_race_snapshot(pcs_seasons, "pcs_specialty_seasons", config.pcs_slug, config.year)
-        catch e
-            @debug "Failed to archive PCS specialty seasons data: $e"
         end
     end
 
@@ -681,6 +706,7 @@ function solve_oneday(
         filter_startlist=filter_startlist,
         qualitative_df=qualitative_df,
         odds_df=odds_df,
+        apply_recency=false,
     )
     if data === nothing
         return DataFrame(), DataFrame(), DataFrame[], Matrix{Float64}(undef, 0, 0)
