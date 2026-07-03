@@ -340,6 +340,10 @@ Returns `(df, top_teams, sim_vg_points, diagnostics)` where df gains
 `:selection_frequency` and `:expected_vg_points`, and `diagnostics` carries
 per-stage and per-classification position counts that reports surface as
 podium / top-K probabilities.
+
+`breakaway_rates` (optional, aligned to `df.riderkey`) is forwarded to
+`simulate_stage_race` to enable the per-rider breakaway event on hilly/mountain
+stages; empty by default (feature off).
 """
 function resample_optimise_stage!(
     df::DataFrame,
@@ -355,6 +359,7 @@ function resample_optimise_stage!(
     max_per_team::Integer = 0,
     risk_aversion::Float64 = 0.5,
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
+    breakaway_rates::Vector{Float64} = Float64[],
 )
     uncertainties = Float64.(df.uncertainty)
     teams = String.(df.team)
@@ -379,6 +384,7 @@ function resample_optimise_stage!(
         rng = rng,
         sim_config = sim_config,
         rider_classes = rider_classes,
+        breakaway_rates = breakaway_rates,
     )
 
     df, top_teams = _resample_core!(

@@ -253,6 +253,65 @@ end
     return nothing
 end
 
+# Discrete breakaway event (grand-tour breakaway modelling, July 2026). Draws
+# a per-stage Bernoulli "in the break" event, hilly/mountain stages only, for
+# riders with a recorded PCS breakaway-km history (`breakaway_rates[i] > 0`,
+# from `compute_breakaway_rates` — see race_solver.jl `_load_breakaway_rates`).
+# Riders with no such history (pure sprinters, GC leaders who never go up the
+# road) have `breakaway_rates[i] == 0.0` and are skipped WITHOUT consuming an
+# `rng` draw, so passing an empty/all-zero `breakaway_rates` (the default)
+# leaves the RNG stream — and hence every simulated outcome — bit-identical to
+# the pre-breakaway-modelling behaviour.
+#
+# On trigger, boosts the rider's `noisy` stage-finish strength (mirrors the
+# real advantage of contesting a stage from a small escape rather than the
+# full bunch) so the effect flows through the EXISTING finish-position
+# ranking, points-jersey ranking, and daily-KOM proxy (all keyed off `noisy`)
+# without a parallel ranking system. Deliberately does NOT touch
+# `cumulative_gc_score`: a domestique's break essentially never moves real
+# GC, and keeping GC untouched means this feature cannot inflate the exact
+# metrics (final GC bonus, final team classification) used for rank-ρ
+# validation elsewhere.
+@inline function _draw_breakaway!(
+    in_break::Vector{Bool},
+    noisy::Vector{Float64},
+    breakaway_rates::Vector{Float64},
+    boost::Float64,
+    stype::Symbol,
+    abandoned::Vector{Bool},
+    n_riders::Int,
+    rng::AbstractRNG,
+)
+    fill!(in_break, false)
+    (isempty(breakaway_rates) || (stype != :hilly && stype != :mountain)) && return in_break
+    for i = 1:n_riders
+        (abandoned[i] || breakaway_rates[i] <= 0.0) && continue
+        if rand(rng) < breakaway_rates[i]
+            in_break[i] = true
+            noisy[i] += boost
+        end
+    end
+    return in_break
+end
+
+# Flat "breakaway at 50% distance" bonus (`scoring.breakaway_points`, 20 pts —
+# previously dead for stage races, see scoring.jl SCORING_GRAND_TOUR). Awarded
+# unconditionally to every rider `_draw_breakaway!` selected for this stage,
+# on top of whatever they score for their (boosted) finish position. Must run
+# AFTER `_score_stage_finish_and_assists!`, which `fill!`s `stage_pts` to zero.
+@inline function _score_breakaway_bonus!(
+    stage_pts::Vector{Float64},
+    in_break::Vector{Bool},
+    bp::Int,
+    n_riders::Int,
+)
+    bp == 0 && return nothing
+    for i = 1:n_riders
+        in_break[i] && (stage_pts[i] += bp)
+    end
+    return nothing
+end
+
 """
     stage_dimension_weights(stage::StageProfile) -> NamedTuple
 
@@ -338,6 +397,13 @@ Per-event scoring (stage finish + assists, daily GC + assists, points jersey,
 intermediate sprint, KOM) is delegated to `_score_*` helpers above. The aleatoric
 scale, breakaway noise, jersey allocation, and intermediate-sprint points all live
 in `sim_config::StageSimConfig`.
+
+`breakaway_rates` (optional, aligned to `uncertainties`/`teams` by rider index)
+enables the discrete per-rider breakaway event on hilly/mountain stages — see
+`_draw_breakaway!`. Empty by default, in which case the feature is fully
+inert (no RNG draws consumed, output identical to pre-breakaway-modelling
+behaviour). Typically produced by `compute_breakaway_rates` from archived PCS
+breakaway-km data with `max_rate = STAGE_BREAKAWAY_MAX_RATE`.
 """
 function simulate_stage_race(
     stages::Vector{StageProfile},
@@ -351,6 +417,7 @@ function simulate_stage_race(
     rng::AbstractRNG = Random.default_rng(),
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
     rider_classes::Vector{String} = String[],
+    breakaway_rates::Vector{Float64} = Float64[],
 )
     n_riders = length(uncertainties)
     n_stages = length(stages)
@@ -424,6 +491,7 @@ function simulate_stage_race(
     mountain_top5_counts = Vector{Int}(undef, n_riders)
     kom_str = Vector{Float64}(undef, n_riders)
     abandoned = Vector{Bool}(undef, n_riders)
+    in_break = Vector{Bool}(undef, n_riders)
 
     for sim = 1:n_sims
         for i = 1:n_riders
@@ -521,6 +589,20 @@ function simulate_stage_race(
                 end
             end
 
+            # Discrete breakaway event (rider-targeted, data-informed — see
+            # `_draw_breakaway!` above). No-op and RNG-inert when
+            # `breakaway_rates` is empty (the default).
+            _draw_breakaway!(
+                in_break,
+                noisy,
+                breakaway_rates,
+                sim_config.breakaway_stage_boost,
+                stype,
+                abandoned,
+                n_riders,
+                rng,
+            )
+
             # Rank by noisy stage strength → positions, record podium/top-10.
             # A team time trial is scored as a ranking of teams: every rider
             # shares their squad's placing.
@@ -558,6 +640,11 @@ function simulate_stage_race(
                     n_riders,
                 )
             end
+
+            # Flat breakaway bonus (unconditional on finish position). Must
+            # run after the fill! above, and is a no-op whenever `in_break` is
+            # all-false (flat/itt/ttt stages, or breakaway modelling disabled).
+            _score_breakaway_bonus!(stage_pts, in_break, scoring.breakaway_points, n_riders)
 
             # Cumulative GC ranking after this stage.
             gc_order = sortperm(cumulative_gc_score, rev = true)

@@ -540,6 +540,153 @@ end
     @test Velogames._aleatoric_sd(mtn_w, an) == an.mountain
 end
 
+# =========================================================================
+# GT breakaway modelling (prototype, July 2026 — roadmap.md "Stage-race
+# breakaway modelling")
+# =========================================================================
+
+@testset "_draw_breakaway! and _score_breakaway_bonus!" begin
+    rng = Random.MersenneTwister(1)
+    n = 4
+    abandoned = fill(false, n)
+    rates = [1.0, 0.0, 1.0, 0.0]  # riders 1 and 3 have recorded breakaway history
+
+    # Flat stage: guarded off regardless of rate — no trigger, no boost
+    noisy = zeros(n)
+    in_break = fill(false, n)
+    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :flat, abandoned, n, rng)
+    @test all(.!in_break)
+    @test noisy == zeros(n)
+
+    # Mountain stage: riders 1 and 3 (rate 1.0) always trigger; boost applied
+    fill!(noisy, 0.0)
+    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :mountain, abandoned, n, rng)
+    @test in_break == [true, false, true, false]
+    @test noisy == [2.5, 0.0, 2.5, 0.0]
+
+    # Flat breakaway bonus: only in_break riders are credited
+    stage_pts = zeros(n)
+    Velogames._score_breakaway_bonus!(stage_pts, in_break, 20, n)
+    @test stage_pts == [20.0, 0.0, 20.0, 0.0]
+
+    # bp == 0 (one-day-style scoring table) is a no-op
+    stage_pts2 = zeros(n)
+    Velogames._score_breakaway_bonus!(stage_pts2, in_break, 0, n)
+    @test all(stage_pts2 .== 0.0)
+
+    # Abandoned riders never trigger even at rate 1.0
+    fill!(noisy, 0.0)
+    fill!(in_break, false)
+    abandoned2 = [true, false, true, false]  # exactly the rate-1.0 riders
+    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :mountain, abandoned2, n, rng)
+    @test all(.!in_break)
+
+    # Empty breakaway_rates (the default) is a strict no-op — no rand() call,
+    # so RNG state is untouched (checked by comparing the next draw to a fresh
+    # rng at the same seed).
+    rng_a = Random.MersenneTwister(99)
+    rng_b = Random.MersenneTwister(99)
+    fill!(noisy, 0.0)
+    fill!(in_break, false)
+    Velogames._draw_breakaway!(
+        in_break,
+        noisy,
+        Float64[],
+        2.5,
+        :mountain,
+        abandoned,
+        n,
+        rng_a,
+    )
+    @test all(.!in_break)
+    @test rand(rng_a) == rand(rng_b)  # rng_a consumed nothing beforehand
+end
+
+@testset "simulate_stage_race breakaway event: do-no-harm" begin
+    # An all-zero (or empty, the default) breakaway_rates vector must consume
+    # zero rand() calls, so the whole simulation is bit-identical to the
+    # pre-breakaway-modelling behaviour under the same seed.
+    n_riders = 6
+    scoring = SCORING_GRAND_TOUR
+    stages = [flat_stage(1), mountain_stage(2), hilly_stage(3)]
+    base = collect(range(2.0, -2.0, length = n_riders))
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
+    )
+    uncertainties = fill(0.5, n_riders)
+    teams = repeat(["A", "B", "C"], 2)
+
+    sim_default, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 200,
+        rng = Random.MersenneTwister(7),
+    )
+    sim_explicit_zero, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 200,
+        rng = Random.MersenneTwister(7),
+        breakaway_rates = zeros(n_riders),
+    )
+
+    @test sim_default == sim_explicit_zero
+end
+
+@testset "simulate_stage_race breakaway event: boosts targeted rider" begin
+    # Rider 5 is a weak domestique (well below the leaders on every dimension)
+    # given a forced (rate 1.0) breakaway history. With rate 1.0 the Bernoulli
+    # draw is guaranteed to trigger every simulation on both mountain stages
+    # (rand() ∈ [0,1) is always < 1.0), so rider 5 banks the flat 20-pt
+    # breakaway bonus twice, deterministically, regardless of RNG — a mean
+    # floor of 40 that would be impossible without this feature.
+    n_riders = 6
+    scoring = SCORING_GRAND_TOUR
+    stages = [mountain_stage(1), mountain_stage(2), flat_stage(3)]
+    base = [4.0, 1.0, 0.0, -1.0, -3.0, -4.0]
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
+    )
+    uncertainties = fill(0.6, n_riders)
+    teams = ["A", "B", "C", "D", "E", "F"]
+
+    rates = zeros(n_riders)
+    rates[5] = 1.0
+
+    sim, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 50,
+        rng = Random.MersenneTwister(3),
+        breakaway_rates = rates,
+    )
+    mean_pts = vec(mean(sim, dims = 2))
+
+    @test mean_pts[5] >= 40.0
+end
+
+# =========================================================================
+# GT VG-history signal (Option A prototype, July 2026 — roadmap.md
+# "GT VG-history strength signal")
+# =========================================================================
+
 @testset "attrition helpers (_norm_class, _rand_gamma)" begin
     # Real VG class labels normalise to the attrition_class_mult keys.
     @test Velogames._norm_class("All Rounder") == :allrounder
