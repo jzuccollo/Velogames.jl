@@ -295,6 +295,10 @@ function _apply_pcs_recency!(
             catch
                 DataFrame(year = Int[], points = Float64[])
             end
+            # A cached "no data for this rider/specialty" result can come back
+            # as a columnless DataFrame rather than raising — treat the same
+            # as the catch-block fallback above (no data, skip this rider).
+            hasproperty(df, :year) || continue
             # Only seasons up to the race year. A per-season page can carry
             # post-race results (re-run after the race, or a stale current_year);
             # a year > current_year would also flip the decay weight above 1 and
