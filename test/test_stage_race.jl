@@ -740,6 +740,41 @@ end
     @test on.strength_gc == off.strength_gc
 end
 
+@testset "GT VG points-propensity factors: two-sided, shrunk, inert off (Option B)" begin
+    # p (ability-implied EVG): leader high, break-hunter low, domestique high,
+    # debutant moderate. Real prior GT totals invert the roles: the break-hunter
+    # out-scores their ability, the domestique under-scores it, the leader matches.
+    keys = ["leader", "breaker", "domestique", "debutant"]
+    evg_raw = [3000.0, 40.0, 250.0, 150.0]
+    gt = DataFrame(
+        riderkey = ["leader", "leader", "breaker", "breaker", "domestique"],
+        score = [3100, 2900, 300, 280, 70],
+        year = [2025, 2024, 2025, 2024, 2025],
+    )
+
+    f = gt_propensity_factors(keys, evg_raw, gt, 2026)
+
+    # Break-hunter scored far above ability ⇒ positive factor (EVG raised).
+    @test f[2] > 0.2
+    # Locked domestique scored far below ability ⇒ negative factor (EVG lowered).
+    # This is the two-sided correction Option A structurally cannot deliver.
+    @test f[3] < -0.1
+    # Leader's real ≈ predicted ⇒ factor ≈ 0 (do-no-harm on leaders).
+    @test abs(f[1]) < 0.1
+    # Debutant absent from GT history ⇒ factor exactly 0 (unchanged).
+    @test f[4] == 0.0
+
+    # Shrinkage: the two-edition break-hunter keeps more of its raw ratio than a
+    # single-edition version of the same rider (partial pooling grows with data).
+    gt1 = DataFrame(riderkey = ["breaker"], score = [300], year = [2025])
+    f1 = gt_propensity_factors(["breaker"], [40.0], gt1, 2026)
+    f2 = gt_propensity_factors(["breaker"], [40.0], gt, 2026)
+    @test f2[1] > f1[1] > 0.0
+
+    # No history at all is fully inert (all factors zero).
+    @test all(==(0.0), gt_propensity_factors(keys, evg_raw, nothing, 2026))
+end
+
 @testset "attrition helpers (_norm_class, _rand_gamma)" begin
     # Real VG class labels normalise to the attrition_class_mult keys.
     @test Velogames._norm_class("All Rounder") == :allrounder

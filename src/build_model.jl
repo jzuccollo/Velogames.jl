@@ -329,6 +329,88 @@ function resample_optimise!(
 end
 
 
+# ---------------------------------------------------------------------------
+# GT VG points-propensity layer (Option B prototype, July 2026)
+# ---------------------------------------------------------------------------
+
+"""
+    gt_propensity_factors(riderkeys, evg_raw, gt_vg_history_df, current_year;
+                          shrinkage=2.0, decay=0.8, floor=30.0) -> Vector{Float64}
+
+Learn each rider's persistent **points-propensity** log-factor `f_i` from the
+residual between their REAL historical grand-tour VG totals and the model's
+role-blind, ability-implied prediction. Unlike Option A (a strength nudge), this
+operates at the VG-points level and is deliberately **two-sided**:
+
+- `r_{i,e}` — the rider's real VG total in past edition `e` (from
+  `gt_vg_history_df`, one row per rider-edition).
+- `p_i` = `evg_raw[i]` — the model's ability-implied expected VG points for this
+  rider (the role-BLIND prediction; when Option A is on this is the A-lifted
+  prediction, so B captures only the residual A leaves — see below).
+- `f_i` = `s_i · Σ_e w_e·log((r_{i,e}+floor)/(p_i+floor)) / Σ_e w_e`
+
+with recency weight `w_e = decay^years_ago` and partial-pool shrink
+`s_i = W_i/(W_i+shrinkage)`, `W_i = Σ_e w_e`. The adjusted EVG is
+`p_i·exp(f_i)`, i.e. a log-space convex combination of the model's prediction
+and the rider's historical realised total, with weight on history growing with
+edition count. Break-hunters (`r≫p`) get `f>0`; locked domestiques (`r≪p`)
+`f<0`; leaders (`r≈p`) `f≈0`; riders with no GT history get `f=0` (unchanged).
+
+`floor` (a baseline-participation VG constant) both regularises the log-ratio
+away from ±∞ for near-zero `r`/`p` and caps the magnitude for cheap riders.
+`shrinkage` is heavy on purpose — this is small-data (~1-3 editions/rider).
+
+**Temporal-integrity approximation.** `p_i` is the CURRENT-race ability-implied
+EVG used as the baseline for every past edition, rather than a rigorous
+per-edition `p_{i,e}` reconstructed from ≤e-1 data (which would need archived
+as-of-date startlists/costs/odds for each past edition — largely unavailable).
+This assumes ability is roughly stable across editions (recency weighting
+down-weights old ones). It captures the PERSISTENT multiplicative role factor,
+which is the signal we want; edition-specific ability drift is the residual
+leakage. See roadmap.md "GT VG points-propensity layer (Option B prototype)".
+"""
+function gt_propensity_factors(
+    riderkeys::Vector{String},
+    evg_raw::Vector{Float64},
+    gt_vg_history_df::Union{DataFrame,Nothing},
+    current_year::Int;
+    shrinkage::Float64 = 2.0,
+    decay::Float64 = 0.8,
+    floor::Float64 = 30.0,
+)
+    n = length(riderkeys)
+    factors = zeros(Float64, n)
+    (gt_vg_history_df === nothing || nrow(gt_vg_history_df) == 0) && return factors
+
+    hist = Dict{String,Vector{Tuple{Float64,Int}}}()
+    for row in eachrow(gt_vg_history_df)
+        (ismissing(row.year) || ismissing(row.score)) && continue
+        push!(
+            get!(hist, row.riderkey, Tuple{Float64,Int}[]),
+            (max(0.0, Float64(row.score)), current_year - Int(row.year)),
+        )
+    end
+
+    for i = 1:n
+        h = get(hist, riderkeys[i], Tuple{Float64,Int}[])
+        isempty(h) && continue
+        p = max(0.0, evg_raw[i])
+        wsum = 0.0
+        lrsum = 0.0
+        for (r, years_ago) in h
+            w = decay^max(0, years_ago)
+            lrsum += w * log((r + floor) / (p + floor))
+            wsum += w
+        end
+        wsum <= 0.0 && continue
+        m = lrsum / wsum
+        s = wsum / (wsum + shrinkage)   # partial-pool shrink toward f=0
+        factors[i] = s * m
+    end
+    return factors
+end
+
+
 """
     resample_optimise_stage!(df, stages, stage_strengths, scoring, build_model_fn; kwargs...)
         -> (DataFrame, Vector{DataFrame}, Matrix{Float64}, StageRaceDiagnostics)

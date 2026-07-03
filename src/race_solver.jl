@@ -357,6 +357,7 @@ function _prepare_rider_data(
     kom_odds_df::Union{DataFrame,Nothing} = nothing,
     stagewin_odds_df::Union{DataFrame,Nothing} = nothing,
     use_gt_vg_history::Bool = false,
+    use_gt_vg_propensity::Bool = false,
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -533,8 +534,11 @@ function _prepare_rider_data(
     # A rider's own prior GT VG success is a role-conditional (lower-bias) proxy
     # for their GT VG points than their role-blind general ability is. Gated by
     # `use_gt_vg_history` (default off ⇒ nothing ⇒ signal inert), stage races only.
+    # Also fetched for the Option B points-propensity layer (`use_gt_vg_propensity`),
+    # which learns a role factor from the same prior-edition totals but applies it
+    # at the EVG level rather than as a strength nudge (see roadmap.md Option B).
     gt_vg_history_df = nothing
-    if use_gt_vg_history && config.type == :stage
+    if (use_gt_vg_history || use_gt_vg_propensity) && config.type == :stage
         vg_slug = get(_STAGE_RACE_VG_SLUGS, config.pcs_slug, "")
         gt_vg_history_df = assemble_gt_vg_history(
             vg_slug,
@@ -865,6 +869,8 @@ function solve_stage(
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
     include_gt_history::Bool = true,
     use_gt_vg_history::Bool = false,
+    use_gt_vg_propensity::Bool = false,
+    gt_vg_propensity_mode::Symbol = :posthoc,
 )
     data = _prepare_rider_data(
         config,
@@ -886,6 +892,7 @@ function solve_stage(
         kom_odds_df = kom_odds_df,
         stagewin_odds_df = stagewin_odds_df,
         use_gt_vg_history = use_gt_vg_history,
+        use_gt_vg_propensity = use_gt_vg_propensity,
     )
     if data === nothing
         return StageResult(
@@ -962,6 +969,60 @@ function solve_stage(
             sim_config = sim_config,
             breakaway_rates = b_stage_rates,
         )
+
+        # --- Option B: GT VG points-propensity layer (prototype, July 2026 —
+        # see roadmap.md). Two-sided EVG correction learned from the residual
+        # between each rider's REAL prior GT totals and their ability-implied
+        # EVG. Default off ⇒ inert. Stacks on Option A: because `evg_raw` here
+        # is the (A-lifted, if `use_gt_vg_history`) prediction, B captures only
+        # the residual A leaves, so the two compose without double-counting.
+        if use_gt_vg_propensity && data.gt_vg_history_df !== nothing
+            evg_raw = vec(mean(sim_vg_points, dims = 2))
+            factors = gt_propensity_factors(
+                String.(predicted.riderkey),
+                evg_raw,
+                data.gt_vg_history_df,
+                config.year,
+            )
+            predicted[!, :gt_propensity_factor] = round.(factors, digits = 3)
+            if gt_vg_propensity_mode == :sim
+                # (b) Inside-the-sim: scale every per-draw column, so the mean,
+                # the downside deviation AND the per-draw selection frequency
+                # all reflect propensity. Re-runs only the (RNG-free) optimise
+                # tail on the scaled matrix — no re-simulation.
+                sim_vg_points = sim_vg_points .* exp.(factors)
+                predicted, top_teams = _resample_core!(
+                    predicted,
+                    sim_vg_points,
+                    build_model_stage;
+                    team_size = config.team_size,
+                    max_per_team = max_per_team,
+                    risk_aversion = risk_aversion,
+                )
+            else
+                # (a) Post-hoc: multiply the final EVG mean and re-optimise the
+                # chosen team on the adjusted points. Per-draw selection
+                # frequency is left on the unadjusted simulation.
+                adj = evg_raw .* exp.(factors)
+                predicted[!, :expected_vg_points] = round.(adj, digits = 1)
+                predicted[!, :_adj_pts] = adj
+                res = build_model_stage(
+                    predicted,
+                    config.team_size,
+                    :_adj_pts,
+                    :cost;
+                    totalcost = 100,
+                    max_per_team = max_per_team,
+                )
+                select!(predicted, Not(:_adj_pts))
+                if res !== nothing
+                    chosen = Set(
+                        k for k in predicted.riderkey if JuMP.value(res[k]) > 0.5
+                    )
+                    top_teams = [filter(row -> row.riderkey in chosen, predicted)]
+                end
+            end
+        end
     else
         # --- Aggregate fallback ---
         scoring = get_scoring(:stage)

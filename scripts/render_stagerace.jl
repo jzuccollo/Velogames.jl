@@ -79,6 +79,15 @@ pcs_stage_scrape = get(_cfg["optimisation"], "pcs_stage_scrape", true)
 # [optimisation] block of race_config.toml to inject each rider's own prior GT
 # VG totals as a role/propensity strength signal.
 use_gt_vg_history = get(_cfg["optimisation"], "gt_vg_history", false)
+# GT VG points-propensity layer (Option B prototype, July 2026 — see roadmap.md).
+# Default off ⇒ pipeline behaviour unchanged. Set `gt_vg_propensity = true` to
+# apply a two-sided EVG correction learned from the residual between each rider's
+# real prior GT totals and their ability-implied EVG. `gt_vg_propensity_mode`
+# selects the injection point: "posthoc" (multiply the EVG mean, default) or
+# "sim" (scale every simulation draw so selection frequency reflects it too).
+use_gt_vg_propensity = get(_cfg["optimisation"], "gt_vg_propensity", false)
+gt_vg_propensity_mode =
+    Symbol(get(_cfg["optimisation"], "gt_vg_propensity_mode", "posthoc"))
 
 breakaway_dir = joinpath(DEFAULT_ARCHIVE_DIR, "pcs_breakaways")
 race_cache = CacheConfig(DEFAULT_CACHE_DIR, FRESH ? 0 : 6)
@@ -145,6 +154,8 @@ result = solve_stage(
     kom_odds_df = kom_odds_df,
     stagewin_odds_df = stagewin_odds_df,
     use_gt_vg_history = use_gt_vg_history,
+    use_gt_vg_propensity = use_gt_vg_propensity,
+    gt_vg_propensity_mode = gt_vg_propensity_mode,
 )
 
 predicted = result.predicted
