@@ -74,18 +74,18 @@ end
 
 cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
 pcs_stage_scrape = get(_cfg["optimisation"], "pcs_stage_scrape", true)
-# GT VG-history signal (Option A prototype, July 2026 — see roadmap.md). Default
-# off ⇒ pipeline behaviour unchanged. Set `gt_vg_history = true` in the
-# [optimisation] block of race_config.toml to inject each rider's own prior GT
-# VG totals as a role/propensity strength signal.
-use_gt_vg_history = get(_cfg["optimisation"], "gt_vg_history", false)
-# GT VG points-propensity layer (Option B prototype, July 2026 — see roadmap.md).
-# Default off ⇒ pipeline behaviour unchanged. Set `gt_vg_propensity = true` to
-# apply a two-sided EVG correction learned from the residual between each rider's
-# real prior GT totals and their ability-implied EVG. `gt_vg_propensity_mode`
-# selects the injection point: "posthoc" (multiply the EVG mean, default) or
-# "sim" (scale every simulation draw so selection frequency reflects it too).
-use_gt_vg_propensity = get(_cfg["optimisation"], "gt_vg_propensity", false)
+# GT VG-history signal (Option A, July 2026 — see roadmap.md). ON by default:
+# injects each rider's own prior GT VG totals as a role/propensity strength
+# signal (leader/debutant-inert, upward-only). Set `gt_vg_history = false` in
+# the [optimisation] block of race_config.toml to disable.
+use_gt_vg_history = get(_cfg["optimisation"], "gt_vg_history", true)
+# GT VG points-propensity layer (Option B, July 2026 — see roadmap.md). ON by
+# default: a two-sided EVG correction learned from the residual between each
+# rider's real prior GT totals and their ability-implied EVG (lifts break-hunters,
+# lowers over-rated domestiques). `gt_vg_propensity_mode` selects the injection
+# point: "posthoc" (multiply the EVG mean, default) or "sim" (scale every
+# simulation draw so selection frequency reflects it too). Set false to disable.
+use_gt_vg_propensity = get(_cfg["optimisation"], "gt_vg_propensity", true)
 gt_vg_propensity_mode =
     Symbol(get(_cfg["optimisation"], "gt_vg_propensity_mode", "posthoc"))
 
