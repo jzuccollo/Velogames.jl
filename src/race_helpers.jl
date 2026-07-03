@@ -567,93 +567,92 @@ vg_classics_url(
 vg_classics_game_id() = 13
 
 """Stage race URL patterns (separate VG competitions from one-day classics)."""
-const _STAGE_RACE_PATTERNS =
-    Dict{String,NamedTuple{(:slug, :template),Tuple{String,String}}}(
-        # Grand tours
-        "tdf" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
-        ),
-        "tour" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
-        ),
-        "tourdefrance" => (
-            slug = "velogame",
-            template = "https://www.velogames.com/velogame/{year}/riders.php",
-        ),
-        "vuelta" => (
-            slug = "spain",
-            template = "https://www.velogames.com/spain/{year}/riders.php",
-        ),
-        "spain" => (
-            slug = "spain",
-            template = "https://www.velogames.com/spain/{year}/riders.php",
-        ),
-        "giro" => (
-            slug = "italy",
-            template = "https://www.velogames.com/italy/{year}/riders.php",
-        ),
-        "giroditalia" => (
-            slug = "italy",
-            template = "https://www.velogames.com/italy/{year}/riders.php",
-        ),
-        # Week-long stage races
-        "parisnice" =>
-            (slug = "pn", template = "https://www.velogames.com/pn/{year}/riders.php"),
-        "tirrenoadriatico" => (
-            slug = "tirreno-adriatico",
-            template = "https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
-        ),
-        "tirreno" => (
-            slug = "tirreno-adriatico",
-            template = "https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
-        ),
-        "catalunya" => (
-            slug = "catalunya",
-            template = "https://www.velogames.com/catalunya/{year}/riders.php",
-        ),
-        "voltaacatalunya" => (
-            slug = "catalunya",
-            template = "https://www.velogames.com/catalunya/{year}/riders.php",
-        ),
-        "itzulia" => (
-            slug = "itzulia",
-            template = "https://www.velogames.com/itzulia/{year}/riders.php",
-        ),
-        "itzuliabasquecountry" => (
-            slug = "itzulia",
-            template = "https://www.velogames.com/itzulia/{year}/riders.php",
-        ),
-        "romandie" => (
-            slug = "romandie",
-            template = "https://www.velogames.com/romandie/{year}/riders.php",
-        ),
-        "tourderomandie" => (
-            slug = "romandie",
-            template = "https://www.velogames.com/romandie/{year}/riders.php",
-        ),
-        "dauphine" => (
-            slug = "criterium-du-dauphine",
-            template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
-        ),
-        "criteriumdudauphine" => (
-            slug = "criterium-du-dauphine",
-            template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
-        ),
-        "tourauvergne" => (
-            slug = "criterium-du-dauphine",
-            template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
-        ),
-        "suisse" => (
-            slug = "suisse",
-            template = "https://www.velogames.com/suisse/{year}/riders.php",
-        ),
-        "tourdesuisse" => (
-            slug = "suisse",
-            template = "https://www.velogames.com/suisse/{year}/riders.php",
-        ),
-    )
+const _STAGE_RACE_PATTERNS = Dict(
+    # Grand tours
+    "tdf" => (
+        slug = "velogame",
+        template = "https://www.velogames.com/velogame/{year}/riders.php",
+    ),
+    "tour" => (
+        slug = "velogame",
+        template = "https://www.velogames.com/velogame/{year}/riders.php",
+    ),
+    "tourdefrance" => (
+        slug = "velogame",
+        template = "https://www.velogames.com/velogame/{year}/riders.php",
+    ),
+    "vuelta" => (
+        slug = "spain",
+        template = "https://www.velogames.com/spain/{year}/riders.php",
+    ),
+    "spain" => (
+        slug = "spain",
+        template = "https://www.velogames.com/spain/{year}/riders.php",
+    ),
+    "giro" => (
+        slug = "italy",
+        template = "https://www.velogames.com/italy/{year}/riders.php",
+    ),
+    "giroditalia" => (
+        slug = "italy",
+        template = "https://www.velogames.com/italy/{year}/riders.php",
+    ),
+    # Week-long stage races
+    "parisnice" =>
+        (slug = "pn", template = "https://www.velogames.com/pn/{year}/riders.php"),
+    "tirrenoadriatico" => (
+        slug = "tirreno-adriatico",
+        template = "https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
+    ),
+    "tirreno" => (
+        slug = "tirreno-adriatico",
+        template = "https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
+    ),
+    "catalunya" => (
+        slug = "catalunya",
+        template = "https://www.velogames.com/catalunya/{year}/riders.php",
+    ),
+    "voltaacatalunya" => (
+        slug = "catalunya",
+        template = "https://www.velogames.com/catalunya/{year}/riders.php",
+    ),
+    "itzulia" => (
+        slug = "itzulia",
+        template = "https://www.velogames.com/itzulia/{year}/riders.php",
+    ),
+    "itzuliabasquecountry" => (
+        slug = "itzulia",
+        template = "https://www.velogames.com/itzulia/{year}/riders.php",
+    ),
+    "romandie" => (
+        slug = "romandie",
+        template = "https://www.velogames.com/romandie/{year}/riders.php",
+    ),
+    "tourderomandie" => (
+        slug = "romandie",
+        template = "https://www.velogames.com/romandie/{year}/riders.php",
+    ),
+    "dauphine" => (
+        slug = "criterium-du-dauphine",
+        template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+    ),
+    "criteriumdudauphine" => (
+        slug = "criterium-du-dauphine",
+        template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+    ),
+    "tourauvergne" => (
+        slug = "criterium-du-dauphine",
+        template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
+    ),
+    "suisse" => (
+        slug = "suisse",
+        template = "https://www.velogames.com/suisse/{year}/riders.php",
+    ),
+    "tourdesuisse" => (
+        slug = "suisse",
+        template = "https://www.velogames.com/suisse/{year}/riders.php",
+    ),
+)
 
 """Human-friendly aliases mapping to PCS slugs for one-day classics races."""
 const _CLASSICS_ALIASES = Dict{String,String}(
