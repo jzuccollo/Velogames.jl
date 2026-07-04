@@ -192,6 +192,14 @@ signal degrades rather than *how much* to trust the signal source.
     # Prevents over-concentration for favourites with many history observations.
     within_cluster_correlation::Float64 = 0.5
     between_cluster_correlation::Float64 = 0.15
+    # Apply the block-correlation discount per dimension in the multidim
+    # (stage-race) path too. Off reproduces the pre-July-2026 behaviour where
+    # stage-race posteriors carried no correlation discount and were
+    # systematically overconfident relative to one-day posteriors (review §3).
+    # Pre-registered revisit trigger (remediation plan D4): if Vuelta 2026
+    # top-20 rank ρ degrades vs Giro/Tour 2026, or GC win% moves further from
+    # market, flip default off and investigate.
+    multidim_block_correlation::Bool = true
     # Scales vg_variance early in the season when few riders have points.
     # Effective variance = vg_variance * (1 + penalty * (1 - frac_nonzero)).
     # At opening weekend (~10% with points): ~6.6. Late season (~80%): ~2.4.

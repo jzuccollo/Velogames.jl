@@ -1466,3 +1466,48 @@ end
     # GC-shape fork is absent here (no :strength_gc column).
     @test forks.shape === nothing
 end
+
+@testset "multidim block-correlation discount (WP1.6)" begin
+    cfg_on = Velogames.BayesianConfig()
+    cfg_off = Velogames.BayesianConfig(multidim_block_correlation = false)
+    gc = Velogames._DIM_INDEX[:gc]
+
+    multi = Velogames.RiderSignalData(
+        has_pcs = true,
+        pcs_gc_z = 1.5,
+        pcs_climber_z = 1.2,
+        rider_class = "allrounder",
+        vg_points = 1.0,
+        race_history = [1.0, 0.8],
+        race_history_years_ago = [1, 2],
+        odds_implied_prob = 0.3,
+    )
+    est_on = Velogames.estimate_rider_strength_multidim(multi; config = cfg_on)
+    est_off = Velogames.estimate_rider_strength_multidim(multi; config = cfg_off)
+
+    # Multi-observation dimensions widen; none narrow.
+    @test est_on.variance[gc] > est_off.variance[gc]
+    @test all(est_on.variance .>= est_off.variance .- 1e-12)
+    # The discount shrinks the posterior mean toward the prior (0), never past it.
+    @test 0.0 < est_on.mean[gc] < est_off.mean[gc]
+
+    # A rider with at most one observation per dimension is untouched.
+    single = Velogames.RiderSignalData(
+        has_pcs = false,
+        rider_class = "sprinter",
+        vg_points = 1.2,
+    )
+    s_on = Velogames.estimate_rider_strength_multidim(single; config = cfg_on)
+    s_off = Velogames.estimate_rider_strength_multidim(single; config = cfg_off)
+    @test s_on.mean == s_off.mean
+    @test s_on.variance == s_off.variance
+
+    # skip_block_correlation escape hatch reproduces the flag-off result.
+    est_skip = Velogames.estimate_rider_strength_multidim(
+        multi;
+        config = cfg_on,
+        skip_block_correlation = true,
+    )
+    @test est_skip.mean == est_off.mean
+    @test est_skip.variance == est_off.variance
+end
