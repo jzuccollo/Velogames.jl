@@ -14,7 +14,7 @@
 #
 # Run:  julia --project scripts/league_eval.jl
 # ---------------------------------------------------------------------------
-using DataFrames, Feather, JuMP, HiGHS, TOML, Statistics, Printf
+using DataFrames, Feather, JuMP, HiGHS, TOML, Statistics, Printf, Velogames
 
 const ARCH = joinpath(homedir(), "Dropbox", "code", "velogames", "archive")
 const REPO = normpath(joinpath(@__DIR__, ".."))
@@ -109,3 +109,142 @@ if nrow(ok) > 0
             nrow(wo), sum(wo.model_score), sum(wo.odds_score), sum(wo.wscore))
     end
 end
+
+# ---------------------------------------------------------------------------
+# League standings — cumulative placement (WP0.1)
+#
+# Reads the vgleague package's scraped standings (../vgleague/data/...; see
+# docs/remediation-plan.md D1 — no scraper duplicated here) via
+# `load_league_standings`, plus the optional manual data/league_standings.toml
+# fallback. Requires data/race_config.toml's [league] section (see
+# race_config.toml.example); skips gracefully if either is absent.
+# ---------------------------------------------------------------------------
+
+const MODEL_LABEL = "Model (this repo)"
+
+function report_league_placement(out::DataFrame)
+race_config_path = joinpath(REPO, "data", "race_config.toml")
+if !isfile(race_config_path)
+    println(
+        "\nNo data/race_config.toml found — skipping league placement section (see race_config.toml.example [league]).",
+    )
+else
+    cfg = TOML.parsefile(race_config_path)
+    league_cfg = get(cfg, "league", Dict())
+    if isempty(league_cfg)
+        println(
+            "\nNo [league] section in data/race_config.toml — skipping league placement section.",
+        )
+    else
+        standings = load_league_standings(;
+            data_dir = league_cfg["vgleague_data_dir"],
+            game_slug = league_cfg["game_slug"],
+            year = league_cfg["year"],
+            league_id = string(league_cfg["league_id"]),
+            toml_path = joinpath(REPO, "data", "league_standings.toml"),
+        )
+
+        if nrow(standings) == 0
+            println(
+                "\nNo league standings found for $(league_cfg["game_slug"]) $(league_cfg["year"]) $(league_cfg["league_id"]) at $(league_cfg["vgleague_data_dir"]) — skipping.",
+            )
+        else
+            # Match every standings race_name to a pcs_slug via the classics schedule
+            slug_of_racename = Dict{String,String}()
+            for rn in unique(standings.race_name)
+                key = Velogames.normalise_race_name(rn)
+                for ri in CLASSICS_RACES_2026
+                    if Velogames.normalise_race_name(ri.name) == key
+                        slug_of_racename[rn] = ri.pcs_slug
+                        break
+                    end
+                end
+            end
+            racename_of_slug = Dict(v => k for (k, v) in slug_of_racename)
+
+            common = NamedTuple[]
+            skipped = String[]
+            for r in eachrow(out)
+                if r.status != "ok" || ismissing(r.model_score)
+                    push!(skipped, "$(r.slug) $(r.yr): $(r.status)")
+                    continue
+                end
+                race_name = get(racename_of_slug, r.slug, nothing)
+                if race_name === nothing
+                    push!(skipped, "$(r.slug) $(r.yr): no matching league standings")
+                    continue
+                end
+                push!(
+                    common,
+                    (; slug = r.slug, yr = r.yr, race_name = race_name, model_score = r.model_score),
+                )
+            end
+
+            if isempty(common)
+                println(
+                    "\nNo races with both an archived model score and league standings — skipping cumulative-placement section.",
+                )
+            else
+                println(
+                    "\n=== Cumulative league placement (model as phantom entrant, n=$(length(common)) common races) ===",
+                )
+
+                entrants = Set{String}()
+                for c in common
+                    race_standings = filter(:race_name => ==(c.race_name), standings)
+                    union!(entrants, race_standings.username)
+                end
+
+                cumulative = Dict{String,Float64}(u => 0.0 for u in entrants)
+                cumulative[MODEL_LABEL] = 0.0
+
+                for c in common
+                    race_standings = filter(:race_name => ==(c.race_name), standings)
+                    scored = Dict(
+                        String(row.username) => Float64(row.score) for
+                        row in eachrow(race_standings)
+                    )
+                    for u in entrants
+                        cumulative[u] += get(scored, u, 0.0)
+                    end
+                    cumulative[MODEL_LABEL] += c.model_score
+
+                    ranked = [(u, s) for (u, s) in scored]
+                    push!(ranked, (MODEL_LABEL, c.model_score))
+                    sort!(ranked, by = x -> -x[2])
+                    place = findfirst(x -> x[1] == MODEL_LABEL, ranked)
+                    @printf(
+                        "%-26s model %5.0f | placed %2d/%2d | leader %-22s %5.0f\n",
+                        c.race_name,
+                        c.model_score,
+                        place,
+                        length(ranked),
+                        ranked[1][1],
+                        ranked[1][2]
+                    )
+                end
+
+                cum_ranked = sort(collect(cumulative), by = x -> -x[2])
+                cum_place = findfirst(x -> x[1] == MODEL_LABEL, cum_ranked)
+                println("\n--- Cumulative totals over the $(length(common)) common races ---")
+                for (rank, (name, score)) in enumerate(cum_ranked)
+                    marker = name == MODEL_LABEL ? "  <== model" : ""
+                    @printf("%2d. %-26s %6.0f%s\n", rank, name, score, marker)
+                end
+                println(
+                    "Model would place $cum_place/$(length(cum_ranked)) cumulatively over these $(length(common)) races.",
+                )
+            end
+
+            if !isempty(skipped)
+                println("\nRaces skipped (no archived model score or no matching league standings):")
+                for s in skipped
+                    println("  - $s")
+                end
+            end
+        end
+    end
+end
+end
+
+report_league_placement(out)

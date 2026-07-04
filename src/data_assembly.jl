@@ -1012,5 +1012,134 @@ end
 
 
 # ---------------------------------------------------------------------------
+# League standings (WP0.1 — measures the actual objective: league placement)
+# ---------------------------------------------------------------------------
+
+"""
+    load_league_standings(json_path::AbstractString; toml_path=nothing) -> DataFrame
+
+Load full league standings from a `vgleague` JSON snapshot
+(`{game_slug}_{year}_{league_id}.json`, produced by the sibling `vgleague`
+package — see `../vgleague`). Returns a long DataFrame with one row per
+`(username, teamname, race_name, race_number, score)`: every entrant's score
+in every race the league has scraped so far.
+
+If `toml_path` is given and exists, manually-recorded standings
+(`data/league_standings.toml`) are merged in: any race name present in the
+TOML file overrides/supplements the JSON for that race (the scraper hasn't
+caught up yet, or the user wants to hand-correct it). See
+`load_league_standings_toml` for the TOML schema.
+"""
+function load_league_standings(
+    json_path::AbstractString;
+    toml_path::Union{AbstractString,Nothing} = nothing,
+)
+    json_df = load_league_standings_json(json_path)
+    toml_df =
+        (toml_path === nothing || !isfile(toml_path)) ? DataFrame() :
+        load_league_standings_toml(toml_path)
+
+    isempty(toml_df) && return json_df
+    isempty(json_df) && return toml_df
+
+    override_races = Set(toml_df.race_name)
+    kept = filter(:race_name => (r -> !(r in override_races)), json_df)
+    return vcat(kept, toml_df; cols = :union)
+end
+
+"""
+    load_league_standings(; data_dir, game_slug, year, league_id, toml_path=nothing) -> DataFrame
+
+Convenience method: builds the `vgleague` JSON path from its components
+(`joinpath(data_dir, "{game_slug}_{year}_{league_id}.json")`) before loading.
+"""
+function load_league_standings(;
+    data_dir::AbstractString,
+    game_slug::AbstractString,
+    year::Integer,
+    league_id::AbstractString,
+    toml_path::Union{AbstractString,Nothing} = nothing,
+)
+    json_path =
+        joinpath(expanduser(data_dir), "$(game_slug)_$(year)_$(league_id).json")
+    return load_league_standings(json_path; toml_path = toml_path)
+end
+
+"""
+    load_league_standings_json(json_path::AbstractString) -> DataFrame
+
+Parse a `vgleague` JSON snapshot directly. Returns an empty DataFrame if the
+file doesn't exist. See `load_league_standings` for the combined (JSON + TOML)
+entry point normally used.
+"""
+function load_league_standings_json(json_path::AbstractString)
+    isfile(json_path) || return DataFrame()
+    data = JSON3.read(read(json_path, String))
+
+    rows = NamedTuple[]
+    for (username, team) in pairs(data.teams)
+        teamname = String(team.teamname)
+        for (race_name, race) in pairs(team.races)
+            push!(
+                rows,
+                (;
+                    username = String(username),
+                    teamname = teamname,
+                    race_name = String(race_name),
+                    race_number = Int(race.race_number),
+                    score = Float64(race.score),
+                ),
+            )
+        end
+    end
+    isempty(rows) && return DataFrame()
+    return DataFrame(rows)
+end
+
+"""
+    load_league_standings_toml(toml_path::AbstractString) -> DataFrame
+
+Load manually-recorded league standings (fallback for races the `vgleague`
+scraper hasn't picked up yet, or hand corrections). Schema:
+
+```toml
+[[races]]
+name = "Omloop Nieuwsblad"
+standings = [
+    { team = "Cobbles & Wobbles", score = 1027 },
+    { team = "Mud Springs Eternal", score = 965 },
+]
+```
+
+Same long shape as `load_league_standings_json`, except `username` is set
+equal to `teamname` (manual entries only ever record team names, not VG
+logins) and `race_number` is `missing`.
+"""
+function load_league_standings_toml(toml_path::AbstractString)
+    isfile(toml_path) || return DataFrame()
+    data = TOML.parsefile(toml_path)
+
+    rows = NamedTuple[]
+    for race in get(data, "races", [])
+        race_name = race["name"]
+        for standing in race["standings"]
+            push!(
+                rows,
+                (;
+                    username = standing["team"],
+                    teamname = standing["team"],
+                    race_name = race_name,
+                    race_number = missing,
+                    score = Float64(standing["score"]),
+                ),
+            )
+        end
+    end
+    isempty(rows) && return DataFrame()
+    return DataFrame(rows)
+end
+
+
+# ---------------------------------------------------------------------------
 # Stage-race classification rendering
 # ---------------------------------------------------------------------------

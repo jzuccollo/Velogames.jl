@@ -34,6 +34,14 @@ EOF
 
 echo "Added $WINNER_NAME ($WINNER_SCORE) for $PCS_SLUG $YEAR"
 
+# League standings live in the sibling vgleague package (../vgleague), not here
+# (see docs/remediation-plan.md D1 — we read its JSON cache rather than
+# scraping standings ourselves). Remind to refresh it so scripts/league_eval.jl's
+# cumulative-placement section stays current.
+echo ""
+echo "Reminder: run 'vgleague update <league>' in ../vgleague to refresh league"
+echo "standings for $PCS_SLUG $YEAR, then re-run scripts/league_eval.jl."
+
 # Generate HTML reports directly (no Quarto needed)
 echo "Generating reports..."
 julia --project="$REPO_ROOT" "$REPO_ROOT/scripts/render_reports.jl"

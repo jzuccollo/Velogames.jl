@@ -1,7 +1,7 @@
 module Velogames
 
 using HTTP, DataFrames, Cascadia, Gumbo, Unicode, HiGHS, JuMP, Feather, Dates, JSON3, SHA
-using Random, Statistics, PlotlyBase
+using Random, Statistics, PlotlyBase, TOML
 
 # Core data retrieval
 export getvg_riders,
@@ -192,6 +192,7 @@ export html_page,
     compute_stage_type_scores,
     archive_stage_race_results,
     load_stage_profiles,
+    load_league_standings,
     plotly_html,
     precision_budget,
     sim_distribution_chart,

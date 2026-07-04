@@ -55,3 +55,13 @@ my_team = [
     "Mathieu Van Der Poel",
     "Mads Pedersen"
 ]
+
+[league]
+# Used by scripts/league_eval.jl for the cumulative-placement section (WP0.1).
+# Reads the vgleague package's scraped JSON cache
+# (../vgleague/data/{game_slug}_{year}_{league_id}.json) rather than
+# duplicating a scraper here — see docs/remediation-plan.md D1.
+vgleague_data_dir = "~/code/vgleague/data"
+game_slug = "sixes-classics"
+year = 2026
+league_id = "100737112"
