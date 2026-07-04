@@ -113,7 +113,9 @@ const CLASSICS_RACES_2026 = [
         204.0,
     ),
     RaceInfo(
-        "In Flanders Fields - From Middelkerke to Wevelgem",
+        # VG's name for Gent-Wevelgem 2026 (races.php and league pages agree;
+        # there is no "From" — the previous name here never matched either).
+        "In Flanders Fields - Middelkerke to Wevelgem",
         "2026-03-29",
         2,
         "gent-wevelgem",
