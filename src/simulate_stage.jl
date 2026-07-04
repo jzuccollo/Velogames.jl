@@ -228,8 +228,14 @@ end
 # result — reasonable, since the rider animating a mountain stage typically
 # leads over its climbs. Abandoned riders carry -Inf `noisy` and sort out
 # automatically.
+#
+# The same daily points also accrue into `kom_total`, the cumulative per-sim
+# KOM tally that decides the final mountains jersey (July 2026 fix: the final
+# jersey previously ranked on mountain-stage top-5 FINISHES, which never read
+# `kom_s` and ignored hilly stages).
 @inline function _score_daily_mountains!(
     stage_pts::Vector{Float64},
+    kom_total::Vector{Float64},
     kom_s::Vector{Float64},
     noisy::Vector{Float64},
     strengths_blend::Vector{Float64},
@@ -248,7 +254,9 @@ end
     end
     kom_order = sortperm(kom_str, rev = true)
     for r = 1:min(depth, n_riders)
-        stage_pts[kom_order[r]] += scoring.daily_mountains_class[r]
+        pts = scoring.daily_mountains_class[r]
+        stage_pts[kom_order[r]] += pts
+        kom_total[kom_order[r]] += pts
     end
     return nothing
 end
@@ -488,7 +496,7 @@ function simulate_stage_race(
     gc_positions = Vector{Int}(undef, n_riders)
     stage_pts = Vector{Float64}(undef, n_riders)
     points_jersey_total = Vector{Float64}(undef, n_riders)
-    mountain_top5_counts = Vector{Int}(undef, n_riders)
+    kom_total = Vector{Float64}(undef, n_riders)
     kom_str = Vector{Float64}(undef, n_riders)
     abandoned = Vector{Bool}(undef, n_riders)
     in_break = Vector{Bool}(undef, n_riders)
@@ -500,7 +508,7 @@ function simulate_stage_race(
 
         fill!(cumulative_gc_score, 0.0)
         fill!(points_jersey_total, 0.0)
-        fill!(mountain_top5_counts, 0)
+        fill!(kom_total, 0.0)
         fill!(abandoned, false)
         rider_total_pts = zeros(Float64, n_riders)
 
@@ -671,16 +679,9 @@ function simulate_stage_race(
                 sim_config,
             )
 
-            # KOM proxy: count mountain top-5 finishes per rider (feeds the final
-            # mountains classification). The daily KOM classification points are
-            # scored separately below.
-            for i = 1:n_riders
-                if positions[i] <= 5 && stype == :mountain
-                    mountain_top5_counts[i] += 1
-                end
-            end
             _score_daily_mountains!(
                 stage_pts,
+                kom_total,
                 kom_s,
                 noisy,
                 strengths_blend,
@@ -722,7 +723,7 @@ function simulate_stage_race(
         for i = 1:n_riders
             if abandoned[i]
                 points_jersey_total[i] = -Inf
-                mountain_top5_counts[i] = -1
+                kom_total[i] = -Inf
             end
         end
 
@@ -746,11 +747,13 @@ function simulate_stage_race(
             end
         end
 
-        # Final mountains classification (mountain top-5 count proxy)
-        kom_order = sortperm(mountain_top5_counts, rev = true)
+        # Final mountains classification: ranked by cumulative daily-KOM points
+        # (driven by kom_s across hilly AND mountain stages, same stage set and
+        # strength dimension as the daily competition).
+        kom_order = sortperm(kom_total, rev = true)
         for rank = 1:min(length(scoring.final_mountains_class), n_riders)
             rider_idx = kom_order[rank]
-            if mountain_top5_counts[rider_idx] > 0
+            if kom_total[rider_idx] > 0
                 rider_total_pts[rider_idx] += scoring.final_mountains_class[rank]
                 if rank <= diag_mountains_top
                     diag_mountains_pos[rider_idx, rank] += 1

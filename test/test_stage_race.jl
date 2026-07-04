@@ -801,10 +801,13 @@ end
     blend = copy(mountain_s)                            # noise component = noisy - blend = 0
     kom_str = zeros(n)
 
-    # Mountain stage: top climbers bank daily_mountains_class points.
+    # Mountain stage: top climbers bank daily_mountains_class points, and the
+    # same points accrue into the cumulative kom_total that decides the final jersey.
     stage_pts = zeros(n)
+    kom_total = zeros(n)
     Velogames._score_daily_mountains!(
         stage_pts,
+        kom_total,
         mountain_s,
         noisy,
         blend,
@@ -816,11 +819,13 @@ end
     @test stage_pts[1] == scoring.daily_mountains_class[1]        # best climber → top KOM
     @test stage_pts[6] == scoring.daily_mountains_class[6]        # 6th → last scoring slot
     @test stage_pts[7] == 0 && stage_pts[8] == 0                  # outside top 6
+    @test kom_total == stage_pts                                  # cumulative tally mirrors daily points
 
-    # Hilly stage also scores; ITT / flat do not.
+    # Hilly stage also scores (and accumulates); ITT / flat do not.
     stage_pts = zeros(n)
     Velogames._score_daily_mountains!(
         stage_pts,
+        kom_total,
         mountain_s,
         noisy,
         blend,
@@ -830,10 +835,13 @@ end
         n,
     )
     @test stage_pts[1] == scoring.daily_mountains_class[1]
+    @test kom_total[1] == 2 * scoring.daily_mountains_class[1]    # two scoring stages banked
     for st in (:flat, :itt, :ttt)
         stage_pts = zeros(n)
+        before = copy(kom_total)
         Velogames._score_daily_mountains!(
             stage_pts,
+            kom_total,
             mountain_s,
             noisy,
             blend,
@@ -843,7 +851,44 @@ end
             n,
         )
         @test all(stage_pts .== 0)
+        @test kom_total == before
     end
+end
+
+@testset "final mountains jersey ranked by cumulative daily-KOM points" begin
+    # WP1.1 (review defects 1+2): a high-kom_s specialist who finishes mid-pack
+    # must beat the GC leader to the final mountains jersey. Under the old
+    # mountain-top-5-finish-count proxy the leader (who wins every summit) took
+    # the jersey and kom_s never touched it.
+    scoring = SCORING_GRAND_TOUR
+    stages = [mountain_stage(1), mountain_stage(2), hilly_stage(3)]
+    n = 6
+    base = [3.0, 0.0, 1.0, 0.5, -1.0, -2.0]    # rider 1 = GC leader, rider 2 mid-pack
+    kom = [-1.0, 5.0, 0.0, -0.5, -1.5, -2.0]   # rider 2 = KOM specialist
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
+        :kom => kom,
+    )
+    n_sims = 200
+    _, diag = simulate_stage_race(
+        stages,
+        stage_strengths,
+        fill(0.3, n),
+        ["A", "B", "C", "D", "E", "F"],
+        scoring;
+        n_sims = n_sims,
+        rng = Random.MersenneTwister(5),
+    )
+
+    # Specialist (rider 2) takes the final jersey in a clear majority of sims,
+    # and far more often than the GC leader (rider 1).
+    @test diag.final_mountains_position_counts[2, 1] > n_sims ÷ 2
+    @test diag.final_mountains_position_counts[2, 1] >
+          diag.final_mountains_position_counts[1, 1]
 end
 
 @testset "attrition freeze-out + gate" begin
