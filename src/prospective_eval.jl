@@ -198,6 +198,16 @@ function prospective_pit_values(
         feather_path = joinpath(race_dir, "$year.feather")
         isfile(feather_path) || continue
 
+        # `simulate_vg_draws` only knows the one-day `ScoringTable` (single race,
+        # scalar strength, one-day finish/assist/breakaway rules). Stage races need
+        # the grand-tour simulator (`simulate_stage_race`, per-stage multi-dim
+        # strengths + GC/jersey scoring), so scoring them here would silently use
+        # the wrong points model. Skip until stage-race PIT is wired up.
+        if haskey(_STAGE_RACE_VG_SLUGS, pcs_slug)
+            @info "Skipping stage-race PIT for $pcs_slug $year — needs the grand-tour simulator (simulate_stage_race), not the one-day simulate_vg_draws path"
+            continue
+        end
+
         predictions =
             load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
         vg_results =

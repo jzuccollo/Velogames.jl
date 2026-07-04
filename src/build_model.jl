@@ -66,6 +66,44 @@ function _add_team_cap!(model, x, df::DataFrame, max_per_team::Integer)
     return model
 end
 
+"""
+    _add_nogood_cuts!(model, x, exclude, team_size)
+
+Forbid each previously-selected roster in `exclude` (a vector of riderkey lists)
+via a no-good cut `sum(x[k] for k in team) <= team_size - 1`. Re-solving the model
+with the accumulated cuts then yields the next-best *distinct* team, which is how
+k-best enumeration works (HiGHS has no native solution pool). `x` must be indexed
+by riderkey.
+"""
+function _add_nogood_cuts!(model, x, exclude::Vector{Vector{String}}, team_size::Integer)
+    for team in exclude
+        JuMP.@constraint(model, sum(x[k] for k in team) <= team_size - 1)
+    end
+    return model
+end
+
+"""
+    _add_force_constraints!(model, x, force_in, force_out)
+
+Pin individual riders in (`x[k] == 1`) or out (`x[k] == 0`) of the solution. Used
+by the structural-fork analysis to find the best team *with* vs *without* a given
+rider (or forced to include a pair of GC leaders). `x` must be indexed by riderkey.
+"""
+function _add_force_constraints!(
+    model,
+    x,
+    force_in::Vector{String},
+    force_out::Vector{String},
+)
+    for k in force_in
+        JuMP.@constraint(model, x[k] == 1)
+    end
+    for k in force_out
+        JuMP.@constraint(model, x[k] == 0)
+    end
+    return model
+end
+
 
 """
     build_model_oneday(inputdf::DataFrame, n::Integer=6, points::Symbol=:expected_vg_points, cost::Symbol=:cost; totalcost::Integer=100)
@@ -87,6 +125,9 @@ function build_model_oneday(
     cost::Symbol = :cost;
     totalcost::Integer = 100,
     max_per_team::Integer = 0,
+    exclude::Vector{Vector{String}} = Vector{String}[],
+    force_in::Vector{String} = String[],
+    force_out::Vector{String} = String[],
 )
     model = JuMP.Model(HiGHS.Optimizer)
     JuMP.set_silent(model)
@@ -95,6 +136,8 @@ function build_model_oneday(
     JuMP.@constraint(model, inputdf[!, cost]' * x <= totalcost) # cost must be <= totalcost
     JuMP.@constraint(model, sum(x) == n) # exactly n riders must be chosen
     _add_team_cap!(model, x, inputdf, max_per_team)
+    _add_nogood_cuts!(model, x, exclude, n)
+    _add_force_constraints!(model, x, force_in, force_out)
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The model was not solved correctly.")
@@ -126,6 +169,9 @@ function build_model_stage(
     cost::Symbol = :cost;
     totalcost::Integer = 100,
     max_per_team::Integer = 0,
+    exclude::Vector{Vector{String}} = Vector{String}[],
+    force_in::Vector{String} = String[],
+    force_out::Vector{String} = String[],
 )
     df = copy(inputdf)
 
@@ -139,6 +185,8 @@ function build_model_stage(
     JuMP.@constraint(model, sum(x) == n)
     _add_class_constraints!(model, x, df, has_classes)
     _add_team_cap!(model, x, df, max_per_team)
+    _add_nogood_cuts!(model, x, exclude, n)
+    _add_force_constraints!(model, x, force_in, force_out)
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The model was not solved correctly.")
@@ -148,16 +196,55 @@ function build_model_stage(
 end
 
 """
-    _resample_core!(df, sim_vg_points, build_model_fn; team_size, max_per_team, risk_aversion)
+    _kbest_team_keys(df, build_model_fn, points_col; team_size, max_per_team, n_alternatives)
+        -> Vector{Vector{String}}
+
+Enumerate up to `n_alternatives` distinct best teams on `points_col` by iterated
+no-good cuts: solve, record the roster, forbid that exact roster (`exclude`),
+re-solve. Reuses `build_model_fn`, so the budget / class / per-team constraints
+are honoured automatically on every solve. Returns riderkey lists ranked
+best-first (index 1 is the global optimum on `points_col`; each later entry has a
+weakly lower objective). Stops early when the model becomes infeasible.
+"""
+function _kbest_team_keys(
+    df::DataFrame,
+    build_model_fn::Function,
+    points_col::Symbol;
+    team_size::Integer,
+    max_per_team::Integer,
+    n_alternatives::Integer,
+)
+    excluded = Vector{Vector{String}}()
+    for _ = 1:max(1, n_alternatives)
+        result = build_model_fn(
+            df,
+            team_size,
+            points_col,
+            :cost;
+            totalcost = 100,
+            max_per_team = max_per_team,
+            exclude = excluded,
+        )
+        result === nothing && break
+        keys = String[k for k in df.riderkey if JuMP.value(result[k]) > 0.5]
+        isempty(keys) && break
+        push!(excluded, keys)
+    end
+    return excluded
+end
+
+"""
+    _resample_core!(df, sim_vg_points, build_model_fn; team_size, max_per_team, risk_aversion, n_alternatives)
         -> (df, top_teams)
 
 Shared tail of the resampled-optimisation pipeline, once the per-draw VG-points
 matrix (`sim_vg_points`, n_riders × n_resamples) is known. Accumulates downside
 risk via Welford, optimises each draw to tally selection frequency, writes the
 `:selection_frequency`, `:expected_vg_points` and `:downside_semi_dev` columns,
-then runs a final deterministic optimise on risk-adjusted points and returns the
-chosen team. The per-draw optimise is RNG-free, so building the matrix upfront
-(one-day) or via `simulate_stage_race` (stage) yields identical results.
+then enumerates the `n_alternatives` best distinct teams on risk-adjusted points
+(k-best via no-good cuts) and returns them ranked best-first. The per-draw
+optimise is RNG-free, so building the matrix upfront (one-day) or via
+`simulate_stage_race` (stage) yields identical results.
 """
 function _resample_core!(
     df::DataFrame,
@@ -166,6 +253,7 @@ function _resample_core!(
     team_size::Integer,
     max_per_team::Integer,
     risk_aversion::Float64,
+    n_alternatives::Integer = 20,
 )
     n_riders, n_resamples = size(sim_vg_points)
     selection_counts = zeros(Int, n_riders)
@@ -225,27 +313,27 @@ function _resample_core!(
 
     @info "Resampled optimisation: $n_successful/$n_resamples successful"
 
-    # Final deterministic optimisation on risk-adjusted expected points. Per-resample
+    # Deterministic optimisation on risk-adjusted expected points. Per-resample
     # team-frequency tracking is too noisy (hundreds of unique compositions with ~150
-    # riders), so we optimise once on points that account for both Jensen's inequality
-    # and uncertainty bias.
+    # riders), so we optimise on points that account for both Jensen's inequality
+    # and uncertainty bias. Rather than a single solve, enumerate the `n_alternatives`
+    # best distinct teams (k-best via no-good cuts): the near-optimal set sits within
+    # a whisker of the best in EVG, so surfacing it lets the report expose the
+    # interchangeable "filler" slots and the structural either/or decisions.
     df[!, :_final_pts] = risk_adjusted_pts
-    top_teams = DataFrame[]
-    final_result = build_model_fn(
+    key_lists = _kbest_team_keys(
         df,
-        team_size,
-        :_final_pts,
-        :cost;
-        totalcost = 100,
+        build_model_fn,
+        :_final_pts;
+        team_size = team_size,
         max_per_team = max_per_team,
+        n_alternatives = n_alternatives,
     )
-    if final_result !== nothing
-        final_keys = Set(k for k in df.riderkey if JuMP.value(final_result[k]) > 0.5)
-        final_team = filter(row -> row.riderkey in final_keys, df)
-        push!(top_teams, final_team)
-    end
-
     select!(df, Not(:_final_pts))
+
+    # Build each team from the cleaned df (so no internal :_final_pts column leaks
+    # into the rendered tables); teams stay ranked best-first.
+    top_teams = [filter(row -> row.riderkey in Set(keys), df) for keys in key_lists]
     return df, top_teams
 end
 
@@ -262,7 +350,9 @@ heavy-tailed noise (set `simulation_df=nothing` for Gaussian).
 
 Returns `(df, top_teams, sim_vg_points)` where:
 - `df` gains columns `:selection_frequency` and `:expected_vg_points`
-- `top_teams` is a `Vector{DataFrame}` containing the optimal team
+- `top_teams` is a `Vector{DataFrame}` of the `n_alternatives` best distinct teams,
+  ranked best-first (k-best enumeration via no-good cuts); `top_teams[1]` is the
+  optimal team
 - `sim_vg_points` is a `Matrix{Float64}` (n_riders × n_resamples) of per-draw VG points
 """
 function resample_optimise!(
@@ -274,6 +364,7 @@ function resample_optimise!(
     rng::AbstractRNG = Random.default_rng(),
     max_per_team::Integer = 0,
     risk_aversion::Float64 = 0.5,
+    n_alternatives::Integer = 20,
     breakaway_rates::Vector{Float64} = Float64[],
     breakaway_mean_sectors::Vector{Float64} = Float64[],
     simulation_df::Union{Int,Nothing} = nothing,
@@ -324,8 +415,91 @@ function resample_optimise!(
         team_size = team_size,
         max_per_team = max_per_team,
         risk_aversion = risk_aversion,
+        n_alternatives = n_alternatives,
     )
     return df, top_teams, sim_vg_points
+end
+
+
+# ---------------------------------------------------------------------------
+# GT VG points-propensity layer (Option B prototype, July 2026)
+# ---------------------------------------------------------------------------
+
+"""
+    gt_propensity_factors(riderkeys, evg_raw, gt_vg_history_df, current_year;
+                          shrinkage=2.0, decay=0.8, floor=30.0) -> Vector{Float64}
+
+Learn each rider's persistent **points-propensity** log-factor `f_i` from the
+residual between their REAL historical grand-tour VG totals and the model's
+role-blind, ability-implied prediction. Unlike Option A (a strength nudge), this
+operates at the VG-points level and is deliberately **two-sided**:
+
+- `r_{i,e}` — the rider's real VG total in past edition `e` (from
+  `gt_vg_history_df`, one row per rider-edition).
+- `p_i` = `evg_raw[i]` — the model's ability-implied expected VG points for this
+  rider (the role-BLIND prediction; when Option A is on this is the A-lifted
+  prediction, so B captures only the residual A leaves — see below).
+- `f_i` = `s_i · Σ_e w_e·log((r_{i,e}+floor)/(p_i+floor)) / Σ_e w_e`
+
+with recency weight `w_e = decay^years_ago` and partial-pool shrink
+`s_i = W_i/(W_i+shrinkage)`, `W_i = Σ_e w_e`. The adjusted EVG is
+`p_i·exp(f_i)`, i.e. a log-space convex combination of the model's prediction
+and the rider's historical realised total, with weight on history growing with
+edition count. Break-hunters (`r≫p`) get `f>0`; locked domestiques (`r≪p`)
+`f<0`; leaders (`r≈p`) `f≈0`; riders with no GT history get `f=0` (unchanged).
+
+`floor` (a baseline-participation VG constant) both regularises the log-ratio
+away from ±∞ for near-zero `r`/`p` and caps the magnitude for cheap riders.
+`shrinkage` is heavy on purpose — this is small-data (~1-3 editions/rider).
+
+**Temporal-integrity approximation.** `p_i` is the CURRENT-race ability-implied
+EVG used as the baseline for every past edition, rather than a rigorous
+per-edition `p_{i,e}` reconstructed from ≤e-1 data (which would need archived
+as-of-date startlists/costs/odds for each past edition — largely unavailable).
+This assumes ability is roughly stable across editions (recency weighting
+down-weights old ones). It captures the PERSISTENT multiplicative role factor,
+which is the signal we want; edition-specific ability drift is the residual
+leakage. See roadmap.md "GT VG points-propensity layer (Option B prototype)".
+"""
+function gt_propensity_factors(
+    riderkeys::Vector{String},
+    evg_raw::Vector{Float64},
+    gt_vg_history_df::Union{DataFrame,Nothing},
+    current_year::Int;
+    shrinkage::Float64 = 2.0,
+    decay::Float64 = 0.8,
+    floor::Float64 = 30.0,
+)
+    n = length(riderkeys)
+    factors = zeros(Float64, n)
+    (gt_vg_history_df === nothing || nrow(gt_vg_history_df) == 0) && return factors
+
+    hist = Dict{String,Vector{Tuple{Float64,Int}}}()
+    for row in eachrow(gt_vg_history_df)
+        (ismissing(row.year) || ismissing(row.score)) && continue
+        push!(
+            get!(hist, row.riderkey, Tuple{Float64,Int}[]),
+            (max(0.0, Float64(row.score)), current_year - Int(row.year)),
+        )
+    end
+
+    for i = 1:n
+        h = get(hist, riderkeys[i], Tuple{Float64,Int}[])
+        isempty(h) && continue
+        p = max(0.0, evg_raw[i])
+        wsum = 0.0
+        lrsum = 0.0
+        for (r, years_ago) in h
+            w = decay^max(0, years_ago)
+            lrsum += w * log((r + floor) / (p + floor))
+            wsum += w
+        end
+        wsum <= 0.0 && continue
+        m = lrsum / wsum
+        s = wsum / (wsum + shrinkage)   # partial-pool shrink toward f=0
+        factors[i] = s * m
+    end
+    return factors
 end
 
 
@@ -337,9 +511,14 @@ Resampled optimisation for stage races: runs `simulate_stage_race` to get
 per-draw total VG points, then optimises team selection per draw.
 
 Returns `(df, top_teams, sim_vg_points, diagnostics)` where df gains
-`:selection_frequency` and `:expected_vg_points`, and `diagnostics` carries
-per-stage and per-classification position counts that reports surface as
-podium / top-K probabilities.
+`:selection_frequency` and `:expected_vg_points`, `top_teams` is the
+`n_alternatives` best distinct teams ranked best-first (k-best via no-good cuts),
+and `diagnostics` carries per-stage and per-classification position counts that
+reports surface as podium / top-K probabilities.
+
+`breakaway_rates` (optional, aligned to `df.riderkey`) is forwarded to
+`simulate_stage_race` to enable the per-rider breakaway event on hilly/mountain
+stages; empty by default (feature off).
 """
 function resample_optimise_stage!(
     df::DataFrame,
@@ -354,7 +533,9 @@ function resample_optimise_stage!(
     rng::AbstractRNG = Random.default_rng(),
     max_per_team::Integer = 0,
     risk_aversion::Float64 = 0.5,
+    n_alternatives::Integer = 20,
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
+    breakaway_rates::Vector{Float64} = Float64[],
 )
     uncertainties = Float64.(df.uncertainty)
     teams = String.(df.team)
@@ -379,6 +560,7 @@ function resample_optimise_stage!(
         rng = rng,
         sim_config = sim_config,
         rider_classes = rider_classes,
+        breakaway_rates = breakaway_rates,
     )
 
     df, top_teams = _resample_core!(
@@ -388,6 +570,7 @@ function resample_optimise_stage!(
         team_size = team_size,
         max_per_team = max_per_team,
         risk_aversion = risk_aversion,
+        n_alternatives = n_alternatives,
     )
     return df, top_teams, sim_vg_points, diagnostics
 end
@@ -486,4 +669,197 @@ function compute_cheapest_winning_stage_team(df::DataFrame, target_score::Real)
     result === nothing && return nothing
     chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
     return filter(row -> row.riderkey in chosen_keys, df)
+end
+
+# ---------------------------------------------------------------------------
+# Near-optimal team analysis (filler pool + structural forks, report-facing)
+# ---------------------------------------------------------------------------
+
+"""
+    compute_filler_pool(top_teams) -> (core_df, filler_df, n_teams)
+
+Decompose a k-best near-optimal team set into its two decision layers:
+
+- `core_df` — riders present in **every** one of the `top_teams` (the locked
+  picks). Taken from `top_teams[1]` so it carries the full prediction columns.
+- `filler_df` — riders present in **some but not all** teams: the interchangeable
+  slots. Gains a `:frequency` column (in how many of the near-optimal teams the
+  rider appears) and is sorted by frequency, then cost, then EVG.
+
+`n_teams` is `length(top_teams)`. This is the "menu" a fantasy manager actually
+chooses from once the optimiser has fixed the expensive core.
+"""
+function compute_filler_pool(top_teams::Vector{DataFrame})
+    isempty(top_teams) && return (DataFrame(), DataFrame(), 0)
+    n = length(top_teams)
+    key_sets = [Set(String.(t.riderkey)) for t in top_teams]
+    core = intersect(key_sets...)
+
+    freq = Dict{String,Int}()
+    for ks in key_sets, k in ks
+        freq[k] = get(freq, k, 0) + 1
+    end
+
+    core_df = filter(row -> row.riderkey in core, top_teams[1])
+
+    all_rows = unique(vcat(top_teams...), :riderkey)
+    filler_keys = Set(k for (k, c) in freq if c < n)
+    filler_df = filter(row -> row.riderkey in filler_keys, all_rows)
+    if nrow(filler_df) > 0
+        filler_df[!, :frequency] = [freq[k] for k in filler_df.riderkey]
+        sort!(filler_df, [:frequency, :cost, :expected_vg_points], rev = true)
+    end
+    return (core_df, filler_df, n)
+end
+
+"""Solve `build_model_fn` on `points_col` and return `(riderkeys, objective)`.
+
+`objective` is the summed `points_col` over the chosen riders; `(String[], -Inf)`
+if infeasible. `force_in`/`force_out` pin riders in or out (structural forks)."""
+function _solve_team(
+    df::DataFrame,
+    build_model_fn::Function,
+    points_col::Symbol;
+    team_size::Integer,
+    max_per_team::Integer,
+    force_in::Vector{String} = String[],
+    force_out::Vector{String} = String[],
+)
+    result = build_model_fn(
+        df,
+        team_size,
+        points_col,
+        :cost;
+        totalcost = 100,
+        max_per_team = max_per_team,
+        force_in = force_in,
+        force_out = force_out,
+    )
+    result === nothing && return (String[], -Inf)
+    keyset = Set(String[k for k in df.riderkey if JuMP.value(result[k]) > 0.5])
+    obj = sum(row[points_col] for row in eachrow(df) if row.riderkey in keyset)
+    return (collect(keyset), obj)
+end
+
+"""
+    compute_structural_forks(predicted, build_model_fn; team_size, max_per_team,
+                             points_col=:expected_vg_points, n_forks=5) -> (forks, shape)
+
+Surface the major either/or roster decisions in the optimal team, each with the
+EVG it puts at stake and its knock-on.
+
+For every rider in the global optimum (best team on `points_col`) it re-solves
+with that rider **banned** (`force_out`) and reports:
+- `delta` — EVG lost by dropping the rider (global best minus best-without),
+- `comes_in` — the riders that enter to spend the freed budget (name/cost/evg).
+The pivotal picks (expensive leaders) dominate this ranking; `forks` is the top
+`n_forks` by `delta`.
+
+`shape` (when `:strength_gc` is present) is the genuinely structural fork: the two
+strongest-GC riders. It compares the best team forced to carry **both** leaders
+against the best team carrying **at most one** (`max(best-without-g1,
+best-without-g2)`), reporting which shape wins and by how much EVG. `nothing`
+when GC strengths are unavailable or the comparison is infeasible.
+"""
+function compute_structural_forks(
+    predicted::DataFrame,
+    build_model_fn::Function;
+    team_size::Integer,
+    max_per_team::Integer,
+    points_col::Symbol = :expected_vg_points,
+    n_forks::Integer = 5,
+)
+    meta = Dict(
+        String(row.riderkey) => (
+            rider = row.rider,
+            team = row.team,
+            cost = row.cost,
+            evg = row[points_col],
+        ) for row in eachrow(predicted)
+    )
+
+    global_keys, global_obj = _solve_team(
+        predicted,
+        build_model_fn,
+        points_col;
+        team_size = team_size,
+        max_per_team = max_per_team,
+    )
+    global_set = Set(global_keys)
+
+    forks = NamedTuple[]
+    for k in global_keys
+        without_keys, without_obj = _solve_team(
+            predicted,
+            build_model_fn,
+            points_col;
+            team_size = team_size,
+            max_per_team = max_per_team,
+            force_out = String[k],
+        )
+        delta = global_obj - without_obj
+        comes_in = [
+            (rider = meta[c].rider, cost = meta[c].cost, evg = meta[c].evg) for
+            c in setdiff(Set(without_keys), global_set)
+        ]
+        sort!(comes_in, by = r -> -r.cost)
+        push!(
+            forks,
+            (
+                riderkey = k,
+                rider = meta[k].rider,
+                team = meta[k].team,
+                cost = meta[k].cost,
+                evg = meta[k].evg,
+                delta = delta,
+                comes_in = comes_in,
+            ),
+        )
+    end
+    sort!(forks, by = f -> -f.delta)
+    forks = collect(first(forks, min(n_forks, length(forks))))
+
+    shape = nothing
+    if :strength_gc in propertynames(predicted) && nrow(predicted) >= 2
+        gc_order = sortperm(Float64.(predicted.strength_gc), rev = true)
+        g1 = String(predicted.riderkey[gc_order[1]])
+        g2 = String(predicted.riderkey[gc_order[2]])
+        _, both_obj = _solve_team(
+            predicted,
+            build_model_fn,
+            points_col;
+            team_size = team_size,
+            max_per_team = max_per_team,
+            force_in = String[g1, g2],
+        )
+        _, o1_obj = _solve_team(
+            predicted,
+            build_model_fn,
+            points_col;
+            team_size = team_size,
+            max_per_team = max_per_team,
+            force_out = String[g1],
+        )
+        _, o2_obj = _solve_team(
+            predicted,
+            build_model_fn,
+            points_col;
+            team_size = team_size,
+            max_per_team = max_per_team,
+            force_out = String[g2],
+        )
+        atmost_obj = max(o1_obj, o2_obj)
+        if isfinite(both_obj) && isfinite(atmost_obj)
+            shape = (
+                leader1 = meta[g1].rider,
+                leader2 = meta[g2].rider,
+                both_evg = both_obj,
+                atmost_evg = atmost_obj,
+                winner = both_obj >= atmost_obj ? :both : :one,
+                delta = abs(both_obj - atmost_obj),
+            )
+        end
+    end
+
+    return (forks = forks, shape = shape)
 end

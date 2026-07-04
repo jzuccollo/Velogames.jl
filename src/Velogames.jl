@@ -90,7 +90,8 @@ export ScoringTable,
     stage_finish_points_for_position,
     daily_gc_points_for_position,
     final_gc_points_for_position,
-    compute_breakaway_rates
+    compute_breakaway_rates,
+    STAGE_BREAKAWAY_MAX_RATE
 
 # Solvers and optimisation
 export solve_oneday,
@@ -109,7 +110,8 @@ export solve_oneday,
     build_model_stage,
     minimise_cost_stage,
     resample_optimise!,
-    resample_optimise_stage!
+    resample_optimise_stage!,
+    gt_propensity_factors
 
 # Simulation and strength estimation
 export BayesianConfig,
@@ -183,6 +185,9 @@ export html_page,
     load_stage_race_per_stage_data,
     compute_optimal_stage_team,
     compute_cheapest_winning_stage_team,
+    compute_filler_pool,
+    compute_structural_forks,
+    format_near_optimal_section,
     compute_cumulative_scores,
     compute_stage_type_scores,
     archive_stage_race_results,

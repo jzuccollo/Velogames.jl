@@ -44,9 +44,10 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 ### Optimisation models (src/build_model.jl)
 
-- `resample_optimise!(df, scoring, build_model_fn; team_size, n_resamples=500, max_per_team)` - Draw noisy strengths from posterior, score VG points, optimise team per draw, repeat. Returns `(df, top_teams)` where df gains `:selection_frequency` and `:expected_vg_points`, and `top_teams` is a `Vector{DataFrame}` of the most frequently selected teams.
-- `build_model_oneday(df, n, points_col, cost_col; max_per_team)` - Maximise points, one-day (6 riders, cost <= 100, optional per-team cap)
-- `build_model_stage(df, n, points_col, cost_col; max_per_team)` - Maximise points, stage race (9 riders, class constraints, optional per-team cap)
+- `resample_optimise!(df, scoring, build_model_fn; team_size, n_resamples=500, max_per_team, n_alternatives=20)` - Draw noisy strengths from posterior, score VG points, tally per-draw selection frequency, then optimise on risk-adjusted expected points. Returns `(df, top_teams)` where df gains `:selection_frequency` and `:expected_vg_points`, and `top_teams` is a `Vector{DataFrame}` of the `n_alternatives` best distinct teams ranked best-first (k-best enumeration via iterated no-good cuts; `top_teams[1]` is the optimal team). Reports use this near-optimal set for the stage-race team switcher, filler pool, and structural-fork analysis.
+- `build_model_oneday(df, n, points_col, cost_col; max_per_team, exclude, force_in, force_out)` - Maximise points, one-day (6 riders, cost <= 100, optional per-team cap). `exclude` adds no-good cuts (k-best); `force_in`/`force_out` pin riders (structural forks).
+- `build_model_stage(df, n, points_col, cost_col; max_per_team, exclude, force_in, force_out)` - Maximise points, stage race (9 riders, class constraints, optional per-team cap). Same `exclude`/`force_in`/`force_out` hooks as the one-day model.
+- `compute_filler_pool(top_teams)` / `compute_structural_forks(predicted, build_model_fn; team_size, max_per_team, n_forks=5)` - Decompose the k-best set into locked core + interchangeable filler pool, and rank the highest-EVG either/or roster decisions (drop-a-rider deltas + the both-GC-leaders-vs-one structural fork). Rendered by `format_near_optimal_section` (report_formatters.jl).
 - `minimise_cost_stage(df, target_score, n, cost_col)` - Minimise cost for target score
 
 ### Data scraping (src/get_data.jl)

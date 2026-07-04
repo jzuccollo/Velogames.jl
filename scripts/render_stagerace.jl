@@ -67,6 +67,9 @@ history_years = _cfg["optimisation"]["history_years"]
 domestique_discount = _cfg["optimisation"]["domestique_discount"]
 risk_aversion = _cfg["optimisation"]["risk_aversion"]
 max_per_team = _cfg["optimisation"]["max_per_team"]
+# Near-optimal team set: how many distinct k-best teams to enumerate for the
+# team switcher / filler pool / structural-fork analysis (default 20).
+n_alternatives = get(_cfg["optimisation"], "n_alternatives", 20)
 excluded_riders = String[x for x in _cfg["optimisation"]["excluded_riders"]]
 simulation_df = let v = _cfg["optimisation"]["simulation_df"]
     v isa Integer ? v : nothing
@@ -74,7 +77,22 @@ end
 
 cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
 pcs_stage_scrape = get(_cfg["optimisation"], "pcs_stage_scrape", true)
+# GT VG-history signal (Option A, July 2026 — see roadmap.md). ON by default:
+# injects each rider's own prior GT VG totals as a role/propensity strength
+# signal (leader/debutant-inert, upward-only). Set `gt_vg_history = false` in
+# the [optimisation] block of race_config.toml to disable.
+use_gt_vg_history = get(_cfg["optimisation"], "gt_vg_history", true)
+# GT VG points-propensity layer (Option B, July 2026 — see roadmap.md). ON by
+# default: a two-sided EVG correction learned from the residual between each
+# rider's real prior GT totals and their ability-implied EVG (lifts break-hunters,
+# lowers over-rated domestiques). `gt_vg_propensity_mode` selects the injection
+# point: "posthoc" (multiply the EVG mean, default) or "sim" (scale every
+# simulation draw so selection frequency reflects it too). Set false to disable.
+use_gt_vg_propensity = get(_cfg["optimisation"], "gt_vg_propensity", true)
+gt_vg_propensity_mode =
+    Symbol(get(_cfg["optimisation"], "gt_vg_propensity_mode", "posthoc"))
 
+breakaway_dir = joinpath(DEFAULT_ARCHIVE_DIR, "pcs_breakaways")
 race_cache = CacheConfig(DEFAULT_CACHE_DIR, FRESH ? 0 : 6)
 
 # ---------------------------------------------------------------------------
@@ -130,13 +148,18 @@ result = solve_stage(
     domestique_discount = domestique_discount,
     risk_aversion = risk_aversion,
     max_per_team = max_per_team,
+    n_alternatives = n_alternatives,
     simulation_df = simulation_df,
     cross_stage_alpha = cross_stage_alpha,
     stage_scoring = stage_scoring,
+    breakaway_dir = breakaway_dir,
     odds_df = odds_df,
     points_odds_df = points_odds_df,
     kom_odds_df = kom_odds_df,
     stagewin_odds_df = stagewin_odds_df,
+    use_gt_vg_history = use_gt_vg_history,
+    use_gt_vg_propensity = use_gt_vg_propensity,
+    gt_vg_propensity_mode = gt_vg_propensity_mode,
 )
 
 predicted = result.predicted
@@ -200,7 +223,7 @@ if using_per_stage
             io,
             html_callout(
                 "<p>Most likely podium finishers per stage, alongside basic stage details. Probabilities in parentheses are the share of $(diagnostics.n_sims) simulations in which the named rider finished in that exact position. Each column names a distinct rider (the modal occupant of that position, excluding riders already shown to its left).</p>\n" *
-                "<p><em>Caveat:</em> the simulation does not model breakaway wins, which take a large share of real hilly and mountain stages. Treat these as the favourites' odds <em>conditional on the stage being contested by the front group</em> — actual single-stage win rates are lower and more spread out.</p>\n" *
+                "<p><em>Caveat:</em> the simulation now models a discrete breakaway event for riders with a recorded PCS breakaway-km history on hilly/mountain stages, but the per-stage rate and payoff are first-pass estimates pending prospective calibration. For riders without breakaway history, treat these picks as the favourites' odds <em>conditional on the stage being contested by the front group</em> — actual single-stage win rates are lower and more spread out.</p>\n" *
                 html_table(stage_df[:, stage_col_order]);
                 title = "Stage details and podium picks",
                 collapsed = false,
@@ -405,6 +428,22 @@ else
         html_callout(
             "No optimal team generated — check configuration and try again.";
             type = "warning",
+        ),
+    )
+end
+
+# --- Near-optimal team set: switcher + filler pool + structural forks ---
+# Uses the live `predicted` frame (which carries the class columns the archive
+# lacks) and the k-best `top_teams` returned by the solver.
+if length(top_teams) > 0
+    write(
+        io,
+        format_near_optimal_section(
+            top_teams,
+            predicted,
+            build_model_stage;
+            team_size = config.team_size,
+            max_per_team = max_per_team,
         ),
     )
 end

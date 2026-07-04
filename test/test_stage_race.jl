@@ -540,6 +540,241 @@ end
     @test Velogames._aleatoric_sd(mtn_w, an) == an.mountain
 end
 
+# =========================================================================
+# GT breakaway modelling (prototype, July 2026 — roadmap.md "Stage-race
+# breakaway modelling")
+# =========================================================================
+
+@testset "_draw_breakaway! and _score_breakaway_bonus!" begin
+    rng = Random.MersenneTwister(1)
+    n = 4
+    abandoned = fill(false, n)
+    rates = [1.0, 0.0, 1.0, 0.0]  # riders 1 and 3 have recorded breakaway history
+
+    # Flat stage: guarded off regardless of rate — no trigger, no boost
+    noisy = zeros(n)
+    in_break = fill(false, n)
+    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :flat, abandoned, n, rng)
+    @test all(.!in_break)
+    @test noisy == zeros(n)
+
+    # Mountain stage: riders 1 and 3 (rate 1.0) always trigger; boost applied
+    fill!(noisy, 0.0)
+    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :mountain, abandoned, n, rng)
+    @test in_break == [true, false, true, false]
+    @test noisy == [2.5, 0.0, 2.5, 0.0]
+
+    # Flat breakaway bonus: only in_break riders are credited
+    stage_pts = zeros(n)
+    Velogames._score_breakaway_bonus!(stage_pts, in_break, 20, n)
+    @test stage_pts == [20.0, 0.0, 20.0, 0.0]
+
+    # bp == 0 (one-day-style scoring table) is a no-op
+    stage_pts2 = zeros(n)
+    Velogames._score_breakaway_bonus!(stage_pts2, in_break, 0, n)
+    @test all(stage_pts2 .== 0.0)
+
+    # Abandoned riders never trigger even at rate 1.0
+    fill!(noisy, 0.0)
+    fill!(in_break, false)
+    abandoned2 = [true, false, true, false]  # exactly the rate-1.0 riders
+    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :mountain, abandoned2, n, rng)
+    @test all(.!in_break)
+
+    # Empty breakaway_rates (the default) is a strict no-op — no rand() call,
+    # so RNG state is untouched (checked by comparing the next draw to a fresh
+    # rng at the same seed).
+    rng_a = Random.MersenneTwister(99)
+    rng_b = Random.MersenneTwister(99)
+    fill!(noisy, 0.0)
+    fill!(in_break, false)
+    Velogames._draw_breakaway!(
+        in_break,
+        noisy,
+        Float64[],
+        2.5,
+        :mountain,
+        abandoned,
+        n,
+        rng_a,
+    )
+    @test all(.!in_break)
+    @test rand(rng_a) == rand(rng_b)  # rng_a consumed nothing beforehand
+end
+
+@testset "simulate_stage_race breakaway event: do-no-harm" begin
+    # An all-zero (or empty, the default) breakaway_rates vector must consume
+    # zero rand() calls, so the whole simulation is bit-identical to the
+    # pre-breakaway-modelling behaviour under the same seed.
+    n_riders = 6
+    scoring = SCORING_GRAND_TOUR
+    stages = [flat_stage(1), mountain_stage(2), hilly_stage(3)]
+    base = collect(range(2.0, -2.0, length = n_riders))
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
+    )
+    uncertainties = fill(0.5, n_riders)
+    teams = repeat(["A", "B", "C"], 2)
+
+    sim_default, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 200,
+        rng = Random.MersenneTwister(7),
+    )
+    sim_explicit_zero, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 200,
+        rng = Random.MersenneTwister(7),
+        breakaway_rates = zeros(n_riders),
+    )
+
+    @test sim_default == sim_explicit_zero
+end
+
+@testset "simulate_stage_race breakaway event: boosts targeted rider" begin
+    # Rider 5 is a weak domestique (well below the leaders on every dimension)
+    # given a forced (rate 1.0) breakaway history. With rate 1.0 the Bernoulli
+    # draw is guaranteed to trigger every simulation on both mountain stages
+    # (rand() ∈ [0,1) is always < 1.0), so rider 5 banks the flat 20-pt
+    # breakaway bonus twice, deterministically, regardless of RNG — a mean
+    # floor of 40 that would be impossible without this feature.
+    n_riders = 6
+    scoring = SCORING_GRAND_TOUR
+    stages = [mountain_stage(1), mountain_stage(2), flat_stage(3)]
+    base = [4.0, 1.0, 0.0, -1.0, -3.0, -4.0]
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
+    )
+    uncertainties = fill(0.6, n_riders)
+    teams = ["A", "B", "C", "D", "E", "F"]
+
+    rates = zeros(n_riders)
+    rates[5] = 1.0
+
+    sim, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = 50,
+        rng = Random.MersenneTwister(3),
+        breakaway_rates = rates,
+    )
+    mean_pts = vec(mean(sim, dims = 2))
+
+    @test mean_pts[5] >= 40.0
+end
+
+# =========================================================================
+# GT VG-history signal (Option A prototype, July 2026 — roadmap.md
+# "GT VG-history strength signal")
+# =========================================================================
+
+@testset "GT VG-history signal: lifts break-hunter, clamps leader, inert off" begin
+    rider_df = DataFrame(
+        rider = ["Star", "Breaker", "Neutral"],
+        riderkey = ["star", "breaker", "neutral"],
+        team = ["A", "B", "C"],
+        cost = [20, 4, 8],
+        classraw = ["Climber", "Unclassed", "Unclassed"],
+        points = [1500.0, 100.0, 400.0],
+        gc = [2000.0, 100.0, 500.0],
+        tt = [1000.0, 100.0, 400.0],
+        sprint = [200.0, 150.0, 300.0],
+        climber = [2000.0, 120.0, 400.0],
+        oneday = [1500.0, 200.0, 600.0],
+        has_pcs_data = [true, true, true],
+    )
+    # One prior edition. Breaker posted a huge VG total (break-hunter role);
+    # Star a modest one (his ability far exceeds it); f1-f3 shape the within-year
+    # z-score distribution. Star and the filler riders sit BELOW Star's ability
+    # estimate, Breaker's z sits ABOVE Breaker's (weak) ability estimate.
+    gt = DataFrame(
+        riderkey = ["breaker", "star", "f1", "f2", "f3"],
+        score = [1500, 250, 300, 150, 80],
+        year = [2025, 2025, 2025, 2025, 2025],
+    )
+
+    off = estimate_strengths(rider_df; race_type = :stage, race_year = 2026)
+    on = estimate_strengths(
+        rider_df;
+        race_type = :stage,
+        race_year = 2026,
+        gt_vg_history_df = gt,
+    )
+
+    bi = findfirst(==("breaker"), on.riderkey)
+    si = findfirst(==("star"), on.riderkey)
+    ni = findfirst(==("neutral"), on.riderkey)
+
+    # Break-hunter's mountain/hilly strength lifted upward by their strong GT history
+    @test on.strength_mountain[bi] > off.strength_mountain[bi]
+    @test on.strength_hilly[bi] > off.strength_hilly[bi]
+    # Upward-only clamp: the strong climber, whose mountain estimate already exceeds
+    # his (low) GT-history z, is untouched — the leader do-no-harm guarantee.
+    @test on.strength_mountain[si] ≈ off.strength_mountain[si]
+    # Rider absent from GT history keeps the prior unchanged (do-no-harm).
+    @test on.strength_mountain[ni] ≈ off.strength_mountain[ni]
+    # Never routes to :gc, :itt or :flat for anyone.
+    @test on.strength_gc ≈ off.strength_gc
+    @test on.strength_itt ≈ off.strength_itt
+    @test on.strength_flat ≈ off.strength_flat
+    # Passing no GT history at all is fully inert.
+    @test on.strength_gc == off.strength_gc
+end
+
+@testset "GT VG points-propensity factors: two-sided, shrunk, inert off (Option B)" begin
+    # p (ability-implied EVG): leader high, break-hunter low, domestique high,
+    # debutant moderate. Real prior GT totals invert the roles: the break-hunter
+    # out-scores their ability, the domestique under-scores it, the leader matches.
+    keys = ["leader", "breaker", "domestique", "debutant"]
+    evg_raw = [3000.0, 40.0, 250.0, 150.0]
+    gt = DataFrame(
+        riderkey = ["leader", "leader", "breaker", "breaker", "domestique"],
+        score = [3100, 2900, 300, 280, 70],
+        year = [2025, 2024, 2025, 2024, 2025],
+    )
+
+    f = gt_propensity_factors(keys, evg_raw, gt, 2026)
+
+    # Break-hunter scored far above ability ⇒ positive factor (EVG raised).
+    @test f[2] > 0.2
+    # Locked domestique scored far below ability ⇒ negative factor (EVG lowered).
+    # This is the two-sided correction Option A structurally cannot deliver.
+    @test f[3] < -0.1
+    # Leader's real ≈ predicted ⇒ factor ≈ 0 (do-no-harm on leaders).
+    @test abs(f[1]) < 0.1
+    # Debutant absent from GT history ⇒ factor exactly 0 (unchanged).
+    @test f[4] == 0.0
+
+    # Shrinkage: the two-edition break-hunter keeps more of its raw ratio than a
+    # single-edition version of the same rider (partial pooling grows with data).
+    gt1 = DataFrame(riderkey = ["breaker"], score = [300], year = [2025])
+    f1 = gt_propensity_factors(["breaker"], [40.0], gt1, 2026)
+    f2 = gt_propensity_factors(["breaker"], [40.0], gt, 2026)
+    @test f2[1] > f1[1] > 0.0
+
+    # No history at all is fully inert (all factors zero).
+    @test all(==(0.0), gt_propensity_factors(keys, evg_raw, nothing, 2026))
+end
+
 @testset "attrition helpers (_norm_class, _rand_gamma)" begin
     # Real VG class labels normalise to the attrition_class_mult keys.
     @test Velogames._norm_class("All Rounder") == :allrounder
@@ -945,4 +1180,123 @@ end
     )
 
     @test diag_flat.final_gc_position_counts[1, 1] > diag_mtn.final_gc_position_counts[1, 1]
+end
+
+# =========================================================================
+# k-best near-optimal team enumeration (team switcher / filler / forks)
+# =========================================================================
+
+# A synthetic stage-race frame with enough riders per class to admit many
+# feasible 9-rider teams (2 all-rounder, 1 sprinter, 2 climber, 3 unclassed + 1
+# wildcard). Distinct integer EVGs so the k-best ordering is unambiguous.
+function _kbest_fixture()
+    classes = vcat(
+        fill("All Rounder", 5),
+        fill("Sprinter", 4),
+        fill("Climber", 5),
+        fill("Unclassed", 10),
+    )
+    n = length(classes)
+    DataFrame(
+        riderkey = ["r$i" for i = 1:n],
+        rider = ["Rider $i" for i = 1:n],
+        team = repeat(["A", "B", "C", "D", "E", "F"], inner = 4),
+        classraw = classes,
+        cost = repeat([16, 12, 8, 6], outer = 6),
+        expected_vg_points = Float64.(collect(n:-1:1) .* 10),
+    )
+end
+
+function _honours_stage_constraints(team::DataFrame)
+    nrow(team) == 9 || return false
+    sum(team.cost) <= 100 || return false
+    cls = lowercase.(replace.(team.classraw, " " => ""))
+    count(==("allrounder"), cls) >= 2 || return false
+    count(==("sprinter"), cls) >= 1 || return false
+    count(==("climber"), cls) >= 2 || return false
+    count(==("unclassed"), cls) >= 3 || return false
+    return true
+end
+
+@testset "_kbest_team_keys enumeration" begin
+    df = _kbest_fixture()
+    key_lists = Velogames._kbest_team_keys(
+        df,
+        build_model_stage,
+        :expected_vg_points;
+        team_size = 9,
+        max_per_team = 0,
+        n_alternatives = 8,
+    )
+
+    @test length(key_lists) == 8                      # all requested teams found
+    ptmap = Dict(df.riderkey .=> df.expected_vg_points)
+
+    # Distinct rosters (no repeated team)
+    rosters = [Set(k) for k in key_lists]
+    @test length(unique(rosters)) == length(rosters)
+
+    # Ranked by weakly descending objective (best first)
+    objs = [sum(ptmap[k] for k in ks) for ks in key_lists]
+    @test issorted(objs, rev = true)
+    @test objs[1] > objs[end]                         # genuine spread
+
+    # Every team honours budget + class + team-size constraints
+    for ks in key_lists
+        team = filter(row -> row.riderkey in Set(ks), df)
+        @test _honours_stage_constraints(team)
+    end
+
+    # n_alternatives is a hard cap; a smaller request is a prefix of the larger.
+    fewer = Velogames._kbest_team_keys(
+        df,
+        build_model_stage,
+        :expected_vg_points;
+        team_size = 9,
+        max_per_team = 0,
+        n_alternatives = 3,
+    )
+    @test length(fewer) == 3
+    @test [Set(k) for k in fewer] == rosters[1:3]
+end
+
+@testset "compute_filler_pool + compute_structural_forks" begin
+    df = _kbest_fixture()
+    key_lists = Velogames._kbest_team_keys(
+        df,
+        build_model_stage,
+        :expected_vg_points;
+        team_size = 9,
+        max_per_team = 0,
+        n_alternatives = 8,
+    )
+    top_teams = [filter(row -> row.riderkey in Set(ks), df) for ks in key_lists]
+
+    core_df, filler_df, n_teams = compute_filler_pool(top_teams)
+    @test n_teams == 8
+    # Core riders are in every team; filler riders in some but not all.
+    core_keys = Set(core_df.riderkey)
+    for t in top_teams
+        @test core_keys ⊆ Set(t.riderkey)
+    end
+    @test all(1 .<= filler_df.frequency .< n_teams)
+    @test isempty(intersect(core_keys, Set(filler_df.riderkey)))
+    # Core + filler together cover the full union of near-optimal rosters.
+    union_keys = reduce(union, [Set(t.riderkey) for t in top_teams])
+    @test union_keys == core_keys ∪ Set(filler_df.riderkey)
+
+    forks = compute_structural_forks(
+        df,
+        build_model_stage;
+        team_size = 9,
+        max_per_team = 0,
+        n_forks = 5,
+    )
+    @test length(forks.forks) <= 5
+    # Dropping any rider from the optimum cannot improve it: delta >= 0.
+    @test all(f -> f.delta >= -1e-6, forks.forks)
+    # Ranked by descending EVG at stake.
+    @test issorted([f.delta for f in forks.forks], rev = true)
+    # GC-shape fork is absent here (no :strength_gc column).
+    @test forks.shape === nothing
 end

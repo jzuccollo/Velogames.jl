@@ -51,6 +51,13 @@ remain as separate arguments to `estimate_rider_strength`.
     kom_history::Vector{Float64} = Float64[]
     kom_history_years_ago::Vector{Int} = Int[]
     kom_history_penalties::Vector{Float64} = Float64[]
+    # GT VG-history (Option A prototype, July 2026; multi-dim only). Each entry is
+    # this rider's own log1p-z-scored VG total from one past edition of THIS grand
+    # tour; `years_ago` drives recency decay. Multiple results ⇒ multiple conjugate
+    # updates ⇒ a naturally tighter, sparsity-appropriate posterior for riders with
+    # a longer GT record.
+    gt_vg_history::Vector{Float64} = Float64[]
+    gt_vg_history_years_ago::Vector{Int} = Int[]
 end
 
 """
@@ -797,6 +804,52 @@ function estimate_rider_strength_multidim(
         config.odds_normalisation,
     )
 
+    # --- GT VG-history (Option A prototype, July 2026) ---
+    # A rider's OWN prior grand-tour VG totals (log1p-z-scored per past edition).
+    # Fixed routing via SIGNAL_DIMENSION_WEIGHTS.gt_vg_history — a role/propensity
+    # factor, NOT the rider's class projection: the whole point is that it captures
+    # scoring role the class/ability signals are blind to. Recency decay reuses
+    # `vg_hist_decay_rate`. Sparsity is handled by the conjugate mechanism itself —
+    # n editions give ~n× the precision of a single result, so a longer GT record
+    # yields a tighter, more-informed posterior with no bolt-on multiplier.
+    #
+    # Two deliberate design choices make this do-no-harm on leaders:
+    #   1. Runs LAST, AFTER the market updates. A leader's mountain/hilly posterior
+    #      is already lifted (and tightened) by GC odds/oracle by this point, so the
+    #      upward clamp below skips them entirely — no precision is added, so the
+    #      market lift is not dampened. (Running BEFORE the market instead silently
+    #      pulls leaders DOWN: the extra precision blunts the later market update.)
+    #   2. UPWARD-ONLY: a dimension updates only when the observation would RAISE its
+    #      mean. Prior GT VG success is evidence of *extra* scoring propensity on top
+    #      of ability (a role bonus); it must never drag down a rider whose ability
+    #      estimate already exceeds their historical-VG z. Same spirit as the
+    #      "clamp at 0" list-cutoff market updates. Consequence: the inverse case (an
+    #      elite classics rider on locked domestique duty whose LOW GT history should
+    #      pull them down) is deliberately NOT handled — that two-sided correction
+    #      would reintroduce the leader harm and belongs in an EVG-stage layer (B).
+    #
+    # NOT multiplied by `md_vec`: unlike PCS/history this is orthogonal to what the
+    # GC/stage-win markets price for cheap domestiques, so the double-counting
+    # `market_discount` must not suppress it (that would gut the signal on the very
+    # dimensions the flagged break-hunters need lifting on).
+    mean_before = copy(posterior.mean)
+    if !isempty(signals.gt_vg_history)
+        w_nt = SIGNAL_DIMENSION_WEIGHTS.gt_vg_history
+        for (obs, years_ago) in
+            zip(signals.gt_vg_history, signals.gt_vg_history_years_ago)
+            base_var = config.gt_vg_hist_base_variance + config.vg_hist_decay_rate * years_ago
+            for dsym in STRENGTH_DIMENSIONS
+                w = getfield(w_nt, dsym)
+                w == 0.0 && continue
+                obs <= posterior.mean[_DIM_INDEX[dsym]] && continue
+                v = base_var / w
+                posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
+                precisions[:gt_vg_history][_DIM_INDEX[dsym]] += 1.0 / v
+            end
+        end
+    end
+    shifts[:gt_vg_history] = posterior.mean .- mean_before
+
     return MultiDimStrengthEstimate(
         copy(posterior.mean),
         copy(posterior.variance),
@@ -838,6 +891,7 @@ struct AssembledSignals
 
     history_lookup::Dict{String,Vector{Tuple{Float64,Int,Float64}}}
     vg_history_lookup::Dict{String,Vector{Tuple{Float64,Int}}}
+    gt_vg_history_lookup::Dict{String,Vector{Tuple{Float64,Int}}}
     points_history_lookup::Dict{String,Vector{Tuple{Float64,Int,Float64}}}
     kom_history_lookup::Dict{String,Vector{Tuple{Float64,Int,Float64}}}
     odds_lookup::Dict{String,Float64}
@@ -888,6 +942,7 @@ function _assemble_signals(
     vg_history_df::Union{DataFrame,Nothing} = nothing,
     points_history_df::Union{DataFrame,Nothing} = nothing,
     kom_history_df::Union{DataFrame,Nothing} = nothing,
+    gt_vg_history_df::Union{DataFrame,Nothing} = nothing,
     seasons_df::Union{DataFrame,Nothing} = nothing,
     config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     race_year::Union{Int,Nothing} = nothing,
@@ -1118,6 +1173,34 @@ function _assemble_signals(
         end
     end
 
+    # --- GT VG-history lookup (Option A prototype). log1p, then z-score WITHIN
+    # each past edition's full field, so a rider's entry is "how their VG total
+    # ranked among that Tour's starters". log1p first because GT totals are
+    # heavily right-skewed (leaders 3000-4000, domestiques 50-300) — raw z-scoring
+    # would let a single 4000 dominate σ and compress everyone else toward 0. A
+    # cheap break-hunter who out-scores the median then lands materially above 0,
+    # pulling their (currently far-below-average) strength estimate upward. ---
+    gt_vg_history_lookup = Dict{String,Vector{Tuple{Float64,Int}}}()
+    if gt_vg_history_df !== nothing &&
+       :riderkey in propertynames(gt_vg_history_df) &&
+       :score in propertynames(gt_vg_history_df) &&
+       :year in propertynames(gt_vg_history_df)
+        for g in groupby(gt_vg_history_df, :year)
+            logged = log1p.(max.(Float64.(coalesce.(g.score, 0.0)), 0.0))
+            μ = mean(logged)
+            σ = std(logged)
+            for (i, row) in enumerate(eachrow(g))
+                ismissing(row.year) && continue
+                z = σ > 0 ? (logged[i] - μ) / σ : 0.0
+                years_ago = current_year - row.year
+                push!(
+                    get!(gt_vg_history_lookup, row.riderkey, Tuple{Float64,Int}[]),
+                    (z, years_ago),
+                )
+            end
+        end
+    end
+
     # --- Classification history lookups (points jersey, KOM) — same shape as
     # race history: position → strength, recency, variance penalty. ---
     function _class_hist(cls_df)
@@ -1155,6 +1238,7 @@ function _assemble_signals(
         seasons_keys,
         history_lookup,
         vg_history_lookup,
+        gt_vg_history_lookup,
         points_history_lookup,
         kom_history_lookup,
         odds_lookup,
@@ -1195,6 +1279,7 @@ function _estimate_strengths_multidim(
     vg_history_df::Union{DataFrame,Nothing} = nothing,
     points_history_df::Union{DataFrame,Nothing} = nothing,
     kom_history_df::Union{DataFrame,Nothing} = nothing,
+    gt_vg_history_df::Union{DataFrame,Nothing} = nothing,
     seasons_df::Union{DataFrame,Nothing} = nothing,
     config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     race_year::Union{Int,Nothing} = nothing,
@@ -1215,6 +1300,7 @@ function _estimate_strengths_multidim(
         vg_history_df = vg_history_df,
         points_history_df = points_history_df,
         kom_history_df = kom_history_df,
+        gt_vg_history_df = gt_vg_history_df,
         seasons_df = seasons_df,
         config = config,
         race_year = race_year,
@@ -1343,6 +1429,10 @@ function _estimate_strengths_multidim(
         vg_hist_strengths = Float64[h[1] for h in vg_hist]
         vg_hist_years = Int[h[2] for h in vg_hist]
 
+        gt_vg_hist = get(sig.gt_vg_history_lookup, key, Tuple{Float64,Int}[])
+        gt_vg_hist_z = Float64[h[1] for h in gt_vg_hist]
+        gt_vg_hist_years = Int[h[2] for h in gt_vg_hist]
+
         pts_hist = get(sig.points_history_lookup, key, Tuple{Float64,Int,Float64}[])
         kom_hist = get(sig.kom_history_lookup, key, Tuple{Float64,Int,Float64}[])
 
@@ -1379,6 +1469,8 @@ function _estimate_strengths_multidim(
             vg_points = sig.vg_z[i],
             vg_race_history = vg_hist_strengths,
             vg_race_history_years_ago = vg_hist_years,
+            gt_vg_history = gt_vg_hist_z,
+            gt_vg_history_years_ago = gt_vg_hist_years,
             points_history = Float64[h[1] for h in pts_hist],
             points_history_years_ago = Int[h[2] for h in pts_hist],
             points_history_penalties = Float64[h[3] for h in pts_hist],
@@ -1587,6 +1679,7 @@ function estimate_strengths(
     vg_history_df::Union{DataFrame,Nothing} = nothing,
     points_history_df::Union{DataFrame,Nothing} = nothing,
     kom_history_df::Union{DataFrame,Nothing} = nothing,
+    gt_vg_history_df::Union{DataFrame,Nothing} = nothing,
     qualitative_df::Union{DataFrame,Nothing} = nothing,
     form_df::Union{DataFrame,Nothing} = nothing,
     seasons_df::Union{DataFrame,Nothing} = nothing,
@@ -1612,6 +1705,7 @@ function estimate_strengths(
             vg_history_df = vg_history_df,
             points_history_df = points_history_df,
             kom_history_df = kom_history_df,
+            gt_vg_history_df = gt_vg_history_df,
             seasons_df = seasons_df,
             config = config,
             race_year = race_year,
@@ -1869,6 +1963,7 @@ function estimate_strengths(
         vg_history_df = data.vg_history_df,
         points_history_df = data.points_history_df,
         kom_history_df = data.kom_history_df,
+        gt_vg_history_df = data.gt_vg_history_df,
         qualitative_df = data.qualitative_df,
         form_df = data.form_df,
         seasons_df = data.seasons_df,

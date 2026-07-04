@@ -913,6 +913,15 @@ Fields:
 - `breakaway_noise` — per-event, per-dimension breakaway σ (decoupled from GC).
 - `points_jersey_allocation` — per-stage-type points-jersey allocation vectors.
 - `intermediate_sprint_points` — intermediate-sprint banner allocation.
+- `breakaway_stage_boost` — per-stage strength boost (same z-score-ish units as
+  `stage_strengths`) applied to a rider's `noisy` stage-finish strength when a
+  discrete breakaway event triggers for them (see `_draw_breakaway!` in
+  simulate_stage.jl). Distinct from `breakaway_noise`: that's symmetric,
+  zero-mean variance inflation applied to every rider on breakaway-conducive
+  terrain; this is a one-sided boost applied only to riders with recorded PCS
+  breakaway-km history, representing the real advantage of contesting a stage
+  from a small escape group rather than the full bunch. First-pass estimate —
+  needs prospective calibration (see roadmap.md "Stage-race breakaway modelling (prototype, July 2026)").
 """
 struct StageSimConfig
     aleatoric_noise::NamedTuple
@@ -925,6 +934,7 @@ struct StageSimConfig
     aleatoric_df::Int                   # Student-t df for the aleatoric race-day draw
     gc_favourite_protection::Float64    # DNF hazard reduction for strong GC favourites
     gc_protection_floor::Float64        # min hazard multiplier — irreducible crash risk
+    breakaway_stage_boost::Float64      # noisy-strength boost when a breakaway event triggers
 end
 
 function StageSimConfig(;
@@ -996,6 +1006,16 @@ function StageSimConfig(;
     # protection multiplier bottoms out at this floor rather than →0. 0.35 leaves
     # a class-17.6% climber favourite at ~6% DNF (top-10 ~94%), not ~1.6%.
     gc_protection_floor = 0.35,
+    # Breakaway event boost (prototype, July 2026 — see roadmap.md "Stage-race
+    # breakaway modelling"): applied to a rider's noisy stage strength on the
+    # stage(s) they're drawn into a break (see `_draw_breakaway!`). Calibrated
+    # so a mid-strength domestique
+    # (strengths_blend a few SD below the leaders) gets a realistic shot at a
+    # top-10/20 stage result from within the smaller break group, without
+    # guaranteeing they beat genuine strong climbers who are also occasionally
+    # in the same move. First-pass estimate, not yet validated against
+    # historical breakaway-heavy riders — see roadmap.md "Stage-race breakaway modelling (prototype, July 2026)".
+    breakaway_stage_boost = 2.5,
 )
     StageSimConfig(
         aleatoric_noise,
@@ -1008,6 +1028,7 @@ function StageSimConfig(;
         aleatoric_df,
         gc_favourite_protection,
         gc_protection_floor,
+        breakaway_stage_boost,
     )
 end
 

@@ -57,6 +57,8 @@ standard data container between fetching and prediction.
     # Prior-edition classification history (stage races): points jersey + KOM standings
     points_history_df::Union{DataFrame,Nothing} = nothing
     kom_history_df::Union{DataFrame,Nothing} = nothing
+    # Prior-edition GT VG overall totals for THIS grand tour (Option A prototype)
+    gt_vg_history_df::Union{DataFrame,Nothing} = nothing
 end
 
 
@@ -441,6 +443,57 @@ function assemble_vg_race_history(
     end
 
     return vg_history_df
+end
+
+
+# ---------------------------------------------------------------------------
+# Grand-tour VG-history assembly (Option A prototype, July 2026)
+# ---------------------------------------------------------------------------
+
+"""
+    assemble_gt_vg_history(vg_slug, race_year, history_years;
+        cache_config, force_refresh) -> Union{DataFrame, Nothing}
+
+Fetch each prior edition's full-field VG overall totals for THIS grand tour
+(same `vg_slug`), across `[race_year - history_years, race_year - 1]`, and stack
+them long. Returns a DataFrame with `riderkey`, `score`, `year` (the shape
+`_assemble_signals` expects for the GT VG-history signal), or `nothing` if no
+edition returned data.
+
+Deliberately same-race (Tour→Tour), not cross-grand-tour: the flagged
+break-hunter failures are all Tour-history cases, same-race is the lowest-bias
+option (identical scoring/competition), and the memory note records that
+cross-GT jersey history transfers poorly. Cross-GT is a possible extension.
+"""
+function assemble_gt_vg_history(
+    vg_slug::String,
+    race_year::Int,
+    history_years::Int;
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    isempty(vg_slug) && return nothing
+    out = nothing
+    for hist_year = (race_year-history_years):(race_year-1)
+        try
+            df = getvg_stage_race_totals(
+                hist_year,
+                vg_slug;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            (df === nothing || nrow(df) == 0) && continue
+            keep = select(df, :riderkey, :score)
+            keep[!, :year] .= hist_year
+            out = out === nothing ? keep : vcat(out, keep; cols = :union)
+        catch e
+            @warn "Failed to fetch GT VG totals for $vg_slug $hist_year" exception = e
+        end
+    end
+    if out !== nothing
+        @info "GT VG-history: $(nrow(out)) rider-results across $(length(unique(out.year))) editions of '$vg_slug'"
+    end
+    return out
 end
 
 

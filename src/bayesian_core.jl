@@ -164,6 +164,20 @@ signal degrades rather than *how much* to trust the signal source.
     # half-life ≈ 1 season (last season ~50%, 2 years ago ~25%, 3 years ago ~12%).
     pcs_season_decay::Float64 = 0.7
 
+    # --- GT VG-history signal (Option A prototype, July 2026) ---
+    # Base observation variance for a rider's OWN historical grand-tour VG total
+    # (log1p-z-scored across each past edition's field, recency-decayed by
+    # `vg_hist_decay_rate`). This is a role/propensity proxy: a rider who scored
+    # like a break-hunter last Tour scored so *because* of their role, so their
+    # own prior GT VG is a lower-bias predictor of their GT VG than their general
+    # ability is. Deliberately NOT divided by `history_precision_scale` — it is a
+    # distinct signal kept independent of the ability/history/market groups — and
+    # is exempt from `market_discount` in `estimate_rider_strength_multidim`
+    # (it carries information the GC/stage-win markets do not price for cheap
+    # domestiques). Lower = more influence. See roadmap.md "GT VG-history strength
+    # signal (Option A prototype)".
+    gt_vg_hist_base_variance::Float64 = 1.5
+
     # --- Other parameters ---
 
     # Divisor to scale log-odds to z-score range, matching the scale of
@@ -450,6 +464,26 @@ const SIGNAL_DIMENSION_WEIGHTS = (
         kom = 0.0,
     ),
     kom_history = (flat = 0.0, hilly = 0.0, mountain = 0.0, itt = 0.0, gc = 0.0, kom = 1.0),
+    # GT VG-history (Option A prototype, July 2026): a rider's OWN prior grand-tour
+    # VG total, a role/propensity proxy rather than a terrain signal. Routed to the
+    # stage-FINISH-placing dimensions a break-hunter/opportunist actually scores on
+    # (hilly/mountain), plus a modest :kom (breakaways collect KOM points).
+    # Deliberately ZERO on :gc, :itt AND :flat: routing to :gc would falsely elevate
+    # a break-hunter as a GC threat (inflating daily/final-GC scoring); a domestique's
+    # VG total says nothing about time-trial ability; and :flat would inflate a GC
+    # leader's bunch-sprint strength (their huge GT total comes from mountains, not
+    # flat sprints — the classic "propensity factor routed uniformly distorts" trap).
+    # Grand-tour breakaways are overwhelmingly a hilly/mountain phenomenon anyway.
+    # Consumed UPWARD-ONLY and AFTER the market updates — see
+    # estimate_rider_strength_multidim and roadmap.md "GT VG-history strength signal".
+    gt_vg_history = (
+        flat = 0.0,
+        hilly = 1.0,
+        mountain = 1.0,
+        itt = 0.0,
+        gc = 0.0,
+        kom = 0.5,
+    ),
 )
 
 """
@@ -506,6 +540,7 @@ const SIGNAL_KEYS_MULTIDIM = (
     :odds_points,
     :odds_kom,
     :odds_stagewin,
+    :gt_vg_history,
 )
 
 function _weights_to_vec(nt::NamedTuple)
