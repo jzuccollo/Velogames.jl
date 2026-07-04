@@ -2,6 +2,21 @@
 
 See `CLAUDE.md` for current architecture, prediction model details, signal inventory, and parameter settings.
 
+## Remediation phases 0–1 executed (July 2026)
+
+Phases 0 and 1 of `docs/remediation-plan.md` (following `docs/architecture-review.md`) shipped on branch `remediation/phase-0-1`. **The mechanism moratorium is in force**: no new signals or simulation layers until the Phase 2 stage-race harness exists; genuine bug fixes only. Decisions D1–D4 were executed as follows:
+
+- **D1 (league standings)**: resolved without a new scraper — the sibling `../vgleague` package already scrapes full league standings; `load_league_standings` (data_assembly.jl) reads its JSON cache, with `data/league_standings.toml` manual paste as fallback. First measurement: **over the 9 races with both archived model teams and standings, the model would place 2nd of 15 cumulatively** (11,198 vs leader 11,616), slightly ahead of the entered teams (11,076; delta −122). Note: "Mud Springs Eternal", read by the review as a strong opponent, is the user's own team. Entered-vs-advised deltas now reported per race by `scripts/league_eval.jl`. Later-season races need `vgleague update dpcc` run in `../vgleague`.
+- **D2 (final-KOM fix, review defects 1+2)**: final mountains jersey now ranked by cumulative daily-KOM points (driven by `kom_s`, hilly+mountain); `mountain_top5_counts` deleted. Fixed-seed Giro 2026 diff: movement confined to the KOM component (sum |ΔEVG| 185.3); Ciccone +29.4, Vine +26.9, Scaroni +10.1 up; Caruso/Vendrame/Narváez down. Caveat: Giro/Tour 2026 prediction archives predate the `strength_kom` column, so retrospective reconstructions fall back to `strength_mountain` for the KOM channel.
+- **D3 (intermediate sprints)**: the undocumented runtime 0.5× folded into the config vector (`[10, 6, 4, 3, 2, 1] .* 0.5` as literals); bit-identical on fixed seeds.
+- **D4 (multidim block-correlation)**: the scalar cluster discount ported per-dimension to `estimate_rider_strength_multidim`, behind `multidim_block_correlation::Bool = true`. Pre-registered checks all passed: (a) SDs widen only for multi-signal riders; (b) archived TdF 2026 reconstruction: Pogačar simulated GC win% 93.1% → **78.3%** (market raw implied 80.0%, normalised 55.3%) — the GC over-determinism defect and the missing discount were indeed the same fact; (c) Giro 2026 top-20 rank ρ 0.094 → 0.119 (improves). **Recorded caveat for the revisit trigger**: Giro full-field EVG↔actual ρ fell 0.577 → 0.303 (wider posteriors let simulation noise compress cheap riders' EVG), and the Giro favourite's win% barely moved (92.2% → 91.5%). **Pre-registered revisit trigger: if Vuelta 2026 top-20 rank ρ degrades vs Giro/Tour 2026 levels, or GC win% moves further from market, flip the flag off and investigate.**
+
+Other Phase 1 fixes: GC-favourite protection no longer silently skipped when `gc_strengths` is empty (review defect 4); simulation layers (attrition, breakaway participation, aleatoric) now draw from independent per-sim RNG sub-streams so toggling one layer leaves the others' streams unchanged — the enabler for Phase 2's clean ablations. Seeded outputs changed once at that commit. Prediction archives now write a mandatory column set plus `schema_version` (review defect 5); readers warn on legacy archives (pre-April-2026 archives cannot be re-created).
+
+Dead-knob prune (WP1.5): the two dead `BayesianConfig` fields the review counted (`form_absence_floor`, `qualitative_absence_floor`) are deleted — the estimation-path knob count drops by 2. The REFACTOR_PLAN audit found Phases 1–4 essentially already shipped (the plan document had not been kept in sync); only its optional 3d (estimator shared-block refactor) remains open, worth scheduling since the estimators keep needing edits. `qualitative_base_variance` stays a hardcoded 2.0 literal in its accessor, deliberately not promoted to a config field while the qualitative signal is production-dead.
+
+Known bugs recorded, not fixed (moratorium): `find_race`'s fuzzy fallback mis-resolves short aliases ("Tour" → "Paris-Tours Elite"); `CLASSICS_RACES_2026`'s gent-wevelgem display name doesn't match the VG/vgleague name ("From Middelkerke" vs "Middelkerke"), so its standings don't match by name.
+
 ## Known issues
 
 ### VG points distributions underestimate scoring riders (March–April 2026)
