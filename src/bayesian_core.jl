@@ -211,12 +211,15 @@ signal degrades rather than *how much* to trust the signal source.
     # Floor observations use per-signal variance multipliers × base_variance
     # (less precise than direct observations).
     #
-    # Two floor mechanisms:
-    #   :odds — market-based: bookmaker GC market prices the full field, so
-    #       absence is informative (residual probability mass shared across
-    #       absent riders).
-    #   :form, :qualitative — fixed: absent riders get a per-signal floor
-    #       strength as a z-score observation.
+    # :odds is the live floor mechanism: bookmaker GC market prices the full
+    # field, so absence is informative (residual probability mass shared
+    # across absent riders). The per-rider floor *strength* for :form and
+    # :qualitative is computed upstream in `_assemble_signals` (currently
+    # always 0.0 there — both signals are disabled by the April 2026
+    # ablation); `form_floor_variance_multiplier` /
+    # `qualitative_floor_variance_multiplier` below stay wired so
+    # `estimate_rider_strength` has correct behaviour if a caller re-enables
+    # them directly with a non-zero floor strength.
     #
     # `:oracle` is intentionally absent: Cycling Oracle publishes a top-15
     # with probabilities normalised to sum to 1.0, so applying the residual-
@@ -225,16 +228,12 @@ signal degrades rather than *how much* to trust the signal source.
     # rider not in the published top-15. Treat oracle absence as
     # uninformative (consistent with Oracle Points / Oracle KOM handling).
     floor_signals::Set{Symbol} = Set([:odds, :qualitative])
-    # Per-signal floor config: (strength, variance_multiplier).
-    # Strength is the z-score observation for absent riders.
-    # Variance multiplier scales the signal's base variance for floor observations
-    # (higher = weaker floor). Sources with broader coverage warrant stronger
-    # floors (lower multiplier, more negative strength).
+    # Per-signal floor config: variance_multiplier scales the signal's base
+    # variance for floor observations (higher = weaker floor). Sources with
+    # broader coverage warrant stronger floors (lower multiplier).
     odds_floor_variance_multiplier::Float64 = 2.0
     oracle_floor_variance_multiplier::Float64 = 2.0
-    form_absence_floor::Float64 = -0.5
     form_floor_variance_multiplier::Float64 = 2.0
-    qualitative_absence_floor::Float64 = -0.15
     qualitative_floor_variance_multiplier::Float64 = 4.0
     # --- Market discount ---
     # When odds exist for a race, non-market signal variances are multiplied
@@ -256,6 +255,11 @@ vg_hist_base_variance(c::BayesianConfig) =
     c._form_to_vg_hist_ratio / c.history_precision_scale
 odds_variance(c::BayesianConfig) = 1.0 / c.market_precision_scale
 oracle_variance(c::BayesianConfig) = c._odds_to_oracle_ratio / c.market_precision_scale
+# Qualitative intelligence has no precision-scale group of its own (it's
+# disabled by the April 2026 ablation and only re-enabled via
+# force_enable=:qualitative for backtesting), so this is a bare literal
+# rather than ratio/scale_factor like the signals above. Not worth promoting
+# into a config field while the signal is dead in production.
 qualitative_base_variance(c::BayesianConfig) = 2.0
 
 """Default Bayesian hyperparameters."""
