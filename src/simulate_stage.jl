@@ -415,11 +415,12 @@ inert. Typically produced by `compute_breakaway_rates` from archived PCS
 breakaway-km data with `max_rate = STAGE_BREAKAWAY_MAX_RATE`.
 
 RNG stream design (WP1.4, July 2026). Each simulation draw consumes from the
-master `rng`, in order: (1) one `UInt64` seed for the attrition sub-stream,
-(2) one `UInt64` seed for the breakaway-participation sub-stream — both drawn
-unconditionally, whether or not those layers are active — then (3) the
-persistent rider noise (`n_riders` randn), and per stage (4) the aleatoric
-stage noise (`_rand_t`, fixed `aleatoric_df + 1` randn per rider) and (5) any
+master `rng`, in order: (1) ONE `UInt64` layer seed, drawn unconditionally and
+salted per layer (attrition, breakaway participation) to seed each sub-stream —
+a future layer takes a new salt on the same draw, so adding layers never shifts
+existing streams — then (2) the
+persistent rider noise (`n_riders` randn), and per stage (3) the aleatoric
+stage noise (`_rand_t`, fixed `aleatoric_df + 1` randn per rider) and (4) any
 stage-finish / points-jersey breakaway Gaussian noise (gated only on stage
 weights, an input). Attrition draws (the shared Gamma "brutal day" shock —
 `_rand_gamma`, a rejection sampler with VARIABLE consumption — plus per-rider
@@ -468,7 +469,11 @@ function simulate_stage_race(
     # ordering bug fixed in July 2026: protection was silently skipped for
     # callers passing empty gc_strengths).
     if isempty(gc_strengths)
-        keys_present = collect(keys(stage_strengths))
+        # Average genuine stage types only: :kom is a jersey channel, not a
+        # stage type, and :ttt duplicates :itt — including them skews the GC
+        # proxy towards KOM specialists and double-weights the TT dimension.
+        keys_present =
+            [k for k in (:flat, :hilly, :mountain, :itt) if haskey(stage_strengths, k)]
         gc_strengths =
             [mean(stage_strengths[k][i] for k in keys_present) for i = 1:n_riders]
     end
@@ -529,8 +534,12 @@ function simulate_stage_race(
     for sim = 1:n_sims
         # Seeded unconditionally so master-stream consumption is fixed
         # regardless of which layers are active.
-        Random.seed!(attrition_rng, rand(rng, UInt64))
-        Random.seed!(breakaway_rng, rand(rng, UInt64))
+        # One master draw per sim, salted per layer: adding a future layer means
+        # a new salt on the SAME draw, so existing layers' streams never shift
+        # (drawing one UInt64 per layer would re-shift everything downstream).
+        layer_seed = rand(rng, UInt64)
+        Random.seed!(attrition_rng, layer_seed ⊻ 0x9e3779b97f4a7c15)
+        Random.seed!(breakaway_rng, layer_seed ⊻ 0xd1b54a32d192ed03)
         for i = 1:n_riders
             rider_noise[i] = randn(rng)
         end

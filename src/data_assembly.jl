@@ -1025,10 +1025,13 @@ package — see `../vgleague`). Returns a long DataFrame with one row per
 in every race the league has scraped so far.
 
 If `toml_path` is given and exists, manually-recorded standings
-(`data/league_standings.toml`) are merged in: any race name present in the
-TOML file overrides/supplements the JSON for that race (the scraper hasn't
-caught up yet, or the user wants to hand-correct it). See
-`load_league_standings_toml` for the TOML schema.
+(`data/league_standings.toml`) are merged in: any race whose name matches one
+in the TOML file (compared via `normalise_race_name`, so a hand-typed variant
+still overrides) is replaced by the TOML entries (the scraper hasn't caught up
+yet, or the user wants to hand-correct it). TOML rows record the team display
+name; where that matches a `teamname` in the JSON, the row is assigned that
+entrant's `username` so one entrant keeps a single identity across sources.
+See `load_league_standings_toml` for the TOML schema.
 """
 function load_league_standings(
     json_path::AbstractString;
@@ -1042,8 +1045,12 @@ function load_league_standings(
     isempty(toml_df) && return json_df
     isempty(json_df) && return toml_df
 
-    override_races = Set(toml_df.race_name)
-    kept = filter(:race_name => (r -> !(r in override_races)), json_df)
+    override_races = Set(normalise_race_name.(String.(toml_df.race_name)))
+    kept =
+        filter(:race_name => (r -> !(normalise_race_name(String(r)) in override_races)), json_df)
+    username_of_team =
+        Dict(String(t) => String(u) for (t, u) in zip(json_df.teamname, json_df.username))
+    toml_df.username = [get(username_of_team, String(t), String(t)) for t in toml_df.teamname]
     return vcat(kept, toml_df; cols = :union)
 end
 

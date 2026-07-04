@@ -84,6 +84,11 @@ const PREDICTION_MANDATORY_COLUMNS = [
     :expected_vg_points,
 ]
 
+# Single source of the mandatory-column check, shared by the write-time error
+# (`_archive_predictions`) and the read-time warning (`_check_prediction_schema`).
+_missing_prediction_columns(df::DataFrame) =
+    setdiff(PREDICTION_MANDATORY_COLUMNS, propertynames(df))
+
 """Archive the predicted DataFrame for prospective evaluation."""
 function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     isempty(config.pcs_slug) && return
@@ -98,14 +103,16 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
         end
     end
 
-    missing_cols = setdiff(PREDICTION_MANDATORY_COLUMNS, propertynames(predicted))
+    missing_cols = _missing_prediction_columns(predicted)
     isempty(missing_cols) || error(
         "_archive_predictions: predicted DataFrame is missing mandatory columns $missing_cols — refusing to write an incomplete prediction archive",
     )
 
+    # union with the mandatory set so a future mandatory column can never pass
+    # the check above yet be silently dropped by this allowlist.
     cols = intersect(
         propertynames(predicted),
-        [
+        union(PREDICTION_MANDATORY_COLUMNS, [
             :riderkey,
             :rider,
             :team,
@@ -153,7 +160,7 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :expected_vg_points,
             :selection_frequency,
             :chosen,
-        ],
+        ]),
     )
     out = predicted[:, cols]
     out[!, :schema_version] .= PREDICTION_ARCHIVE_SCHEMA_VERSION

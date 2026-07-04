@@ -433,7 +433,7 @@ end
 
 """
     _market_update_listed!(posterior, precisions, shifts, key, prob, base_var, weights,
-                           n_starters, odds_normalisation) -> posterior
+                           n_starters, odds_normalisation, cluster_prec, cluster_n) -> posterior
 
 Apply one listed-only market signal (jersey / points / KOM / stage-win oracle or
 odds) to the multidim posterior. These markets have list-cutoff selection bias,
@@ -777,6 +777,8 @@ function estimate_rider_strength_multidim(
                 v = base_var / w
                 posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
                 precisions[:odds][_DIM_INDEX[dsym]] += 1.0 / v
+                cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[dsym]] += 1.0 / v
+                cluster_n[_CLUSTER_MARKET, _DIM_INDEX[dsym]] += 1
             end
         elseif signals.odds_floor_strength != 0.0
             var_f = odds_variance(config) * config.odds_floor_variance_multiplier
@@ -787,12 +789,16 @@ function estimate_rider_strength_multidim(
                 :gc,
             )
             precisions[:odds][_DIM_INDEX[:gc]] += 1.0 / var_f
+            cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1.0 / var_f
+            cluster_n[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1
         end
     elseif signals.odds_floor_strength != 0.0
         var_f = odds_variance(config) * config.odds_floor_variance_multiplier
         posterior =
             bayesian_update_multidim_dim(posterior, signals.odds_floor_strength, var_f, :gc)
         precisions[:odds][_DIM_INDEX[:gc]] += 1.0 / var_f
+        cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1.0 / var_f
+        cluster_n[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1
     end
     shifts[:odds] = posterior.mean .- mean_before
 
@@ -918,6 +924,14 @@ function estimate_rider_strength_multidim(
             n_total_d > 1 || continue
             post_prec = 1.0 / posterior.variance[d]
             total_obs_prec = post_prec - prior_prec
+            # Invariant: every update site must accumulate into cluster_prec.
+            # A missed site silently drops that signal's precision from the
+            # discount reconstruction (this fired once, for the GC-odds block).
+            @assert isapprox(
+                cluster_prec[1, d] + cluster_prec[2, d] + cluster_prec[3, d],
+                total_obs_prec;
+                rtol = 1e-6,
+            ) "cluster accumulation out of sync with posterior precision (dim $d)"
 
             # Within-cluster discount, then collect active clusters
             cluster_precs = Float64[]

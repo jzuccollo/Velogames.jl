@@ -22,6 +22,12 @@ const REPO = normpath(joinpath(@__DIR__, ".."))
 fpath(dt, slug, yr) = joinpath(ARCH, dt, slug, "$yr.feather")
 loadf(dt, slug, yr) = isfile(fpath(dt, slug, yr)) ? Feather.read(fpath(dt, slug, yr)) : nothing
 
+# Stage races archive their VG results under vg_stage_totals (their own VG
+# competition); one-day classics under vg_results.
+is_stage_race(slug) = haskey(Velogames._STAGE_RACE_VG_SLUGS, slug)
+results_for(slug, yr) =
+    is_stage_race(slug) ? loadf("vg_stage_totals", slug, yr) : loadf("vg_results", slug, yr)
+
 function best_team(df, points_col; n = 6, budget = 100)
     m = Model(HiGHS.Optimizer)
     set_silent(m)
@@ -44,9 +50,9 @@ winners = TOML.parsefile(joinpath(REPO, "data", "league_winners.toml"))["winners
 rows = NamedTuple[]
 for w in winners
     slug, yr, wscore = w["pcs_slug"], w["year"], w["score"]
-    is_gt = haskey(Dict("giro-d-italia" => 1, "tour-de-france" => 1, "vuelta-a-espana" => 1), slug)
+    is_gt = is_stage_race(slug)
     preds = loadf("predictions", slug, yr)
-    res = is_gt ? loadf("vg_stage_totals", slug, yr) : loadf("vg_results", slug, yr)
+    res = results_for(slug, yr)
     (preds === nothing || res === nothing) && (push!(rows, blank(slug, yr, wscore, preds === nothing ? "no preds" : "no results")); continue)
 
     if !(:cost in propertynames(preds))
@@ -167,16 +173,26 @@ else
             # Resolve the "current race" pcs_slug for the manual entered_team override.
             # Deliberately avoids `find_race`'s fuzzy fallback (its substring match
             # mis-resolves short GT aliases like "Tour" against "Paris-Tours Elite") —
-            # only exact pcs_slug matches and the explicit GT alias table are used.
+            # exact pcs_slug matches, the explicit stage-race alias table, and
+            # normalised classics display names are used, in that order.
             current_slug = ""
             if haskey(cfg, "race")
                 rn = cfg["race"]["name"]
                 key = replace(lowercase(rn), " " => "", "-" => "")
+                nk = Velogames.normalise_race_name(rn)
+                ci = findfirst(
+                    ri -> Velogames.normalise_race_name(ri.name) == nk,
+                    CLASSICS_RACES_2026,
+                )
                 current_slug =
                     if Velogames._find_race_by_slug(rn) !== nothing
                         rn
+                    elseif haskey(Velogames._STAGE_RACE_PCS_SLUGS, key)
+                        Velogames._STAGE_RACE_PCS_SLUGS[key]
+                    elseif ci !== nothing
+                        CLASSICS_RACES_2026[ci].pcs_slug
                     else
-                        get(Velogames._STAGE_RACE_PCS_SLUGS, key, lowercase(rn))
+                        ""
                     end
             end
             entered_cfg = get(cfg, "entered_team", Dict())
@@ -210,10 +226,15 @@ else
                     "\n=== Cumulative league placement (model as phantom entrant, n=$(length(common)) common races) ===",
                 )
 
+                scored_by_race = Dict(
+                    c.race_name => Dict(
+                        String(row.username) => Float64(row.score) for
+                        row in eachrow(filter(:race_name => ==(c.race_name), standings))
+                    ) for c in common
+                )
                 entrants = Set{String}()
-                for c in common
-                    race_standings = filter(:race_name => ==(c.race_name), standings)
-                    union!(entrants, race_standings.username)
+                for scored in values(scored_by_race)
+                    union!(entrants, keys(scored))
                 end
 
                 cumulative = Dict{String,Float64}(u => 0.0 for u in entrants)
@@ -222,11 +243,7 @@ else
                 model_cumulative_for_entered = 0.0
 
                 for c in common
-                    race_standings = filter(:race_name => ==(c.race_name), standings)
-                    scored = Dict(
-                        String(row.username) => Float64(row.score) for
-                        row in eachrow(race_standings)
-                    )
+                    scored = scored_by_race[c.race_name]
                     for u in entrants
                         cumulative[u] += get(scored, u, 0.0)
                     end
@@ -246,34 +263,13 @@ else
                         ranked[1][2]
                     )
 
-                    # Entered-vs-advised (WP0.2): the user's own entered team for this race
+                    # Entered-vs-advised (WP0.2): the user's own entered team for
+                    # this race, from the league standings. The manual
+                    # [entered_team] override is handled in its own block below —
+                    # it must not be gated on the race appearing in the classics
+                    # standings (grand tours and un-scraped races never do).
                     if !isempty(user_name)
-                        entered_score = if c.slug == current_slug && entered_score_override > 0
-                            entered_score_override
-                        elseif c.slug == current_slug && !isempty(entered_riders)
-                            is_gt = haskey(
-                                Dict(
-                                    "giro-d-italia" => 1,
-                                    "tour-de-france" => 1,
-                                    "vuelta-a-espana" => 1,
-                                ),
-                                c.slug,
-                            )
-                            res =
-                                is_gt ? loadf("vg_stage_totals", c.slug, c.yr) :
-                                loadf("vg_results", c.slug, c.yr)
-                            if res === nothing
-                                missing
-                            else
-                                actual_of = Dict(
-                                    String(rr.riderkey) => Float64(rr.score) for
-                                    rr in eachrow(res)
-                                )
-                                sum(get(actual_of, createkey(name), 0.0) for name in entered_riders)
-                            end
-                        else
-                            get(scored, user_name, missing)
-                        end
+                        entered_score = get(scored, user_name, missing)
                         if !ismissing(entered_score)
                             entered_cumulative += entered_score
                             model_cumulative_for_entered += c.model_score
@@ -315,6 +311,40 @@ else
                 println("\nRaces skipped (no archived model score or no matching league standings):")
                 for s in skipped
                     println("  - $s")
+                end
+            end
+
+            # Manual [entered_team] override (WP0.2): scored directly against
+            # archived results, independent of the league standings — reachable
+            # for grand tours and races the vgleague cache hasn't scraped yet.
+            if !isempty(current_slug) &&
+               (entered_score_override > 0 || !isempty(entered_riders))
+                race_yr = cfg["race"]["year"]
+                entered_score = if entered_score_override > 0
+                    entered_score_override
+                else
+                    res = results_for(current_slug, race_yr)
+                    if res === nothing
+                        missing
+                    else
+                        actual_of = Dict(
+                            String(rr.riderkey) => Float64(rr.score) for
+                            rr in eachrow(res)
+                        )
+                        sum(get(actual_of, createkey(name), 0.0) for name in entered_riders)
+                    end
+                end
+                if ismissing(entered_score)
+                    println(
+                        "\n[entered_team] set for $current_slug $race_yr but no archived results yet — cannot score the entered team.",
+                    )
+                else
+                    @printf(
+                        "\nEntered team for %s %d (manual [entered_team]): %.0f\n",
+                        current_slug,
+                        race_yr,
+                        entered_score
+                    )
                 end
             end
         end

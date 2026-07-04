@@ -913,10 +913,13 @@ Fields:
 - `breakaway_noise` — per-event, per-dimension breakaway σ (decoupled from GC).
 - `points_jersey_allocation` — per-stage-type points-jersey allocation vectors.
 - `intermediate_sprint_points` — intermediate-sprint banner allocation, awarded
-  as-is per banner rank. The default is half the published VG vector
-  (20/12/8/6/4/2/1): a former runtime 0.5× multiplier folded into the config
-  (July 2026, decision D3) — it damps the banner contribution because not every
-  stage's sprint is contested by the strongest flat riders.
+  as-is per banner rank. The default halves the model's former hardcoded vector
+  (20/12/8/6/4/2/1): a runtime 0.5× multiplier folded into the config (July
+  2026, decision D3) — it damps the banner contribution because not every
+  stage's sprint is contested by the strongest flat riders. NB the actual VG
+  table pays 10 banner ranks ([20,16,12,8,6,5,4,3,2,1], see
+  `SCORING_GRAND_TOUR.intermediate_sprint_points`); this vector is a
+  deliberately damped modelling allocation, not the published table.
 - `breakaway_stage_boost` — per-stage strength boost (same z-score-ish units as
   `stage_strengths`) applied to a rider's `noisy` stage-finish strength when a
   discrete breakaway event triggers for them (see `_draw_breakaway!` in
