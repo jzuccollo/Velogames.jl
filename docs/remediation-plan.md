@@ -170,7 +170,7 @@ Ground rules:
 
 ```
 Read docs/architecture-review.md and docs/remediation-plan.md in full, then execute
-Phase 2 of the remediation plan on branch remediation/phase-2 off main. You are
+Continue Phase 2 of the remediation plan on branch remediation/phase-0-1. You are
 authorised to use subagents per the plan's orchestration guide (max 3 concurrent;
 WP2.1 and WP2.2 may run in parallel — disjoint files — then WP2.3 strictly after
 both).
