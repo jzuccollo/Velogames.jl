@@ -111,7 +111,7 @@ if nrow(ok) > 0
 end
 
 # ---------------------------------------------------------------------------
-# League standings — cumulative placement (WP0.1)
+# League standings — cumulative placement (WP0.1) + entered-vs-advised (WP0.2)
 #
 # Reads the vgleague package's scraped standings (../vgleague/data/...; see
 # docs/remediation-plan.md D1 — no scraper duplicated here) via
@@ -149,6 +149,8 @@ else
                 "\nNo league standings found for $(league_cfg["game_slug"]) $(league_cfg["year"]) $(league_cfg["league_id"]) at $(league_cfg["vgleague_data_dir"]) — skipping.",
             )
         else
+            user_name = get(league_cfg, "user_name", "")
+
             # Match every standings race_name to a pcs_slug via the classics schedule
             slug_of_racename = Dict{String,String}()
             for rn in unique(standings.race_name)
@@ -161,6 +163,25 @@ else
                 end
             end
             racename_of_slug = Dict(v => k for (k, v) in slug_of_racename)
+
+            # Resolve the "current race" pcs_slug for the manual entered_team override.
+            # Deliberately avoids `find_race`'s fuzzy fallback (its substring match
+            # mis-resolves short GT aliases like "Tour" against "Paris-Tours Elite") —
+            # only exact pcs_slug matches and the explicit GT alias table are used.
+            current_slug = ""
+            if haskey(cfg, "race")
+                rn = cfg["race"]["name"]
+                key = replace(lowercase(rn), " " => "", "-" => "")
+                current_slug =
+                    if Velogames._find_race_by_slug(rn) !== nothing
+                        rn
+                    else
+                        get(Velogames._STAGE_RACE_PCS_SLUGS, key, lowercase(rn))
+                    end
+            end
+            entered_cfg = get(cfg, "entered_team", Dict())
+            entered_riders = get(entered_cfg, "riders", String[])
+            entered_score_override = Float64(get(entered_cfg, "score", 0))
 
             common = NamedTuple[]
             skipped = String[]
@@ -197,6 +218,8 @@ else
 
                 cumulative = Dict{String,Float64}(u => 0.0 for u in entrants)
                 cumulative[MODEL_LABEL] = 0.0
+                entered_cumulative = 0.0
+                model_cumulative_for_entered = 0.0
 
                 for c in common
                     race_standings = filter(:race_name => ==(c.race_name), standings)
@@ -222,6 +245,48 @@ else
                         ranked[1][1],
                         ranked[1][2]
                     )
+
+                    # Entered-vs-advised (WP0.2): the user's own entered team for this race
+                    if !isempty(user_name)
+                        entered_score = if c.slug == current_slug && entered_score_override > 0
+                            entered_score_override
+                        elseif c.slug == current_slug && !isempty(entered_riders)
+                            is_gt = haskey(
+                                Dict(
+                                    "giro-d-italia" => 1,
+                                    "tour-de-france" => 1,
+                                    "vuelta-a-espana" => 1,
+                                ),
+                                c.slug,
+                            )
+                            res =
+                                is_gt ? loadf("vg_stage_totals", c.slug, c.yr) :
+                                loadf("vg_results", c.slug, c.yr)
+                            if res === nothing
+                                missing
+                            else
+                                actual_of = Dict(
+                                    String(rr.riderkey) => Float64(rr.score) for
+                                    rr in eachrow(res)
+                                )
+                                sum(get(actual_of, createkey(name), 0.0) for name in entered_riders)
+                            end
+                        else
+                            get(scored, user_name, missing)
+                        end
+                        if !ismissing(entered_score)
+                            entered_cumulative += entered_score
+                            model_cumulative_for_entered += c.model_score
+                            delta = entered_score - c.model_score
+                            @printf(
+                                "  entered (%s): %5.0f | model: %5.0f | delta (entered - model): %+.0f\n",
+                                user_name,
+                                entered_score,
+                                c.model_score,
+                                delta
+                            )
+                        end
+                    end
                 end
 
                 cum_ranked = sort(collect(cumulative), by = x -> -x[2])
@@ -234,6 +299,16 @@ else
                 println(
                     "Model would place $cum_place/$(length(cum_ranked)) cumulatively over these $(length(common)) races.",
                 )
+
+                if !isempty(user_name) && entered_cumulative > 0
+                    @printf(
+                        "\nEntered team (%s) cumulative: %.0f | Model cumulative (same subset): %.0f | delta: %+.0f\n",
+                        user_name,
+                        entered_cumulative,
+                        model_cumulative_for_entered,
+                        entered_cumulative - model_cumulative_for_entered
+                    )
+                end
             end
 
             if !isempty(skipped)
