@@ -66,6 +66,24 @@ function _race_has_happened(config::RaceConfig)
     return Dates.Date(info.date) < today
 end
 
+"""
+Prediction-archive schema (WP0.3, April 2026). These columns must always be
+present at archive time — they're what `league_eval.jl` and
+`prospective_eval.jl` need to score an archived team and diagnose signal
+value. `schema_version` lets readers distinguish this hardened schema from
+legacy (pre-April-2026) archives that predate it and cannot be re-created.
+"""
+const PREDICTION_ARCHIVE_SCHEMA_VERSION = 2
+const PREDICTION_MANDATORY_COLUMNS = [
+    :riderkey,
+    :rider,
+    :team,
+    :cost,
+    :chosen,
+    :selection_frequency,
+    :expected_vg_points,
+]
+
 """Archive the predicted DataFrame for prospective evaluation."""
 function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     isempty(config.pcs_slug) && return
@@ -79,6 +97,12 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             return
         end
     end
+
+    missing_cols = setdiff(PREDICTION_MANDATORY_COLUMNS, propertynames(predicted))
+    isempty(missing_cols) || error(
+        "_archive_predictions: predicted DataFrame is missing mandatory columns $missing_cols — refusing to write an incomplete prediction archive",
+    )
+
     cols = intersect(
         propertynames(predicted),
         [
@@ -131,8 +155,10 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :chosen,
         ],
     )
+    out = predicted[:, cols]
+    out[!, :schema_version] .= PREDICTION_ARCHIVE_SCHEMA_VERSION
     try
-        save_race_snapshot(predicted[:, cols], "predictions", config.pcs_slug, config.year)
+        save_race_snapshot(out, "predictions", config.pcs_slug, config.year)
     catch e
         @warn "Failed to archive predictions: $e"
     end
