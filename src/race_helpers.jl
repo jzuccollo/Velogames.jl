@@ -912,7 +912,11 @@ Fields:
   (A1b, June 2026): hilly is the most stochastic, ITT the least.
 - `breakaway_noise` — per-event, per-dimension breakaway σ (decoupled from GC).
 - `points_jersey_allocation` — per-stage-type points-jersey allocation vectors.
-- `intermediate_sprint_points` — intermediate-sprint banner allocation.
+- `intermediate_sprint_points` — intermediate-sprint banner allocation, awarded
+  as-is per banner rank. The default is half the published VG vector
+  (20/12/8/6/4/2/1): a former runtime 0.5× multiplier folded into the config
+  (July 2026, decision D3) — it damps the banner contribution because not every
+  stage's sprint is contested by the strongest flat riders.
 - `breakaway_stage_boost` — per-stage strength boost (same z-score-ish units as
   `stage_strengths`) applied to a rider's `noisy` stage-finish strength when a
   discrete breakaway event triggers for them (see `_draw_breakaway!` in
@@ -966,7 +970,7 @@ function StageSimConfig(;
         itt = [15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
         ttt = [15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
     ),
-    intermediate_sprint_points = [20.0, 12.0, 8.0, 6.0, 4.0, 2.0, 1.0],
+    intermediate_sprint_points = [10.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.5],
     # Attrition (A2, July 2026): per-rider-stage DNF hazard fitted from archived
     # pcs_abandons across 4 GTs (giro/tour/vuelta 2025 + giro 2026). Field DNF
     # ~15%, concentrated on hard days. A shared per-stage Gamma shock (shape 2 →

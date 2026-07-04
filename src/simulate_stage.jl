@@ -212,7 +212,7 @@ end
     end
     int_order = sortperm(int_noisy, rev = true)
     for rank = 1:min(length(int_points), n_riders)
-        points_jersey_total[int_order[rank]] += 0.5 * int_points[rank]
+        points_jersey_total[int_order[rank]] += int_points[rank]
     end
     return nothing
 end

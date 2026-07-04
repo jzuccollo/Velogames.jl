@@ -538,6 +538,13 @@ end
     an = Velogames.DEFAULT_STAGE_SIM_CONFIG.aleatoric_noise
     @test Velogames._aleatoric_sd(flat_w, an) == an.flat
     @test Velogames._aleatoric_sd(mtn_w, an) == an.mountain
+
+    # Intermediate-sprint pin (WP1.2, decision D3): the vector is awarded as-is;
+    # the old runtime 0.5x multiplier is folded into these defaults (half the
+    # published VG 20/12/8/6/4/2/1). Changing either without the other is a
+    # silent 2x scoring change.
+    @test Velogames.DEFAULT_STAGE_SIM_CONFIG.intermediate_sprint_points ==
+          [10.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.5]
 end
 
 # =========================================================================
