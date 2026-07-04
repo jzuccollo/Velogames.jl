@@ -444,11 +444,23 @@ function simulate_stage_race(
     else
         Float64[]
     end
+    # If gc_strengths not supplied, fall back to per-rider mean across stage types.
+    # Production callers always supply gc_strengths via `compute_stage_strengths`;
+    # this fallback keeps synthetic test inputs working. Must run BEFORE the
+    # GC-favourite protection block below, which reads gc_strengths (the
+    # ordering bug fixed in July 2026: protection was silently skipped for
+    # callers passing empty gc_strengths).
+    if isempty(gc_strengths)
+        keys_present = collect(keys(stage_strengths))
+        gc_strengths =
+            [mean(stage_strengths[k][i] for k in keys_present) for i = 1:n_riders]
+    end
+
     # GC-favourite protection: fold a per-rider hazard multiplier ≤ 1 into the
     # class multiplier so strong GC favourites (high GC-strength z-score) rarely
     # abandon — they're contending, not strategically pulling out. Only riders
     # >1 SD above the field are protected, so field survival is ~unchanged.
-    if attrition_on && !isempty(gc_strengths) && sim_config.gc_favourite_protection > 0
+    if attrition_on && sim_config.gc_favourite_protection > 0
         μ = mean(gc_strengths)
         s = std(gc_strengths)
         if s > 0
@@ -458,15 +470,6 @@ function simulate_stage_race(
                 class_mult[i] *= max(sim_config.gc_protection_floor, prot)
             end
         end
-    end
-
-    # If gc_strengths not supplied, fall back to per-rider mean across stage types.
-    # Production callers always supply gc_strengths via `compute_stage_strengths`;
-    # this fallback keeps synthetic test inputs working.
-    if isempty(gc_strengths)
-        keys_present = collect(keys(stage_strengths))
-        gc_strengths =
-            [mean(stage_strengths[k][i] for k in keys_present) for i = 1:n_riders]
     end
 
     sim_vg_points = zeros(Float64, n_riders, n_sims)

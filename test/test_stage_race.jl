@@ -963,6 +963,60 @@ end
     @test sum(sim_on) < sum(sim_off)
 end
 
+@testset "GC-favourite protection applies with empty gc_strengths" begin
+    # WP1.3 (review defect 4): the empty-gc_strengths fallback used to run
+    # AFTER the protection block, silently skipping protection for callers that
+    # rely on the fallback (exactly the backtest-harness path).
+    scoring = SCORING_GRAND_TOUR
+    n = 8
+    base = Float64.([5, 0, 0, 0, 0, 0, 0, -1])   # rider 1 = clear GC favourite
+    ss = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
+    )
+    unc = fill(0.4, n)
+    teams = ["T$i" for i = 1:n]
+    classes = fill("unclassed", n)
+    stages = [flat_stage(i) for i = 1:6]
+    hi_haz = (flat = 0.3, hilly = 0.3, mountain = 0.3, itt = 0.3, ttt = 0.3)
+
+    # (a) Empty gc_strengths must be bit-identical to explicitly passing the
+    # fallback (per-rider mean across stage types) — proof the fallback now
+    # feeds the protection block. All stage vectors are equal and integer-valued
+    # so the fallback mean is exactly `base`.
+    cfg = StageSimConfig(attrition_hazard = hi_haz)
+    sim_empty, _ = simulate_stage_race(
+        stages, ss, unc, teams, scoring;
+        n_sims = 300, rng = Random.MersenneTwister(21),
+        rider_classes = classes, sim_config = cfg,
+    )
+    sim_explicit, _ = simulate_stage_race(
+        stages, ss, unc, teams, scoring;
+        n_sims = 300, rng = Random.MersenneTwister(21),
+        rider_classes = classes, sim_config = cfg, gc_strengths = copy(base),
+    )
+    @test sim_empty == sim_explicit
+
+    # (b) Protection actually bites: with heavy attrition the favourite banks
+    # materially more points under default protection than with it disabled.
+    cfg_noprot = StageSimConfig(attrition_hazard = hi_haz, gc_favourite_protection = 0.0)
+    sim_noprot, _ = simulate_stage_race(
+        stages, ss, unc, teams, scoring;
+        n_sims = 600, rng = Random.MersenneTwister(22),
+        rider_classes = classes, sim_config = cfg_noprot,
+    )
+    cfg_prot = StageSimConfig(attrition_hazard = hi_haz)
+    sim_prot, _ = simulate_stage_race(
+        stages, ss, unc, teams, scoring;
+        n_sims = 600, rng = Random.MersenneTwister(22),
+        rider_classes = classes, sim_config = cfg_prot,
+    )
+    @test mean(sim_prot[1, :]) > 1.3 * mean(sim_noprot[1, :])
+end
+
 @testset "simulate_stage_race always returns (matrix, diagnostics)" begin
     # Regression test: with the record_diagnostics kwarg removed, the function
     # must unconditionally return a tuple of the right shapes.
