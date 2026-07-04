@@ -610,9 +610,9 @@ end
 end
 
 @testset "simulate_stage_race breakaway event: do-no-harm" begin
-    # An all-zero (or empty, the default) breakaway_rates vector must consume
-    # zero rand() calls, so the whole simulation is bit-identical to the
-    # pre-breakaway-modelling behaviour under the same seed.
+    # An all-zero breakaway_rates vector must consume zero draws from the
+    # breakaway sub-stream, so the whole simulation is bit-identical to the
+    # empty-rates default under the same seed.
     n_riders = 6
     scoring = SCORING_GRAND_TOUR
     stages = [flat_stage(1), mountain_stage(2), hilly_stage(3)]
@@ -961,6 +961,66 @@ end
     @test all(sim_on .>= 0.0)
     # Heavy attrition removes post-abandon scoring ⇒ strictly fewer total points.
     @test sum(sim_on) < sum(sim_off)
+end
+
+@testset "RNG layer-stability (WP1.4)" begin
+    # Toggling one simulation layer must leave every other layer's random
+    # stream unchanged: each layer draws from its own per-sim sub-stream,
+    # seeded unconditionally from the master rng.
+
+    # (a) _draw_breakaway! consumes one draw per positive-rate rider regardless
+    # of abandonment, so attrition cannot perturb the breakaway stream.
+    n = 4
+    rates = [0.5, 0.0, 0.5, 0.5]
+    rng_a = Random.Xoshiro(17)
+    rng_b = Random.Xoshiro(17)
+    in_break = fill(false, n)
+    noisy = zeros(n)
+    Velogames._draw_breakaway!(
+        in_break, noisy, rates, 2.5, :mountain, fill(false, n), n, rng_a,
+    )
+    fill!(in_break, false)
+    fill!(noisy, 0.0)
+    Velogames._draw_breakaway!(
+        in_break, noisy, rates, 2.5, :mountain, [true, false, false, true], n, rng_b,
+    )
+    @test rand(rng_a) == rand(rng_b)   # identical consumption either way
+    @test !in_break[1] && !in_break[4] # abandoned riders' draws are discarded
+
+    # (b) Toggling the attrition layer (on with zero hazard vs off entirely)
+    # leaves the master and breakaway streams untouched: the full simulation —
+    # including stochastic breakaway participation — is bit-identical.
+    scoring = SCORING_GRAND_TOUR
+    n_riders = 8
+    base = collect(range(2.0, -2.0, length = n_riders))
+    ss = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(base),
+        :hilly => copy(base),
+        :mountain => copy(base),
+        :itt => copy(base),
+        :ttt => copy(base),
+    )
+    unc = fill(0.5, n_riders)
+    teams = repeat(["A", "B", "C", "D"], 2)
+    stages = [flat_stage(1), hilly_stage(2), mountain_stage(3)]
+    b_rates = zeros(n_riders)
+    b_rates[5] = 0.5
+    b_rates[7] = 0.3
+    zero_haz = StageSimConfig(
+        attrition_hazard = (flat = 0.0, hilly = 0.0, mountain = 0.0, itt = 0.0, ttt = 0.0),
+    )
+    sim_off, _ = simulate_stage_race(
+        stages, ss, unc, teams, scoring;
+        n_sims = 200, rng = Random.MersenneTwister(31),
+        rider_classes = String[], breakaway_rates = b_rates,
+    )
+    sim_on, _ = simulate_stage_race(
+        stages, ss, unc, teams, scoring;
+        n_sims = 200, rng = Random.MersenneTwister(31),
+        rider_classes = fill("sprinter", n_riders), sim_config = zero_haz,
+        breakaway_rates = b_rates,
+    )
+    @test sim_off == sim_on
 end
 
 @testset "GC-favourite protection applies with empty gc_strengths" begin

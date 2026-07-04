@@ -267,9 +267,10 @@ end
 # from `compute_breakaway_rates` — see race_solver.jl `_load_breakaway_rates`).
 # Riders with no such history (pure sprinters, GC leaders who never go up the
 # road) have `breakaway_rates[i] == 0.0` and are skipped WITHOUT consuming an
-# `rng` draw, so passing an empty/all-zero `breakaway_rates` (the default)
-# leaves the RNG stream — and hence every simulated outcome — bit-identical to
-# the pre-breakaway-modelling behaviour.
+# `rng` draw. Riders WITH a positive rate consume exactly one draw per
+# conducive stage regardless of abandonment (the draw is discarded for
+# abandoned riders), so this layer's consumption depends only on its inputs —
+# the attrition layer cannot perturb the breakaway stream (WP1.4).
 #
 # On trigger, boosts the rider's `noisy` stage-finish strength (mirrors the
 # real advantage of contesting a stage from a small escape rather than the
@@ -293,8 +294,9 @@ end
     fill!(in_break, false)
     (isempty(breakaway_rates) || (stype != :hilly && stype != :mountain)) && return in_break
     for i = 1:n_riders
-        (abandoned[i] || breakaway_rates[i] <= 0.0) && continue
-        if rand(rng) < breakaway_rates[i]
+        breakaway_rates[i] <= 0.0 && continue
+        u = rand(rng)   # drawn even for abandoned riders — see comment above
+        if !abandoned[i] && u < breakaway_rates[i]
             in_break[i] = true
             noisy[i] += boost
         end
@@ -409,9 +411,24 @@ in `sim_config::StageSimConfig`.
 `breakaway_rates` (optional, aligned to `uncertainties`/`teams` by rider index)
 enables the discrete per-rider breakaway event on hilly/mountain stages — see
 `_draw_breakaway!`. Empty by default, in which case the feature is fully
-inert (no RNG draws consumed, output identical to pre-breakaway-modelling
-behaviour). Typically produced by `compute_breakaway_rates` from archived PCS
+inert. Typically produced by `compute_breakaway_rates` from archived PCS
 breakaway-km data with `max_rate = STAGE_BREAKAWAY_MAX_RATE`.
+
+RNG stream design (WP1.4, July 2026). Each simulation draw consumes from the
+master `rng`, in order: (1) one `UInt64` seed for the attrition sub-stream,
+(2) one `UInt64` seed for the breakaway-participation sub-stream — both drawn
+unconditionally, whether or not those layers are active — then (3) the
+persistent rider noise (`n_riders` randn), and per stage (4) the aleatoric
+stage noise (`_rand_t`, fixed `aleatoric_df + 1` randn per rider) and (5) any
+stage-finish / points-jersey breakaway Gaussian noise (gated only on stage
+weights, an input). Attrition draws (the shared Gamma "brutal day" shock —
+`_rand_gamma`, a rejection sampler with VARIABLE consumption — plus per-rider
+hazard uniforms) come exclusively from the attrition sub-stream; discrete
+breakaway participation uniforms come exclusively from the breakaway
+sub-stream, one per positive-rate rider per conducive stage regardless of
+abandonment. Master-stream consumption is therefore fixed given the stage list
+and field size, so toggling any one layer (attrition, breakaway participation)
+leaves every other layer's random stream unchanged.
 """
 function simulate_stage_race(
     stages::Vector{StageProfile},
@@ -504,7 +521,16 @@ function simulate_stage_race(
     abandoned = Vector{Bool}(undef, n_riders)
     in_break = Vector{Bool}(undef, n_riders)
 
+    # Layer sub-RNGs, reseeded from the master rng every simulation draw — see
+    # "RNG stream design" in the docstring.
+    attrition_rng = Random.Xoshiro(0)
+    breakaway_rng = Random.Xoshiro(0)
+
     for sim = 1:n_sims
+        # Seeded unconditionally so master-stream consumption is fixed
+        # regardless of which layers are active.
+        Random.seed!(attrition_rng, rand(rng, UInt64))
+        Random.seed!(breakaway_rng, rand(rng, UInt64))
         for i = 1:n_riders
             rider_noise[i] = randn(rng)
         end
@@ -542,11 +568,11 @@ function simulate_stage_race(
             if attrition_on
                 base_h = getproperty(sim_config.attrition_hazard, stype)
                 shock =
-                    _rand_gamma(rng, sim_config.attrition_shock_shape) /
+                    _rand_gamma(attrition_rng, sim_config.attrition_shock_shape) /
                     sim_config.attrition_shock_shape
                 day_h = base_h * shock
                 for i = 1:n_riders
-                    if !abandoned[i] && rand(rng) < day_h * class_mult[i]
+                    if !abandoned[i] && rand(attrition_rng) < day_h * class_mult[i]
                         abandoned[i] = true
                     end
                 end
@@ -601,8 +627,9 @@ function simulate_stage_race(
             end
 
             # Discrete breakaway event (rider-targeted, data-informed — see
-            # `_draw_breakaway!` above). No-op and RNG-inert when
-            # `breakaway_rates` is empty (the default).
+            # `_draw_breakaway!` above). Draws from its own sub-stream so the
+            # attrition layer cannot perturb it; no-op when `breakaway_rates`
+            # is empty (the default).
             _draw_breakaway!(
                 in_break,
                 noisy,
@@ -611,7 +638,7 @@ function simulate_stage_race(
                 stype,
                 abandoned,
                 n_riders,
-                rng,
+                breakaway_rng,
             )
 
             # Rank by noisy stage strength → positions, record podium/top-10.
