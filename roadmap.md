@@ -419,7 +419,7 @@ Per-stage simulation replaces the aggregate GC-position model for stage races. E
 - In-stage climb/sprint bonus simulation (requires per-stage climb/sprint counts from PCS — HC/Cat1 data is scraped but not yet used in scoring)
 - Breakaway modelling for stage races
 - Abandonment modelling (survival probability per stage)
-- Stage-race-specific PIT calibration in prospective evaluation
+- Stage-race-specific PIT calibration in prospective evaluation. **Interim (July 2026):** `prospective_pit_values` now *skips* stage races (`haskey(_STAGE_RACE_VG_SLUGS, pcs_slug)`) with an `@info`, rather than silently mis-scoring them. Previously it fell back to one-day Cat 2 scoring (`_find_race_by_slug` returns `nothing` for grand-tour slugs → `cat=2`), producing meaningless PIT numbers. The one-day `simulate_vg_draws` path (`ScoringTable`, single race, scalar strength) cannot consume `SCORING_GRAND_TOUR`; correct follow-up is to route stage races through `simulate_stage_race` (per-stage multi-dim strengths, stage profiles, GC/jersey scoring) for their PIT draws.
 - Stage race backtesting (extend `backtest.jl` to compare per-stage vs aggregate predictions across historical grand tours)
 - Tour de Pologne and Renewi Tour VG slug mappings (VG pages not yet created for 2026)
 
