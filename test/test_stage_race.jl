@@ -1181,3 +1181,122 @@ end
 
     @test diag_flat.final_gc_position_counts[1, 1] > diag_mtn.final_gc_position_counts[1, 1]
 end
+
+# =========================================================================
+# k-best near-optimal team enumeration (team switcher / filler / forks)
+# =========================================================================
+
+# A synthetic stage-race frame with enough riders per class to admit many
+# feasible 9-rider teams (2 all-rounder, 1 sprinter, 2 climber, 3 unclassed + 1
+# wildcard). Distinct integer EVGs so the k-best ordering is unambiguous.
+function _kbest_fixture()
+    classes = vcat(
+        fill("All Rounder", 5),
+        fill("Sprinter", 4),
+        fill("Climber", 5),
+        fill("Unclassed", 10),
+    )
+    n = length(classes)
+    DataFrame(
+        riderkey = ["r$i" for i = 1:n],
+        rider = ["Rider $i" for i = 1:n],
+        team = repeat(["A", "B", "C", "D", "E", "F"], inner = 4),
+        classraw = classes,
+        cost = repeat([16, 12, 8, 6], outer = 6),
+        expected_vg_points = Float64.(collect(n:-1:1) .* 10),
+    )
+end
+
+function _honours_stage_constraints(team::DataFrame)
+    nrow(team) == 9 || return false
+    sum(team.cost) <= 100 || return false
+    cls = lowercase.(replace.(team.classraw, " " => ""))
+    count(==("allrounder"), cls) >= 2 || return false
+    count(==("sprinter"), cls) >= 1 || return false
+    count(==("climber"), cls) >= 2 || return false
+    count(==("unclassed"), cls) >= 3 || return false
+    return true
+end
+
+@testset "_kbest_team_keys enumeration" begin
+    df = _kbest_fixture()
+    key_lists = Velogames._kbest_team_keys(
+        df,
+        build_model_stage,
+        :expected_vg_points;
+        team_size = 9,
+        max_per_team = 0,
+        n_alternatives = 8,
+    )
+
+    @test length(key_lists) == 8                      # all requested teams found
+    ptmap = Dict(df.riderkey .=> df.expected_vg_points)
+
+    # Distinct rosters (no repeated team)
+    rosters = [Set(k) for k in key_lists]
+    @test length(unique(rosters)) == length(rosters)
+
+    # Ranked by weakly descending objective (best first)
+    objs = [sum(ptmap[k] for k in ks) for ks in key_lists]
+    @test issorted(objs, rev = true)
+    @test objs[1] > objs[end]                         # genuine spread
+
+    # Every team honours budget + class + team-size constraints
+    for ks in key_lists
+        team = filter(row -> row.riderkey in Set(ks), df)
+        @test _honours_stage_constraints(team)
+    end
+
+    # n_alternatives is a hard cap; a smaller request is a prefix of the larger.
+    fewer = Velogames._kbest_team_keys(
+        df,
+        build_model_stage,
+        :expected_vg_points;
+        team_size = 9,
+        max_per_team = 0,
+        n_alternatives = 3,
+    )
+    @test length(fewer) == 3
+    @test [Set(k) for k in fewer] == rosters[1:3]
+end
+
+@testset "compute_filler_pool + compute_structural_forks" begin
+    df = _kbest_fixture()
+    key_lists = Velogames._kbest_team_keys(
+        df,
+        build_model_stage,
+        :expected_vg_points;
+        team_size = 9,
+        max_per_team = 0,
+        n_alternatives = 8,
+    )
+    top_teams = [filter(row -> row.riderkey in Set(ks), df) for ks in key_lists]
+
+    core_df, filler_df, n_teams = compute_filler_pool(top_teams)
+    @test n_teams == 8
+    # Core riders are in every team; filler riders in some but not all.
+    core_keys = Set(core_df.riderkey)
+    for t in top_teams
+        @test core_keys ⊆ Set(t.riderkey)
+    end
+    @test all(1 .<= filler_df.frequency .< n_teams)
+    @test isempty(intersect(core_keys, Set(filler_df.riderkey)))
+    # Core + filler together cover the full union of near-optimal rosters.
+    union_keys = reduce(union, [Set(t.riderkey) for t in top_teams])
+    @test union_keys == core_keys ∪ Set(filler_df.riderkey)
+
+    forks = compute_structural_forks(
+        df,
+        build_model_stage;
+        team_size = 9,
+        max_per_team = 0,
+        n_forks = 5,
+    )
+    @test length(forks.forks) <= 5
+    # Dropping any rider from the optimum cannot improve it: delta >= 0.
+    @test all(f -> f.delta >= -1e-6, forks.forks)
+    # Ranked by descending EVG at stake.
+    @test issorted([f.delta for f in forks.forks], rev = true)
+    # GC-shape fork is absent here (no :strength_gc column).
+    @test forks.shape === nothing
+end

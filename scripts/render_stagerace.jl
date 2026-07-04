@@ -67,6 +67,9 @@ history_years = _cfg["optimisation"]["history_years"]
 domestique_discount = _cfg["optimisation"]["domestique_discount"]
 risk_aversion = _cfg["optimisation"]["risk_aversion"]
 max_per_team = _cfg["optimisation"]["max_per_team"]
+# Near-optimal team set: how many distinct k-best teams to enumerate for the
+# team switcher / filler pool / structural-fork analysis (default 20).
+n_alternatives = get(_cfg["optimisation"], "n_alternatives", 20)
 excluded_riders = String[x for x in _cfg["optimisation"]["excluded_riders"]]
 simulation_df = let v = _cfg["optimisation"]["simulation_df"]
     v isa Integer ? v : nothing
@@ -145,6 +148,7 @@ result = solve_stage(
     domestique_discount = domestique_discount,
     risk_aversion = risk_aversion,
     max_per_team = max_per_team,
+    n_alternatives = n_alternatives,
     simulation_df = simulation_df,
     cross_stage_alpha = cross_stage_alpha,
     stage_scoring = stage_scoring,
@@ -424,6 +428,22 @@ else
         html_callout(
             "No optimal team generated — check configuration and try again.";
             type = "warning",
+        ),
+    )
+end
+
+# --- Near-optimal team set: switcher + filler pool + structural forks ---
+# Uses the live `predicted` frame (which carries the class columns the archive
+# lacks) and the k-best `top_teams` returned by the solver.
+if length(top_teams) > 0
+    write(
+        io,
+        format_near_optimal_section(
+            top_teams,
+            predicted,
+            build_model_stage;
+            team_size = config.team_size,
+            max_per_team = max_per_team,
         ),
     )
 end

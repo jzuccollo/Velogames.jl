@@ -534,3 +534,268 @@ function format_info_share_per_dim(
     push!(lines, "</div>")
     return join(lines, "\n")
 end
+
+# ---------------------------------------------------------------------------
+# Near-optimal team set: switcher + explicit filler pool + structural forks
+# ---------------------------------------------------------------------------
+
+"""Normalise a raw VG class string ("All Rounder") to a badge slug ("allrounder")."""
+_class_slug(c) = lowercase(replace(string(c), " " => ""))
+
+"""Serialise one near-optimal team to the dict shape the switcher JS consumes."""
+function _team_switcher_dict(team::DataFrame, rank::Int)
+    has_class = :classraw in propertynames(team)
+    ordered = sort(team, :expected_vg_points, rev = true)
+    riders = [
+        Dict(
+            "name" => string(r.rider),
+            "team" => string(r.team),
+            "class" => has_class ? string(r.classraw) : "",
+            "cost" => r.cost,
+            "evg" => round(Float64(r.expected_vg_points), digits = 1),
+        ) for r in eachrow(ordered)
+    ]
+    return Dict(
+        "rank" => rank,
+        "evg" => round(sum(Float64.(team.expected_vg_points)), digits = 1),
+        "cost" => sum(team.cost),
+        "riders" => riders,
+    )
+end
+
+"""HTML for the no-JS `<details>` fallback: a static table per near-optimal team."""
+function _switcher_fallback(top_teams::Vector{DataFrame})
+    io = IOBuffer()
+    write(io, "<details><summary>All near-optimal teams (no-JavaScript view)</summary>\n")
+    for (i, team) in enumerate(top_teams)
+        evg = round(sum(Float64.(team.expected_vg_points)), digits = 1)
+        write(io, "<p><strong>Team $i</strong> — cost $(sum(team.cost))/100, EVG $evg</p>\n")
+        cols = intersect(
+            [:rider, :team, :classraw, :cost, :expected_vg_points],
+            propertynames(team),
+        )
+        write(io, html_table(sort(team[:, cols], :expected_vg_points, rev = true)))
+    end
+    write(io, "</details>\n")
+    return String(take!(io))
+end
+
+"""
+    format_near_optimal_section(top_teams, predicted, build_model_fn;
+                                team_size, max_per_team, n_forks=5) -> String
+
+Render the full "near-optimal team set" section: an interactive team switcher
+(tabs repopulating one table, swing riders highlighted, EVG + %-gap-vs-best), the
+explicit core/filler decomposition (`compute_filler_pool`), and the ranked
+structural forks (`compute_structural_forks`). Degrades to a static `<details>`
+list when JavaScript is disabled. `predicted` (the live frame, which carries the
+class columns) and `build_model_fn` drive the fork re-solves.
+"""
+function format_near_optimal_section(
+    top_teams::Vector{DataFrame},
+    predicted::DataFrame,
+    build_model_fn::Function;
+    team_size::Integer,
+    max_per_team::Integer,
+    n_forks::Integer = 5,
+)
+    isempty(top_teams) && return ""
+    n_teams = length(top_teams)
+    evgs = [sum(Float64.(t.expected_vg_points)) for t in top_teams]
+    best_evg = maximum(evgs)
+    worst_gap =
+        best_evg > 0 ? round(100 * (best_evg - minimum(evgs)) / best_evg, digits = 2) : 0.0
+
+    io = IOBuffer()
+    write(io, html_heading("Your optimal team and its near-equals", 2))
+
+    # --- Intro callout ---
+    intro =
+        "<p>The single \"best\" team is the top of a cluster of near-identical rosters. " *
+        "Below are the <strong>$(n_teams)</strong> best distinct teams; the worst shown is only " *
+        "<strong>$(worst_gap)%</strong> below the best in expected VG points (EVG). They " *
+        "share a fixed <em>core</em> and differ only in the interchangeable " *
+        "<span style=\"background:#fff3cd;border-left:3px solid #ffc107;padding:0 .3em;\">swing</span> slots.</p>"
+    write(io, html_callout(intro; title = "Why a switcher?", type = "note"))
+
+    # --- Interactive switcher (JS) + no-JS fallback ---
+    teams_json =
+        JSON3.write([_team_switcher_dict(t, i) for (i, t) in enumerate(top_teams)])
+    css = """<style>
+#near-optimal .no-tabbar { display:flex; flex-wrap:wrap; gap:.4em; margin:1em 0; }
+#near-optimal .no-tab { border:1px solid #ccc; background:#f7f7f7; border-radius:6px; padding:.35em .7em; cursor:pointer; font-size:.9em; font-family:inherit; }
+#near-optimal .no-tab.active { background:#d4a843; color:#fff; border-color:#d4a843; font-weight:600; }
+#near-optimal .no-tab .gap { opacity:.75; font-size:.85em; margin-left:.3em; }
+#near-optimal .no-meta { margin:.4em 0 1em; }
+#near-optimal tr.no-swing td { background:#fff3cd; }
+#near-optimal tr.no-swing td:first-child { border-left:3px solid #ffc107; }
+#near-optimal .no-badge { font-size:.7em; background:#ffc107; color:#5a4600; border-radius:4px; padding:.05em .4em; }
+</style>"""
+    switcher = """<div id="near-optimal">
+$css
+<div class="no-tabbar" id="no-tabbar"></div>
+<p class="no-meta" id="no-meta"></p>
+<div class="table-wrap"><table class="table table-striped table-sm">
+<thead><tr><th>Rider</th><th>Team</th><th class="num">Cost</th><th class="num">EVG</th></tr></thead>
+<tbody id="no-body"></tbody></table></div>
+<noscript><p><em>Enable JavaScript to switch between teams interactively; the full list is below.</em></p></noscript>
+$(_switcher_fallback(top_teams))
+</div>
+<script>
+(function(){
+  var TEAMS = $(teams_json);
+  var nameSets = TEAMS.map(function(t){ return new Set(t.riders.map(function(r){return r.name;})); });
+  var core = TEAMS.length ? TEAMS[0].riders.map(function(r){return r.name;})
+      .filter(function(n){ return nameSets.every(function(s){ return s.has(n); }); }) : [];
+  var coreSet = new Set(core);
+  var best = TEAMS.length ? Math.max.apply(null, TEAMS.map(function(t){ return t.evg; })) : 0;
+  var tabbar = document.getElementById("no-tabbar");
+  var body = document.getElementById("no-body");
+  var meta = document.getElementById("no-meta");
+  function render(i){
+    var t = TEAMS[i];
+    Array.prototype.forEach.call(tabbar.children, function(b, j){ b.className = "no-tab" + (j===i ? " active" : ""); });
+    var gapPct = ((best - t.evg) / best * 100).toFixed(2);
+    meta.innerHTML = "<strong>Team " + t.rank + "</strong> \\u2014 cost " + t.cost + "/100 \\u00b7 EVG " + t.evg.toFixed(1) +
+      (i === 0 ? " \\u00b7 <em>best</em>" : " \\u00b7 " + gapPct + "% below best");
+    body.innerHTML = "";
+    t.riders.forEach(function(r){
+      var swing = !coreSet.has(r.name);
+      var tr = document.createElement("tr");
+      if (swing) tr.className = "no-swing";
+      tr.innerHTML = "<td>" + r.name + (swing ? " <span class='no-badge'>swing</span>" : "") + "</td>" +
+        "<td>" + r.team + "</td><td class='num'>" + r.cost + "</td><td class='num'>" + r.evg.toFixed(1) + "</td>";
+      body.appendChild(tr);
+    });
+  }
+  TEAMS.forEach(function(t, i){
+    var b = document.createElement("button");
+    b.className = "no-tab";
+    var gapPct = ((best - t.evg) / best * 100).toFixed(2);
+    b.innerHTML = "Team " + t.rank + (i === 0 ? "" : " <span class='gap'>-" + gapPct + "%</span>");
+    b.onclick = function(){ render(i); };
+    tabbar.appendChild(b);
+  });
+  if (TEAMS.length) render(0);
+})();
+</script>
+"""
+    write(io, switcher)
+
+    # --- Explicit core + filler pool (Refinement A) ---
+    core_df, filler_df, _ = compute_filler_pool(top_teams)
+    write(io, html_heading("Locked core and the filler menu", 3))
+    core_cost = nrow(core_df) > 0 ? sum(core_df.cost) : 0
+    core_evg =
+        nrow(core_df) > 0 ? round(sum(Float64.(core_df.expected_vg_points)), digits = 1) :
+        0.0
+    write(
+        io,
+        "<p><strong>$(nrow(core_df)) core riders</strong> appear in every near-optimal team " *
+        "($(core_cost)/100 credits, $(core_evg) EVG) — treat these as locked. The remaining " *
+        "$(100 - core_cost) credits buy the interchangeable filler slots below.</p>\n",
+    )
+    if nrow(core_df) > 0
+        core_cols = intersect(
+            [:rider, :team, :classraw, :cost, :expected_vg_points, :strength_gc],
+            propertynames(core_df),
+        )
+        write(io, html_table(sort(core_df[:, core_cols], :expected_vg_points, rev = true)))
+    end
+
+    if nrow(filler_df) > 0
+        has_class = :classraw in propertynames(filler_df)
+        filler_display = DataFrame(
+            Rider = string.(filler_df.rider),
+            Team = string.(filler_df.team),
+            Cost = filler_df.cost,
+            EVG = round.(Float64.(filler_df.expected_vg_points), digits = 1),
+            In = ["$(f)/$(n_teams)" for f in filler_df.frequency],
+        )
+        if has_class
+            insertcols!(filler_display, 3, :Class => _class_slug.(filler_df.classraw))
+        end
+        write(
+            io,
+            html_callout(
+                "<p>Riders appearing in <em>some but not all</em> near-optimal teams — the " *
+                "menu competing for the open slots. <strong>In</strong> shows how many of the " *
+                "$(n_teams) near-optimal teams each appears in; a higher count is a safer filler.</p>\n" *
+                html_table(filler_display);
+                title = "Filler pool (interchangeable slots)",
+                type = "tip",
+                collapsed = false,
+            ),
+        )
+    else
+        write(
+            io,
+            "<p><em>The near-optimal teams are identical — no interchangeable slots.</em></p>\n",
+        )
+    end
+
+    # --- Structural forks (Refinement B) ---
+    forks_result = compute_structural_forks(
+        predicted,
+        build_model_fn;
+        team_size = team_size,
+        max_per_team = max_per_team,
+        n_forks = n_forks,
+    )
+    write(io, html_heading("Key decisions (structural forks)", 3))
+
+    shape = forks_result.shape
+    fork_lines = String[]
+    if shape !== nothing
+        verdict =
+            shape.winner == :both ?
+            "carrying <strong>both</strong> $(shape.leader1) and $(shape.leader2) wins" :
+            "<strong>one leader plus depth</strong> wins (dropping one of $(shape.leader1)/$(shape.leader2))"
+        push!(
+            fork_lines,
+            "<li><strong>Two GC leaders vs one:</strong> $verdict by " *
+            "<strong>$(round(shape.delta, digits=1)) EVG</strong> " *
+            "(both-leaders team $(round(shape.both_evg, digits=1)) vs " *
+            "best at-most-one $(round(shape.atmost_evg, digits=1))).</li>",
+        )
+    end
+    for f in forks_result.forks
+        f.delta < 0.05 && continue
+        incoming =
+            isempty(f.comes_in) ? "no replacement (roster shrinks)" :
+            join(
+                [
+                    "$(c.rider) ($(c.cost)cr, $(round(c.evg, digits=1)) EVG)" for
+                    c in f.comes_in
+                ],
+                ", ",
+            )
+        push!(
+            fork_lines,
+            "<li><strong>Drop $(f.rider)</strong> ($(f.cost)cr): costs " *
+            "<strong>$(round(f.delta, digits=1)) EVG</strong>. Frees $(f.cost) credits, which buy " *
+            "$incoming — no combination matches their points-per-slot.</li>",
+        )
+    end
+    if isempty(fork_lines)
+        write(
+            io,
+            "<p><em>No high-impact either/or decisions — the optimal team is robust.</em></p>\n",
+        )
+    else
+        write(
+            io,
+            html_callout(
+                "<p>The roster decisions that move the most EVG, best first. Each shows the EVG " *
+                "at stake and which riders swing in to fill the freed budget.</p>\n<ul>\n" *
+                join(fork_lines, "\n") *
+                "\n</ul>\n";
+                title = "Highest-impact roster decisions",
+                type = "note",
+                collapsed = false,
+            ),
+        )
+    end
+
+    return String(take!(io))
+end

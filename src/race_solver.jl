@@ -22,8 +22,9 @@ end
 
 Bundle of outputs from `solve_stage`. Fields:
 - `predicted` — full per-rider prediction DataFrame
-- `chosenteam` — riders selected by the most-frequent optimal team
-- `top_teams` — vector of the most-frequent team selections, descending
+- `chosenteam` — riders in the optimal team (`top_teams[1]`)
+- `top_teams` — the `n_alternatives` best distinct near-optimal teams, ranked
+  best-first (k-best enumeration via no-good cuts on risk-adjusted EVG)
 - `sim_vg_points` — `n_riders × n_resamples` matrix of simulated VG points
 - `diagnostics` — per-stage / per-classification position counters from
   `simulate_stage_race` (only set on the per-stage pipeline; `nothing` on
@@ -740,9 +741,10 @@ optimisation of expected Velogames points.
 ## Returns
 A tuple `(predicted, chosenteam, top_teams, sim_vg_points)` where `predicted` is
 a DataFrame of all riders with expected VG points and selection frequency,
-`chosenteam` is the most frequently selected team, `top_teams` is a vector of
-the top alternative teams, and `sim_vg_points` is a Matrix{Float64}
-(n_riders × n_resamples) of per-draw VG points (row order matches `predicted`).
+`chosenteam` is the optimal team (`top_teams[1]`), `top_teams` is the
+`n_alternatives` best distinct near-optimal teams ranked best-first (k-best
+enumeration), and `sim_vg_points` is a Matrix{Float64} (n_riders × n_resamples)
+of per-draw VG points (row order matches `predicted`).
 """
 function solve_oneday(
     config::RaceConfig;
@@ -759,6 +761,7 @@ function solve_oneday(
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
     risk_aversion::Float64 = 0.5,
+    n_alternatives::Int = 20,
     breakaway_dir::String = "",
     simulation_df::Union{Int,Nothing} = nothing,
 )
@@ -804,6 +807,7 @@ function solve_oneday(
         n_resamples = n_resamples,
         max_per_team = max_per_team,
         risk_aversion = risk_aversion,
+        n_alternatives = n_alternatives,
         breakaway_rates = b_rates,
         breakaway_mean_sectors = b_sectors,
         simulation_df = simulation_df,
@@ -839,7 +843,10 @@ per-stage pipeline via the discrete per-stage breakaway event in
 leaves both pipelines unaffected.
 
 ## Returns
-A tuple `(predicted, chosenteam, top_teams, sim_vg_points)`.
+A `StageResult` (`predicted`, `chosenteam`, `top_teams`, `sim_vg_points`,
+`diagnostics`). `top_teams` is the `n_alternatives` best distinct near-optimal
+teams ranked best-first (k-best enumeration via no-good cuts), which the report
+uses to surface the interchangeable filler pool and the structural fork decisions.
 """
 function solve_stage(
     config::RaceConfig;
@@ -862,6 +869,7 @@ function solve_stage(
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
     risk_aversion::Float64 = 0.5,
+    n_alternatives::Int = 20,
     breakaway_dir::String = "",
     simulation_df::Union{Int,Nothing} = nothing,
     cross_stage_alpha::Float64 = 0.7,
@@ -966,6 +974,7 @@ function solve_stage(
             gc_strengths = gc_strengths_vec,
             max_per_team = max_per_team,
             risk_aversion = risk_aversion,
+            n_alternatives = n_alternatives,
             sim_config = sim_config,
             breakaway_rates = b_stage_rates,
         )
@@ -998,29 +1007,26 @@ function solve_stage(
                     team_size = config.team_size,
                     max_per_team = max_per_team,
                     risk_aversion = risk_aversion,
+                    n_alternatives = n_alternatives,
                 )
             else
-                # (a) Post-hoc: multiply the final EVG mean and re-optimise the
-                # chosen team on the adjusted points. Per-draw selection
-                # frequency is left on the unadjusted simulation.
+                # (a) Post-hoc: multiply the final EVG mean and re-enumerate the
+                # k-best near-optimal teams on the adjusted points. Per-draw
+                # selection frequency is left on the unadjusted simulation.
                 adj = evg_raw .* exp.(factors)
                 predicted[!, :expected_vg_points] = round.(adj, digits = 1)
                 predicted[!, :_adj_pts] = adj
-                res = build_model_stage(
+                key_lists = _kbest_team_keys(
                     predicted,
-                    config.team_size,
-                    :_adj_pts,
-                    :cost;
-                    totalcost = 100,
+                    build_model_stage,
+                    :_adj_pts;
+                    team_size = config.team_size,
                     max_per_team = max_per_team,
+                    n_alternatives = n_alternatives,
                 )
                 select!(predicted, Not(:_adj_pts))
-                if res !== nothing
-                    chosen = Set(
-                        k for k in predicted.riderkey if JuMP.value(res[k]) > 0.5
-                    )
-                    top_teams = [filter(row -> row.riderkey in chosen, predicted)]
-                end
+                top_teams =
+                    [filter(row -> row.riderkey in Set(keys), predicted) for keys in key_lists]
             end
         end
     else
@@ -1038,6 +1044,7 @@ function solve_stage(
             n_resamples = n_resamples,
             max_per_team = max_per_team,
             risk_aversion = risk_aversion,
+            n_alternatives = n_alternatives,
             breakaway_rates = b_rates,
             breakaway_mean_sectors = b_sectors,
             simulation_df = simulation_df,
