@@ -991,8 +991,12 @@ end
 Load archived PCS stage profiles and convert back to StageProfile structs.
 Returns empty vector if not archived.
 """
-function load_stage_profiles(pcs_slug::String, year::Int)
-    df = load_race_snapshot("pcs_stage_profiles", pcs_slug, year)
+function load_stage_profiles(
+    pcs_slug::String,
+    year::Int;
+    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+)
+    df = load_race_snapshot("pcs_stage_profiles", pcs_slug, year; archive_dir)
     df === nothing && return StageProfile[]
     return [
         StageProfile(

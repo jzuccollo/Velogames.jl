@@ -157,7 +157,12 @@ export BacktestRace,
     build_race_catalogue,
     prefetch_race_data,
     prefetch_all_races,
-    spearman_correlation
+    spearman_correlation,
+    StageRaceBacktestData,
+    prefetch_stage_race_data,
+    champion_evg,
+    backtest_stage_race,
+    crosscheck_option_ab
 
 # Utilities
 export createkey,

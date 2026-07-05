@@ -2209,6 +2209,59 @@ if nrow(pit_df) > 0 && nrow(prospective_df) > 0
     end
 end
 
+# --- Stage-race harness ---
+
+write(io, html_heading("Stage-race harness", 2))
+write(
+    io,
+    """<p>Grand-tour editions reconstructed as-of race day from the archive (<code>prefetch_stage_race_data</code>) and scored against actual VG totals. Each predictor's 9-rider team is optimised on its own EVG under the production budget/class constraints; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production stack, <code>champion_evg</code>), <code>persistence</code> (most recent prior-edition VG total), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years). These are the standing comparators for the WP2.3 champion–challenger gate.</p>\n""",
+)
+
+gt_editions = vcat(
+    [("giro-d-italia", y) for y = 2023:2026],
+    [("tour-de-france", y) for y = 2023:2025],
+    [("vuelta-a-espana", y) for y = 2023:2025],
+)
+
+harness_rows = DataFrame[]
+for (slug, yr) in gt_editions
+    try
+        edition_df = suppress_output() do
+            backtest_stage_race(slug, yr)
+        end
+        push!(harness_rows, edition_df)
+    catch e
+        @warn "Stage-race harness skipped $slug $yr: $e"
+    end
+end
+
+if isempty(harness_rows)
+    write(
+        io,
+        html_callout(
+            "No grand-tour editions could be reconstructed — check the archive (vg_stage_riders / vg_stage_totals / pcs_stage_profiles).",
+        ),
+    )
+else
+    write(io, html_table(vcat(harness_rows...)))
+end
+
+write(io, html_heading("Option A/B do-no-harm cross-check", 3))
+write(
+    io,
+    """<p>Binding harness acceptance check (WP2.1): the 2026 Tour is reconstructed as-of race day and the recorded Option A/B validation (roadmap.md, July 2026) is re-run inside the harness — EVG four ways with the GT VG-history signal restricted to editions ≤ 2024, Spearman-correlated against riders' real 2025 Tour totals. Reproduced values should sit within ±0.03 of the recorded ones (exact reproduction is impossible: WP1.1 and WP1.4 changed the simulator since the recording; <code>multidim_block_correlation</code> is disabled to era-match WP1.6).</p>\n""",
+)
+
+ab_df = try
+    suppress_output() do
+        crosscheck_option_ab()
+    end
+catch e
+    @warn "Option A/B cross-check unavailable: $e"
+    nothing
+end
+ab_df !== nothing && write(io, html_table(ab_df))
+
 # ---------------------------------------------------------------------------
 # Write output
 # ---------------------------------------------------------------------------

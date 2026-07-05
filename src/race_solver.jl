@@ -856,6 +856,123 @@ end
 
 
 """
+    _stage_prediction_core(data, stages, scoring_table; race_year, ...)
+        -> (predicted, top_teams, sim_vg_points, diagnostics)
+
+Pure per-stage prediction pipeline shared by `solve_stage` (production) and
+the stage-race backtest harness (`champion_evg` in backtest.jl): multidim
+`estimate_strengths` → `compute_stage_strengths` → `resample_optimise_stage!`
+→ optional Option B propensity adjustment (`gt_propensity_factors`, reading
+`data.gt_vg_history_df`). No I/O or archival side effects — callers handle
+data fetching, breakaway-rate loading, and prediction archival.
+"""
+function _stage_prediction_core(
+    data::RaceData,
+    stages::Vector{StageProfile},
+    scoring_table::StageRaceScoringTable;
+    race_year::Int,
+    team_size::Integer = 9,
+    n_resamples::Int = 500,
+    domestique_discount::Float64 = 0.0,
+    max_per_team::Integer = 0,
+    risk_aversion::Float64 = 0.5,
+    n_alternatives::Integer = 20,
+    cross_stage_alpha::Float64 = 0.7,
+    sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
+    breakaway_rates::Vector{Float64} = Float64[],
+    use_gt_vg_propensity::Bool = false,
+    gt_vg_propensity_mode::Symbol = :posthoc,
+    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    rng::AbstractRNG = Random.default_rng(),
+)
+    @info "Estimating rider strengths (stage race)..."
+    predicted = estimate_strengths(
+        data;
+        race_type = :stage,
+        race_year = race_year,
+        domestique_discount = domestique_discount,
+        config = config,
+    )
+
+    @info "Building per-stage strengths from multidim posterior ($(length(stages)) stages)..."
+    stage_strengths = compute_stage_strengths(predicted)
+    gc_strengths_vec = Float64.(predicted.strength_gc)
+
+    @info "Running per-stage resampled optimisation ($n_resamples resamples, $(length(stages)) stages)..."
+    predicted, top_teams, sim_vg_points, diagnostics = resample_optimise_stage!(
+        predicted,
+        stages,
+        stage_strengths,
+        scoring_table,
+        build_model_stage;
+        team_size = team_size,
+        n_resamples = n_resamples,
+        cross_stage_alpha = cross_stage_alpha,
+        gc_strengths = gc_strengths_vec,
+        rng = rng,
+        max_per_team = max_per_team,
+        risk_aversion = risk_aversion,
+        n_alternatives = n_alternatives,
+        sim_config = sim_config,
+        breakaway_rates = breakaway_rates,
+    )
+
+    # --- Option B: GT VG points-propensity layer (prototype, July 2026 —
+    # see roadmap.md). Two-sided EVG correction learned from the residual
+    # between each rider's REAL prior GT totals and their ability-implied
+    # EVG. Default off ⇒ inert. Stacks on Option A: because `evg_raw` here
+    # is the (A-lifted, if `use_gt_vg_history`) prediction, B captures only
+    # the residual A leaves, so the two compose without double-counting.
+    if use_gt_vg_propensity && data.gt_vg_history_df !== nothing
+        evg_raw = vec(mean(sim_vg_points, dims = 2))
+        factors = gt_propensity_factors(
+            String.(predicted.riderkey),
+            evg_raw,
+            data.gt_vg_history_df,
+            race_year,
+        )
+        predicted[!, :gt_propensity_factor] = round.(factors, digits = 3)
+        if gt_vg_propensity_mode == :sim
+            # (b) Inside-the-sim: scale every per-draw column, so the mean,
+            # the downside deviation AND the per-draw selection frequency
+            # all reflect propensity. Re-runs only the (RNG-free) optimise
+            # tail on the scaled matrix — no re-simulation.
+            sim_vg_points = sim_vg_points .* exp.(factors)
+            predicted, top_teams = _resample_core!(
+                predicted,
+                sim_vg_points,
+                build_model_stage;
+                team_size = team_size,
+                max_per_team = max_per_team,
+                risk_aversion = risk_aversion,
+                n_alternatives = n_alternatives,
+            )
+        else
+            # (a) Post-hoc: multiply the final EVG mean and re-enumerate the
+            # k-best near-optimal teams on the adjusted points. Per-draw
+            # selection frequency is left on the unadjusted simulation.
+            adj = evg_raw .* exp.(factors)
+            predicted[!, :expected_vg_points] = round.(adj, digits = 1)
+            predicted[!, :_adj_pts] = adj
+            key_lists = _kbest_team_keys(
+                predicted,
+                build_model_stage,
+                :_adj_pts;
+                team_size = team_size,
+                max_per_team = max_per_team,
+                n_alternatives = n_alternatives,
+            )
+            select!(predicted, Not(:_adj_pts))
+            top_teams =
+                [filter(row -> row.riderkey in Set(keys), predicted) for keys in key_lists]
+        end
+    end
+
+    return predicted, top_teams, sim_vg_points, diagnostics
+end
+
+
+"""
 ## `solve_stage`
 
 Construct an optimal team for a stage race using resampled optimisation.
@@ -945,20 +1062,8 @@ function solve_stage(
         )
     end
 
-    @info "Estimating rider strengths (stage race)..."
-    predicted = estimate_strengths(
-        data;
-        race_type = :stage,
-        race_year = config.year,
-        domestique_discount = domestique_discount,
-    )
-
     if !isempty(stages)
         # --- Per-stage pipeline ---
-        @info "Building per-stage strengths from multidim posterior ($(length(stages)) stages)..."
-        stage_strengths = compute_stage_strengths(predicted)
-        gc_strengths_vec = Float64.(predicted.strength_gc)
-
         # Archive stage profiles
         if !isempty(config.pcs_slug)
             try
@@ -990,80 +1095,36 @@ function solve_stage(
         # 4-checkpoint sectors.
         b_stage_rates, _b_stage_sectors = _load_breakaway_rates(
             breakaway_dir,
-            predicted.riderkey;
+            data.rider_df.riderkey;
             max_rate = STAGE_BREAKAWAY_MAX_RATE,
         )
 
-        @info "Running per-stage resampled optimisation ($n_resamples resamples, $(length(stages)) stages)..."
-        predicted, top_teams, sim_vg_points, diagnostics = resample_optimise_stage!(
-            predicted,
+        predicted, top_teams, sim_vg_points, diagnostics = _stage_prediction_core(
+            data,
             stages,
-            stage_strengths,
-            scoring_table,
-            build_model_stage;
+            scoring_table;
+            race_year = config.year,
             team_size = config.team_size,
             n_resamples = n_resamples,
-            cross_stage_alpha = cross_stage_alpha,
-            gc_strengths = gc_strengths_vec,
+            domestique_discount = domestique_discount,
             max_per_team = max_per_team,
             risk_aversion = risk_aversion,
             n_alternatives = n_alternatives,
+            cross_stage_alpha = cross_stage_alpha,
             sim_config = sim_config,
             breakaway_rates = b_stage_rates,
+            use_gt_vg_propensity = use_gt_vg_propensity,
+            gt_vg_propensity_mode = gt_vg_propensity_mode,
         )
-
-        # --- Option B: GT VG points-propensity layer (prototype, July 2026 —
-        # see roadmap.md). Two-sided EVG correction learned from the residual
-        # between each rider's REAL prior GT totals and their ability-implied
-        # EVG. Default off ⇒ inert. Stacks on Option A: because `evg_raw` here
-        # is the (A-lifted, if `use_gt_vg_history`) prediction, B captures only
-        # the residual A leaves, so the two compose without double-counting.
-        if use_gt_vg_propensity && data.gt_vg_history_df !== nothing
-            evg_raw = vec(mean(sim_vg_points, dims = 2))
-            factors = gt_propensity_factors(
-                String.(predicted.riderkey),
-                evg_raw,
-                data.gt_vg_history_df,
-                config.year,
-            )
-            predicted[!, :gt_propensity_factor] = round.(factors, digits = 3)
-            if gt_vg_propensity_mode == :sim
-                # (b) Inside-the-sim: scale every per-draw column, so the mean,
-                # the downside deviation AND the per-draw selection frequency
-                # all reflect propensity. Re-runs only the (RNG-free) optimise
-                # tail on the scaled matrix — no re-simulation.
-                sim_vg_points = sim_vg_points .* exp.(factors)
-                predicted, top_teams = _resample_core!(
-                    predicted,
-                    sim_vg_points,
-                    build_model_stage;
-                    team_size = config.team_size,
-                    max_per_team = max_per_team,
-                    risk_aversion = risk_aversion,
-                    n_alternatives = n_alternatives,
-                )
-            else
-                # (a) Post-hoc: multiply the final EVG mean and re-enumerate the
-                # k-best near-optimal teams on the adjusted points. Per-draw
-                # selection frequency is left on the unadjusted simulation.
-                adj = evg_raw .* exp.(factors)
-                predicted[!, :expected_vg_points] = round.(adj, digits = 1)
-                predicted[!, :_adj_pts] = adj
-                key_lists = _kbest_team_keys(
-                    predicted,
-                    build_model_stage,
-                    :_adj_pts;
-                    team_size = config.team_size,
-                    max_per_team = max_per_team,
-                    n_alternatives = n_alternatives,
-                )
-                select!(predicted, Not(:_adj_pts))
-                top_teams =
-                    [filter(row -> row.riderkey in Set(keys), predicted) for keys in key_lists]
-            end
-        end
     else
         # --- Aggregate fallback ---
+        @info "Estimating rider strengths (stage race)..."
+        predicted = estimate_strengths(
+            data;
+            race_type = :stage,
+            race_year = config.year,
+            domestique_discount = domestique_discount,
+        )
         scoring = get_scoring(:stage)
 
         b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
