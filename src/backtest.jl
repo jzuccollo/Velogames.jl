@@ -1032,9 +1032,6 @@ Fields:
   production). `race_data.rider_df === riders`.
 - `stages` — archived PCS stage profiles (`pcs_stage_profiles`)
 - `scoring` — archived VG scoring table (`vg_scoring`), else `SCORING_GRAND_TOUR`
-- `breakaway_rates` — aligned to `riders`, from archived PCS attack-km
-  seasons strictly before the race year; empty vector = feature inert
-  (e.g. the 2023 editions, which pre-date the earliest attack-km file)
 - `gt_vg_history` — prior-edition GT VG totals INCLUDING other grand tours
   run strictly before the target (same-year Giro before a Tour, etc.), long
   format `riderkey, score, year, gt_slug`. The same-GT subset feeds the
@@ -1059,9 +1056,7 @@ Temporal-integrity notes (documented approximations, in the spirit of
    per-season data simply carry no PCS signal.
 4. `seasons_df` (PCS season totals → currency factors) is omitted: it only
    scales the career fallback, which is race-day-archived where present.
-5. Breakaway attack-km seasons are restricted to strictly before the race
-   year; production uses the latest three seasons including the current one.
-6. Odds/oracle snapshots exist only for 2026 editions; earlier editions run
+5. Odds/oracle snapshots exist only for 2026 editions; earlier editions run
    marketless. A reconstruction gap (the market existed on the day), not a leak.
 """
 struct StageRaceBacktestData
@@ -1073,7 +1068,6 @@ struct StageRaceBacktestData
     race_data::RaceData
     stages::Vector{StageProfile}
     scoring::StageRaceScoringTable
-    breakaway_rates::Vector{Float64}
     gt_vg_history::Union{DataFrame,Nothing}
     gc_results::Union{DataFrame,Nothing}
     points_results::Union{DataFrame,Nothing}
@@ -1324,24 +1318,6 @@ function prefetch_stage_race_data(
     scoring_df = snap("vg_scoring")
     scoring = scoring_df === nothing ? SCORING_GRAND_TOUR : _df_to_scoring(scoring_df)
 
-    # --- Breakaway rates (production default ON; note 5) ---
-    breakaway_rates = Float64[]
-    breakaway_stats = try
-        load_pcs_breakaway_stats(joinpath(archive_dir, "pcs_breakaways"))
-    catch
-        DataFrame()
-    end
-    if nrow(breakaway_stats) > 0
-        pre_stats = filter(:year => (y -> y < year), breakaway_stats)
-        if nrow(pre_stats) > 0
-            breakaway_rates, _ = compute_breakaway_rates(
-                pre_stats,
-                String.(riders.riderkey);
-                max_rate = STAGE_BREAKAWAY_MAX_RATE,
-            )
-        end
-    end
-
     # --- Actual classification outcomes (scoring targets only) ---
     gc_results = snap("pcs_gc_results")
     points_results = try
@@ -1385,7 +1361,6 @@ function prefetch_stage_race_data(
         race_data,
         stages,
         scoring,
-        breakaway_rates,
         gt_vg_history,
         gc_results,
         points_results,
@@ -1401,9 +1376,9 @@ The champion predictor: the FULL production simulator stack re-run as-of race
 day via `_stage_prediction_core` (multidim `estimate_strengths` →
 `compute_stage_strengths` → `resample_optimise_stage!` → Option B post-hoc),
 with production-default toggles — Option A on (via `race_data.gt_vg_history_df`),
-Option B on (`:posthoc`), breakaway event on where pre-race attack-km data
-exists, multidim block correlation at its `BayesianConfig` default. Seeded RNG
-for reproducibility. Extra `kwargs` forward to `_stage_prediction_core`.
+Option B on (`:posthoc`), multidim block correlation at its `BayesianConfig`
+default. Seeded RNG for reproducibility. Extra `kwargs` forward to
+`_stage_prediction_core`.
 """
 function champion_evg(
     data::StageRaceBacktestData;
@@ -1417,7 +1392,6 @@ function champion_evg(
         data.scoring;
         race_year = data.year,
         n_resamples = n_resamples,
-        breakaway_rates = data.breakaway_rates,
         use_gt_vg_propensity = true,
         gt_vg_propensity_mode = :posthoc,
         rng = Random.MersenneTwister(seed),
@@ -1703,7 +1677,6 @@ function crosscheck_option_ab(;
             race_year = data.year,
             n_resamples = n_resamples,
             config = cfg,
-            breakaway_rates = Float64[],
             rng = Random.MersenneTwister(seed),
         )
         return vec(mean(sim, dims = 2))

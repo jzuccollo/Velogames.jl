@@ -515,10 +515,6 @@ Returns `(df, top_teams, sim_vg_points, diagnostics)` where df gains
 `n_alternatives` best distinct teams ranked best-first (k-best via no-good cuts),
 and `diagnostics` carries per-stage and per-classification position counts that
 reports surface as podium / top-K probabilities.
-
-`breakaway_rates` (optional, aligned to `df.riderkey`) is forwarded to
-`simulate_stage_race` to enable the per-rider breakaway event on hilly/mountain
-stages; empty by default (feature off).
 """
 function resample_optimise_stage!(
     df::DataFrame,
@@ -535,15 +531,9 @@ function resample_optimise_stage!(
     risk_aversion::Float64 = 0.5,
     n_alternatives::Integer = 20,
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
-    breakaway_rates::Vector{Float64} = Float64[],
 )
     uncertainties = Float64.(df.uncertainty)
     teams = String.(df.team)
-    # Rider classes drive the attrition hazard (A2). Prefer :classraw, fall back
-    # to :class; empty when neither is present (attrition then disabled).
-    rider_classes =
-        :classraw in propertynames(df) ? String.(df.classraw) :
-        :class in propertynames(df) ? String.(df.class) : String[]
 
     # Run all simulations at once. simulate_stage_race always returns
     # (vg_points, diagnostics); we surface diagnostics for per-stage podium
@@ -559,8 +549,6 @@ function resample_optimise_stage!(
         gc_strengths = gc_strengths,
         rng = rng,
         sim_config = sim_config,
-        rider_classes = rider_classes,
-        breakaway_rates = breakaway_rates,
     )
 
     df, top_teams = _resample_core!(

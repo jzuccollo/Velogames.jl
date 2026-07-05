@@ -29,30 +29,6 @@ function _rand_t(rng::AbstractRNG, df::Int)
     return z * sqrt(df / v)
 end
 
-# Marsaglia–Tsang Gamma sampler (shape ≥ 1, unit scale). Used for the shared
-# per-stage "brutal day" attrition shock. Returns mean = shape.
-function _rand_gamma(rng::AbstractRNG, shape::Float64)
-    d = shape - 1.0 / 3.0
-    c = 1.0 / sqrt(9.0 * d)
-    while true
-        x = randn(rng)
-        v = (1.0 + c * x)^3
-        v <= 0.0 && continue
-        u = rand(rng)
-        if log(u) < 0.5 * x^2 + d - d * v + d * log(v)
-            return d * v
-        end
-    end
-end
-
-# Normalise a raw VG class label ("All Rounder", "Sprinter", …) to the keys used
-# by `StageSimConfig.attrition_class_mult`. Unknown labels fall back to unclassed.
-@inline function _norm_class(raw)
-    s = replace(lowercase(String(raw)), " " => "")
-    s == "sprinter" ? :sprinter :
-    s == "climber" ? :climber : s == "allrounder" ? :allrounder : :unclassed
-end
-
 """
     simulate_race(strengths, uncertainties; n_sims, rng, simulation_df) -> Matrix{Int}
 

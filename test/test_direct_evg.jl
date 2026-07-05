@@ -129,7 +129,6 @@ end
         RaceData(rider_df = riders, odds_df = odds_df),
         StageProfile[],
         SCORING_GRAND_TOUR,
-        Float64[],
         gt_hist,
         nothing,
         nothing,

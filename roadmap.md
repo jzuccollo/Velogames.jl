@@ -574,3 +574,29 @@ The implementation would add faceted PIT histograms or a calibration table by st
 | 10 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Not done |
 | 11 | ML models | Unknown | Weak (+3% over baseline) | Not done — prerequisites missing |
 | 12 | Conditional VG-points calibration | Medium (diagnostic) | Depends on aggregate PIT findings | Not done — requires 15+ prospective races |
+
+---
+
+### Phase 2 champion–challenger gate: decision memo (July 2026, WP2.3)
+
+**Pre-registered question (D5):** is the seventeen-layer simulator stack retained as the GT points engine only if it beats the direct-EVG challenger on team-points-captured (9-rider optimiser on each model's EVG, scored on actual VG totals) across the archived GTs by more than the bootstrap 90% CI?
+
+**Set-up.** Harness: `backtest_stage_race` (WP2.1, ec98bdf), 10 editions (Giro 2023–2026, Tour/Vuelta 2023–2025), reconstruction as-of race day, both engines on identical inputs (market data exists only for the 2026 editions and feeds both). Challenger: `direct_evg` (WP2.2, 1de8173) — 7 fitted parameters (fit 2023–24, validated 2025, 2026 evaluation-only) + market weight fixed a priori. Champion: full production stack at seed 20260704, n_resamples=500.
+
+**Result: no winner.** Team-points-captured, challenger − simulator, per edition: Giro 23 −0.085, Giro 24 +0.035, Giro 25 +0.251, Giro 26 −0.080, Tour 23 −0.160, Tour 24 −0.073, Tour 25 −0.016, Vuelta 23 −0.169, Vuelta 24 −0.086, Vuelta 25 −0.016. Primary set (all 10): mean −0.040, bootstrap 90% CI [−0.093, +0.025] (B=10,000) — straddles zero. Out-of-sample subset (2025 ×3 + Giro 26): mean +0.035, CI [−0.048, +0.168] — straddles zero. The simulator wins 8/10 editions but never outside the CI; the challenger's one large win (Giro 2025, its best edition vs the simulator's worst) flips the out-of-sample mean positive. **Per the pre-registered tie rule: the challenger does not replace the simulator; it is retained as a standing harness comparator (and the Vuelta 2026 prospective benchmark), not wired into `solve_stage`. Individually non-earning simulator layers are deleted.**
+
+**Layer adjudication** (10-edition mean Δtpc with the layer toggled off; seed-noise band on the mean ±0.0126):
+
+| Layer | mean Δtpc | Verdict |
+|---|---|---|
+| Attrition (hazards, class multipliers, day-shock) | −0.0001 (max per-edition 0.001) | **deleted** — a near-exact no-op on tpc; removal marginally improved full-field ρ (+0.003) |
+| Breakaway participation draw (stage path) | +0.005 (per-edition ±0.08, sign-cancelling) | **deleted** — indistinguishable from noise injection; one-day breakaway scoring untouched (real VG scoring category there) |
+| GC-favourite protection + floor | −0.010 (entirely one edition: Giro 23 −0.106) | **deleted** — within band; single-edition support |
+| Option B (points propensity) | **−0.039** | **retained** — outside the band; the one layer that demonstrably earns tpc. Its rank-ρ contribution on current code (+0.003..+0.010 overall) is smaller than the recorded +0.032 — the Phase 1 fixes improved the baseline it corrects (see the WP2.1 cross-check attribution) |
+| Option A (GT-history strength signal) | not individually toggleable; indirect estimate +0.014 (within band) | **not adjudicated** — an estimation-path signal rather than a simulator layer; stays under its existing pre-registered prospective trigger |
+
+**Post-deletion do-no-harm:** 10-edition sweep re-run after the deletions: mean tpc 0.5709 vs 0.5634 pre-deletion (bound ±0.0126) — within the band (Δ +0.0075), accepted; full test suite green.
+
+**Caveats, recorded honestly.** (i) The challenger's 2023–24 editions are in-sample (its fit years); the simulator carries its own in-sample exposure (PL-fitted aleatoric noise, attrition hazards fitted on these same archives), so neither side is clean and the primary set slightly favours the challenger while the 8/10 win count favours the simulator. (ii) The deleted attrition layer was the model's only DNF mechanism; sprinter DNF risk (~32% for 2nd–4th-tier GT sprinters) returns to explicitly unmodelled — it was not being converted into team-points anyway. (iii) Deleting GC protection removes a determinism-increasing layer, which should move simulated GC win% toward the market (the direction the WP1.6 investigation wants). (iv) Both engines beat naive persistence on mean tpc (simulator 0.563, challenger 0.524, persistence 0.451), and the simulator beat the odds-implied baseline on the one edition with odds (Giro 26: 0.596 vs 0.546).
+
+**Pre-registered next test (Vuelta 2026, WP2.4):** archive predictions from BOTH engines before the deadline; compare team-points-captured prospectively after the race. If the challenger wins that comparison (making it 2 of 4 recent out-of-sample GTs, given Giro 25), re-run this gate with the 2026 editions included as validation before any further simulator investment.

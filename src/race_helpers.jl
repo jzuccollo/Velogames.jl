@@ -922,28 +922,13 @@ Fields:
   table pays 10 banner ranks ([20,16,12,8,6,5,4,3,2,1], see
   `SCORING_GRAND_TOUR.intermediate_sprint_points`); this vector is a
   deliberately damped modelling allocation, not the published table.
-- `breakaway_stage_boost` — per-stage strength boost (same z-score-ish units as
-  `stage_strengths`) applied to a rider's `noisy` stage-finish strength when a
-  discrete breakaway event triggers for them (see `_draw_breakaway!` in
-  simulate_stage.jl). Distinct from `breakaway_noise`: that's symmetric,
-  zero-mean variance inflation applied to every rider on breakaway-conducive
-  terrain; this is a one-sided boost applied only to riders with recorded PCS
-  breakaway-km history, representing the real advantage of contesting a stage
-  from a small escape group rather than the full bunch. First-pass estimate —
-  needs prospective calibration (see roadmap.md "Stage-race breakaway modelling (prototype, July 2026)").
 """
 struct StageSimConfig
     aleatoric_noise::NamedTuple
     breakaway_noise::NamedTuple
     points_jersey_allocation::NamedTuple
     intermediate_sprint_points::Vector{Float64}
-    attrition_hazard::NamedTuple        # per-rider-stage DNF hazard by stage type
-    attrition_class_mult::NamedTuple    # hazard multiplier by rider class (×field)
-    attrition_shock_shape::Float64      # Gamma shape of the shared brutal-day shock (mean 1)
     aleatoric_df::Int                   # Student-t df for the aleatoric race-day draw
-    gc_favourite_protection::Float64    # DNF hazard reduction for strong GC favourites
-    gc_protection_floor::Float64        # min hazard multiplier — irreducible crash risk
-    breakaway_stage_boost::Float64      # noisy-strength boost when a breakaway event triggers
 end
 
 function StageSimConfig(;
@@ -976,68 +961,19 @@ function StageSimConfig(;
         ttt = [15.0, 10.0, 6.0, 3.0, 2.0, 1.0],
     ),
     intermediate_sprint_points = [10.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.5],
-    # Attrition (A2, July 2026): per-rider-stage DNF hazard fitted from archived
-    # pcs_abandons across 4 GTs (giro/tour/vuelta 2025 + giro 2026). Field DNF
-    # ~15%, concentrated on hard days. A shared per-stage Gamma shock (shape 2 →
-    # mean 1, var 0.5) reproduces the observed over-dispersion (per-stage abandon
-    # var/mean ≈ 1.66) so sprinters can be eliminated in cohorts on brutal days.
-    attrition_hazard = (
-        flat = 0.0035,
-        hilly = 0.0075,
-        mountain = 0.0092,
-        itt = 0.0018,
-        ttt = 0.002,
-    ),
-    attrition_class_mult = (
-        sprinter = 1.29,
-        climber = 1.19,
-        allrounder = 1.53,
-        unclassed = 0.86,
-    ),
-    attrition_shock_shape = 2.0,
     # Student-t df for the aleatoric race-day scatter. This is a calibrated model
     # property, NOT the global `simulation_df`: the aleatoric term models fat-
     # tailed race-day chaos (crashes/echelons) and is distinct from the Gaussian
     # epistemic wobble, so it has its own tail. `aleatoric_noise` (a_type) is
     # calibrated against df=5; change them together.
     aleatoric_df = 5,
-    # GC-favourite protection: strong GC favourites don't strategically abandon
-    # (they're contending/winning), but the class hazard would still DNF them at
-    # their class rate — over-attritioning the durable race leader and capping
-    # his GC top-10% at his class finish rate. Reduce hazard by exp(-k·max(0, gc_z−1)),
-    # where gc_z is the rider's GC-strength z-score, so only genuine favourites
-    # (>1 SD above the field) are protected and the field-wide survival rate is
-    # essentially unchanged. Empirically ~0 for the field, strong for the top 2–3.
-    gc_favourite_protection = 1.2,
-    # …but floored: even the most dominant leader keeps an irreducible crash-out
-    # risk. Historically GC favourites DNF meaningfully (Roglič 2021/22/24,
-    # Pinot 2019, Mas 2025; mass-crash years take out marquee names), so the
-    # protection multiplier bottoms out at this floor rather than →0. 0.35 leaves
-    # a class-17.6% climber favourite at ~6% DNF (top-10 ~94%), not ~1.6%.
-    gc_protection_floor = 0.35,
-    # Breakaway event boost (prototype, July 2026 — see roadmap.md "Stage-race
-    # breakaway modelling"): applied to a rider's noisy stage strength on the
-    # stage(s) they're drawn into a break (see `_draw_breakaway!`). Calibrated
-    # so a mid-strength domestique
-    # (strengths_blend a few SD below the leaders) gets a realistic shot at a
-    # top-10/20 stage result from within the smaller break group, without
-    # guaranteeing they beat genuine strong climbers who are also occasionally
-    # in the same move. First-pass estimate, not yet validated against
-    # historical breakaway-heavy riders — see roadmap.md "Stage-race breakaway modelling (prototype, July 2026)".
-    breakaway_stage_boost = 2.5,
 )
     StageSimConfig(
         aleatoric_noise,
         breakaway_noise,
         points_jersey_allocation,
         intermediate_sprint_points,
-        attrition_hazard,
-        attrition_class_mult,
-        attrition_shock_shape,
         aleatoric_df,
-        gc_favourite_protection,
-        gc_protection_floor,
-        breakaway_stage_boost,
     )
 end
 

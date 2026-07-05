@@ -395,23 +395,6 @@ end
 # ---------------------------------------------------------------------------
 
 """
-Per-stage breakaway probability cap for grand tour hilly/mountain stages, used
-in place of `compute_breakaway_rates`'s one-day `max_rate` default (0.35) when
-computing stage-race breakaway rates (see `_load_breakaway_rates` in
-race_solver.jl and `_draw_breakaway!` in simulate_stage.jl).
-
-The one-day default is calibrated as "probability the field's top break-hunter
-is in the decisive move of THIS SINGLE race" — appropriate for a one-off
-classic. A grand tour offers ~10-13 hilly/mountain stages, each a fresh
-opportunity, so reusing 0.35 per stage would imply a near-certain (`1 -
-0.65^12 ≈ 99%`) breakaway appearance across the race for the top attacker —
-too high. 0.15/stage gives that rider an expected ~1.5-2 breakaway stages
-across a typical grand tour, a conservative first-pass estimate pending
-prospective validation (see roadmap.md "Stage-race breakaway modelling (prototype, July 2026)").
-"""
-const STAGE_BREAKAWAY_MAX_RATE = 0.15
-
-"""
     compute_breakaway_rates(breakaway_df, startlist_keys; history_years=3, max_rate=0.35, mean_sectors=2.0)
         -> (rates::Vector{Float64}, sectors::Vector{Float64})
 

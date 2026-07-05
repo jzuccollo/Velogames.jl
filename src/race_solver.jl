@@ -171,23 +171,13 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     end
 end
 
-"""Load breakaway rates from PCS data, or return empty vectors if unavailable.
-
-`max_rate` is the one-day default (0.35 — see `compute_breakaway_rates`) unless
-overridden; stage-race callers pass `STAGE_BREAKAWAY_MAX_RATE` (0.15) since a
-grand tour offers many hilly/mountain stages rather than a single race day.
-"""
-function _load_breakaway_rates(
-    breakaway_dir::String,
-    riderkeys::AbstractVector;
-    max_rate::Float64 = 0.35,
-)
+"""Load breakaway rates from PCS data, or return empty vectors if unavailable."""
+function _load_breakaway_rates(breakaway_dir::String, riderkeys::AbstractVector)
     isempty(breakaway_dir) && return Float64[], Float64[]
     !isdir(breakaway_dir) && return Float64[], Float64[]
     try
         breakaway_df = load_pcs_breakaway_stats(breakaway_dir)
-        rates, sectors =
-            compute_breakaway_rates(breakaway_df, String.(riderkeys); max_rate = max_rate)
+        rates, sectors = compute_breakaway_rates(breakaway_df, String.(riderkeys))
         n_matched = count(>(0.0), rates)
         @info "Breakaway data: $n_matched/$(length(riderkeys)) riders matched"
         return rates, sectors
@@ -864,7 +854,7 @@ the stage-race backtest harness (`champion_evg` in backtest.jl): multidim
 `estimate_strengths` → `compute_stage_strengths` → `resample_optimise_stage!`
 → optional Option B propensity adjustment (`gt_propensity_factors`, reading
 `data.gt_vg_history_df`). No I/O or archival side effects — callers handle
-data fetching, breakaway-rate loading, and prediction archival.
+data fetching and prediction archival.
 """
 function _stage_prediction_core(
     data::RaceData,
@@ -879,7 +869,6 @@ function _stage_prediction_core(
     n_alternatives::Integer = 20,
     cross_stage_alpha::Float64 = 0.7,
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
-    breakaway_rates::Vector{Float64} = Float64[],
     use_gt_vg_propensity::Bool = false,
     gt_vg_propensity_mode::Symbol = :posthoc,
     config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
@@ -914,7 +903,6 @@ function _stage_prediction_core(
         risk_aversion = risk_aversion,
         n_alternatives = n_alternatives,
         sim_config = sim_config,
-        breakaway_rates = breakaway_rates,
     )
 
     # --- Option B: GT VG points-propensity layer (prototype, July 2026 —
@@ -985,12 +973,10 @@ Uses class-aware strength estimation and enforces VG classification constraints
 (all-rounders, climbers, sprinters, unclassed) during optimisation.
 
 When `breakaway_dir` points at archived PCS breakaway-km data (same source as
-one-day races), both pipelines enable per-rider breakaway scoring: the
-aggregate fallback via `resample_optimise!`'s one-day-style mechanism, and the
-per-stage pipeline via the discrete per-stage breakaway event in
-`simulate_stage_race` (hilly/mountain stages only, capped at
-`STAGE_BREAKAWAY_MAX_RATE` per stage). Empty `breakaway_dir` (the default)
-leaves both pipelines unaffected.
+one-day races), the aggregate fallback enables per-rider breakaway scoring via
+`resample_optimise!`'s one-day-style mechanism. The per-stage pipeline does not
+model breakaway participation (deleted July 2026, WP2.3 — it failed to move
+team-points-captured on the backtest harness).
 
 ## Returns
 A `StageResult` (`predicted`, `chosenteam`, `top_teams`, `sim_vg_points`,
@@ -1085,20 +1071,6 @@ function solve_stage(
 
         scoring_table = stage_scoring !== nothing ? stage_scoring : SCORING_GRAND_TOUR
 
-        # Breakaway rates (prototype, July 2026 — see roadmap.md "Stage-race
-        # breakaway modelling"): reuses the same archived PCS breakaway-km
-        # data as one-day races, but capped at STAGE_BREAKAWAY_MAX_RATE per
-        # stage rather than the one-day 0.35, since a grand tour offers
-        # ~10-13 hilly/mountain stages rather than a single race day (see
-        # scoring.jl). `_b_stage_sectors` (one-day sector counts) is unused —
-        # GT scoring has a single flat `breakaway_points` bonus, not one-day's
-        # 4-checkpoint sectors.
-        b_stage_rates, _b_stage_sectors = _load_breakaway_rates(
-            breakaway_dir,
-            data.rider_df.riderkey;
-            max_rate = STAGE_BREAKAWAY_MAX_RATE,
-        )
-
         predicted, top_teams, sim_vg_points, diagnostics = _stage_prediction_core(
             data,
             stages,
@@ -1112,7 +1084,6 @@ function solve_stage(
             n_alternatives = n_alternatives,
             cross_stage_alpha = cross_stage_alpha,
             sim_config = sim_config,
-            breakaway_rates = b_stage_rates,
             use_gt_vg_propensity = use_gt_vg_propensity,
             gt_vg_propensity_mode = gt_vg_propensity_mode,
         )

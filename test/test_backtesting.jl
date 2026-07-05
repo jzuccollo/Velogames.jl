@@ -145,7 +145,6 @@
             race_data,
             Velogames.StageProfile[],
             Velogames.SCORING_GRAND_TOUR,
-            Float64[],
             gt_hist,
             gc,
             nothing,
