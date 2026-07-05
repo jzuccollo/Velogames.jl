@@ -162,7 +162,11 @@ export BacktestRace,
     prefetch_stage_race_data,
     champion_evg,
     backtest_stage_race,
-    crosscheck_option_ab
+    crosscheck_option_ab,
+    DirectEVGParams,
+    DEFAULT_DIRECT_EVG_PARAMS,
+    direct_evg,
+    fit_direct_evg
 
 # Utilities
 export createkey,
@@ -230,6 +234,9 @@ include("simulate_stage.jl")
 include("strength_pipeline.jl")
 include("prior_checks.jl")
 include("backtest.jl")
+# direct_evg.jl references backtest.jl's StageRaceBacktestData in its method
+# signatures, so it must come after backtest.jl (and build_model.jl).
+include("direct_evg.jl")
 include("race_solver.jl")
 include("prospective_eval.jl")
 include("report_html.jl")
