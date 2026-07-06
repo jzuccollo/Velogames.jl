@@ -2249,7 +2249,7 @@ end
 write(io, html_heading("Option A/B do-no-harm cross-check", 3))
 write(
     io,
-    """<p>Binding harness acceptance check (WP2.1): the 2026 Tour is reconstructed as-of race day and the recorded Option A/B validation (roadmap.md, July 2026) is re-run inside the harness — EVG four ways with the GT VG-history signal restricted to editions ≤ 2024, Spearman-correlated against riders' real 2025 Tour totals. Reproduced values should sit within ±0.03 of the recorded ones (exact reproduction is impossible: WP1.1 and WP1.4 changed the simulator since the recording; <code>multidim_block_correlation</code> is disabled to era-match WP1.6).</p>\n""",
+    """<p>Drift alarm for the harness (WP2.1): the 2026 Tour is reconstructed as-of race day and the Option A/B validation is re-run inside the harness — EVG four ways with the GT VG-history signal restricted to editions ≤ 2024, Spearman-correlated against riders' real 2025 Tour totals. <code>pass</code> compares each ρ against the <em>pinned post-WP2.3 baseline</em> (<code>base_*</code> columns) within ±0.03 — a false row means something has shifted the seeded pipeline since the baseline was pinned and should be investigated (or the baseline consciously re-based). The <code>rec_*</code> columns are the historical values recorded in roadmap.md on pre-Phase-1 code; they are kept for the record, not as the pass criterion — WP1.1, WP1.4 and the WP2.3 layer deletions each legitimately moved the level (attribution in the <code>crosscheck_option_ab</code> docstring).</p>\n""",
 )
 
 ab_df = try

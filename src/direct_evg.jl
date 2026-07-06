@@ -324,3 +324,8 @@ const DEFAULT_DIRECT_EVG_PARAMS = DirectEVGParams(
     13.552000000000003,   # hist_weight
     2.0,                  # market_weight (fixed prior)
 )
+
+# Register the challenger as a standing harness predictor (WP2.3 memo: retained
+# as the standing comparator). Runs after backtest.jl's registry exists because
+# Velogames.jl includes this file later.
+_STAGE_PREDICTORS[:direct] = direct_evg

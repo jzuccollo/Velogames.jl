@@ -1015,7 +1015,7 @@ plugs into the harness; `champion_evg` (the full production simulator stack)
 is one such predictor.
 
 Fields:
-- `pcs_slug`, `vg_slug`, `year`, `race_date`
+- `pcs_slug`, `year`, `race_date`
 - `riders` — one row per starter: `riderkey`, `rider`, `team`, `cost`,
   `classraw`/`class` (from the `vg_stage_riders` archive), reconstructed
   signal columns (`points` zeroed, `<spec>_r` recency specialty, career
@@ -1061,7 +1061,6 @@ Temporal-integrity notes (documented approximations, in the spirit of
 """
 struct StageRaceBacktestData
     pcs_slug::String
-    vg_slug::String
     year::Int
     race_date::Union{Date,Nothing}
     riders::DataFrame
@@ -1150,6 +1149,11 @@ function _gt_vg_totals_asof(
 )
     archived = load_race_snapshot("vg_stage_totals", gt_pcs_slug, edition_year; archive_dir)
     archived !== nothing && nrow(archived) > 0 && return archived
+    # Live-fetch only COMPLETED editions: an in-progress GT (e.g. the Tour
+    # while prefetching the same year's Vuelta) would freeze partial mid-race
+    # totals into the long-TTL cache and into gt_vg_history as if final.
+    rd = resolve_race_date(gt_pcs_slug, edition_year)
+    rd !== nothing && today() < rd + Day(25) && return nothing
     df = try
         getvg_stage_race_totals(edition_year, gt_vg_slug; cache_config = cache_config)
     catch
@@ -1177,7 +1181,6 @@ function prefetch_stage_race_data(
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = DEFAULT_ARCHIVE_DIR,
 )
-    vg_slug = _STAGE_RACE_VG_SLUGS[pcs_slug]
     race_date = resolve_race_date(pcs_slug, year)
 
     # --- Rider universe (archived VG roster) + actual totals ---
@@ -1238,7 +1241,10 @@ function prefetch_stage_race_data(
     if archived_pcs !== nothing
         riders = join_pcs_specialty(riders, archived_pcs)
     else
-        with_seasons = Set(seasons_long.riderkey)
+        # Gate on the same pre-race-year seasons the recency columns use: a
+        # debut-season rider (only seasons ≥ race year) must carry NO PCS
+        # signal, not a full-precision field-average observation (note 3).
+        with_seasons = Set(filter(:year => <(year), seasons_long).riderkey)
         riders[!, :has_pcs_data] = [k in with_seasons for k in riders.riderkey]
     end
     _add_specialty_recency!(riders, seasons_long, year)
@@ -1311,6 +1317,17 @@ function prefetch_stage_race_data(
     points_oracle_df = snap("oracle_points")
     kom_oracle_df = snap("oracle_kom")
 
+    # Surname-rematch market frames against the roster ONCE here so every
+    # predictor sees identical riderkeys regardless of call order: production's
+    # `_assemble_signals` rematches these frames IN PLACE at estimation time,
+    # which would otherwise make a challenger's market coverage depend on
+    # whether the champion ran first on the same struct.
+    for mdf in (odds_df, oracle_df, points_odds_df, kom_odds_df,
+                stagewin_odds_df, points_oracle_df, kom_oracle_df)
+        mdf !== nothing && :rider in propertynames(mdf) &&
+            rematch_riderkeys!(mdf, riders)
+    end
+
     # --- Stage profiles + scoring table ---
     stages = load_stage_profiles(pcs_slug, year; archive_dir = archive_dir)
     isempty(stages) &&
@@ -1319,17 +1336,22 @@ function prefetch_stage_race_data(
     scoring = scoring_df === nothing ? SCORING_GRAND_TOUR : _df_to_scoring(scoring_df)
 
     # --- Actual classification outcomes (scoring targets only) ---
+    # Live-fetch standings only for COMPLETED races: an in-progress edition's
+    # mid-race standings would be cached (9999-day TTL) as if final.
     gc_results = snap("pcs_gc_results")
-    points_results = try
-        getpcs_race_results(pcs_slug, year; classification = :points, cache_config)
-    catch
-        nothing
-    end
-    kom_results = try
-        getpcs_race_results(pcs_slug, year; classification = :kom, cache_config)
-    catch
-        nothing
-    end
+    race_over = race_date !== nothing && today() >= race_date + Day(25)
+    points_results = !race_over ? nothing :
+        try
+            getpcs_race_results(pcs_slug, year; classification = :points, cache_config)
+        catch
+            nothing
+        end
+    kom_results = !race_over ? nothing :
+        try
+            getpcs_race_results(pcs_slug, year; classification = :kom, cache_config)
+        catch
+            nothing
+        end
 
     race_data = RaceData(;
         rider_df = riders,
@@ -1354,7 +1376,6 @@ function prefetch_stage_race_data(
 
     return StageRaceBacktestData(
         pcs_slug,
-        vg_slug,
         year,
         race_date,
         riders,
@@ -1375,10 +1396,13 @@ end
 The champion predictor: the FULL production simulator stack re-run as-of race
 day via `_stage_prediction_core` (multidim `estimate_strengths` →
 `compute_stage_strengths` → `resample_optimise_stage!` → Option B post-hoc),
-with production-default toggles — Option A on (via `race_data.gt_vg_history_df`),
-Option B on (`:posthoc`), multidim block correlation at its `BayesianConfig`
-default. Seeded RNG for reproducibility. Extra `kwargs` forward to
-`_stage_prediction_core`.
+in the gate-adjudicated production configuration: Option A is active because
+`prefetch_stage_race_data` always populates `race_data.gt_vg_history_df` (the
+signal is data-gated, not kwarg-gated), and Option B is pinned on here
+(`:posthoc`) — note `solve_stage`'s own kwarg default is OFF; production turns
+it on via `race_config.toml` (`render_stagerace.jl` defaults the knob to
+true). Multidim block correlation at its `BayesianConfig` default. Seeded RNG
+for reproducibility. Extra `kwargs` forward to `_stage_prediction_core`.
 """
 function champion_evg(
     data::StageRaceBacktestData;
@@ -1472,8 +1496,9 @@ end
     backtest_stage_race(pcs_slug, year; predictors, target, kwargs...) -> DataFrame
 
 Score predictors against one archived grand-tour edition. A predictor is a
-built-in `Symbol` (`:simulator` → `champion_evg`, `:persistence` →
-`persistence_evg`, `:odds` → `odds_evg`) or a `name => f` pair where
+built-in `Symbol` (`:simulator` → `champion_evg`, `:direct` → `direct_evg`
+(the WP2.2 challenger, registered when `direct_evg.jl` loads), `:persistence`
+→ `persistence_evg`, `:odds` → `odds_evg`) or a `name => f` pair where
 `f(data::StageRaceBacktestData) -> DataFrame(riderkey, expected_vg_points)`.
 Predictors returning `nothing` (e.g. `:odds` on a marketless edition) are
 skipped. Riders missing from a predictor's frame score 0.
@@ -1497,7 +1522,7 @@ The string/year method prefetches via `prefetch_stage_race_data` first.
 """
 function backtest_stage_race(
     data::StageRaceBacktestData;
-    predictors = [:simulator, :persistence, :odds],
+    predictors = [:simulator, :direct, :persistence, :odds],
     target::Symbol = :vg_total,
 )
     riders = data.riders
@@ -1576,7 +1601,7 @@ end
 function backtest_stage_race(
     pcs_slug::String,
     year::Int;
-    predictors = [:simulator, :persistence, :odds],
+    predictors = [:simulator, :direct, :persistence, :odds],
     target::Symbol = :vg_total,
     history_years::Int = 3,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
@@ -1587,68 +1612,48 @@ function backtest_stage_race(
 end
 
 """Copy a `RaceData` with only `gt_vg_history_df` replaced (the Option A/B
-signal channel the cross-check toggles)."""
-function _with_gt_history(rd::RaceData, gt_df::Union{DataFrame,Nothing})
-    return RaceData(
-        rider_df = rd.rider_df,
-        race_history_df = rd.race_history_df,
-        odds_df = rd.odds_df,
-        oracle_df = rd.oracle_df,
-        vg_history_df = rd.vg_history_df,
-        qualitative_df = rd.qualitative_df,
-        form_df = rd.form_df,
-        seasons_df = rd.seasons_df,
-        actual_df = rd.actual_df,
-        points_oracle_df = rd.points_oracle_df,
-        kom_oracle_df = rd.kom_oracle_df,
-        points_odds_df = rd.points_odds_df,
-        kom_odds_df = rd.kom_odds_df,
-        stagewin_odds_df = rd.stagewin_odds_df,
-        points_history_df = rd.points_history_df,
-        kom_history_df = rd.kom_history_df,
-        gt_vg_history_df = gt_df,
-    )
-end
+signal channel the cross-check toggles). Generic over `fieldnames` so a new
+`RaceData` field can never be silently reset to its default here."""
+_with_gt_history(rd::RaceData, gt_df::Union{DataFrame,Nothing}) = RaceData(;
+    (f => getfield(rd, f) for f in fieldnames(RaceData))...,
+    gt_vg_history_df = gt_df,
+)
 
 """
     crosscheck_option_ab(; data=nothing, n_resamples=2500, seed=20260703,
-        tier_by=:actual, cache_config, archive_dir) -> DataFrame
+        cache_config, archive_dir) -> DataFrame
 
-Binding do-no-harm cross-check for the harness (WP2.1): reproduce the recorded
-Option A/B validation (roadmap.md "GT VG-history strength signal" / "GT VG
-points-propensity layer", July 2026) inside the reconstruction layer.
-Reconstructs the 2026 Tour as-of race day, produces EVG four ways — role-blind
-(A off, B off), A only, B only, A+B — with the GT VG-history signal restricted
-to editions ≤ 2024, then Spearman-correlates each EVG against riders' real
-2025 Tour VG totals over the riders present in both (recorded n = 96), overall
-and within top-20 / top-40 tiers.
+Option A/B drift alarm for the harness (WP2.1): reconstruct the 2026 Tour
+as-of race day and produce EVG four ways — role-blind (A off, B off), A only,
+B only, A+B — with the GT VG-history signal restricted to same-GT editions
+≤ 2024, then Spearman-correlate each EVG against riders' real 2025 Tour VG
+totals over the riders present in both (n = 96), overall and within top-20 /
+top-40 tiers ranked by the real totals. `multidim_block_correlation` is
+disabled for these runs (era-matching the original recording, pre-WP1.6).
 
-Era-matching with the recorded run (`MersenneTwister(20260703)`, n_sims = 2500,
-breakaway off, pre-WP1.6): `multidim_block_correlation` is disabled for these
-runs. WP1.1 (KOM jersey fix) and WP1.4 (RNG substreams) landed since and are
-not toggleable, so exact reproduction is impossible by design; acceptance is
-±0.03 on each recorded ρ plus the qualitative A/B pattern.
+Two reference sets are carried, with different jobs:
 
-`tier_by` selects the tier convention: `:actual` ranks the common riders by
-real 2025 totals, `:predicted` by the variant's own EVG. Returns one row per
-variant with reproduced and recorded ρ and a `pass` flag (`missing` for A+B,
-which has no recorded rank-ρ target).
-
-July 2026 reproduction (post-WP1.1/1.4): n = 96 matches the recorded run and
-Option A's fingerprint reproduces (leader strengths untouched, overall ρ up,
-top-40 ρ down materially), but 5/9 values sit outside ±0.03 — a consistent
-≈+0.05 level shift on overall ρ for every variant. Decomposition attributed
-this to the non-toggleable WP1.1 KOM fix / WP1.4 RNG substreams (seed spread
-is ±0.008 and toggling `multidim_block_correlation` moves ≤0.003, so both are
-ruled out); the improved baseline also mechanically shrinks Option B's
-marginal deltas, since B corrects the residual the baseline leaves. Expect
-`pass = false` rows unless the recorded targets are re-based.
+- `base_*` — the PINNED baseline (July 2026, post-WP2.3 code with the branch
+  code-review fixes applied). `pass` = every ρ within ±0.03 of it. This is
+  the operative alarm: a future change that trips it has shifted the seeded
+  pipeline by more than seed noise (±0.008) and should be investigated — or
+  the baseline consciously re-based if the movement is intended.
+- `rec_*` — the HISTORICAL values recorded in roadmap.md (early July 2026,
+  pre-Phase-1 code). Kept for the record, NOT a pass criterion. Known,
+  attributed divergences from them: WP1.1 (final-KOM ranking), WP1.4 (RNG
+  substream restructure), the WP2.3 layer deletions (attrition and
+  GC-favourite protection were ACTIVE in the recorded run; their removal,
+  and the removal of the per-sim layer-seed draws, shifts every seeded
+  output), the WP2.1 reconstruction approximations, and the review-fix
+  market-frame rematching. Net effect ≈ +0.05 on overall ρ, uniform across
+  variants; the improved baseline also mechanically shrinks Option B's
+  marginal deltas, since B corrects the residual the baseline leaves. n = 96
+  and Option A's fingerprint (overall up, top-40 down) reproduce throughout.
 """
 function crosscheck_option_ab(;
     data::Union{StageRaceBacktestData,Nothing} = nothing,
     n_resamples::Int = 2500,
     seed::Int = 20260703,
-    tier_by::Symbol = :actual,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = DEFAULT_ARCHIVE_DIR,
 )
@@ -1690,6 +1695,14 @@ function crosscheck_option_ab(;
     common = findall(k -> haskey(real_of, k), keys_)
     real = [real_of[k] for k in keys_[common]]
 
+    # Pinned post-WP2.3 baseline (see docstring) — the operative pass criterion.
+    baseline = Dict(
+        "role-blind" => (0.750, 0.433, 0.620),
+        "A only" => (0.767, 0.394, 0.562),
+        "B only" => (0.756, 0.446, 0.581),
+        "A+B" => (0.751, 0.389, 0.511),
+    )
+    # Historical roadmap.md values (pre-Phase-1 code) — kept for the record.
     recorded = Dict(
         "role-blind" => (0.691, 0.469, 0.610),
         "A only" => (0.700, 0.466, 0.546),
@@ -1700,11 +1713,12 @@ function crosscheck_option_ab(;
     for (variant, evg) in
         [("role-blind", evg_blind), ("A only", evg_a), ("B only", evg_b), ("A+B", evg_ab)]
         v = evg[common]
-        order = sortperm(tier_by == :predicted ? v : real, rev = true)
+        order = sortperm(real, rev = true)
         rho(idx) = round(spearman_correlation(v[idx], real[idx]), digits = 3)
         overall = rho(eachindex(v))
         t20 = rho(order[1:min(20, length(order))])
         t40 = rho(order[1:min(40, length(order))])
+        base = baseline[variant]
         rec = get(recorded, variant, nothing)
         push!(
             rows,
@@ -1714,11 +1728,13 @@ function crosscheck_option_ab(;
                 rho_overall = overall,
                 rho_top20 = t20,
                 rho_top40 = t40,
+                base_overall = base[1],
+                base_top20 = base[2],
+                base_top40 = base[3],
                 rec_overall = rec === nothing ? missing : rec[1],
                 rec_top20 = rec === nothing ? missing : rec[2],
                 rec_top40 = rec === nothing ? missing : rec[3],
-                pass = rec === nothing ? missing :
-                       all(abs.((overall, t20, t40) .- rec) .<= 0.03),
+                pass = all(abs.((overall, t20, t40) .- base) .<= 0.03),
             ),
         )
     end

@@ -223,6 +223,20 @@ end
     # At least some riders score non-zero in every simulation
     @test all(sum(sim, dims = 1) .> 0)
 
+    # Same-seed bit-identity: seeded reproducibility is load-bearing (gate
+    # results, cross-check, archived comparisons) — pin it explicitly.
+    sim_repeat, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = n_sims,
+        cross_stage_alpha = 0.7,
+        rng = Random.MersenneTwister(123),
+    )
+    @test sim == sim_repeat
+
     # Total points per sim should be reasonable (stage finish + GC + assists + finals)
     # Each stage awards at least positions 1-20 worth of points
     total_per_sim = vec(sum(sim, dims = 1))

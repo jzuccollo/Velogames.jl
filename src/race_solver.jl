@@ -524,7 +524,8 @@ function _prepare_rider_data(
     end
 
     # --- 3b-ii. Fetch prior-edition points/KOM classification history (stage races) ---
-    # Same-race only: the isolation backtest (scripts/eval_classification_history.jl)
+    # Same-race only: the July 2026 isolation backtest (recorded in roadmap.md;
+    # its successor is backtest_stage_race(...; target = :points/:kom))
     # found same-race jersey history predictive (ρ≈0.33) but GT cross-history
     # harmful for jerseys (KOM no-harm Δρ −0.10) — jersey roles are parcours- and
     # team-specific and transfer poorly across grand tours, unlike GC ability.
@@ -909,8 +910,10 @@ function _stage_prediction_core(
     # see roadmap.md). Two-sided EVG correction learned from the residual
     # between each rider's REAL prior GT totals and their ability-implied
     # EVG. Default off ⇒ inert. Stacks on Option A: because `evg_raw` here
-    # is the (A-lifted, if `use_gt_vg_history`) prediction, B captures only
-    # the residual A leaves, so the two compose without double-counting.
+    # is the A-lifted prediction whenever the RaceData carries
+    # `gt_vg_history_df` (A is data-gated at signal assembly, two layers up),
+    # B captures only the residual A leaves, so the two compose without
+    # double-counting.
     if use_gt_vg_propensity && data.gt_vg_history_df !== nothing
         evg_raw = vec(mean(sim_vg_points, dims = 2))
         factors = gt_propensity_factors(

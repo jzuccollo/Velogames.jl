@@ -122,7 +122,6 @@ end
     )
     data = StageRaceBacktestData(
         "giro-d-italia",
-        "giro",
         2026,
         nothing,
         riders,

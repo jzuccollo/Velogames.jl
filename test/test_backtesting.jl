@@ -138,7 +138,6 @@
         )
         fixture(race_data) = StageRaceBacktestData(
             "test-tour",
-            "testvg",
             2026,
             nothing,
             riders,
