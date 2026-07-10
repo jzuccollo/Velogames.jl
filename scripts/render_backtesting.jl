@@ -2262,6 +2262,64 @@ catch e
 end
 ab_df !== nothing && write(io, html_table(ab_df))
 
+# --- One-day harness ---
+
+write(io, html_heading("One-day harness", 2))
+write(
+    io,
+    """<p>A curated set of major classics reconstructed as-of race day (<code>prefetch_oneday_backtest_data</code>) and scored against actual scraped VG totals — the true scoreboard, with assist and breakaway points, not the finish-only proxy the per-race calibration section uses. Each predictor's 6-rider team is optimised on its own EVG under the budget; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production one-day stack, <code>champion_oneday_evg</code>), <code>direct</code> (the direct-EVG challenger), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years), <code>maxcost</code> (the star-buying baseline). This is the one-day twin of the stage-race harness above. Scope is limited to the classics below to bound the champion's resampling cost; widen <code>oneday_slugs</code> to cover more.</p>\n""",
+)
+
+# Curated major classics (the review §2.1 set + monuments) — bounded so the
+# champion's per-edition resampling stays tractable in a report render.
+oneday_slugs = [
+    "omloop-het-nieuwsblad", "kuurne-brussel-kuurne", "strade-bianche",
+    "milano-sanremo", "classic-brugge-de-panne", "e3-harelbeke",
+    "gent-wevelgem", "dwars-door-vlaanderen", "ronde-van-vlaanderen",
+    "paris-roubaix", "amstel-gold-race", "la-fleche-wallonne",
+    "liege-bastogne-liege", "il-lombardia",
+]
+
+oneday_harness_rows = DataFrame[]
+for slug in oneday_slugs, yr in backtest_years
+    try
+        edition_df = suppress_output() do
+            backtest_oneday_race(
+                slug,
+                yr;
+                predictors = [:simulator, :direct, :odds, :maxcost],
+                cache_config = bt_cache,
+            )
+        end
+        push!(oneday_harness_rows, edition_df)
+    catch e
+        @warn "One-day harness skipped $slug $yr: $e"
+    end
+end
+oneday_rows = isempty(oneday_harness_rows) ? DataFrame() : vcat(oneday_harness_rows...)
+
+if nrow(oneday_rows) == 0
+    write(
+        io,
+        html_callout(
+            "No one-day editions could be scored — check the vg_results archive.",
+        ),
+    )
+else
+    oneday_summary = combine(
+        groupby(oneday_rows, :predictor),
+        :team_points_captured => (x -> round(mean(x); digits = 3)) => :mean_capture,
+        :team_points_captured => (x -> round(median(x); digits = 3)) => :median_capture,
+        :rho_full => (x -> round(mean(skipmissing(x)); digits = 3)) => :mean_rho,
+        nrow => :n_editions,
+    )
+    sort!(oneday_summary, :mean_capture, rev = true)
+    write(io, html_heading("Summary across editions", 3))
+    write(io, html_table(oneday_summary))
+    write(io, html_heading("Per-edition detail", 3))
+    write(io, html_table(sort(oneday_rows, [:year, :race, :predictor])))
+end
+
 # ---------------------------------------------------------------------------
 # Write output
 # ---------------------------------------------------------------------------
