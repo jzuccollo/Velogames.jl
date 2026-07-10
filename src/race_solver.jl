@@ -808,27 +808,22 @@ function solve_oneday(
         return DataFrame(), DataFrame(), DataFrame[], Matrix{Float64}(undef, 0, 0)
     end
 
-    # --- 5. Estimate rider strengths ---
+    # --- 5. Estimate rider strengths + resampled optimisation ---
     scoring = get_scoring(config.category > 0 ? config.category : 2)
 
+    # Breakaway rates (I/O) — loaded here and passed into the fetch-free core.
+    # Keyed on data.rider_df.riderkey; estimate_strengths preserves row order,
+    # so the rate vector aligns with the resampled `predicted` frame.
+    b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, data.rider_df.riderkey)
+
     @info "Estimating rider strengths (Cat $(config.category))..."
-    predicted = estimate_strengths(
-        data;
+    predicted, top_teams, sim_vg_points = _oneday_prediction_core(
+        data,
+        scoring;
         race_year = config.year,
-        domestique_discount = domestique_discount,
-    )
-
-    # --- 6. Breakaway rates ---
-    b_rates, b_sectors = _load_breakaway_rates(breakaway_dir, predicted.riderkey)
-
-    # --- 7. Resampled optimisation ---
-    @info "Running resampled optimisation ($n_resamples resamples)..."
-    predicted, top_teams, sim_vg_points = resample_optimise!(
-        predicted,
-        scoring,
-        build_model_oneday;
         team_size = config.team_size,
         n_resamples = n_resamples,
+        domestique_discount = domestique_discount,
         max_per_team = max_per_team,
         risk_aversion = risk_aversion,
         n_alternatives = n_alternatives,
@@ -960,6 +955,60 @@ function _stage_prediction_core(
     end
 
     return predicted, top_teams, sim_vg_points, diagnostics
+end
+
+
+"""
+    _oneday_prediction_core(data, scoring; race_year, ...)
+        -> (predicted, top_teams, sim_vg_points)
+
+Pure one-day prediction pipeline shared by `solve_oneday` (production) and the
+one-day backtest harness (`champion_oneday_evg` in backtest.jl): scalar
+`estimate_strengths` → `resample_optimise!(build_model_oneday)`. No I/O or
+archival side effects — callers handle data fetching, breakaway-rate loading,
+and prediction archival. The one-day twin of `_stage_prediction_core`.
+"""
+function _oneday_prediction_core(
+    data::RaceData,
+    scoring::ScoringTable;
+    race_year::Int,
+    team_size::Integer = 6,
+    n_resamples::Int = 500,
+    domestique_discount::Float64 = 0.0,
+    max_per_team::Integer = 0,
+    risk_aversion::Float64 = 0.5,
+    n_alternatives::Integer = 20,
+    breakaway_rates::Vector{Float64} = Float64[],
+    breakaway_mean_sectors::Vector{Float64} = Float64[],
+    simulation_df::Union{Int,Nothing} = nothing,
+    config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
+    rng::AbstractRNG = Random.default_rng(),
+)
+    @info "Estimating rider strengths..."
+    predicted = estimate_strengths(
+        data;
+        race_year = race_year,
+        domestique_discount = domestique_discount,
+        config = config,
+    )
+
+    @info "Running resampled optimisation ($n_resamples resamples)..."
+    predicted, top_teams, sim_vg_points = resample_optimise!(
+        predicted,
+        scoring,
+        build_model_oneday;
+        team_size = team_size,
+        n_resamples = n_resamples,
+        rng = rng,
+        max_per_team = max_per_team,
+        risk_aversion = risk_aversion,
+        n_alternatives = n_alternatives,
+        breakaway_rates = breakaway_rates,
+        breakaway_mean_sectors = breakaway_mean_sectors,
+        simulation_df = simulation_df,
+    )
+
+    return predicted, top_teams, sim_vg_points
 end
 
 
