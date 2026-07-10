@@ -329,3 +329,128 @@ const DEFAULT_DIRECT_EVG_PARAMS = DirectEVGParams(
 # as the standing comparator). Runs after backtest.jl's registry exists because
 # Velogames.jl includes this file later.
 _STAGE_PREDICTORS[:direct] = direct_evg
+
+
+# ---------------------------------------------------------------------------
+# One-day direct-EVG challenger — the one-day twin of the stage challenger.
+# ---------------------------------------------------------------------------
+#
+# Reuses the ENTIRE stage blend core (`DirectEVGParams`, `_rank_curve_log`,
+# `_evg_from_inputs`, `_evg_loss`, `_fit_rank_curve`, `_fit_direct_evg_core`) —
+# those operate on a generic `(riderkeys, ability_rank, market_rank, hist)`
+# NamedTuple. The only one-day-specific piece is how that NamedTuple is built:
+# scalar (not multidim) ability strength, a single winner market, and prior
+# same-race/similar-race VG totals (`vg_history_df`, cols riderkey/score/year)
+# instead of grand-tour totals. `market_weight` stays the a-priori 2.0
+# (one-day `market_precision_scale = 4.0` vs ability 1.0 ⇒ weight ratio 2).
+
+"""
+    _direct_oneday_evg_inputs(data::OneDayBacktestData) -> NamedTuple
+
+One-day analogue of `_direct_evg_inputs`: ability rank from the scalar one-day
+`estimate_strengths` posterior, market rank from the single winner market, and
+prior-edition VG history from `vg_history_df` (same-race + similar-race totals
+assembled by `assemble_vg_race_history`).
+"""
+function _direct_oneday_evg_inputs(data::OneDayBacktestData)
+    est = estimate_strengths(
+        data.race_data;
+        race_type = :oneday,
+        race_year = data.year,
+    )
+    riderkeys = String.(est.riderkey)
+    n = length(riderkeys)
+
+    # Ability score: the scalar posterior strength (one-day is scalar).
+    ability = Float64.(est.strength)
+    ability_rank = Vector{Int}(undef, n)
+    ability_rank[sortperm(ability; rev = true)] = 1:n
+
+    # Market rank: implied win probability from the single winner market;
+    # rank among priced riders, 0 = unpriced (and marketless editions).
+    best_prob = Dict{String,Float64}()
+    odds_df = data.race_data.odds_df
+    if odds_df !== nothing && :odds in propertynames(odds_df)
+        probs = 1.0 ./ Float64.(odds_df.odds)
+        probs ./= sum(probs)
+        for (i, key) in enumerate(String.(odds_df.riderkey))
+            probs[i] > get(best_prob, key, 0.0) && (best_prob[key] = probs[i])
+        end
+    end
+    market_rank = zeros(Int, n)
+    priced = [i for i = 1:n if haskey(best_prob, riderkeys[i])]
+    order = sort(priced; by = i -> -best_prob[riderkeys[i]])
+    for (r, i) in enumerate(order)
+        market_rank[i] = r
+    end
+
+    # Prior-edition VG history: (score, years_ago) per rider, same-race +
+    # similar-race rows (both carried by vg_history_df with a :year column).
+    hist = [Tuple{Float64,Int}[] for _ = 1:n]
+    idx = Dict(k => i for (i, k) in enumerate(riderkeys))
+    vgh = data.race_data.vg_history_df
+    if vgh !== nothing &&
+       :riderkey in propertynames(vgh) &&
+       :score in propertynames(vgh) &&
+       :year in propertynames(vgh)
+        for row in eachrow(vgh)
+            i = get(idx, String(row.riderkey), 0)
+            i == 0 && continue
+            push!(hist[i], (max(0.0, Float64(row.score)), data.year - Int(row.year)))
+        end
+    end
+
+    return (; riderkeys, ability_rank, market_rank, hist)
+end
+
+"""
+    direct_oneday_evg(data::OneDayBacktestData;
+                      params::DirectEVGParams = DEFAULT_DIRECT_ONEDAY_EVG_PARAMS)
+        -> DataFrame(riderkey, expected_vg_points)
+
+The one-day direct-EVG challenger (plugs into the one-day harness alongside
+`champion_oneday_evg`). Reads only pre-race inputs — never `riders.actual_total`.
+"""
+function direct_oneday_evg(
+    data::OneDayBacktestData;
+    params::DirectEVGParams = DEFAULT_DIRECT_ONEDAY_EVG_PARAMS,
+)
+    inputs = _direct_oneday_evg_inputs(data)
+    return DataFrame(
+        riderkey = inputs.riderkeys,
+        expected_vg_points = _evg_from_inputs(inputs, params),
+    )
+end
+
+"""
+    fit_direct_oneday_evg(datas::Vector{OneDayBacktestData}) -> DirectEVGParams
+
+Fit the one-day challenger on the given editions (2023+2024 classics per the
+protocol) — reads `actual_total`. Same coarse-to-fine grid + closed-form rank
+curve as `fit_direct_evg`; `market_weight` stays fixed at 2.0.
+"""
+function fit_direct_oneday_evg(datas::Vector{OneDayBacktestData})
+    inputs_actuals =
+        [(_direct_oneday_evg_inputs(d), Float64.(d.riders.actual_total)) for d in datas]
+    return _fit_direct_evg_core(inputs_actuals)
+end
+
+# Fitted by `fit_direct_oneday_evg` on the 2023+2024 classics (65 editions,
+# 6,609 rider-editions; log-space MSE 0.5128 at the reference floor), validated
+# on the 2025 editions — see the WP-D commit message for the validation table.
+# The fit editions are marketless (no pre-2026 one-day odds), so `market_weight`
+# stays at its a-priori 2.0. Full-precision values so the constant is exactly the
+# fit output. Note the low `hist_weight` (0.5): unlike grand tours, a rider's
+# prior-edition one-day VG total carries little signal over current ability.
+const DEFAULT_DIRECT_ONEDAY_EVG_PARAMS = DirectEVGParams(
+    7.443094544895958,    # curve_a
+    0.9369341788149472,   # curve_k
+    2.0,                  # curve_s
+    27.0,                 # floor
+    1.0,                  # hist_decay
+    4.0,                  # hist_kappa
+    0.5,                  # hist_weight
+    2.0,                  # market_weight (fixed prior)
+)
+
+_ONEDAY_PREDICTORS[:direct] = direct_oneday_evg

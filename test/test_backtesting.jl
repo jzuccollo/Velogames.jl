@@ -218,4 +218,94 @@
         @test res_odds.predictor == ["odds"]
         @test 0.0 < res_odds.team_points_captured[1] <= 1.0
     end
+
+    @testset "one-day harness" begin
+        # Synthetic fixture: 12 riders, VARIED cost (so maxcost is non-degenerate
+        # and demonstrably suboptimal), actual VG totals descending 120..10 —
+        # no network, no archive.
+        riders = DataFrame(
+            riderkey = ["r$(lpad(i, 2, '0'))" for i = 1:12],
+            rider = ["Rider $i" for i = 1:12],
+            team = ["T$(mod1(i, 4))" for i = 1:12],
+            cost = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26],
+            actual_total = Float64.(130 .- 10 .* (1:12)),
+        )
+        # `actual_total` lives only on `riders`; race_data carries the pre-race
+        # frame (leakage hygiene). Predictors read race_data, scoring is Cat 1.
+        fixture(rd) =
+            OneDayBacktestData("test-classic", 2026, nothing, riders, rd, Velogames.get_scoring(1), 1)
+        base_rd = RaceData(rider_df = select(riders, Not(:actual_total)))
+        data = fixture(base_rd)
+
+        # Deterministic swap predictor: actual ranks 6 and 7 swapped (crosses the
+        # team-6 boundary). Hindsight optimum = riders 1-6 (570 pts, cost 54); the
+        # swap team = riders 1-5 + r07 (560 pts), since it now rates r07 over r06.
+        pred_pts = Float64.(130 .- 10 .* (1:12))
+        pred_pts[6], pred_pts[7] = pred_pts[7], pred_pts[6]
+        swap_pred =
+            d -> DataFrame(riderkey = riders.riderkey, expected_vg_points = pred_pts)
+
+        res = backtest_oneday_race(data; predictors = ["swap" => swap_pred])
+        @test nrow(res) == 1
+        @test res.team_actual[1] == 560.0
+        @test res.optimal_actual[1] == 570.0
+        @test res.team_points_captured[1] == round(560 / 570, digits = 3)
+        # One adjacent-rank swap over 12 riders: ρ = 1 - 12/(12·143)
+        @test res.rho_full[1] == round(1 - 12 / (12 * 143), digits = 3)
+        @test res.rho_top20[1] == res.rho_full[1]  # n < 20 → same subset
+        @test res.overlap6[1] == 5
+        @test res.overlap20[1] == 12
+
+        # Max-cost baseline: EVG = cost; the harness buys the priciest affordable
+        # team, which is suboptimal here (cheap riders score best).
+        mc = Velogames.maxcost_oneday_evg(data)
+        @test mc.expected_vg_points == Float64.(riders.cost)
+        res_mc = backtest_oneday_race(data; predictors = [:maxcost])
+        @test res_mc.predictor == ["maxcost"]
+        @test res_mc.team_points_captured[1] < 1.0
+
+        # Degenerate (constant) prediction: rank metrics must be missing, not the
+        # tie-artefact 0.5.
+        flat_pred =
+            d -> DataFrame(riderkey = riders.riderkey, expected_vg_points = zeros(12))
+        res_flat = backtest_oneday_race(data; predictors = ["flat" => flat_pred])
+        @test res_flat.rho_full[1] === missing
+        @test res_flat.rho_top20[1] === missing
+
+        # Odds built-in: absent odds → predictor skipped entirely.
+        @test Velogames.odds_oneday_evg(data) === nothing
+        @test nrow(backtest_oneday_race(data; predictors = [:odds])) == 0
+
+        # With odds: implied probability flows through the metrics.
+        odds_data = fixture(
+            RaceData(
+                rider_df = select(riders, Not(:actual_total)),
+                odds_df = DataFrame(riderkey = ["r05"], odds = [2.0]),
+            ),
+        )
+        oe = Velogames.odds_oneday_evg(odds_data)
+        @test oe.expected_vg_points[5] == 0.5
+        @test all(oe.expected_vg_points[Not(5)] .== 0.0)
+        res_odds = backtest_oneday_race(odds_data; predictors = [:odds])
+        @test res_odds.predictor == ["odds"]
+        @test 0.0 < res_odds.team_points_captured[1] <= 1.0
+
+        # No archived VG truth (all-NaN actuals) → clear error, not a silent 0.
+        no_truth = OneDayBacktestData(
+            "test-classic",
+            2026,
+            nothing,
+            DataFrame(
+                riderkey = riders.riderkey,
+                rider = riders.rider,
+                team = riders.team,
+                cost = riders.cost,
+                actual_total = fill(NaN, 12),
+            ),
+            base_rd,
+            Velogames.get_scoring(1),
+            1,
+        )
+        @test_throws ErrorException backtest_oneday_race(no_truth; predictors = [:maxcost])
+    end
 end

@@ -1740,3 +1740,311 @@ function crosscheck_option_ab(;
     end
     return DataFrame(rows)
 end
+
+
+# ===========================================================================
+# One-day backtest harness (pluggable champion/challenger) — the one-day twin
+# of the stage-race harness above. Same predictor contract:
+#   predictor(data::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)
+# Scores team-points-captured against TRUE scraped VG totals (vg_results archive,
+# incl. assist + breakaway), unlike the finish-only `_compute_team_metrics` path
+# used by `backtest_race`/`BacktestResult` (both retained, untouched).
+# ===========================================================================
+
+"""
+    OneDayBacktestData
+
+Everything needed to (a) reconstruct an as-of-race-day one-day prediction and
+(b) score it against archived actuals. Built by `prefetch_oneday_backtest_data`.
+The one-day twin of `StageRaceBacktestData`.
+
+Any predictor with signature
+`predictor(data::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)`
+plugs into the harness; `champion_oneday_evg` (the full production one-day stack)
+is one such predictor.
+
+Fields:
+- `pcs_slug`, `year`, `race_date` — edition identity.
+- `riders` — one row per starter: `riderkey`, `rider`, `team`, `cost`, and
+  `actual_total` (the rider's true scraped VG total from the `vg_results`
+  archive; riders absent from the results score 0; `NaN` throughout when no VG
+  results are archived yet). `actual_total` is held ONLY here, never on
+  `race_data.rider_df`, so predictors cannot read the outcome.
+- `race_data` — a `RaceData` (the production one-day container) carrying the
+  pre-race signal frames that predictors consume.
+- `scoring` — the `ScoringTable` for the race category (Cat 1/2/3).
+- `category` — VG scoring category.
+"""
+struct OneDayBacktestData
+    pcs_slug::String
+    year::Int
+    race_date::Union{Date,Nothing}
+    riders::DataFrame
+    race_data::RaceData
+    scoring::ScoringTable
+    category::Int
+end
+
+
+"""
+    _oneday_vg_totals_asof(pcs_slug, year; cache_config, archive_dir)
+        -> Union{Dict{String,Float64}, Nothing}
+
+Return a `riderkey => true VG total` map for a completed one-day race. Prefers
+the `vg_results` archive; falls back to a live scrape
+(`getvg_race_list` → `match_vg_race_number` → `getvg_race_results`) that
+auto-archives on success (the pattern used by `prospective_eval.jl`). Returns
+`nothing` when neither the archive nor the live fetch yields usable results.
+"""
+function _oneday_vg_totals_asof(
+    pcs_slug::String,
+    year::Int;
+    cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
+    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+)
+    vg = load_race_snapshot("vg_results", pcs_slug, year; archive_dir = archive_dir)
+    if vg === nothing
+        try
+            ri = _find_race_by_slug(pcs_slug)
+            ri === nothing && return nothing
+            racelist = getvg_race_list(year; cache_config = cache_config)
+            num = match_vg_race_number(ri.name, racelist)
+            num === nothing && return nothing
+            vg = getvg_race_results(year, num; cache_config = cache_config)
+            (vg === nothing || nrow(vg) == 0) && return nothing
+            save_race_snapshot(vg, "vg_results", pcs_slug, year; archive_dir = archive_dir)
+            @info "Auto-archived VG results for $pcs_slug $year"
+        catch e
+            @warn "Failed to fetch VG results for $pcs_slug $year: $e"
+            return nothing
+        end
+    end
+    (nrow(vg) == 0 || !hasproperty(vg, :riderkey)) && return nothing
+    return Dict(String(r.riderkey) => Float64(r.score) for r in eachrow(vg))
+end
+
+
+"""
+    prefetch_oneday_backtest_data(race::BacktestRace; kwargs...) -> OneDayBacktestData
+
+Reconstruct an as-of-race-day one-day edition for the harness: the production
+one-day `RaceData` (via `prefetch_race_data`) plus true scraped VG totals for
+scoring. `actual_total` is `NaN` throughout when no VG results can be obtained
+(an in-progress race), which `backtest_oneday_race` rejects for `:vg_total`.
+"""
+function prefetch_oneday_backtest_data(
+    race::BacktestRace;
+    vg_racelists::Union{Dict{Int,DataFrame},Nothing} = nothing,
+    cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
+    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    force_refresh::Bool = false,
+)
+    rd = prefetch_race_data(
+        race;
+        vg_racelists = vg_racelists,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
+    riders = select(rd.rider_df, :riderkey, :rider, :team, :cost)
+    totals =
+        _oneday_vg_totals_asof(race.pcs_slug, race.year; cache_config, archive_dir)
+    riders[!, :actual_total] =
+        totals === nothing ? fill(NaN, nrow(riders)) :
+        [get(totals, String(k), 0.0) for k in riders.riderkey]
+    scoring = get_scoring(race.category > 0 ? race.category : 2)
+    return OneDayBacktestData(
+        race.pcs_slug,
+        race.year,
+        race.date,
+        riders,
+        rd,
+        scoring,
+        race.category,
+    )
+end
+
+
+# --- Built-in one-day predictors ---------------------------------------------
+# Contract: f(data::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)
+
+"""
+    champion_oneday_evg(data; n_resamples=500, seed=..., kwargs...) -> DataFrame
+
+The champion predictor: the FULL production one-day stack re-run as-of race day
+via `_oneday_prediction_core` (`estimate_strengths` → `resample_optimise!`).
+Seeded for reproducibility. Breakaway rates are unavailable in reconstruction,
+so the breakaway channel is inert (a small, documented gap). The one-day twin of
+`champion_evg`.
+"""
+function champion_oneday_evg(
+    data::OneDayBacktestData;
+    n_resamples::Int = 500,
+    seed::Int = 20260704,
+    kwargs...,
+)
+    predicted, _, _ = _oneday_prediction_core(
+        data.race_data,
+        data.scoring;
+        race_year = data.year,
+        n_resamples = n_resamples,
+        rng = Random.MersenneTwister(seed),
+        kwargs...,
+    )
+    return select(predicted, :riderkey, :expected_vg_points)
+end
+
+"""Odds baseline: implied win probability `1/max(odds, 1.01)`, 0 for unpriced
+riders. Returns `nothing` on a marketless edition. Mirrors `odds_evg`."""
+function odds_oneday_evg(data::OneDayBacktestData)
+    odds = data.race_data.odds_df
+    (odds === nothing || !(:odds in propertynames(odds))) && return nothing
+    p = Dict(
+        String(r.riderkey) => 1.0 / max(Float64(r.odds), 1.01) for r in eachrow(odds)
+    )
+    keys_ = String.(data.riders.riderkey)
+    return DataFrame(riderkey = keys_, expected_vg_points = [get(p, k, 0.0) for k in keys_])
+end
+
+"""Max-cost ("star-buying") baseline: EVG = rider cost, so the harness optimiser
+buys the most expensive team affordable under budget."""
+function maxcost_oneday_evg(data::OneDayBacktestData)
+    return DataFrame(
+        riderkey = String.(data.riders.riderkey),
+        expected_vg_points = Float64.(data.riders.cost),
+    )
+end
+
+const _ONEDAY_PREDICTORS = Dict{Symbol,Function}(
+    :simulator => champion_oneday_evg,
+    :odds => odds_oneday_evg,
+    :maxcost => maxcost_oneday_evg,
+)
+
+_resolve_oneday_predictor(p::Symbol) = (String(p), _ONEDAY_PREDICTORS[p])
+_resolve_oneday_predictor(p::Pair) = (String(first(p)), last(p))
+
+function _oneday_team_keys(df::DataFrame, points_col::Symbol)
+    sol = build_model_oneday(df, 6, points_col, :cost; totalcost = 100)
+    sol === nothing && error("One-day team optimisation infeasible on $points_col")
+    return [String(k) for k in df.riderkey if sol[k] > 0.5]
+end
+
+
+"""
+    backtest_oneday_race(data::OneDayBacktestData; predictors) -> DataFrame
+    backtest_oneday_race(pcs_slug, year; predictors, kwargs...) -> DataFrame
+
+Score one-day predictors against one archived classic edition. A predictor is a
+built-in `Symbol` (`:simulator` → `champion_oneday_evg`, `:odds`, `:maxcost`,
+`:direct` when `direct_evg.jl` registers it) or a `name => f` pair where
+`f(data::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)`.
+Predictors returning `nothing` (e.g. `:odds` on a marketless edition) are
+skipped. Riders missing from a predictor's frame score 0.
+
+One row per non-skipped predictor: `race`, `year`, `predictor`, `n`,
+`team_points_captured` (PRIMARY — a 6-rider budget team optimised on the
+predictor's EVG, scored on TRUE scraped VG totals, divided by the hindsight
+optimum), `team_actual`, `optimal_actual`, `rho_full`, `rho_top20`, `overlap6`,
+`overlap20`. The one-day twin of `backtest_stage_race`.
+"""
+function backtest_oneday_race(
+    data::OneDayBacktestData;
+    predictors = [:simulator, :direct, :odds, :maxcost],
+)
+    riders = data.riders
+    actual = Float64.(riders.actual_total)
+    any(isnan, actual) && error(
+        "No vg_results archived for $(data.pcs_slug) $(data.year) — cannot score team-points-captured",
+    )
+    work = copy(riders)
+    actual_of = Dict(String(k) => a for (k, a) in zip(riders.riderkey, actual))
+    opt_score = sum(actual_of[k] for k in _oneday_team_keys(work, :actual_total))
+    actual_rank = invperm(sortperm(actual, rev = true))
+    top20 = partialsortperm(actual, 1:min(20, length(actual)), rev = true)
+
+    rows = NamedTuple[]
+    for p in predictors
+        name, fn = _resolve_oneday_predictor(p)
+        pred = fn(data)
+        pred === nothing && continue
+        evg_of = Dict(
+            String(r.riderkey) => Float64(r.expected_vg_points) for r in eachrow(pred)
+        )
+        evg = [get(evg_of, String(k), 0.0) for k in riders.riderkey]
+        work[!, :_pred] = evg
+        team_score = sum(actual_of[k] for k in _oneday_team_keys(work, :_pred))
+        push!(
+            rows,
+            (
+                race = data.pcs_slug,
+                year = data.year,
+                predictor = name,
+                n = nrow(riders),
+                team_points_captured = round(team_score / opt_score, digits = 3),
+                team_actual = team_score,
+                optimal_actual = opt_score,
+                rho_full = _safe_spearman(evg, actual),
+                rho_top20 = _safe_spearman(evg[top20], actual[top20]),
+                overlap6 = top_n_overlap(evg, actual_rank, 6),
+                overlap20 = top_n_overlap(evg, actual_rank, 20),
+            ),
+        )
+    end
+    return DataFrame(rows)
+end
+
+function backtest_oneday_race(
+    pcs_slug::String,
+    year::Int;
+    predictors = [:simulator, :direct, :odds, :maxcost],
+    category::Int = 0,
+    history_years::Int = 5,
+    cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
+    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+)
+    ri = _find_race_by_slug(pcs_slug)
+    cat = category > 0 ? category : (ri !== nothing ? ri.category : 2)
+    date = if ri !== nothing
+        t = Date(ri.date)
+        Date(year, Dates.month(t), Dates.day(t))
+    else
+        nothing
+    end
+    race = BacktestRace(
+        ri !== nothing ? ri.name : pcs_slug,
+        year,
+        pcs_slug,
+        cat,
+        history_years,
+        date,
+    )
+    data = prefetch_oneday_backtest_data(race; cache_config, archive_dir)
+    return backtest_oneday_race(data; predictors)
+end
+
+
+"""
+    backtest_oneday_season(races; predictors, race_data) -> DataFrame
+
+Run `backtest_oneday_race` for each edition, catching and skipping editions with
+no archived VG truth (or any error), and `vcat` the per-predictor rows. The
+one-day analogue of `backtest_season` (which returns `BacktestResult`s); this
+returns the flat comparison table across editions.
+"""
+function backtest_oneday_season(
+    races::Vector{BacktestRace};
+    predictors = [:simulator, :direct, :odds, :maxcost],
+    cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
+    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+)
+    frames = DataFrame[]
+    for race in races
+        try
+            data = prefetch_oneday_backtest_data(race; cache_config, archive_dir)
+            push!(frames, backtest_oneday_race(data; predictors))
+        catch e
+            @warn "Skipping $(race.pcs_slug) $(race.year): $e"
+        end
+    end
+    return isempty(frames) ? DataFrame() : reduce(vcat, frames)
+end

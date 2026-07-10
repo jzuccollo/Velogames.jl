@@ -144,3 +144,55 @@ end
     @test evg["rider9"] > evg["rider10"]   # big prior GT totals lift the cheap rider
     @test evg["rider5"] > evg["rider3"]    # market favourite beats unpriced comparator
 end
+
+@testset "direct_oneday_evg returns the full riderkey set with finite values" begin
+    # One-day twin of the integration test above: same blend core, one-day
+    # inputs (scalar ability, single winner market, prior-edition VG history).
+    n = 10
+    riders = DataFrame(
+        rider = ["Rider $i" for i = 1:n],
+        riderkey = ["rider$i" for i = 1:n],
+        team = ["Team $(1 + i % 3)" for i = 1:n],
+        cost = [24, 18, 14, 12, 10, 8, 6, 6, 4, 4],
+        points = [1500.0, 1200.0, 900.0, 800.0, 600.0, 400.0, 200.0, 150.0, 100.0, 50.0],
+        oneday = [1800.0, 1200.0, 700.0, 800.0, 500.0, 600.0, 300.0, 250.0, 200.0, 150.0],
+        gc = [2000.0, 1500.0, 900.0, 700.0, 600.0, 400.0, 300.0, 250.0, 200.0, 150.0],
+        tt = [1500.0, 900.0, 400.0, 350.0, 300.0, 250.0, 200.0, 180.0, 150.0, 100.0],
+        sprint = [300.0, 200.0, 150.0, 180.0, 150.0, 200.0, 160.0, 140.0, 120.0, 100.0],
+        climber = [1200.0, 1000.0, 800.0, 500.0, 400.0, 300.0, 250.0, 200.0, 160.0, 120.0],
+        has_pcs_data = fill(true, n),
+    )
+    # rider9 has two big prior-edition VG totals; rider10 is its low-ability
+    # twin with none.
+    vg_hist = DataFrame(
+        riderkey = ["rider9", "rider9"],
+        score = [450.0, 450.0],
+        year = [2024, 2025],
+    )
+    scoring_riders = select(riders, :riderkey, :rider, :team, :cost)
+    scoring_riders[!, :actual_total] = fill(NaN, n)  # unused by direct_oneday_evg
+    mkdata(odds) = OneDayBacktestData(
+        "amstel-gold-race",
+        2026,
+        nothing,
+        scoring_riders,
+        RaceData(rider_df = riders, odds_df = odds, vg_history_df = vg_hist),
+        Velogames.get_scoring(1),
+        1,
+    )
+
+    result = direct_oneday_evg(mkdata(nothing); params = TEST_EVG_PARAMS)
+    @test names(result) == ["riderkey", "expected_vg_points"]
+    @test sort(result.riderkey) == sort(riders.riderkey)
+    @test all(isfinite, result.expected_vg_points)
+    @test all(>=(0.0), result.expected_vg_points)
+    evg = Dict(zip(result.riderkey, result.expected_vg_points))
+    @test evg["rider9"] > evg["rider10"]   # prior VG totals lift the cheap rider
+
+    # Market lift: pricing a low-ability rider as sole favourite (market rank 1,
+    # better than its ability rank) raises its EVG.
+    odds_df = DataFrame(rider = ["Rider 8"], odds = [1.5], riderkey = ["rider8"])
+    r_odds = direct_oneday_evg(mkdata(odds_df); params = TEST_EVG_PARAMS)
+    evg_odds = Dict(zip(r_odds.riderkey, r_odds.expected_vg_points))
+    @test evg_odds["rider8"] > evg["rider8"]
+end

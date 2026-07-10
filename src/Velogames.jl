@@ -165,7 +165,15 @@ export BacktestRace,
     DirectEVGParams,
     DEFAULT_DIRECT_EVG_PARAMS,
     direct_evg,
-    fit_direct_evg
+    fit_direct_evg,
+    OneDayBacktestData,
+    prefetch_oneday_backtest_data,
+    champion_oneday_evg,
+    backtest_oneday_race,
+    backtest_oneday_season,
+    DEFAULT_DIRECT_ONEDAY_EVG_PARAMS,
+    direct_oneday_evg,
+    fit_direct_oneday_evg
 
 # Utilities
 export createkey,
