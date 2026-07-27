@@ -2214,12 +2214,12 @@ end
 write(io, html_heading("Stage-race harness", 2))
 write(
     io,
-    """<p>Grand-tour editions reconstructed as-of race day from the archive (<code>prefetch_stage_race_data</code>) and scored against actual VG totals. Each predictor's 9-rider team is optimised on its own EVG under the production budget/class constraints; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production stack, <code>champion_evg</code>), <code>persistence</code> (most recent prior-edition VG total), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years). These are the standing comparators for the WP2.3 champion–challenger gate.</p>\n""",
+    """<p>Grand-tour editions reconstructed as-of race day from the archive (<code>prefetch_stage_race_data</code>) and scored against actual VG totals. Each predictor's 9-rider team is optimised on its own EVG under the production budget/class constraints; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production stack, <code>champion_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code>, i.e. the team <code>solve_stage</code> actually enters at its default <code>risk_aversion=0.5</code> — the other arms all build an EVG-max team, so this is the only row measuring production's real construction rule), <code>persistence</code> (most recent prior-edition VG total), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years). These are the standing comparators for the WP2.3 champion–challenger gate.</p>\n""",
 )
 
 gt_editions = vcat(
     [("giro-d-italia", y) for y = 2023:2026],
-    [("tour-de-france", y) for y = 2023:2025],
+    [("tour-de-france", y) for y = 2023:2026],
     [("vuelta-a-espana", y) for y = 2023:2025],
 )
 

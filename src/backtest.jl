@@ -1421,7 +1421,32 @@ function champion_evg(
         rng = Random.MersenneTwister(seed),
         kwargs...,
     )
-    return select(predicted, :riderkey, :expected_vg_points)
+    return select(predicted, :riderkey, :expected_vg_points, :downside_semi_dev)
+end
+
+"""
+    champion_evg_risk(data; risk_aversion=0.5, kwargs...) -> DataFrame
+
+The champion scored the way production actually races it. `champion_evg`
+returns raw EVG, and the harness then builds an EVG-max team — but
+`resample_optimise!` optimises `expected_vg_points / (1 + risk_aversion *
+cv_down)`, and every `solve_stage` path defaults `risk_aversion` to 0.5. So
+the two arms enter different teams, and until now only the EVG-max one was
+ever measured. Returns the risk-adjusted values in `expected_vg_points` so
+the harness's team optimisation reproduces production's choice.
+"""
+function champion_evg_risk(
+    data::StageRaceBacktestData;
+    risk_aversion::Float64 = 0.5,
+    kwargs...,
+)
+    pred = champion_evg(data; kwargs...)
+    evg = Float64.(pred.expected_vg_points)
+    cv_down = [e > 0 ? d / e : 0.0 for (e, d) in zip(evg, pred.downside_semi_dev)]
+    return DataFrame(
+        riderkey = pred.riderkey,
+        expected_vg_points = evg ./ (1.0 .+ risk_aversion .* cv_down),
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -1466,8 +1491,12 @@ function odds_evg(data::StageRaceBacktestData)
     )
 end
 
-const _STAGE_PREDICTORS =
-    Dict{Symbol,Function}(:simulator => champion_evg, :persistence => persistence_evg, :odds => odds_evg)
+const _STAGE_PREDICTORS = Dict{Symbol,Function}(
+    :simulator => champion_evg,
+    :simulator_risk => champion_evg_risk,
+    :persistence => persistence_evg,
+    :odds => odds_evg,
+)
 
 _resolve_predictor(p::Symbol) = (String(p), _STAGE_PREDICTORS[p])
 _resolve_predictor(p::Pair) = (String(first(p)), last(p))
@@ -1522,7 +1551,7 @@ The string/year method prefetches via `prefetch_stage_race_data` first.
 """
 function backtest_stage_race(
     data::StageRaceBacktestData;
-    predictors = [:simulator, :direct, :persistence, :odds],
+    predictors = [:simulator, :simulator_risk, :direct, :persistence, :odds],
     target::Symbol = :vg_total,
 )
     riders = data.riders
@@ -1601,7 +1630,7 @@ end
 function backtest_stage_race(
     pcs_slug::String,
     year::Int;
-    predictors = [:simulator, :direct, :persistence, :odds],
+    predictors = [:simulator, :simulator_risk, :direct, :persistence, :odds],
     target::Symbol = :vg_total,
     history_years::Int = 3,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
