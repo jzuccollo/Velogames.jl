@@ -1513,9 +1513,12 @@ _safe_spearman(x, y) =
 return the chosen riderkeys. Class constraints apply automatically when the
 frame carries VG class data (`build_model_stage`), else cost-only — the same
 rule for every predictor and for the hindsight optimum, so team-points-captured
-compares like with like."""
-function _stage_team_keys(df::DataFrame, points_col::Symbol)
-    sol = build_model_stage(df, 9, points_col, :cost)
+compares like with like. `max_per_team` mirrors production's diversification cap
+(`[optimisation] max_per_team`, 2); it is applied to the optimum as well as to
+each predictor's team, keeping the metric a measure of prediction quality within
+the constraint set production actually races under."""
+function _stage_team_keys(df::DataFrame, points_col::Symbol; max_per_team::Integer)
+    sol = build_model_stage(df, 9, points_col, :cost; max_per_team = max_per_team)
     sol === nothing && error("Stage team optimisation infeasible on $points_col")
     return [String(k) for k in df.riderkey if sol[k] > 0.5]
 end
@@ -1525,9 +1528,10 @@ end
     backtest_stage_race(pcs_slug, year; predictors, target, kwargs...) -> DataFrame
 
 Score predictors against one archived grand-tour edition. A predictor is a
-built-in `Symbol` (`:simulator` → `champion_evg`, `:direct` → `direct_evg`
-(the WP2.2 challenger, registered when `direct_evg.jl` loads), `:persistence`
-→ `persistence_evg`, `:odds` → `odds_evg`) or a `name => f` pair where
+built-in `Symbol` (`:simulator` → `champion_evg`, `:simulator_risk` →
+`champion_evg_risk` (the team `solve_stage` actually enters), `:direct` →
+`direct_evg` (the WP2.2 challenger, registered when `direct_evg.jl` loads),
+`:persistence` → `persistence_evg`, `:odds` → `odds_evg`) or a `name => f` pair where
 `f(data::StageRaceBacktestData) -> DataFrame(riderkey, expected_vg_points)`.
 Predictors returning `nothing` (e.g. `:odds` on a marketless edition) are
 skipped. Riders missing from a predictor's frame score 0.
@@ -1553,6 +1557,7 @@ function backtest_stage_race(
     data::StageRaceBacktestData;
     predictors = [:simulator, :simulator_risk, :direct, :persistence, :odds],
     target::Symbol = :vg_total,
+    max_per_team::Integer = 2,
 )
     riders = data.riders
     rows = NamedTuple[]
@@ -1564,7 +1569,8 @@ function backtest_stage_race(
         )
         work = copy(riders)
         actual_of = Dict(String(k) => a for (k, a) in zip(riders.riderkey, actual))
-        opt_score = sum(actual_of[k] for k in _stage_team_keys(work, :actual_total))
+        opt_score =
+            sum(actual_of[k] for k in _stage_team_keys(work, :actual_total; max_per_team))
         actual_rank = invperm(sortperm(actual, rev = true))
         top20 = partialsortperm(actual, 1:min(20, length(actual)), rev = true)
     else
@@ -1591,7 +1597,8 @@ function backtest_stage_race(
 
         if target == :vg_total
             work[!, :_pred] = evg
-            team_score = sum(actual_of[k] for k in _stage_team_keys(work, :_pred))
+            team_score =
+                sum(actual_of[k] for k in _stage_team_keys(work, :_pred; max_per_team))
             push!(
                 rows,
                 (
@@ -1633,11 +1640,12 @@ function backtest_stage_race(
     predictors = [:simulator, :simulator_risk, :direct, :persistence, :odds],
     target::Symbol = :vg_total,
     history_years::Int = 3,
+    max_per_team::Integer = 2,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = DEFAULT_ARCHIVE_DIR,
 )
     data = prefetch_stage_race_data(pcs_slug, year; history_years, cache_config, archive_dir)
-    return backtest_stage_race(data; predictors, target)
+    return backtest_stage_race(data; predictors, target, max_per_team)
 end
 
 """Copy a `RaceData` with only `gt_vg_history_df` replaced (the Option A/B
@@ -1919,7 +1927,29 @@ function champion_oneday_evg(
         rng = Random.MersenneTwister(seed),
         kwargs...,
     )
-    return select(predicted, :riderkey, :expected_vg_points)
+    return select(predicted, :riderkey, :expected_vg_points, :downside_semi_dev)
+end
+
+"""
+    champion_oneday_evg_risk(data; risk_aversion=0.5, kwargs...) -> DataFrame
+
+The one-day champion scored the way `solve_oneday` actually races it — the twin
+of `champion_evg_risk`. Returns the risk-adjusted values in
+`expected_vg_points` so the harness's team optimisation reproduces production's
+choice.
+"""
+function champion_oneday_evg_risk(
+    data::OneDayBacktestData;
+    risk_aversion::Float64 = 0.5,
+    kwargs...,
+)
+    pred = champion_oneday_evg(data; kwargs...)
+    evg = Float64.(pred.expected_vg_points)
+    cv_down = [e > 0 ? d / e : 0.0 for (e, d) in zip(evg, pred.downside_semi_dev)]
+    return DataFrame(
+        riderkey = pred.riderkey,
+        expected_vg_points = evg ./ (1.0 .+ risk_aversion .* cv_down),
+    )
 end
 
 """Odds baseline: implied win probability `1/max(odds, 1.01)`, 0 for unpriced
@@ -1945,6 +1975,7 @@ end
 
 const _ONEDAY_PREDICTORS = Dict{Symbol,Function}(
     :simulator => champion_oneday_evg,
+    :simulator_risk => champion_oneday_evg_risk,
     :odds => odds_oneday_evg,
     :maxcost => maxcost_oneday_evg,
 )
@@ -1952,8 +1983,15 @@ const _ONEDAY_PREDICTORS = Dict{Symbol,Function}(
 _resolve_oneday_predictor(p::Symbol) = (String(p), _ONEDAY_PREDICTORS[p])
 _resolve_oneday_predictor(p::Pair) = (String(first(p)), last(p))
 
-function _oneday_team_keys(df::DataFrame, points_col::Symbol)
-    sol = build_model_oneday(df, 6, points_col, :cost; totalcost = 100)
+function _oneday_team_keys(df::DataFrame, points_col::Symbol; max_per_team::Integer)
+    sol = build_model_oneday(
+        df,
+        6,
+        points_col,
+        :cost;
+        totalcost = 100,
+        max_per_team = max_per_team,
+    )
     sol === nothing && error("One-day team optimisation infeasible on $points_col")
     return [String(k) for k in df.riderkey if sol[k] > 0.5]
 end
@@ -1964,8 +2002,9 @@ end
     backtest_oneday_race(pcs_slug, year; predictors, kwargs...) -> DataFrame
 
 Score one-day predictors against one archived classic edition. A predictor is a
-built-in `Symbol` (`:simulator` → `champion_oneday_evg`, `:odds`, `:maxcost`,
-`:direct` when `direct_evg.jl` registers it) or a `name => f` pair where
+built-in `Symbol` (`:simulator` → `champion_oneday_evg`, `:simulator_risk` →
+`champion_oneday_evg_risk` (the team `solve_oneday` actually enters), `:odds`,
+`:maxcost`, `:direct` when `direct_evg.jl` registers it) or a `name => f` pair where
 `f(data::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)`.
 Predictors returning `nothing` (e.g. `:odds` on a marketless edition) are
 skipped. Riders missing from a predictor's frame score 0.
@@ -1978,7 +2017,8 @@ optimum), `team_actual`, `optimal_actual`, `rho_full`, `rho_top20`, `overlap6`,
 """
 function backtest_oneday_race(
     data::OneDayBacktestData;
-    predictors = [:simulator, :direct, :odds, :maxcost],
+    predictors = [:simulator, :simulator_risk, :direct, :odds, :maxcost],
+    max_per_team::Integer = 2,
 )
     riders = data.riders
     actual = Float64.(riders.actual_total)
@@ -1987,7 +2027,8 @@ function backtest_oneday_race(
     )
     work = copy(riders)
     actual_of = Dict(String(k) => a for (k, a) in zip(riders.riderkey, actual))
-    opt_score = sum(actual_of[k] for k in _oneday_team_keys(work, :actual_total))
+    opt_score =
+        sum(actual_of[k] for k in _oneday_team_keys(work, :actual_total; max_per_team))
     actual_rank = invperm(sortperm(actual, rev = true))
     top20 = partialsortperm(actual, 1:min(20, length(actual)), rev = true)
 
@@ -2001,7 +2042,7 @@ function backtest_oneday_race(
         )
         evg = [get(evg_of, String(k), 0.0) for k in riders.riderkey]
         work[!, :_pred] = evg
-        team_score = sum(actual_of[k] for k in _oneday_team_keys(work, :_pred))
+        team_score = sum(actual_of[k] for k in _oneday_team_keys(work, :_pred; max_per_team))
         push!(
             rows,
             (
@@ -2025,9 +2066,10 @@ end
 function backtest_oneday_race(
     pcs_slug::String,
     year::Int;
-    predictors = [:simulator, :direct, :odds, :maxcost],
+    predictors = [:simulator, :simulator_risk, :direct, :odds, :maxcost],
     category::Int = 0,
     history_years::Int = 5,
+    max_per_team::Integer = 2,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = DEFAULT_ARCHIVE_DIR,
 )
@@ -2048,7 +2090,7 @@ function backtest_oneday_race(
         date,
     )
     data = prefetch_oneday_backtest_data(race; cache_config, archive_dir)
-    return backtest_oneday_race(data; predictors)
+    return backtest_oneday_race(data; predictors, max_per_team)
 end
 
 
@@ -2062,7 +2104,8 @@ returns the flat comparison table across editions.
 """
 function backtest_oneday_season(
     races::Vector{BacktestRace};
-    predictors = [:simulator, :direct, :odds, :maxcost],
+    predictors = [:simulator, :simulator_risk, :direct, :odds, :maxcost],
+    max_per_team::Integer = 2,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = DEFAULT_ARCHIVE_DIR,
 )
@@ -2070,7 +2113,7 @@ function backtest_oneday_season(
     for race in races
         try
             data = prefetch_oneday_backtest_data(race; cache_config, archive_dir)
-            push!(frames, backtest_oneday_race(data; predictors))
+            push!(frames, backtest_oneday_race(data; predictors, max_per_team))
         catch e
             @warn "Skipping $(race.pcs_slug) $(race.year): $e"
         end

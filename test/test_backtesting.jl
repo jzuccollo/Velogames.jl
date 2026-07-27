@@ -119,10 +119,13 @@
     @testset "stage-race harness" begin
         # Synthetic fixture: 12 riders, all cost 10, actual totals descending
         # 120..10 — no network, no archive.
+        # 6 teams of 2, so the default max_per_team=2 is never binding and the
+        # exact team compositions below are the unconstrained optima. A 4-team
+        # fixture would make a 9-rider team infeasible under the cap.
         riders = DataFrame(
             riderkey = ["r$(lpad(i, 2, '0'))" for i = 1:12],
             rider = ["Rider $i" for i = 1:12],
-            team = ["T$(mod1(i, 4))" for i = 1:12],
+            team = ["T$(mod1(i, 6))" for i = 1:12],
             cost = fill(10, 12),
             actual_total = Float64.(130 .- 10 .* (1:12)),
         )
@@ -289,6 +292,29 @@
         res_odds = backtest_oneday_race(odds_data; predictors = [:odds])
         @test res_odds.predictor == ["odds"]
         @test 0.0 < res_odds.team_points_captured[1] <= 1.0
+
+        # max_per_team binds on BOTH the predictor team and the hindsight
+        # optimum — the harness must score the constraint set production races
+        # under, not a larger one. Stack the six best riders onto one team: the
+        # uncapped optimum is those six (570), the capped optimum takes only two
+        # of them plus the next four (390).
+        stacked = copy(riders)
+        stacked.team = ["T1", "T1", "T1", "T1", "T1", "T1", "T2", "T3", "T4", "T5", "T6", "T7"]
+        stacked_data = OneDayBacktestData(
+            "test-classic", 2026, nothing, stacked,
+            RaceData(rider_df = select(stacked, Not(:actual_total))),
+            Velogames.get_scoring(1), 1,
+        )
+        uncapped = backtest_oneday_race(
+            stacked_data; predictors = [:maxcost], max_per_team = 0,
+        )
+        capped = backtest_oneday_race(
+            stacked_data; predictors = [:maxcost], max_per_team = 2,
+        )
+        # Uncapped: r01-r06 = 570. Capped: r01+r02 (230, the T1 limit) plus the
+        # best four singletons r07-r10 (180) = 410, cost 86 <= 100.
+        @test uncapped.optimal_actual[1] == 570.0
+        @test capped.optimal_actual[1] == 410.0
 
         # No archived VG truth (all-NaN actuals) → clear error, not a silent 0.
         no_truth = OneDayBacktestData(

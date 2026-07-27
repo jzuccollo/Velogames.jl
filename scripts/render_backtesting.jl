@@ -2214,7 +2214,7 @@ end
 write(io, html_heading("Stage-race harness", 2))
 write(
     io,
-    """<p>Grand-tour editions reconstructed as-of race day from the archive (<code>prefetch_stage_race_data</code>) and scored against actual VG totals. Each predictor's 9-rider team is optimised on its own EVG under the production budget/class constraints; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production stack, <code>champion_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code>, i.e. the team <code>solve_stage</code> actually enters at its default <code>risk_aversion=0.5</code> — the other arms all build an EVG-max team, so this is the only row measuring production's real construction rule), <code>persistence</code> (most recent prior-edition VG total), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years). These are the standing comparators for the WP2.3 champion–challenger gate.</p>\n""",
+    """<p>Grand-tour editions reconstructed as-of race day from the archive (<code>prefetch_stage_race_data</code>) and scored against actual VG totals. Each predictor's 9-rider team is optimised on its own EVG under the production budget/class constraints and the same <code>max_per_team</code> cap production races under (2); <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's, computed under the identical constraint set. <em>Capture levels here are not comparable with values recorded in <code>roadmap.md</code> before July 2026, which were measured with the cap off.</em> Predictors: <code>simulator</code> (the full production stack, <code>champion_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code>, i.e. the team <code>solve_stage</code> actually enters at its default <code>risk_aversion=0.5</code> — the other arms all build an EVG-max team, so this is the only row measuring production's real construction rule), <code>persistence</code> (most recent prior-edition VG total), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years). These are the standing comparators for the WP2.3 champion–challenger gate.</p>\n""",
 )
 
 gt_editions = vcat(
@@ -2267,7 +2267,7 @@ ab_df !== nothing && write(io, html_table(ab_df))
 write(io, html_heading("One-day harness", 2))
 write(
     io,
-    """<p>A curated set of major classics reconstructed as-of race day (<code>prefetch_oneday_backtest_data</code>) and scored against actual scraped VG totals — the true scoreboard, with assist and breakaway points, not the finish-only proxy the per-race calibration section uses. Each predictor's 6-rider team is optimised on its own EVG under the budget; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production one-day stack, <code>champion_oneday_evg</code>), <code>direct</code> (the direct-EVG challenger), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years), <code>maxcost</code> (the star-buying baseline). This is the one-day twin of the stage-race harness above. Scope is limited to the classics below to bound the champion's resampling cost; widen <code>oneday_slugs</code> to cover more.</p>\n""",
+    """<p>A curated set of major classics reconstructed as-of race day (<code>prefetch_oneday_backtest_data</code>) and scored against actual scraped VG totals — the true scoreboard, with assist and breakaway points, not the finish-only proxy the per-race calibration section uses. Each predictor's 6-rider team is optimised on its own EVG under the budget and the same <code>max_per_team</code> cap production races under; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production one-day stack, <code>champion_oneday_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code> — the team <code>solve_oneday</code> actually enters at its default <code>risk_aversion=0.5</code>), <code>direct</code> (the direct-EVG challenger), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years), <code>maxcost</code> (the star-buying baseline). This is the one-day twin of the stage-race harness above. Scope is limited to the classics below to bound the champion's resampling cost; widen <code>oneday_slugs</code> to cover more.</p>\n""",
 )
 
 # Curated major classics (the review §2.1 set + monuments) — bounded so the
@@ -2280,14 +2280,20 @@ oneday_slugs = [
     "liege-bastogne-liege", "il-lombardia",
 ]
 
+# NOT `backtest_years`: that is the historical-backtest window (2023–2025), and
+# using it here silently excluded the entire 2026 season — the only year with
+# archived odds, so the `:odds` arm never produced a single row. Editions with no
+# archived VG truth (Lombardia 2026, an October race) are skipped by the catch.
+oneday_harness_years = [2023, 2024, 2025, 2026]
+
 oneday_harness_rows = DataFrame[]
-for slug in oneday_slugs, yr in backtest_years
+for slug in oneday_slugs, yr in oneday_harness_years
     try
         edition_df = suppress_output() do
             backtest_oneday_race(
                 slug,
                 yr;
-                predictors = [:simulator, :direct, :odds, :maxcost],
+                predictors = [:simulator, :simulator_risk, :direct, :odds, :maxcost],
                 cache_config = bt_cache,
             )
         end
