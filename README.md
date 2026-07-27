@@ -6,9 +6,9 @@ Hacky, personal Julia package to pick a Velogames team. Always in progress, alwa
 
 Estimate expected Velogames points for each rider via Monte Carlo simulation, then solve a linear programme to maximise expected points constrained by budget and rider limits.
 
-The prediction pipeline combines multiple data sources through Bayesian strength estimation: an uninformative prior is updated sequentially with PCS specialty ratings, VG season points, recent form, race-specific history from past editions, and optionally betting odds, algorithmic predictions, and qualitative intelligence. Monte Carlo simulation converts these strength estimates into probability distributions over finishing positions, which map to expected VG points through the scoring tables.
+The prediction pipeline combines multiple data sources through Bayesian strength estimation: an uninformative prior is updated sequentially with PCS specialty ratings, VG season points, race-specific history from past editions, and where available betting odds and Cycling Oracle predictions. Monte Carlo simulation converts these strength estimates into probability distributions over finishing positions, which map to expected VG points through the scoring tables. An April 2026 ablation retired the PCS form score, VG race history, qualitative intelligence, and trajectory signals — the code and the data collection remain, but none of them feeds a production prediction unless you re-enable it explicitly via `force_enable`.
 
-For stage races, PCS specialty scores are blended according to each rider's VG classification (all-rounder, climber, sprinter, unclassed) to produce a single strength estimate reflecting their likely contribution across the whole race.
+For stage races the model carries a multi-dimensional posterior rather than one number: each PCS specialty source is z-scored separately and routed to strength dimensions through `SIGNAL_DIMENSION_WEIGHTS`, and `compute_stage_strengths` then projects those dimensions onto a per-stage-type strength vector. The race is simulated stage by stage with correlated cross-stage noise, so a rider's contribution reflects which stages actually suit them.
 
 ## Usage
 
@@ -19,6 +19,7 @@ Analysis reports are Julia scripts that generate standalone HTML. Output goes to
 - `scripts/render_assessor.jl` — post-race review and result archival for prospective evaluation
 - `scripts/render_backtesting.jl` — model calibration: prior predictive checks, backtesting, prospective evaluation
 - `scripts/render_reports.jl` → `site/docs/` — public race reports website with per-race retrospectives
+- `scripts/league_eval.jl` — offline league evaluation: model team vs realised points, the hindsight-optimal team, and naive baselines
 
 All scripts accept `--fresh` to bypass the cache and fetch everything from the web. The predictor and stagerace scripts also accept `--force` to overwrite an existing prediction archive.
 
@@ -26,7 +27,7 @@ All scripts accept `--fresh` to bypass the cache and fetch everything from the w
 
 - **Monte Carlo prediction**: Bayesian strength estimation and race simulation to compute expected VG points per rider
 - **Multi-source data integration**: Combines VG costs/season points, PCS specialty ratings, race history, betting odds (Oddschecker paste), and qualitative intelligence from YouTube or web articles
-- **Qualitative intelligence**: YouTube transcripts and web articles fed to the Claude API to extract structured rider assessments, integrated as Bayesian signals
+- **Qualitative intelligence**: YouTube transcripts and web articles fed to the Claude API to extract structured rider assessments. Retired as a live signal by the April 2026 ablation; still collected and archived, and available to backtests via `force_enable`
 - **Risk-adjusted optimisation**: `risk_aversion` parameter penalises high-variance riders; `domestique_discount` down-weights non-leaders relative to their strength gap
 - **One-day and stage race support**: `solve_oneday()` for Sixes Classics, `solve_stage()` for grand tours with classification constraints
 - **Robust caching**: Feather-based caching (`CacheConfig`) with configurable TTL to avoid hammering external sites
@@ -47,7 +48,9 @@ cp data/race_config.toml.example data/race_config.toml
 # Edit race_config.toml with race name, year, data source URLs, your team, etc.
 ```
 
-The `[race]`, `[data_sources]`, `[output]`, and `[optimisation]` sections are shared by all scripts. The `[team_assessor]` section holds your team roster and the VG race number for retrospective analysis.
+The `[race]`, `[data_sources]`, `[output]`, and `[optimisation]` sections are shared by all scripts. The `[team_assessor]` section holds your team roster and the VG race number for retrospective analysis. Two further sections feed `scripts/league_eval.jl`: `[league]` names the minileague to score against and where to read its standings, and `[entered_team]` optionally records the team you actually entered when it differs from the advised one, so the evaluation can report the override delta.
+
+Note that `[league]` describes the season-long league you are competing in — the classics game and a grand tour are separate Velogames competitions with separate leagues, so switching it to score a grand tour discards your classics tracking. Its `vgleague_data_dir` must point at the deploy clone (`~/code/vgleague-deploy/data`), which is what the launchd job actually writes; the `~/code/vgleague` dev clone stopped being updated when scraping moved to a dedicated clone in July 2026.
 
 ### Before each race
 
@@ -98,7 +101,9 @@ Publish a race report in one step (results are auto-archived if not already done
 
 This appends the league winner to `data/league_winners.toml` and generates the HTML report, then stops so you can review the page locally before it prompts you to commit `site/docs/` and push. Answering anything other than `y` leaves the changes in place and prints the commands to run when you are ready. The GitHub Pages deploy action fires on push. Because it waits on that prompt the script needs a terminal, so run it interactively rather than piping its output — with no stdin the prompt hits end-of-file and `set -e` aborts the script before it can commit anything.
 
-The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winner data lives in `data/league_winners.toml`. The index page lists all races grouped by year.
+For grand tours there is `scripts/publish_stage_race.sh`, which archives the stage data explicitly before rendering and commits without prompting. Either script works for a stage race — `render_reports.jl` calls `archive_stage_race_results` on its own, so the stage data gets archived whichever you use.
+
+The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winner data lives in `data/league_winners.toml`, which is tracked: it is the input the reports are built from, and its contents (winning team name and score) are already public in the rendered pages, so regenerating with `--force` on a fresh clone still produces complete reports. Full standings are a different matter — `data/league_standings.toml` carries every entrant's real name and stays gitignored. The index page lists all races grouped by year.
 
 ## Data storage
 

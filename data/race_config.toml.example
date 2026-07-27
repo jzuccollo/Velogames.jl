@@ -59,9 +59,14 @@ my_team = [
 [league]
 # Used by scripts/league_eval.jl for the cumulative-placement and
 # entered-vs-advised sections (WP0.1/WP0.2). Reads the vgleague package's
-# scraped JSON cache (../vgleague/data/{game_slug}_{year}_{league_id}.json)
+# scraped JSON cache ({vgleague_data_dir}/{game_slug}_{year}_{league_id}.json)
 # rather than duplicating a scraper here — see docs/remediation-plan.md D1.
-vgleague_data_dir = "~/code/vgleague/data"
+#
+# Point this at the *deploy* clone: since July 2026 scraping runs from a
+# launchd job against ~/code/vgleague-deploy (Velogames' Cloudflare blocks
+# GitHub Actions runner IPs), so ~/code/vgleague is a dev clone whose data
+# directory is stale and will silently yield mid-season standings.
+vgleague_data_dir = "~/code/vgleague-deploy/data"
 game_slug = "sixes-classics"
 year = 2026
 league_id = "100737112"

@@ -48,20 +48,22 @@ julia --project="$REPO_ROOT" "$REPO_ROOT/scripts/render_reports.jl"
 
 REPORT_FILE="site/docs/reports/${PCS_SLUG}-${YEAR}.html"
 
-# Stop for local review before publishing. league_winners.toml is gitignored,
-# so only the rendered site is committed.
+# Stop for local review before publishing. Both the winner entry appended above
+# and the rendered site are committed — league_winners.toml is the input the
+# reports are built from, and its contents (winning team name and score) are
+# already public in the rendered pages.
 echo ""
 echo "Review the report locally before publishing:"
 echo "  open \"$REPO_ROOT/$REPORT_FILE\""
 echo ""
-read -r -p "Commit site/docs/ and push now? [y/N] " reply
+read -r -p "Commit league_winners.toml + site/docs/ and push now? [y/N] " reply
 if [[ "$reply" =~ ^[Yy]$ ]]; then
     cd "$REPO_ROOT"
-    git add site/docs/
+    git add data/league_winners.toml site/docs/
     git commit -m "Add $PCS_SLUG $YEAR race report ($WINNER_NAME, $WINNER_SCORE)"
     git push
     echo "Pushed."
 else
     echo "Not pushed. When ready, run:"
-    echo "  git -C \"$REPO_ROOT\" add site/docs/ && git -C \"$REPO_ROOT\" commit -m \"Add $PCS_SLUG $YEAR race report ($WINNER_NAME, $WINNER_SCORE)\" && git -C \"$REPO_ROOT\" push"
+    echo "  git -C \"$REPO_ROOT\" add data/league_winners.toml site/docs/ && git -C \"$REPO_ROOT\" commit -m \"Add $PCS_SLUG $YEAR race report ($WINNER_NAME, $WINNER_SCORE)\" && git -C \"$REPO_ROOT\" push"
 fi
