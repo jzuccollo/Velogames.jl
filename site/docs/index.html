@@ -230,6 +230,16 @@ a:hover {
 }
 
 /* ---- Tables ---- */
+/* Wide tables (e.g. the 11-column stage profile) scroll horizontally inside
+   this wrapper rather than squeezing cell text onto multiple lines. */
+.table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 1.4em 0;
+}
+.table-wrap > table {
+  margin: 0;
+}
 table {
   border-collapse: collapse;
   width: 100%;
@@ -239,6 +249,11 @@ table {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 0 0 1px var(--rule);
+}
+/* Keep data-table cells on a single line so wide tables scroll cleanly
+   instead of ballooning row height. */
+.table td {
+  white-space: nowrap;
 }
 thead {
   background: #faf8f3;
@@ -445,6 +460,7 @@ nav#toc .toc-h3 {
 <thead><tr><th>Race</th><th>Date</th></tr></thead>
 <tbody>
 <tr><td><a href="reports/giro-d-italia-2026.html">Giro d'Italia</a></td><td>May</td></tr>
+<tr><td><a href="reports/tour-de-france-2026.html">Tour de France</a></td><td>July</td></tr>
 </tbody></table>
 <h3 id="classics">Classics</h3>
 <table class="table table-sm">
@@ -458,7 +474,7 @@ nav#toc .toc-h3 {
 <tr><td><a href="reports/milano-sanremo-2026.html">Milano-Sanremo</a></td><td>21 March</td></tr>
 <tr><td><a href="reports/classic-brugge-de-panne-2026.html">Ronde Van Brugge</a></td><td>25 March</td></tr>
 <tr><td><a href="reports/e3-harelbeke-2026.html">E3 Saxo Classic</a></td><td>27 March</td></tr>
-<tr><td><a href="reports/gent-wevelgem-2026.html">In Flanders Fields - From Middelkerke to Wevelgem</a></td><td>29 March</td></tr>
+<tr><td><a href="reports/gent-wevelgem-2026.html">In Flanders Fields - Middelkerke to Wevelgem</a></td><td>29 March</td></tr>
 <tr><td><a href="reports/dwars-door-vlaanderen-2026.html">Dwars door Vlaanderen</a></td><td>1 April</td></tr>
 <tr><td><a href="reports/ronde-van-vlaanderen-2026.html">Ronde van Vlaanderen</a></td><td>5 April</td></tr>
 <tr><td><a href="reports/scheldeprijs-2026.html">Scheldeprijs</a></td><td>8 April</td></tr>
@@ -470,6 +486,7 @@ nav#toc .toc-h3 {
 <tr><td><a href="reports/eschborn-frankfurt-2026.html">Eschborn-Frankfurt</a></td><td>1 May</td></tr>
 <tr><td><a href="reports/gp-de-plumelec-2026.html">Grand Prix du Morbihan</a></td><td>9 May</td></tr>
 <tr><td><a href="reports/tro-bro-leon-2026.html">Tro-Bro Leon</a></td><td>10 May</td></tr>
+<tr><td><a href="reports/classique-dunkerque-2026.html">Classique Dunkerque</a></td><td>19 May</td></tr>
 </tbody></table>
 <h2 id="2025-season">2025 season</h2>
 <h3 id="grand-tours">Grand tours</h3>
@@ -492,7 +509,7 @@ nav#toc .toc-h3 {
 <tr><td><a href="reports/milano-sanremo-2025.html">Milano-Sanremo</a></td><td>21 March</td></tr>
 <tr><td><a href="reports/classic-brugge-de-panne-2025.html">Ronde Van Brugge</a></td><td>25 March</td></tr>
 <tr><td><a href="reports/e3-harelbeke-2025.html">E3 Saxo Classic</a></td><td>27 March</td></tr>
-<tr><td><a href="reports/gent-wevelgem-2025.html">In Flanders Fields - From Middelkerke to Wevelgem</a></td><td>29 March</td></tr>
+<tr><td><a href="reports/gent-wevelgem-2025.html">In Flanders Fields - Middelkerke to Wevelgem</a></td><td>29 March</td></tr>
 <tr><td><a href="reports/dwars-door-vlaanderen-2025.html">Dwars door Vlaanderen</a></td><td>1 April</td></tr>
 <tr><td><a href="reports/ronde-van-vlaanderen-2025.html">Ronde van Vlaanderen</a></td><td>5 April</td></tr>
 <tr><td><a href="reports/scheldeprijs-2025.html">Scheldeprijs</a></td><td>8 April</td></tr>
@@ -505,16 +522,25 @@ nav#toc .toc-h3 {
 <tr><td><a href="reports/gp-de-plumelec-2025.html">Grand Prix du Morbihan</a></td><td>9 May</td></tr>
 <tr><td><a href="reports/tro-bro-leon-2025.html">Tro-Bro Leon</a></td><td>10 May</td></tr>
 <tr><td><a href="reports/classique-dunkerque-2025.html">Classique Dunkerque</a></td><td>19 May</td></tr>
+<tr><td><a href="reports/brussels-cycling-classic-2025.html">Brussels Cycling Classic</a></td><td>7 June</td></tr>
 <tr><td><a href="reports/circuit-franco-belge-2025.html">Circuit Franco-Belge</a></td><td>10 June</td></tr>
 <tr><td><a href="reports/dwars-door-het-hageland-2025.html">Duracell Dwars door het Hageland</a></td><td>13 June</td></tr>
+<tr><td><a href="reports/copenhagen-sprint-2025.html">Copenhagen Sprint</a></td><td>14 June</td></tr>
 <tr><td><a href="reports/san-sebastian-2025.html">Donostia San Sebastian Klasikoa</a></td><td>1 August</td></tr>
 <tr><td><a href="reports/cyclassics-hamburg-2025.html">ADAC Cyclassics Hamburg</a></td><td>16 August</td></tr>
 <tr><td><a href="reports/bretagne-classic-2025.html">Bretagne Classic - CIC</a></td><td>30 August</td></tr>
 <tr><td><a href="reports/coppa-sabatini-2025.html">Coppa Sabatini</a></td><td>10 September</td></tr>
 <tr><td><a href="reports/gp-quebec-2025.html">Grand Prix Cycliste de Quebec</a></td><td>11 September</td></tr>
+<tr><td><a href="reports/gp-montreal-2025.html">Grand Prix Cycliste de Montreal</a></td><td>13 September</td></tr>
+<tr><td><a href="reports/gp-de-wallonie-2025.html">Lotto Grand Prix de Wallonie</a></td><td>16 September</td></tr>
+<tr><td><a href="reports/giro-dell-emilia-2025.html">Giro dell'Emilia</a></td><td>3 October</td></tr>
+<tr><td><a href="reports/coppa-bernocchi-2025.html">Coppa Bernocchi</a></td><td>5 October</td></tr>
+<tr><td><a href="reports/tre-valli-varesine-2025.html">Tre Valli Varesine</a></td><td>6 October</td></tr>
 <tr><td><a href="reports/gran-piemonte-2025.html">Gran Piemonte</a></td><td>8 October</td></tr>
 <tr><td><a href="reports/il-lombardia-2025.html">Il Lombardia</a></td><td>10 October</td></tr>
 <tr><td><a href="reports/paris-tours-2025.html">Paris - Tours Elite</a></td><td>11 October</td></tr>
+<tr><td><a href="reports/giro-del-veneto-2025.html">Giro del Veneto</a></td><td>14 October</td></tr>
+<tr><td><a href="reports/veneto-classic-2025.html">Veneto Classic</a></td><td>18 October</td></tr>
 </tbody></table>
 </main>
       <nav id="toc"></nav>
