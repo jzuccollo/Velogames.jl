@@ -24,6 +24,9 @@ prediction_docs/
 # site/docs/ is committed for GitHub Pages
 !site/docs/
 !site/docs/**
+# ...but that negation also re-includes the .DS_Store ignored at the top of
+# this file, so re-exclude it here (last matching pattern wins).
+site/docs/**/.DS_Store
 
 # LLM permissions
 .claude/settings.local.json
@@ -39,8 +42,8 @@ data/race_config.toml
 data/race_config.toml.*
 !data/race_config.toml.example
 
-# League results (changes every race, not version controlled)
-data/league_winners.toml
+# Full league standings: every entrant's real name and score. Not published
+# anywhere (the site shows winning team names only), so it stays local.
 data/league_standings.toml
 
 /.quarto/

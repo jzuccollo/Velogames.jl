@@ -96,7 +96,7 @@ Publish a race report in one step (results are auto-archived if not already done
 ./scripts/publish_race.sh gent-wevelgem 2026 "Team Name" 1234
 ```
 
-This appends the league winner to `data/league_winners.toml`, generates the HTML report, commits, and pushes. The GitHub Pages deploy action fires on push.
+This appends the league winner to `data/league_winners.toml` and generates the HTML report, then stops so you can review the page locally before it prompts you to commit `site/docs/` and push. Answering anything other than `y` leaves the changes in place and prints the commands to run when you are ready. The GitHub Pages deploy action fires on push. Because it waits on that prompt the script needs a terminal, so run it interactively rather than piping its output — with no stdin the prompt hits end-of-file and `set -e` aborts the script before it can commit anything.
 
 The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winner data lives in `data/league_winners.toml`. The index page lists all races grouped by year.
 
