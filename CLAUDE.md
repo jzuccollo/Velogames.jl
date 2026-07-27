@@ -27,10 +27,10 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/report_html.jl` - HTML page generation primitives (`html_page`, `html_table`, `html_callout`, `html_heading`, `plotly_html`, `_slugify`, `commafmt`)
 - `src/report_charts.jl` - SVG/Plotly chart functions (PIT histograms, scatter plots, rank histograms, line charts, team totals, sim distributions), `compute_pit_values`, `simulate_vg_draws`
 - `src/report_formatters.jl` - Signal/classification/podium table formatters (`format_signal_waterfall`, `format_classification_table`, `format_stage_podium_picks`, per-dim helpers), `precision_budget`
-- `scripts/render_predictor.jl` - One-day prediction report: reads `race_config.toml`, runs prediction pipeline, writes `docs/predictor.html`
-- `scripts/render_assessor.jl` - Team assessor report: compares custom team vs optimal, retrospective analysis, writes `docs/assessor.html`
-- `scripts/render_stagerace.jl` - Stage race prediction report: reads `race_config.toml`, runs stage race pipeline, writes `docs/stagerace.html`
-- `scripts/render_backtesting.jl` - Backtesting and calibration report: prior checks, historical backtest, prospective evaluation, writes `docs/backtesting.html`
+- `scripts/render_predictor.jl` - One-day prediction report: reads `race_config.toml`, runs prediction pipeline, writes `prediction_docs/predictor.html` (`[output] dir` overrides)
+- `scripts/render_assessor.jl` - Team assessor report: compares custom team vs optimal, retrospective analysis, writes `prediction_docs/assessor.html` (`[output] dir` overrides)
+- `scripts/render_stagerace.jl` - Stage race prediction report: reads `race_config.toml`, runs stage race pipeline, writes `prediction_docs/stagerace.html` (`[output] dir` overrides)
+- `scripts/render_backtesting.jl` - Backtesting and calibration report: prior checks, historical backtest, prospective evaluation, writes `prediction_docs/backtesting.html` (`[output] dir` overrides)
 - `scripts/render_reports.jl` - Public race reports site: generates per-race HTML retrospectives to `site/docs/`, incremental build (skips existing)
 - `scripts/league_eval.jl` - Offline league evaluation: scores archived model teams against realised VG points, the hindsight-optimal team, and max-cost / odds-implied baselines, then reports cumulative league placement and the entered-vs-advised delta from the `[league]` config. Its placement section matches standings race names against `CLASSICS_RACES_2026`, so it is classics-shaped — a grand tour league's per-stage race names will not resolve.
 - `scripts/baseline_compare.jl` - Naive-persistence yardstick for grand tours: mean VG points across the two prior Tours, fed through `build_model_stage`, set beside the model's archived optimal team
