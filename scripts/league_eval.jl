@@ -14,13 +14,19 @@
 #
 # Run:  julia --project scripts/league_eval.jl
 # ---------------------------------------------------------------------------
-using DataFrames, Feather, JuMP, HiGHS, TOML, Statistics, Printf
+using DataFrames, Feather, JuMP, HiGHS, TOML, Statistics, Printf, Velogames
 
 const ARCH = joinpath(homedir(), "Dropbox", "code", "velogames", "archive")
 const REPO = normpath(joinpath(@__DIR__, ".."))
 
 fpath(dt, slug, yr) = joinpath(ARCH, dt, slug, "$yr.feather")
 loadf(dt, slug, yr) = isfile(fpath(dt, slug, yr)) ? Feather.read(fpath(dt, slug, yr)) : nothing
+
+# Stage races archive their VG results under vg_stage_totals (their own VG
+# competition); one-day classics under vg_results.
+is_stage_race(slug) = haskey(Velogames._STAGE_RACE_VG_SLUGS, slug)
+results_for(slug, yr) =
+    is_stage_race(slug) ? loadf("vg_stage_totals", slug, yr) : loadf("vg_results", slug, yr)
 
 function best_team(df, points_col; n = 6, budget = 100)
     m = Model(HiGHS.Optimizer)
@@ -44,9 +50,9 @@ winners = TOML.parsefile(joinpath(REPO, "data", "league_winners.toml"))["winners
 rows = NamedTuple[]
 for w in winners
     slug, yr, wscore = w["pcs_slug"], w["year"], w["score"]
-    is_gt = haskey(Dict("giro-d-italia" => 1, "tour-de-france" => 1, "vuelta-a-espana" => 1), slug)
+    is_gt = is_stage_race(slug)
     preds = loadf("predictions", slug, yr)
-    res = is_gt ? loadf("vg_stage_totals", slug, yr) : loadf("vg_results", slug, yr)
+    res = results_for(slug, yr)
     (preds === nothing || res === nothing) && (push!(rows, blank(slug, yr, wscore, preds === nothing ? "no preds" : "no results")); continue)
 
     if !(:cost in propertynames(preds))
@@ -109,3 +115,241 @@ if nrow(ok) > 0
             nrow(wo), sum(wo.model_score), sum(wo.odds_score), sum(wo.wscore))
     end
 end
+
+# ---------------------------------------------------------------------------
+# League standings — cumulative placement (WP0.1) + entered-vs-advised (WP0.2)
+#
+# Reads the vgleague package's scraped standings (../vgleague/data/...; see
+# docs/remediation-plan.md D1 — no scraper duplicated here) via
+# `load_league_standings`, plus the optional manual data/league_standings.toml
+# fallback. Requires data/race_config.toml's [league] section (see
+# race_config.toml.example); skips gracefully if either is absent.
+# ---------------------------------------------------------------------------
+
+const MODEL_LABEL = "Model (this repo)"
+
+function report_league_placement(out::DataFrame)
+race_config_path = joinpath(REPO, "data", "race_config.toml")
+if !isfile(race_config_path)
+    println(
+        "\nNo data/race_config.toml found — skipping league placement section (see race_config.toml.example [league]).",
+    )
+else
+    cfg = TOML.parsefile(race_config_path)
+    league_cfg = get(cfg, "league", Dict())
+    if isempty(league_cfg)
+        println(
+            "\nNo [league] section in data/race_config.toml — skipping league placement section.",
+        )
+    else
+        standings = load_league_standings(;
+            data_dir = league_cfg["vgleague_data_dir"],
+            game_slug = league_cfg["game_slug"],
+            year = league_cfg["year"],
+            league_id = string(league_cfg["league_id"]),
+            toml_path = joinpath(REPO, "data", "league_standings.toml"),
+        )
+
+        if nrow(standings) == 0
+            println(
+                "\nNo league standings found for $(league_cfg["game_slug"]) $(league_cfg["year"]) $(league_cfg["league_id"]) at $(league_cfg["vgleague_data_dir"]) — skipping.",
+            )
+        else
+            user_name = get(league_cfg, "user_name", "")
+
+            # Match every standings race_name to a pcs_slug via the classics schedule
+            slug_of_racename = Dict{String,String}()
+            for rn in unique(standings.race_name)
+                key = Velogames.normalise_race_name(rn)
+                for ri in CLASSICS_RACES_2026
+                    if Velogames.normalise_race_name(ri.name) == key
+                        slug_of_racename[rn] = ri.pcs_slug
+                        break
+                    end
+                end
+            end
+            racename_of_slug = Dict(v => k for (k, v) in slug_of_racename)
+
+            # Resolve the "current race" pcs_slug for the manual entered_team override.
+            # Deliberately avoids `find_race`'s fuzzy fallback (its substring match
+            # mis-resolves short GT aliases like "Tour" against "Paris-Tours Elite") —
+            # exact pcs_slug matches, the explicit stage-race alias table, and
+            # normalised classics display names are used, in that order.
+            current_slug = ""
+            if haskey(cfg, "race")
+                rn = cfg["race"]["name"]
+                key = replace(lowercase(rn), " " => "", "-" => "")
+                nk = Velogames.normalise_race_name(rn)
+                ci = findfirst(
+                    ri -> Velogames.normalise_race_name(ri.name) == nk,
+                    CLASSICS_RACES_2026,
+                )
+                current_slug =
+                    if Velogames._find_race_by_slug(rn) !== nothing
+                        rn
+                    elseif haskey(Velogames._STAGE_RACE_PCS_SLUGS, key)
+                        Velogames._STAGE_RACE_PCS_SLUGS[key]
+                    elseif ci !== nothing
+                        CLASSICS_RACES_2026[ci].pcs_slug
+                    else
+                        ""
+                    end
+            end
+            entered_cfg = get(cfg, "entered_team", Dict())
+            entered_riders = get(entered_cfg, "riders", String[])
+            entered_score_override = Float64(get(entered_cfg, "score", 0))
+
+            common = NamedTuple[]
+            skipped = String[]
+            for r in eachrow(out)
+                if r.status != "ok" || ismissing(r.model_score)
+                    push!(skipped, "$(r.slug) $(r.yr): $(r.status)")
+                    continue
+                end
+                race_name = get(racename_of_slug, r.slug, nothing)
+                if race_name === nothing
+                    push!(skipped, "$(r.slug) $(r.yr): no matching league standings")
+                    continue
+                end
+                push!(
+                    common,
+                    (; slug = r.slug, yr = r.yr, race_name = race_name, model_score = r.model_score),
+                )
+            end
+
+            if isempty(common)
+                println(
+                    "\nNo races with both an archived model score and league standings — skipping cumulative-placement section.",
+                )
+            else
+                println(
+                    "\n=== Cumulative league placement (model as phantom entrant, n=$(length(common)) common races) ===",
+                )
+
+                scored_by_race = Dict(
+                    c.race_name => Dict(
+                        String(row.username) => Float64(row.score) for
+                        row in eachrow(filter(:race_name => ==(c.race_name), standings))
+                    ) for c in common
+                )
+                entrants = Set{String}()
+                for scored in values(scored_by_race)
+                    union!(entrants, keys(scored))
+                end
+
+                cumulative = Dict{String,Float64}(u => 0.0 for u in entrants)
+                cumulative[MODEL_LABEL] = 0.0
+                entered_cumulative = 0.0
+                model_cumulative_for_entered = 0.0
+
+                for c in common
+                    scored = scored_by_race[c.race_name]
+                    for u in entrants
+                        cumulative[u] += get(scored, u, 0.0)
+                    end
+                    cumulative[MODEL_LABEL] += c.model_score
+
+                    ranked = [(u, s) for (u, s) in scored]
+                    push!(ranked, (MODEL_LABEL, c.model_score))
+                    sort!(ranked, by = x -> -x[2])
+                    place = findfirst(x -> x[1] == MODEL_LABEL, ranked)
+                    @printf(
+                        "%-26s model %5.0f | placed %2d/%2d | leader %-22s %5.0f\n",
+                        c.race_name,
+                        c.model_score,
+                        place,
+                        length(ranked),
+                        ranked[1][1],
+                        ranked[1][2]
+                    )
+
+                    # Entered-vs-advised (WP0.2): the user's own entered team for
+                    # this race, from the league standings. The manual
+                    # [entered_team] override is handled in its own block below —
+                    # it must not be gated on the race appearing in the classics
+                    # standings (grand tours and un-scraped races never do).
+                    if !isempty(user_name)
+                        entered_score = get(scored, user_name, missing)
+                        if !ismissing(entered_score)
+                            entered_cumulative += entered_score
+                            model_cumulative_for_entered += c.model_score
+                            delta = entered_score - c.model_score
+                            @printf(
+                                "  entered (%s): %5.0f | model: %5.0f | delta (entered - model): %+.0f\n",
+                                user_name,
+                                entered_score,
+                                c.model_score,
+                                delta
+                            )
+                        end
+                    end
+                end
+
+                cum_ranked = sort(collect(cumulative), by = x -> -x[2])
+                cum_place = findfirst(x -> x[1] == MODEL_LABEL, cum_ranked)
+                println("\n--- Cumulative totals over the $(length(common)) common races ---")
+                for (rank, (name, score)) in enumerate(cum_ranked)
+                    marker = name == MODEL_LABEL ? "  <== model" : ""
+                    @printf("%2d. %-26s %6.0f%s\n", rank, name, score, marker)
+                end
+                println(
+                    "Model would place $cum_place/$(length(cum_ranked)) cumulatively over these $(length(common)) races.",
+                )
+
+                if !isempty(user_name) && entered_cumulative > 0
+                    @printf(
+                        "\nEntered team (%s) cumulative: %.0f | Model cumulative (same subset): %.0f | delta: %+.0f\n",
+                        user_name,
+                        entered_cumulative,
+                        model_cumulative_for_entered,
+                        entered_cumulative - model_cumulative_for_entered
+                    )
+                end
+            end
+
+            if !isempty(skipped)
+                println("\nRaces skipped (no archived model score or no matching league standings):")
+                for s in skipped
+                    println("  - $s")
+                end
+            end
+
+            # Manual [entered_team] override (WP0.2): scored directly against
+            # archived results, independent of the league standings — reachable
+            # for grand tours and races the vgleague cache hasn't scraped yet.
+            if !isempty(current_slug) &&
+               (entered_score_override > 0 || !isempty(entered_riders))
+                race_yr = cfg["race"]["year"]
+                entered_score = if entered_score_override > 0
+                    entered_score_override
+                else
+                    res = results_for(current_slug, race_yr)
+                    if res === nothing
+                        missing
+                    else
+                        actual_of = Dict(
+                            String(rr.riderkey) => Float64(rr.score) for
+                            rr in eachrow(res)
+                        )
+                        sum(get(actual_of, createkey(name), 0.0) for name in entered_riders)
+                    end
+                end
+                if ismissing(entered_score)
+                    println(
+                        "\n[entered_team] set for $current_slug $race_yr but no archived results yet — cannot score the entered team.",
+                    )
+                else
+                    @printf(
+                        "\nEntered team for %s %d (manual [entered_team]): %.0f\n",
+                        current_slug,
+                        race_yr,
+                        entered_score
+                    )
+                end
+            end
+        end
+    end
+end
+end
+
+report_league_placement(out)

@@ -283,10 +283,7 @@ function format_classification_table(
 
     any_pos = vec(sum(pos_counts[:, 1:min(top_label, top_k)], dims = 2)) ./ n_sims
     win = pos_counts[:, 1] ./ n_sims
-    # GC: sort by P(win) first, then top-N. For a genuine contender, top-N ≈ their
-    # finish rate (they place top-N whenever they don't abandon), so sorting GC by
-    # top-N would rank by DNF hazard rather than GC quality and push the actual
-    # favourites below younger low-attrition riders. Win% is the true GC signal.
+    # GC: sort by P(win) first, then top-N — win% is the sharper GC signal.
     # Points/mountains stay top-N-first (consistency is what those reward).
     order =
         classification == :gc ? sortperm(collect(zip(win, any_pos)); rev = true) :

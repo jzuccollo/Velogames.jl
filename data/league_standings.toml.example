@@ -1,0 +1,17 @@
+# Manual fallback for league standings not yet in the vgleague JSON cache
+# (../vgleague/data/{game_slug}_{year}_{league_id}.json — the system of record;
+# see WP0.1 in docs/remediation-plan.md). Copy to league_standings.toml and
+# fill in only the races missing from the JSON cache — most races don't need
+# an entry here at all.
+#
+# Any race `name` listed here overrides/supplements the JSON standings for
+# that race (matched via Velogames.normalise_race_name). league_standings.toml
+# is gitignored; this .example is the committed template.
+
+[[races]]
+name = "Omloop Nieuwsblad"
+standings = [
+    { team = "Cobbles & Wobbles", score = 1027 },
+    { team = "Mud Springs Eternal", score = 965 },
+    { team = "Rounded-up Riders", score = 927 },
+]

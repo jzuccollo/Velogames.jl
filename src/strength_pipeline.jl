@@ -409,6 +409,12 @@ end
 # Multi-dimensional strength estimation (stage races)
 # ---------------------------------------------------------------------------
 
+# Cluster rows for the per-dimension block-correlation discount, matching the
+# scalar path's grouping (ability / history / market).
+const _CLUSTER_ABILITY = 1
+const _CLUSTER_HISTORY = 2
+const _CLUSTER_MARKET = 3
+
 """
     MultiDimStrengthEstimate
 
@@ -427,7 +433,7 @@ end
 
 """
     _market_update_listed!(posterior, precisions, shifts, key, prob, base_var, weights,
-                           n_starters, odds_normalisation) -> posterior
+                           n_starters, odds_normalisation, cluster_prec, cluster_n) -> posterior
 
 Apply one listed-only market signal (jersey / points / KOM / stage-win oracle or
 odds) to the multidim posterior. These markets have list-cutoff selection bias,
@@ -448,6 +454,8 @@ function _market_update_listed!(
     weights::NamedTuple,
     n_starters,
     odds_normalisation::Float64,
+    cluster_prec::Matrix{Float64},
+    cluster_n::Matrix{Int},
 )
     mean_before = copy(posterior.mean)
     if prob > 0.0
@@ -460,6 +468,8 @@ function _market_update_listed!(
                 v = base_var / w
                 posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
                 precisions[key][_DIM_INDEX[dsym]] += 1.0 / v
+                cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[dsym]] += 1.0 / v
+                cluster_n[_CLUSTER_MARKET, _DIM_INDEX[dsym]] += 1
             end
         end
     end
@@ -476,6 +486,13 @@ the dimensions in `STRENGTH_DIMENSIONS` according to `SIGNAL_DIMENSION_WEIGHTS`.
 GC-flavoured floors (Cycling Oracle GC, GC odds) only touch the `:gc`
 dimension; sprinters absent from the GC market are no longer penalised on
 `:flat`/`:hilly`.
+
+The scalar path's block-correlation discount is applied per dimension at the
+end (gated by `config.multidim_block_correlation`), widening posteriors for
+riders with multiple correlated observations on a dimension. Cluster
+membership (ability/history/market) matches the scalar path;
+`skip_block_correlation = true` isolates the raw conjugate updates for
+per-signal SBC, mirroring the scalar escape hatch.
 """
 function estimate_rider_strength_multidim(
     signals::RiderSignalData;
@@ -484,6 +501,7 @@ function estimate_rider_strength_multidim(
     effective_vg_variance::Float64 = 0.0,
     race_has_market::Bool = false,
     market_dims::Union{Nothing,Vector{Bool}} = nothing,
+    skip_block_correlation::Bool = false,
 )
     D = length(STRENGTH_DIMENSIONS)
     posterior = multidim_prior(config)
@@ -503,6 +521,12 @@ function estimate_rider_strength_multidim(
     # diagnostics. Each `bayesian_update_multidim_dim(posterior, obs, var, dsym)`
     # call below accumulates `1/var` into the corresponding entry.
     precisions = Dict{Symbol,Vector{Float64}}(s => zeros(D) for s in SIGNAL_KEYS_MULTIDIM)
+    # Per-(cluster, dim) observation precision and update counts, accumulated at
+    # every update site for the end-of-function block-correlation discount.
+    # Order-invariant by construction (unlike the scalar path's boundary
+    # snapshots, which rely on cluster-contiguous update order).
+    cluster_prec = zeros(Float64, 3, D)
+    cluster_n = zeros(Int, 3, D)
 
     # --- PCS specialty (per-source, dim-specific) ---
     mean_before = copy(posterior.mean)
@@ -522,6 +546,8 @@ function estimate_rider_strength_multidim(
                 v = base_var * md_vec[_DIM_INDEX[dsym]] / w
                 posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
                 precisions[:pcs][_DIM_INDEX[dsym]] += 1.0 / v
+                cluster_prec[_CLUSTER_ABILITY, _DIM_INDEX[dsym]] += 1.0 / v
+                cluster_n[_CLUSTER_ABILITY, _DIM_INDEX[dsym]] += 1
             end
         end
     end
@@ -549,6 +575,8 @@ function estimate_rider_strength_multidim(
             v = eff_var_base * md_vec[_DIM_INDEX[dsym]] / w
             posterior = bayesian_update_multidim_dim(posterior, signals.vg_points, v, dsym)
             precisions[:vg][_DIM_INDEX[dsym]] += 1.0 / v
+            cluster_prec[_CLUSTER_ABILITY, _DIM_INDEX[dsym]] += 1.0 / v
+            cluster_n[_CLUSTER_ABILITY, _DIM_INDEX[dsym]] += 1
         end
     end
     shifts[:vg] = posterior.mean .- mean_before
@@ -577,6 +605,8 @@ function estimate_rider_strength_multidim(
                 v = base_var * md_vec[_DIM_INDEX[dsym]] / w
                 posterior = bayesian_update_multidim_dim(posterior, hist_strength, v, dsym)
                 precisions[:history][_DIM_INDEX[dsym]] += 1.0 / v
+                cluster_prec[_CLUSTER_HISTORY, _DIM_INDEX[dsym]] += 1.0 / v
+                cluster_n[_CLUSTER_HISTORY, _DIM_INDEX[dsym]] += 1
             end
         end
     end
@@ -617,6 +647,8 @@ function estimate_rider_strength_multidim(
                     posterior =
                         bayesian_update_multidim_dim(posterior, hist_strength, v, dsym)
                     precisions[sig_key][_DIM_INDEX[dsym]] += 1.0 / v
+                    cluster_prec[_CLUSTER_HISTORY, _DIM_INDEX[dsym]] += 1.0 / v
+                    cluster_n[_CLUSTER_HISTORY, _DIM_INDEX[dsym]] += 1
                 end
             end
         end
@@ -640,6 +672,8 @@ function estimate_rider_strength_multidim(
                 v = eff_var * md_vec[_DIM_INDEX[dsym]] / w
                 posterior = bayesian_update_multidim_dim(posterior, vg_strength, v, dsym)
                 precisions[:vg_history][_DIM_INDEX[dsym]] += 1.0 / v
+                cluster_prec[_CLUSTER_HISTORY, _DIM_INDEX[dsym]] += 1.0 / v
+                cluster_n[_CLUSTER_HISTORY, _DIM_INDEX[dsym]] += 1
             end
         end
     end
@@ -669,6 +703,8 @@ function estimate_rider_strength_multidim(
                 v = base_var / w
                 posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
                 precisions[:oracle_gc][_DIM_INDEX[dsym]] += 1.0 / v
+                cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[dsym]] += 1.0 / v
+                cluster_n[_CLUSTER_MARKET, _DIM_INDEX[dsym]] += 1
             end
         end
     elseif signals.oracle_floor_strength != 0.0
@@ -680,6 +716,8 @@ function estimate_rider_strength_multidim(
             :gc,
         )
         precisions[:oracle_gc][_DIM_INDEX[:gc]] += 1.0 / var_f
+        cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1.0 / var_f
+        cluster_n[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1
     end
     shifts[:oracle_gc] = posterior.mean .- mean_before
 
@@ -699,6 +737,8 @@ function estimate_rider_strength_multidim(
         SIGNAL_DIMENSION_WEIGHTS.oracle_points,
         n_starters,
         config.odds_normalisation,
+        cluster_prec,
+        cluster_n,
     )
 
     # --- Cycling Oracle KOM (→ :mountain, listed only, clamp at 0) ---
@@ -712,6 +752,8 @@ function estimate_rider_strength_multidim(
         SIGNAL_DIMENSION_WEIGHTS.oracle_kom,
         n_starters,
         config.odds_normalisation,
+        cluster_prec,
+        cluster_n,
     )
 
     # Qualitative: still disabled
@@ -735,6 +777,8 @@ function estimate_rider_strength_multidim(
                 v = base_var / w
                 posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
                 precisions[:odds][_DIM_INDEX[dsym]] += 1.0 / v
+                cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[dsym]] += 1.0 / v
+                cluster_n[_CLUSTER_MARKET, _DIM_INDEX[dsym]] += 1
             end
         elseif signals.odds_floor_strength != 0.0
             var_f = odds_variance(config) * config.odds_floor_variance_multiplier
@@ -745,12 +789,16 @@ function estimate_rider_strength_multidim(
                 :gc,
             )
             precisions[:odds][_DIM_INDEX[:gc]] += 1.0 / var_f
+            cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1.0 / var_f
+            cluster_n[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1
         end
     elseif signals.odds_floor_strength != 0.0
         var_f = odds_variance(config) * config.odds_floor_variance_multiplier
         posterior =
             bayesian_update_multidim_dim(posterior, signals.odds_floor_strength, var_f, :gc)
         precisions[:odds][_DIM_INDEX[:gc]] += 1.0 / var_f
+        cluster_prec[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1.0 / var_f
+        cluster_n[_CLUSTER_MARKET, _DIM_INDEX[:gc]] += 1
     end
     shifts[:odds] = posterior.mean .- mean_before
 
@@ -767,6 +815,8 @@ function estimate_rider_strength_multidim(
         SIGNAL_DIMENSION_WEIGHTS.odds_points,
         n_starters,
         config.odds_normalisation,
+        cluster_prec,
+        cluster_n,
     )
 
     # --- Bookmaker KOM market (→ :mountain, listed only, clamp at 0) ---
@@ -780,6 +830,8 @@ function estimate_rider_strength_multidim(
         SIGNAL_DIMENSION_WEIGHTS.odds_kom,
         n_starters,
         config.odds_normalisation,
+        cluster_prec,
+        cluster_n,
     )
 
     # --- Bookmaker "Rider To Win A Stage" market — class-aware routing ---
@@ -802,6 +854,8 @@ function estimate_rider_strength_multidim(
         RACE_HISTORY_CLASS_PROJECTION[stagewin_cls],
         n_starters,
         config.odds_normalisation,
+        cluster_prec,
+        cluster_n,
     )
 
     # --- GT VG-history (Option A prototype, July 2026) ---
@@ -845,10 +899,66 @@ function estimate_rider_strength_multidim(
                 v = base_var / w
                 posterior = bayesian_update_multidim_dim(posterior, obs, v, dsym)
                 precisions[:gt_vg_history][_DIM_INDEX[dsym]] += 1.0 / v
+                cluster_prec[_CLUSTER_HISTORY, _DIM_INDEX[dsym]] += 1.0 / v
+                cluster_n[_CLUSTER_HISTORY, _DIM_INDEX[dsym]] += 1
             end
         end
     end
     shifts[:gt_vg_history] = posterior.mean .- mean_before
+
+    # --- Block-correlation precision discount (per dimension) ---
+    # Same design-effect correction as the scalar path: within each cluster
+    # (ability/history/market) observations share ρ_w, across clusters ρ_b.
+    # Applied per dimension from the accumulated cluster precisions/counts.
+    # Dimensions with ≤1 observation are left untouched.
+    ρ_w = config.within_cluster_correlation
+    ρ_b = config.between_cluster_correlation
+    if config.multidim_block_correlation &&
+       !skip_block_correlation &&
+       (ρ_w > 0 || ρ_b > 0)
+        prior_prec = 1.0 / config.prior_variance
+        new_mean = copy(posterior.mean)
+        new_var = copy(posterior.variance)
+        for d = 1:D
+            n_total_d = cluster_n[1, d] + cluster_n[2, d] + cluster_n[3, d]
+            n_total_d > 1 || continue
+            post_prec = 1.0 / posterior.variance[d]
+            total_obs_prec = post_prec - prior_prec
+            # Invariant: every update site must accumulate into cluster_prec.
+            # A missed site silently drops that signal's precision from the
+            # discount reconstruction (this fired once, for the GC-odds block).
+            @assert isapprox(
+                cluster_prec[1, d] + cluster_prec[2, d] + cluster_prec[3, d],
+                total_obs_prec;
+                rtol = 1e-6,
+            ) "cluster accumulation out of sync with posterior precision (dim $d)"
+
+            # Within-cluster discount, then collect active clusters
+            cluster_precs = Float64[]
+            for k = 1:3
+                n_k = cluster_n[k, d]
+                n_k == 0 && continue
+                discount_k = n_k > 1 ? 1.0 + ρ_w * (n_k - 1) : 1.0
+                push!(cluster_precs, cluster_prec[k, d] / discount_k)
+            end
+
+            # Between-cluster discount
+            n_clusters = length(cluster_precs)
+            eff_obs_prec = if n_clusters > 1
+                sum(cluster_precs) / (1.0 + ρ_b * (n_clusters - 1))
+            else
+                cluster_precs[1]
+            end
+
+            # Reconstruct this dimension's posterior with discounted precision
+            # (prior mean is 0, so obs_mean carries the whole posterior mean).
+            obs_mean = posterior.mean[d] * post_prec / total_obs_prec
+            eff_prec = prior_prec + eff_obs_prec
+            new_mean[d] = eff_obs_prec * obs_mean / eff_prec
+            new_var[d] = 1.0 / eff_prec
+        end
+        posterior = MultiDimPosterior(new_mean, new_var)
+    end
 
     return MultiDimStrengthEstimate(
         copy(posterior.mean),

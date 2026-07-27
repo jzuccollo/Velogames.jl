@@ -223,6 +223,20 @@ end
     # At least some riders score non-zero in every simulation
     @test all(sum(sim, dims = 1) .> 0)
 
+    # Same-seed bit-identity: seeded reproducibility is load-bearing (gate
+    # results, cross-check, archived comparisons) — pin it explicitly.
+    sim_repeat, _ = simulate_stage_race(
+        stages,
+        stage_strengths,
+        uncertainties,
+        teams,
+        scoring;
+        n_sims = n_sims,
+        cross_stage_alpha = 0.7,
+        rng = Random.MersenneTwister(123),
+    )
+    @test sim == sim_repeat
+
     # Total points per sim should be reasonable (stage finish + GC + assists + finals)
     # Each stage awards at least positions 1-20 worth of points
     total_per_sim = vec(sum(sim, dims = 1))
@@ -538,148 +552,13 @@ end
     an = Velogames.DEFAULT_STAGE_SIM_CONFIG.aleatoric_noise
     @test Velogames._aleatoric_sd(flat_w, an) == an.flat
     @test Velogames._aleatoric_sd(mtn_w, an) == an.mountain
-end
 
-# =========================================================================
-# GT breakaway modelling (prototype, July 2026 — roadmap.md "Stage-race
-# breakaway modelling")
-# =========================================================================
-
-@testset "_draw_breakaway! and _score_breakaway_bonus!" begin
-    rng = Random.MersenneTwister(1)
-    n = 4
-    abandoned = fill(false, n)
-    rates = [1.0, 0.0, 1.0, 0.0]  # riders 1 and 3 have recorded breakaway history
-
-    # Flat stage: guarded off regardless of rate — no trigger, no boost
-    noisy = zeros(n)
-    in_break = fill(false, n)
-    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :flat, abandoned, n, rng)
-    @test all(.!in_break)
-    @test noisy == zeros(n)
-
-    # Mountain stage: riders 1 and 3 (rate 1.0) always trigger; boost applied
-    fill!(noisy, 0.0)
-    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :mountain, abandoned, n, rng)
-    @test in_break == [true, false, true, false]
-    @test noisy == [2.5, 0.0, 2.5, 0.0]
-
-    # Flat breakaway bonus: only in_break riders are credited
-    stage_pts = zeros(n)
-    Velogames._score_breakaway_bonus!(stage_pts, in_break, 20, n)
-    @test stage_pts == [20.0, 0.0, 20.0, 0.0]
-
-    # bp == 0 (one-day-style scoring table) is a no-op
-    stage_pts2 = zeros(n)
-    Velogames._score_breakaway_bonus!(stage_pts2, in_break, 0, n)
-    @test all(stage_pts2 .== 0.0)
-
-    # Abandoned riders never trigger even at rate 1.0
-    fill!(noisy, 0.0)
-    fill!(in_break, false)
-    abandoned2 = [true, false, true, false]  # exactly the rate-1.0 riders
-    Velogames._draw_breakaway!(in_break, noisy, rates, 2.5, :mountain, abandoned2, n, rng)
-    @test all(.!in_break)
-
-    # Empty breakaway_rates (the default) is a strict no-op — no rand() call,
-    # so RNG state is untouched (checked by comparing the next draw to a fresh
-    # rng at the same seed).
-    rng_a = Random.MersenneTwister(99)
-    rng_b = Random.MersenneTwister(99)
-    fill!(noisy, 0.0)
-    fill!(in_break, false)
-    Velogames._draw_breakaway!(
-        in_break,
-        noisy,
-        Float64[],
-        2.5,
-        :mountain,
-        abandoned,
-        n,
-        rng_a,
-    )
-    @test all(.!in_break)
-    @test rand(rng_a) == rand(rng_b)  # rng_a consumed nothing beforehand
-end
-
-@testset "simulate_stage_race breakaway event: do-no-harm" begin
-    # An all-zero (or empty, the default) breakaway_rates vector must consume
-    # zero rand() calls, so the whole simulation is bit-identical to the
-    # pre-breakaway-modelling behaviour under the same seed.
-    n_riders = 6
-    scoring = SCORING_GRAND_TOUR
-    stages = [flat_stage(1), mountain_stage(2), hilly_stage(3)]
-    base = collect(range(2.0, -2.0, length = n_riders))
-    stage_strengths = Dict{Symbol,Vector{Float64}}(
-        :flat => copy(base),
-        :hilly => copy(base),
-        :mountain => copy(base),
-        :itt => copy(base),
-        :ttt => copy(base),
-    )
-    uncertainties = fill(0.5, n_riders)
-    teams = repeat(["A", "B", "C"], 2)
-
-    sim_default, _ = simulate_stage_race(
-        stages,
-        stage_strengths,
-        uncertainties,
-        teams,
-        scoring;
-        n_sims = 200,
-        rng = Random.MersenneTwister(7),
-    )
-    sim_explicit_zero, _ = simulate_stage_race(
-        stages,
-        stage_strengths,
-        uncertainties,
-        teams,
-        scoring;
-        n_sims = 200,
-        rng = Random.MersenneTwister(7),
-        breakaway_rates = zeros(n_riders),
-    )
-
-    @test sim_default == sim_explicit_zero
-end
-
-@testset "simulate_stage_race breakaway event: boosts targeted rider" begin
-    # Rider 5 is a weak domestique (well below the leaders on every dimension)
-    # given a forced (rate 1.0) breakaway history. With rate 1.0 the Bernoulli
-    # draw is guaranteed to trigger every simulation on both mountain stages
-    # (rand() ∈ [0,1) is always < 1.0), so rider 5 banks the flat 20-pt
-    # breakaway bonus twice, deterministically, regardless of RNG — a mean
-    # floor of 40 that would be impossible without this feature.
-    n_riders = 6
-    scoring = SCORING_GRAND_TOUR
-    stages = [mountain_stage(1), mountain_stage(2), flat_stage(3)]
-    base = [4.0, 1.0, 0.0, -1.0, -3.0, -4.0]
-    stage_strengths = Dict{Symbol,Vector{Float64}}(
-        :flat => copy(base),
-        :hilly => copy(base),
-        :mountain => copy(base),
-        :itt => copy(base),
-        :ttt => copy(base),
-    )
-    uncertainties = fill(0.6, n_riders)
-    teams = ["A", "B", "C", "D", "E", "F"]
-
-    rates = zeros(n_riders)
-    rates[5] = 1.0
-
-    sim, _ = simulate_stage_race(
-        stages,
-        stage_strengths,
-        uncertainties,
-        teams,
-        scoring;
-        n_sims = 50,
-        rng = Random.MersenneTwister(3),
-        breakaway_rates = rates,
-    )
-    mean_pts = vec(mean(sim, dims = 2))
-
-    @test mean_pts[5] >= 40.0
+    # Intermediate-sprint pin (WP1.2, decision D3): the vector is awarded as-is;
+    # the old runtime 0.5x multiplier is folded into these defaults (half the
+    # published VG 20/12/8/6/4/2/1). Changing either without the other is a
+    # silent 2x scoring change.
+    @test Velogames.DEFAULT_STAGE_SIM_CONFIG.intermediate_sprint_points ==
+          [10.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.5]
 end
 
 # =========================================================================
@@ -775,24 +654,6 @@ end
     @test all(==(0.0), gt_propensity_factors(keys, evg_raw, nothing, 2026))
 end
 
-@testset "attrition helpers (_norm_class, _rand_gamma)" begin
-    # Real VG class labels normalise to the attrition_class_mult keys.
-    @test Velogames._norm_class("All Rounder") == :allrounder
-    @test Velogames._norm_class("Sprinter") == :sprinter
-    @test Velogames._norm_class("Climber") == :climber
-    @test Velogames._norm_class("Unclassed") == :unclassed
-    # Unknown labels fall back to :unclassed.
-    @test Velogames._norm_class("GC") == :unclassed
-    @test Velogames._norm_class("") == :unclassed
-
-    # Gamma sampler (shape ≥ 1): strictly positive, terminates, mean ≈ shape.
-    rng = Random.MersenneTwister(1)
-    g = [Velogames._rand_gamma(rng, 2.0) for _ = 1:20000]
-    @test all(g .> 0.0)
-    @test all(isfinite, g)
-    @test abs(mean(g) - 2.0) < 0.1
-end
-
 @testset "daily mountains classification scoring" begin
     scoring = SCORING_GRAND_TOUR
     n = 8
@@ -801,10 +662,13 @@ end
     blend = copy(mountain_s)                            # noise component = noisy - blend = 0
     kom_str = zeros(n)
 
-    # Mountain stage: top climbers bank daily_mountains_class points.
+    # Mountain stage: top climbers bank daily_mountains_class points, and the
+    # same points accrue into the cumulative kom_total that decides the final jersey.
     stage_pts = zeros(n)
+    kom_total = zeros(n)
     Velogames._score_daily_mountains!(
         stage_pts,
+        kom_total,
         mountain_s,
         noisy,
         blend,
@@ -816,11 +680,13 @@ end
     @test stage_pts[1] == scoring.daily_mountains_class[1]        # best climber → top KOM
     @test stage_pts[6] == scoring.daily_mountains_class[6]        # 6th → last scoring slot
     @test stage_pts[7] == 0 && stage_pts[8] == 0                  # outside top 6
+    @test kom_total == stage_pts                                  # cumulative tally mirrors daily points
 
-    # Hilly stage also scores; ITT / flat do not.
+    # Hilly stage also scores (and accumulates); ITT / flat do not.
     stage_pts = zeros(n)
     Velogames._score_daily_mountains!(
         stage_pts,
+        kom_total,
         mountain_s,
         noisy,
         blend,
@@ -830,10 +696,13 @@ end
         n,
     )
     @test stage_pts[1] == scoring.daily_mountains_class[1]
+    @test kom_total[1] == 2 * scoring.daily_mountains_class[1]    # two scoring stages banked
     for st in (:flat, :itt, :ttt)
         stage_pts = zeros(n)
+        before = copy(kom_total)
         Velogames._score_daily_mountains!(
             stage_pts,
+            kom_total,
             mountain_s,
             noisy,
             blend,
@@ -843,72 +712,44 @@ end
             n,
         )
         @test all(stage_pts .== 0)
+        @test kom_total == before
     end
 end
 
-@testset "attrition freeze-out + gate" begin
+@testset "final mountains jersey ranked by cumulative daily-KOM points" begin
+    # WP1.1 (review defects 1+2): a high-kom_s specialist who finishes mid-pack
+    # must beat the GC leader to the final mountains jersey. Under the old
+    # mountain-top-5-finish-count proxy the leader (who wins every summit) took
+    # the jersey and kom_s never touched it.
     scoring = SCORING_GRAND_TOUR
-    stages = [mountain_stage(1), mountain_stage(2), mountain_stage(3), mountain_stage(4)]
-    n_riders = 10
-    base = collect(range(2.0, -2.0, length = n_riders))
+    stages = [mountain_stage(1), mountain_stage(2), hilly_stage(3)]
+    n = 6
+    base = [3.0, 0.0, 1.0, 0.5, -1.0, -2.0]    # rider 1 = GC leader, rider 2 mid-pack
+    kom = [-1.0, 5.0, 0.0, -0.5, -1.5, -2.0]   # rider 2 = KOM specialist
     stage_strengths = Dict{Symbol,Vector{Float64}}(
         :flat => copy(base),
         :hilly => copy(base),
         :mountain => copy(base),
         :itt => copy(base),
         :ttt => copy(base),
+        :kom => kom,
     )
-    unc = fill(0.5, n_riders)
-    teams = repeat(["A", "B"], 5)
-
-    # Attrition OFF (empty rider_classes) — reproduces pre-A2 behaviour.
-    rng1 = Random.MersenneTwister(99)
-    sim_off, _ = simulate_stage_race(
+    n_sims = 200
+    _, diag = simulate_stage_race(
         stages,
         stage_strengths,
-        unc,
-        teams,
+        fill(0.3, n),
+        ["A", "B", "C", "D", "E", "F"],
         scoring;
-        n_sims = 100,
-        rng = rng1,
-        rider_classes = String[],
-    )
-    # Gate is deterministic: same seed + empty classes ⇒ identical output.
-    rng2 = Random.MersenneTwister(99)
-    sim_off2, _ = simulate_stage_race(
-        stages,
-        stage_strengths,
-        unc,
-        teams,
-        scoring;
-        n_sims = 100,
-        rng = rng2,
-        rider_classes = String[],
-    )
-    @test sim_off == sim_off2
-
-    # Attrition ON with a high hazard ⇒ riders abandon and stop scoring.
-    hi = StageSimConfig(
-        attrition_hazard = (flat = 0.5, hilly = 0.5, mountain = 0.5, itt = 0.5, ttt = 0.5),
-    )
-    rng3 = Random.MersenneTwister(99)
-    sim_on, _ = simulate_stage_race(
-        stages,
-        stage_strengths,
-        unc,
-        teams,
-        scoring;
-        n_sims = 100,
-        rng = rng3,
-        rider_classes = fill("sprinter", n_riders),
-        sim_config = hi,
+        n_sims = n_sims,
+        rng = Random.MersenneTwister(5),
     )
 
-    @test all(isfinite, sim_off)                 # no NaN / Inf leaks into totals
-    @test all(isfinite, sim_on)
-    @test all(sim_on .>= 0.0)
-    # Heavy attrition removes post-abandon scoring ⇒ strictly fewer total points.
-    @test sum(sim_on) < sum(sim_off)
+    # Specialist (rider 2) takes the final jersey in a clear majority of sims,
+    # and far more often than the GC leader (rider 1).
+    @test diag.final_mountains_position_counts[2, 1] > n_sims ÷ 2
+    @test diag.final_mountains_position_counts[2, 1] >
+          diag.final_mountains_position_counts[1, 1]
 end
 
 @testset "simulate_stage_race always returns (matrix, diagnostics)" begin
@@ -1016,68 +857,9 @@ end
 end
 
 # =========================================================================
-# Review remediation (July 2026): abandonment/TTT, empty scoring tables,
-# market-discount mask, per-rider recency fallback.
+# Review remediation (July 2026): empty scoring tables, market-discount mask,
+# per-rider recency fallback.
 # =========================================================================
-
-@testset "_assign_team_positions! excludes abandoned riders" begin
-    # Team A holds the single strongest active rider but also an abandoned
-    # (-Inf) teammate; team B is uniformly mid. The abandoned rider must not
-    # drag team A to the bottom — team A ranks on its ACTIVE riders' mean.
-    n = 4
-    noisy = [5.0, -Inf, 1.0, 1.0]
-    teams = ["A", "A", "B", "B"]
-    abandoned = [false, true, false, false]
-    positions = zeros(Int, n)
-    Velogames._assign_team_positions!(positions, noisy, teams, abandoned, n)
-    @test positions[1] == 1          # team A first (active mean 5.0 > B's 1.0)
-    @test positions[3] == 2 && positions[4] == 2
-
-    # A team with NO active riders left ranks last (mean -Inf).
-    noisy2 = [-Inf, -Inf, 1.0, 1.0]
-    abandoned2 = [true, true, false, false]
-    positions2 = zeros(Int, n)
-    Velogames._assign_team_positions!(positions2, noisy2, teams, abandoned2, n)
-    @test positions2[3] == 1 && positions2[4] == 1
-    @test positions2[1] == 2 && positions2[2] == 2
-end
-
-@testset "TTT after abandonment stays finite" begin
-    # Mountain stage (high hazard forces abandonment) then a TTT: exercises the
-    # team-mean path with -Inf teammates present. Must not leak -Inf/NaN into
-    # totals nor throw.
-    scoring = SCORING_GRAND_TOUR
-    stages = [mountain_stage(1), ttt_stage(2)]
-    n_riders = 10
-    base = collect(range(2.0, -2.0, length = n_riders))
-    stage_strengths = Dict{Symbol,Vector{Float64}}(
-        :flat => copy(base),
-        :hilly => copy(base),
-        :mountain => copy(base),
-        :itt => copy(base),
-        :ttt => copy(base),
-    )
-    unc = fill(0.3, n_riders)
-    teams = repeat(["A", "B"], 5)
-    hi = StageSimConfig(
-        attrition_hazard = (flat = 0.4, hilly = 0.4, mountain = 0.4, itt = 0.0, ttt = 0.0),
-    )
-    rng = Random.MersenneTwister(7)
-    sim, _ = simulate_stage_race(
-        stages,
-        stage_strengths,
-        unc,
-        teams,
-        scoring;
-        n_sims = 200,
-        rng = rng,
-        rider_classes = fill("sprinter", n_riders),
-        sim_config = hi,
-    )
-    @test all(isfinite, sim)
-    @test all(sim .>= 0.0)
-    @test sum(sim) > 0.0
-end
 
 @testset "format_classification_table handles empty scoring table" begin
     # A classification whose VG scoring table is empty (heading unmatched, or the
@@ -1299,4 +1081,49 @@ end
     @test issorted([f.delta for f in forks.forks], rev = true)
     # GC-shape fork is absent here (no :strength_gc column).
     @test forks.shape === nothing
+end
+
+@testset "multidim block-correlation discount (WP1.6)" begin
+    cfg_on = Velogames.BayesianConfig()
+    cfg_off = Velogames.BayesianConfig(multidim_block_correlation = false)
+    gc = Velogames._DIM_INDEX[:gc]
+
+    multi = Velogames.RiderSignalData(
+        has_pcs = true,
+        pcs_gc_z = 1.5,
+        pcs_climber_z = 1.2,
+        rider_class = "allrounder",
+        vg_points = 1.0,
+        race_history = [1.0, 0.8],
+        race_history_years_ago = [1, 2],
+        odds_implied_prob = 0.3,
+    )
+    est_on = Velogames.estimate_rider_strength_multidim(multi; config = cfg_on)
+    est_off = Velogames.estimate_rider_strength_multidim(multi; config = cfg_off)
+
+    # Multi-observation dimensions widen; none narrow.
+    @test est_on.variance[gc] > est_off.variance[gc]
+    @test all(est_on.variance .>= est_off.variance .- 1e-12)
+    # The discount shrinks the posterior mean toward the prior (0), never past it.
+    @test 0.0 < est_on.mean[gc] < est_off.mean[gc]
+
+    # A rider with at most one observation per dimension is untouched.
+    single = Velogames.RiderSignalData(
+        has_pcs = false,
+        rider_class = "sprinter",
+        vg_points = 1.2,
+    )
+    s_on = Velogames.estimate_rider_strength_multidim(single; config = cfg_on)
+    s_off = Velogames.estimate_rider_strength_multidim(single; config = cfg_off)
+    @test s_on.mean == s_off.mean
+    @test s_on.variance == s_off.variance
+
+    # skip_block_correlation escape hatch reproduces the flag-off result.
+    est_skip = Velogames.estimate_rider_strength_multidim(
+        multi;
+        config = cfg_on,
+        skip_block_correlation = true,
+    )
+    @test est_skip.mean == est_off.mean
+    @test est_skip.variance == est_off.variance
 end

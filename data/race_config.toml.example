@@ -55,3 +55,21 @@ my_team = [
     "Mathieu Van Der Poel",
     "Mads Pedersen"
 ]
+
+[league]
+# Used by scripts/league_eval.jl for the cumulative-placement and
+# entered-vs-advised sections (WP0.1/WP0.2). Reads the vgleague package's
+# scraped JSON cache (../vgleague/data/{game_slug}_{year}_{league_id}.json)
+# rather than duplicating a scraper here — see docs/remediation-plan.md D1.
+vgleague_data_dir = "~/code/vgleague/data"
+game_slug = "sixes-classics"
+year = 2026
+league_id = "100737112"
+user_name = "JZ"             # vgleague username whose entered team is scored (not the display team name)
+
+[entered_team]
+# Manual override for the team actually entered in the CURRENT race
+# ([race] above), only needed if it isn't in the vgleague JSON cache yet.
+# league_eval.jl prefers this over the JSON when both are present.
+riders = []
+score = 0                    # 0 = compute from riders + archived VG results when the race is scored

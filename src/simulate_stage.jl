@@ -107,22 +107,15 @@ function _assign_team_positions!(
     positions::Vector{Int},
     noisy::Vector{Float64},
     teams::Vector{String},
-    abandoned::Vector{Bool},
     n_riders::Int,
 )
-    # Average TT strength over the riders still in the race. An abandoned rider's
-    # noisy is -Inf, so including them would collapse the whole squad's mean to
-    # -Inf and rank every active teammate last. A team with no active riders left
-    # ranks bottom (mean -Inf).
     team_sum = Dict{String,Float64}()
     team_n = Dict{String,Int}()
     for i = 1:n_riders
-        (!isempty(abandoned) && abandoned[i]) && continue
         team_sum[teams[i]] = get(team_sum, teams[i], 0.0) + noisy[i]
         team_n[teams[i]] = get(team_n, teams[i], 0) + 1
     end
-    team_mean(t) = get(team_n, t, 0) == 0 ? -Inf : team_sum[t] / team_n[t]
-    ranked = sort(unique(teams), by = team_mean, rev = true)
+    ranked = sort(unique(teams), by = t -> team_sum[t] / team_n[t], rev = true)
     team_rank = Dict(t => r for (r, t) in enumerate(ranked))
     for i = 1:n_riders
         positions[i] = team_rank[teams[i]]
@@ -191,7 +184,6 @@ end
     stype::Symbol,
     n_riders::Int,
     int_points::Vector{Float64},
-    abandoned::Vector{Bool},
 )
     if stype != :flat && stype != :hilly
         return nothing
@@ -201,18 +193,16 @@ end
     # Same variance decomposition as the stage finish: persistent epistemic
     # wobble (α·σ·rider, correlated with the stage) + aleatoric race-day scatter
     # (a_stage·stage). Reuses the stage's own noise draws so a rider's banner
-    # result is correlated with their stage-finish result. Abandoned riders are
-    # frozen out (they don't contest the banner).
+    # result is correlated with their stage-finish result.
     for i = 1:n_riders
         int_noisy[i] =
-            (!isempty(abandoned) && abandoned[i]) ? -Inf :
             flat_str[i] +
             uncertainties[i] * alpha * rider_noise[i] +
             a_stage * stage_noise[i]
     end
     int_order = sortperm(int_noisy, rev = true)
     for rank = 1:min(length(int_points), n_riders)
-        points_jersey_total[int_order[rank]] += 0.5 * int_points[rank]
+        points_jersey_total[int_order[rank]] += int_points[rank]
     end
     return nothing
 end
@@ -223,13 +213,18 @@ end
 # climbers / polka-dot contenders. Per-climb HC/Cat-1 points can't be modelled
 # (the PCS scraper leaves `n_hc_climbs`/`n_cat1_climbs` at 0), so we rank by
 # climbing ability plus the stage's realised luck (`noisy - strengths_blend`).
-# Note `noisy` already carries the stage-finish breakaway shock on mountain
+# Note `noisy` already carries the stage-finish breakaway noise on mountain
 # stages, so the daily-KOM order is positively correlated with the day's stage
 # result — reasonable, since the rider animating a mountain stage typically
-# leads over its climbs. Abandoned riders carry -Inf `noisy` and sort out
-# automatically.
+# leads over its climbs.
+#
+# The same daily points also accrue into `kom_total`, the cumulative per-sim
+# KOM tally that decides the final mountains jersey (July 2026 fix: the final
+# jersey previously ranked on mountain-stage top-5 FINISHES, which never read
+# `kom_s` and ignored hilly stages).
 @inline function _score_daily_mountains!(
     stage_pts::Vector{Float64},
+    kom_total::Vector{Float64},
     kom_s::Vector{Float64},
     noisy::Vector{Float64},
     strengths_blend::Vector{Float64},
@@ -248,66 +243,9 @@ end
     end
     kom_order = sortperm(kom_str, rev = true)
     for r = 1:min(depth, n_riders)
-        stage_pts[kom_order[r]] += scoring.daily_mountains_class[r]
-    end
-    return nothing
-end
-
-# Discrete breakaway event (grand-tour breakaway modelling, July 2026). Draws
-# a per-stage Bernoulli "in the break" event, hilly/mountain stages only, for
-# riders with a recorded PCS breakaway-km history (`breakaway_rates[i] > 0`,
-# from `compute_breakaway_rates` — see race_solver.jl `_load_breakaway_rates`).
-# Riders with no such history (pure sprinters, GC leaders who never go up the
-# road) have `breakaway_rates[i] == 0.0` and are skipped WITHOUT consuming an
-# `rng` draw, so passing an empty/all-zero `breakaway_rates` (the default)
-# leaves the RNG stream — and hence every simulated outcome — bit-identical to
-# the pre-breakaway-modelling behaviour.
-#
-# On trigger, boosts the rider's `noisy` stage-finish strength (mirrors the
-# real advantage of contesting a stage from a small escape rather than the
-# full bunch) so the effect flows through the EXISTING finish-position
-# ranking, points-jersey ranking, and daily-KOM proxy (all keyed off `noisy`)
-# without a parallel ranking system. Deliberately does NOT touch
-# `cumulative_gc_score`: a domestique's break essentially never moves real
-# GC, and keeping GC untouched means this feature cannot inflate the exact
-# metrics (final GC bonus, final team classification) used for rank-ρ
-# validation elsewhere.
-@inline function _draw_breakaway!(
-    in_break::Vector{Bool},
-    noisy::Vector{Float64},
-    breakaway_rates::Vector{Float64},
-    boost::Float64,
-    stype::Symbol,
-    abandoned::Vector{Bool},
-    n_riders::Int,
-    rng::AbstractRNG,
-)
-    fill!(in_break, false)
-    (isempty(breakaway_rates) || (stype != :hilly && stype != :mountain)) && return in_break
-    for i = 1:n_riders
-        (abandoned[i] || breakaway_rates[i] <= 0.0) && continue
-        if rand(rng) < breakaway_rates[i]
-            in_break[i] = true
-            noisy[i] += boost
-        end
-    end
-    return in_break
-end
-
-# Flat "breakaway at 50% distance" bonus (`scoring.breakaway_points`, 20 pts —
-# previously dead for stage races, see scoring.jl SCORING_GRAND_TOUR). Awarded
-# unconditionally to every rider `_draw_breakaway!` selected for this stage,
-# on top of whatever they score for their (boosted) finish position. Must run
-# AFTER `_score_stage_finish_and_assists!`, which `fill!`s `stage_pts` to zero.
-@inline function _score_breakaway_bonus!(
-    stage_pts::Vector{Float64},
-    in_break::Vector{Bool},
-    bp::Int,
-    n_riders::Int,
-)
-    bp == 0 && return nothing
-    for i = 1:n_riders
-        in_break[i] && (stage_pts[i] += bp)
+        pts = scoring.daily_mountains_class[r]
+        stage_pts[kom_order[r]] += pts
+        kom_total[kom_order[r]] += pts
     end
     return nothing
 end
@@ -398,12 +336,12 @@ intermediate sprint, KOM) is delegated to `_score_*` helpers above. The aleatori
 scale, breakaway noise, jersey allocation, and intermediate-sprint points all live
 in `sim_config::StageSimConfig`.
 
-`breakaway_rates` (optional, aligned to `uncertainties`/`teams` by rider index)
-enables the discrete per-rider breakaway event on hilly/mountain stages — see
-`_draw_breakaway!`. Empty by default, in which case the feature is fully
-inert (no RNG draws consumed, output identical to pre-breakaway-modelling
-behaviour). Typically produced by `compute_breakaway_rates` from archived PCS
-breakaway-km data with `max_rate = STAGE_BREAKAWAY_MAX_RATE`.
+RNG stream design. Each simulation draw consumes from the master `rng`, in
+order: (1) the persistent rider noise (`n_riders` randn), and per stage (2) the
+aleatoric stage noise (`_rand_t`, fixed `aleatoric_df + 1` randn per rider) and
+(3) any stage-finish / points-jersey breakaway Gaussian noise (gated only on
+stage weights, an input). Master-stream consumption is therefore fixed given
+the stage list and field size.
 """
 function simulate_stage_race(
     stages::Vector{StageProfile},
@@ -416,47 +354,20 @@ function simulate_stage_race(
     gc_strengths::Vector{Float64} = Float64[],
     rng::AbstractRNG = Random.default_rng(),
     sim_config::StageSimConfig = DEFAULT_STAGE_SIM_CONFIG,
-    rider_classes::Vector{String} = String[],
-    breakaway_rates::Vector{Float64} = Float64[],
 )
     n_riders = length(uncertainties)
     n_stages = length(stages)
     alpha = cross_stage_alpha
 
-    # Attrition (A2): per-rider class hazard multiplier. Active only when
-    # `rider_classes` is supplied (production); tests without classes keep the
-    # old no-attrition behaviour. Abandoned riders are frozen out of every
-    # per-stage event and all final classifications from their abandon stage on.
-    attrition_on = !isempty(rider_classes)
-    class_mult = if attrition_on
-        [
-            getproperty(sim_config.attrition_class_mult, _norm_class(rider_classes[i]))
-            for i = 1:n_riders
-        ]
-    else
-        Float64[]
-    end
-    # GC-favourite protection: fold a per-rider hazard multiplier ≤ 1 into the
-    # class multiplier so strong GC favourites (high GC-strength z-score) rarely
-    # abandon — they're contending, not strategically pulling out. Only riders
-    # >1 SD above the field are protected, so field survival is ~unchanged.
-    if attrition_on && !isempty(gc_strengths) && sim_config.gc_favourite_protection > 0
-        μ = mean(gc_strengths)
-        s = std(gc_strengths)
-        if s > 0
-            for i = 1:n_riders
-                gc_z = (gc_strengths[i] - μ) / s
-                prot = exp(-sim_config.gc_favourite_protection * max(0.0, gc_z - 1.0))
-                class_mult[i] *= max(sim_config.gc_protection_floor, prot)
-            end
-        end
-    end
-
     # If gc_strengths not supplied, fall back to per-rider mean across stage types.
     # Production callers always supply gc_strengths via `compute_stage_strengths`;
     # this fallback keeps synthetic test inputs working.
     if isempty(gc_strengths)
-        keys_present = collect(keys(stage_strengths))
+        # Average genuine stage types only: :kom is a jersey channel, not a
+        # stage type, and :ttt duplicates :itt — including them skews the GC
+        # proxy towards KOM specialists and double-weights the TT dimension.
+        keys_present =
+            [k for k in (:flat, :hilly, :mountain, :itt) if haskey(stage_strengths, k)]
         gc_strengths =
             [mean(stage_strengths[k][i] for k in keys_present) for i = 1:n_riders]
     end
@@ -488,10 +399,8 @@ function simulate_stage_race(
     gc_positions = Vector{Int}(undef, n_riders)
     stage_pts = Vector{Float64}(undef, n_riders)
     points_jersey_total = Vector{Float64}(undef, n_riders)
-    mountain_top5_counts = Vector{Int}(undef, n_riders)
+    kom_total = Vector{Float64}(undef, n_riders)
     kom_str = Vector{Float64}(undef, n_riders)
-    abandoned = Vector{Bool}(undef, n_riders)
-    in_break = Vector{Bool}(undef, n_riders)
 
     for sim = 1:n_sims
         for i = 1:n_riders
@@ -500,8 +409,7 @@ function simulate_stage_race(
 
         fill!(cumulative_gc_score, 0.0)
         fill!(points_jersey_total, 0.0)
-        fill!(mountain_top5_counts, 0)
-        fill!(abandoned, false)
+        fill!(kom_total, 0.0)
         rider_total_pts = zeros(Float64, n_riders)
 
         for (stage_idx, stage) in enumerate(stages)
@@ -522,23 +430,6 @@ function simulate_stage_race(
                     w.hilly * hilly_s[i] +
                     w.mountain * mountain_s[i] +
                     w.itt * itt_s[i]
-            end
-
-            # Attrition: draw this stage's abandonments among still-active riders.
-            # A single shared "brutal day" shock (Gamma, mean 1) scales every
-            # at-risk rider's hazard together, so crashes/echelons/time-cuts take
-            # out sprinters in correlated cohorts rather than independently.
-            if attrition_on
-                base_h = getproperty(sim_config.attrition_hazard, stype)
-                shock =
-                    _rand_gamma(rng, sim_config.attrition_shock_shape) /
-                    sim_config.attrition_shock_shape
-                day_h = base_h * shock
-                for i = 1:n_riders
-                    if !abandoned[i] && rand(rng) < day_h * class_mult[i]
-                        abandoned[i] = true
-                    end
-                end
             end
 
             # Stage-finish noisy strengths + GC accumulation. Total per-stage
@@ -569,12 +460,6 @@ function simulate_stage_race(
             gc_sep = clamp(w.mountain + w.itt, 0.0, 1.0)
             for i = 1:n_riders
                 stage_noise[i] = _rand_t(rng, sim_config.aleatoric_df)
-                if abandoned[i]
-                    # Frozen out: last in every ranking, no further GC time.
-                    noisy[i] = -Inf
-                    cumulative_gc_score[i] = -Inf
-                    continue
-                end
                 epistemic = uncertainties[i] * alpha * rider_noise[i]
                 aleatoric = a_stage * stage_noise[i]
                 noisy[i] = strengths_blend[i] + epistemic + aleatoric
@@ -589,36 +474,18 @@ function simulate_stage_race(
                 end
             end
 
-            # Discrete breakaway event (rider-targeted, data-informed — see
-            # `_draw_breakaway!` above). No-op and RNG-inert when
-            # `breakaway_rates` is empty (the default).
-            _draw_breakaway!(
-                in_break,
-                noisy,
-                breakaway_rates,
-                sim_config.breakaway_stage_boost,
-                stype,
-                abandoned,
-                n_riders,
-                rng,
-            )
-
             # Rank by noisy stage strength → positions, record podium/top-10.
             # A team time trial is scored as a ranking of teams: every rider
             # shares their squad's placing.
             order = sortperm(noisy, rev = true)
             if stype == :ttt
-                _assign_team_positions!(positions, noisy, teams, abandoned, n_riders)
+                _assign_team_positions!(positions, noisy, teams, n_riders)
             else
                 for (pos, rider_idx) in enumerate(order)
                     positions[rider_idx] = pos
                 end
             end
             for i = 1:n_riders
-                # Abandoned riders inherit their team's placing on a TTT, so
-                # exclude them here or a top-3 team would credit its abandoned
-                # members with a stage podium in the diagnostics.
-                abandoned[i] && continue
                 p = positions[i]
                 if p <= 3
                     diag_stage_finish[stage_idx, i, p] += 1
@@ -640,11 +507,6 @@ function simulate_stage_race(
                     n_riders,
                 )
             end
-
-            # Flat breakaway bonus (unconditional on finish position). Must
-            # run after the fill! above, and is a no-op whenever `in_break` is
-            # all-false (flat/itt/ttt stages, or breakaway modelling disabled).
-            _score_breakaway_bonus!(stage_pts, in_break, scoring.breakaway_points, n_riders)
 
             # Cumulative GC ranking after this stage.
             gc_order = sortperm(cumulative_gc_score, rev = true)
@@ -671,16 +533,9 @@ function simulate_stage_race(
                 sim_config,
             )
 
-            # KOM proxy: count mountain top-5 finishes per rider (feeds the final
-            # mountains classification). The daily KOM classification points are
-            # scored separately below.
-            for i = 1:n_riders
-                if positions[i] <= 5 && stype == :mountain
-                    mountain_top5_counts[i] += 1
-                end
-            end
             _score_daily_mountains!(
                 stage_pts,
+                kom_total,
                 kom_s,
                 noisy,
                 strengths_blend,
@@ -702,29 +557,14 @@ function simulate_stage_race(
                 stype,
                 n_riders,
                 sim_config.intermediate_sprint_points,
-                abandoned,
             )
 
-            # Abandoned riders are frozen out of every per-stage event: their
-            # finish/GC positions are already last (noisy = -Inf), but the
-            # teammate-assist loops still credit them, so skip accumulation
-            # entirely once they have left the race. Points banked on earlier
-            # stages remain in rider_total_pts.
             for i = 1:n_riders
-                abandoned[i] || (rider_total_pts[i] += stage_pts[i])
+                rider_total_pts[i] += stage_pts[i]
             end
         end
 
         # --- Final classification bonuses ---
-        # Abandoned riders are not classified: freeze them out of the final
-        # points and mountains rankings (final GC/team already exclude them via
-        # their -Inf cumulative GC score). Points earned before abandoning stand.
-        for i = 1:n_riders
-            if abandoned[i]
-                points_jersey_total[i] = -Inf
-                mountain_top5_counts[i] = -1
-            end
-        end
 
         # Final GC
         for i = 1:n_riders
@@ -746,11 +586,13 @@ function simulate_stage_race(
             end
         end
 
-        # Final mountains classification (mountain top-5 count proxy)
-        kom_order = sortperm(mountain_top5_counts, rev = true)
+        # Final mountains classification: ranked by cumulative daily-KOM points
+        # (driven by kom_s across hilly AND mountain stages, same stage set and
+        # strength dimension as the daily competition).
+        kom_order = sortperm(kom_total, rev = true)
         for rank = 1:min(length(scoring.final_mountains_class), n_riders)
             rider_idx = kom_order[rank]
-            if mountain_top5_counts[rider_idx] > 0
+            if kom_total[rider_idx] > 0
                 rider_total_pts[rider_idx] += scoring.final_mountains_class[rank]
                 if rank <= diag_mountains_top
                     diag_mountains_pos[rider_idx, rank] += 1

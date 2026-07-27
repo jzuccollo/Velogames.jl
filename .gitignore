@@ -41,6 +41,7 @@ data/race_config.toml.*
 
 # League results (changes every race, not version controlled)
 data/league_winners.toml
+data/league_standings.toml
 
 /.quarto/
 

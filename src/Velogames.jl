@@ -1,7 +1,7 @@
 module Velogames
 
 using HTTP, DataFrames, Cascadia, Gumbo, Unicode, HiGHS, JuMP, Feather, Dates, JSON3, SHA
-using Random, Statistics, PlotlyBase
+using Random, Statistics, PlotlyBase, TOML
 
 # Core data retrieval
 export getvg_riders,
@@ -90,8 +90,7 @@ export ScoringTable,
     stage_finish_points_for_position,
     daily_gc_points_for_position,
     final_gc_points_for_position,
-    compute_breakaway_rates,
-    STAGE_BREAKAWAY_MAX_RATE
+    compute_breakaway_rates
 
 # Solvers and optimisation
 export solve_oneday,
@@ -157,7 +156,24 @@ export BacktestRace,
     build_race_catalogue,
     prefetch_race_data,
     prefetch_all_races,
-    spearman_correlation
+    spearman_correlation,
+    StageRaceBacktestData,
+    prefetch_stage_race_data,
+    champion_evg,
+    backtest_stage_race,
+    crosscheck_option_ab,
+    DirectEVGParams,
+    DEFAULT_DIRECT_EVG_PARAMS,
+    direct_evg,
+    fit_direct_evg,
+    OneDayBacktestData,
+    prefetch_oneday_backtest_data,
+    champion_oneday_evg,
+    backtest_oneday_race,
+    backtest_oneday_season,
+    DEFAULT_DIRECT_ONEDAY_EVG_PARAMS,
+    direct_oneday_evg,
+    fit_direct_oneday_evg
 
 # Utilities
 export createkey,
@@ -192,6 +208,7 @@ export html_page,
     compute_stage_type_scores,
     archive_stage_race_results,
     load_stage_profiles,
+    load_league_standings,
     plotly_html,
     precision_budget,
     sim_distribution_chart,
@@ -224,6 +241,9 @@ include("simulate_stage.jl")
 include("strength_pipeline.jl")
 include("prior_checks.jl")
 include("backtest.jl")
+# direct_evg.jl references backtest.jl's StageRaceBacktestData in its method
+# signatures, so it must come after backtest.jl (and build_model.jl).
+include("direct_evg.jl")
 include("race_solver.jl")
 include("prospective_eval.jl")
 include("report_html.jl")

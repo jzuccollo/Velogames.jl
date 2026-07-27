@@ -6,6 +6,25 @@ Loads predictions and results from the archive (`DEFAULT_ARCHIVE_DIR`, under
 backtesting framework (Spearman rho, top-N overlap, signal shifts).
 """
 
+"""
+    _check_prediction_schema(predictions, label) -> predictions
+
+Warn (once per legacy archive read) if an archived prediction DataFrame
+predates the WP0.3 schema hardening — i.e. is missing any of
+`PREDICTION_MANDATORY_COLUMNS`
+(`riderkey, rider, team, cost, chosen, selection_frequency, expected_vg_points`).
+Never throws: legacy (pre-April-2026) archives can't be re-created, so readers
+must tolerate them and degrade gracefully rather than crash. Returns
+`predictions` unchanged for chaining.
+"""
+function _check_prediction_schema(predictions::DataFrame, label::AbstractString)
+    missing_cols = _missing_prediction_columns(predictions)
+    if !isempty(missing_cols)
+        @warn "Legacy prediction archive for $label is missing columns $missing_cols — pre-April-2026 archives predate the schema hardening and cannot be re-created; affected metrics may be skipped or degraded"
+    end
+    return predictions
+end
+
 struct ProspectiveResult
     pcs_slug::String
     year::Int
@@ -38,6 +57,7 @@ function evaluate_prospective(
     if predictions === nothing || pcs_results === nothing
         return nothing
     end
+    _check_prediction_schema(predictions, "$pcs_slug $year")
 
     # Match on riderkey
     if !hasproperty(pcs_results, :riderkey)
@@ -210,6 +230,7 @@ function prospective_pit_values(
 
         predictions =
             load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
+        predictions === nothing || _check_prediction_schema(predictions, "$pcs_slug $year")
         vg_results =
             load_race_snapshot("vg_results", pcs_slug, year; archive_dir = archive_dir)
 
@@ -370,6 +391,7 @@ function signal_value_analysis(year::Int; archive_dir::String = DEFAULT_ARCHIVE_
         predictions =
             load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
         predictions === nothing && continue
+        _check_prediction_schema(predictions, "$pcs_slug $year")
 
         shift_cols =
             filter(c -> startswith(string(c), "shift_"), propertynames(predictions))

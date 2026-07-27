@@ -2209,6 +2209,117 @@ if nrow(pit_df) > 0 && nrow(prospective_df) > 0
     end
 end
 
+# --- Stage-race harness ---
+
+write(io, html_heading("Stage-race harness", 2))
+write(
+    io,
+    """<p>Grand-tour editions reconstructed as-of race day from the archive (<code>prefetch_stage_race_data</code>) and scored against actual VG totals. Each predictor's 9-rider team is optimised on its own EVG under the production budget/class constraints; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production stack, <code>champion_evg</code>), <code>persistence</code> (most recent prior-edition VG total), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years). These are the standing comparators for the WP2.3 champion–challenger gate.</p>\n""",
+)
+
+gt_editions = vcat(
+    [("giro-d-italia", y) for y = 2023:2026],
+    [("tour-de-france", y) for y = 2023:2025],
+    [("vuelta-a-espana", y) for y = 2023:2025],
+)
+
+harness_rows = DataFrame[]
+for (slug, yr) in gt_editions
+    try
+        edition_df = suppress_output() do
+            backtest_stage_race(slug, yr)
+        end
+        push!(harness_rows, edition_df)
+    catch e
+        @warn "Stage-race harness skipped $slug $yr: $e"
+    end
+end
+
+if isempty(harness_rows)
+    write(
+        io,
+        html_callout(
+            "No grand-tour editions could be reconstructed — check the archive (vg_stage_riders / vg_stage_totals / pcs_stage_profiles).",
+        ),
+    )
+else
+    write(io, html_table(vcat(harness_rows...)))
+end
+
+write(io, html_heading("Option A/B do-no-harm cross-check", 3))
+write(
+    io,
+    """<p>Drift alarm for the harness (WP2.1): the 2026 Tour is reconstructed as-of race day and the Option A/B validation is re-run inside the harness — EVG four ways with the GT VG-history signal restricted to editions ≤ 2024, Spearman-correlated against riders' real 2025 Tour totals. <code>pass</code> compares each ρ against the <em>pinned post-WP2.3 baseline</em> (<code>base_*</code> columns) within ±0.03 — a false row means something has shifted the seeded pipeline since the baseline was pinned and should be investigated (or the baseline consciously re-based). The <code>rec_*</code> columns are the historical values recorded in roadmap.md on pre-Phase-1 code; they are kept for the record, not as the pass criterion — WP1.1, WP1.4 and the WP2.3 layer deletions each legitimately moved the level (attribution in the <code>crosscheck_option_ab</code> docstring).</p>\n""",
+)
+
+ab_df = try
+    suppress_output() do
+        crosscheck_option_ab()
+    end
+catch e
+    @warn "Option A/B cross-check unavailable: $e"
+    nothing
+end
+ab_df !== nothing && write(io, html_table(ab_df))
+
+# --- One-day harness ---
+
+write(io, html_heading("One-day harness", 2))
+write(
+    io,
+    """<p>A curated set of major classics reconstructed as-of race day (<code>prefetch_oneday_backtest_data</code>) and scored against actual scraped VG totals — the true scoreboard, with assist and breakaway points, not the finish-only proxy the per-race calibration section uses. Each predictor's 6-rider team is optimised on its own EVG under the budget; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production one-day stack, <code>champion_oneday_evg</code>), <code>direct</code> (the direct-EVG challenger), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years), <code>maxcost</code> (the star-buying baseline). This is the one-day twin of the stage-race harness above. Scope is limited to the classics below to bound the champion's resampling cost; widen <code>oneday_slugs</code> to cover more.</p>\n""",
+)
+
+# Curated major classics (the review §2.1 set + monuments) — bounded so the
+# champion's per-edition resampling stays tractable in a report render.
+oneday_slugs = [
+    "omloop-het-nieuwsblad", "kuurne-brussel-kuurne", "strade-bianche",
+    "milano-sanremo", "classic-brugge-de-panne", "e3-harelbeke",
+    "gent-wevelgem", "dwars-door-vlaanderen", "ronde-van-vlaanderen",
+    "paris-roubaix", "amstel-gold-race", "la-fleche-wallonne",
+    "liege-bastogne-liege", "il-lombardia",
+]
+
+oneday_harness_rows = DataFrame[]
+for slug in oneday_slugs, yr in backtest_years
+    try
+        edition_df = suppress_output() do
+            backtest_oneday_race(
+                slug,
+                yr;
+                predictors = [:simulator, :direct, :odds, :maxcost],
+                cache_config = bt_cache,
+            )
+        end
+        push!(oneday_harness_rows, edition_df)
+    catch e
+        @warn "One-day harness skipped $slug $yr: $e"
+    end
+end
+oneday_rows = isempty(oneday_harness_rows) ? DataFrame() : vcat(oneday_harness_rows...)
+
+if nrow(oneday_rows) == 0
+    write(
+        io,
+        html_callout(
+            "No one-day editions could be scored — check the vg_results archive.",
+        ),
+    )
+else
+    oneday_summary = combine(
+        groupby(oneday_rows, :predictor),
+        :team_points_captured => (x -> round(mean(x); digits = 3)) => :mean_capture,
+        :team_points_captured => (x -> round(median(x); digits = 3)) => :median_capture,
+        :rho_full => (x -> round(mean(skipmissing(x)); digits = 3)) => :mean_rho,
+        nrow => :n_editions,
+    )
+    sort!(oneday_summary, :mean_capture, rev = true)
+    write(io, html_heading("Summary across editions", 3))
+    write(io, html_table(oneday_summary))
+    write(io, html_heading("Per-edition detail", 3))
+    write(io, html_table(sort(oneday_rows, [:year, :race, :predictor])))
+end
+
 # ---------------------------------------------------------------------------
 # Write output
 # ---------------------------------------------------------------------------
