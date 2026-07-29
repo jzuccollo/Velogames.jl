@@ -626,3 +626,54 @@ Ranked by cost-adjusted expected value:
 4. **New information, not new machinery (speculative, gate hard).** Technique is saturated, so the ceiling only lifts with inputs the market has not priced: the disabled **qualitative/YouTube signal** (DS interviews, form intel), **echelon/weather risk**, **parcours-specific breakaway propensity**, live odds movement. The review's own evidence is that most added signals have not moved the numbers, so treat each as a speculative bet gated on the challenger's held-out harness before belief; expect most to fail.
 
 **Caveats.** The 0.005 champion–challenger gap is inside the noise on 39 races and neither number is fully clean (the challenger's 2023–24 are its fit years; 2025 is its clean held-out; the champion carries its own in-sample noise-fitting exposure). Act on the tie, not on the ordering. Experiment 3 is highest-upside but least certain to survive the season objective; 1 and 2 are the safe, cheap shots on goal to run first.
+
+### Experiment 1 result: CLOSED, null (July 2026)
+
+**Both halves of experiment 1 are dead. Do not re-run it.**
+
+**(b) Oracle-floor disablement was already shipped.** `floor_signals` defaults to
+`Set([:odds, :qualitative])` and `strength_pipeline.jl` gates the oracle floor on
+`:oracle in config.floor_signals`, so the floor has never been active in
+production. The experiment-1 entry above listing it as a candidate was simply
+wrong about the code.
+
+**(a) The market discount is flat across a 64× range.** Added a per-rider
+`market_discount_unpriced` (priced riders keep the ×8 haircut; unpriced riders
+discount at a separate rate), swept it over 1.0/2.0/4.0/8.0/16.0/32.0/64.0, and
+scored `team_points_captured` on all 12 one-day editions with archived odds
+(2026; paired, deterministic seed). The `md=8.0` arm reproduces the shipped
+numbers exactly, so the rig is sound.
+
+| `market_discount_unpriced` | mean capture | vs shipped | top-20 ρ |
+| --- | --- | --- | --- |
+| 1.0 | 0.535 | **−0.037** | 0.431 |
+| 2.0 | 0.572 | −0.000 | 0.442 |
+| 4.0 | 0.572 | +0.000 | 0.464 |
+| **8.0 (shipped)** | **0.572** | — | **0.474** |
+| 16.0 | 0.568 | −0.004 | 0.490 |
+| 32.0 | 0.569 | −0.003 | 0.491 |
+| 64.0 | 0.570 | −0.002 | 0.491 |
+
+Weakening the discount *degrades* rank ρ monotonically and costs capture at the
+extreme (2 wins / 5 losses / 5 ties at md=1.0). Strengthening it does nothing
+(±0.004). So the mid-field PIT failure is **not** caused by the blanket haircut
+crushing unpriced riders toward the prior — the roadmap's stated mechanism is
+refuted, with the sign reversed on the ρ side. The `market_discount_unpriced`
+field was deleted after the sweep; the blanket race-level discount stands.
+
+**Standing observation, not yet an experiment.** On those same 12 marketed
+classics the bare odds ranking beats the full production stack on both metrics —
+capture 0.630 vs 0.572, top-20 ρ 0.575 vs 0.474. Treat with care: the gap is
+concentrated in two editions (Eschborn +0.345, Roubaix +0.266) and drops to
+~0.01 with both removed, and the simulator wins Gent-Wevelgem by 0.196. Odds win
+6, simulator 3, 3 ties. This is the same information-ceiling story as the
+champion/challenger tie, and it is **not** reachable via the market-discount
+knob. If anything is worth trying next it is experiment 2 (ensemble), which
+attacks the decorrelation directly.
+
+**Harness metric re-based (July 2026).** `backtest_stage_race` /
+`backtest_oneday_race` now default `max_per_team=2`, matching production, applied
+to predictor teams and the hindsight optimum alike. Capture values recorded
+anywhere above this line predate that change and are not comparable. The
+one-day harness also gained a `:simulator_risk` arm and 2026 coverage (it had
+been looping `backtest_years`, so the `:odds` arm never produced a row).
