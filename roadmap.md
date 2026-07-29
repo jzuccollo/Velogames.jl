@@ -677,3 +677,54 @@ to predictor teams and the hindsight optimum alike. Capture values recorded
 anywhere above this line predate that change and are not comparable. The
 one-day harness also gained a `:simulator_risk` arm and 2026 coverage (it had
 been looping `backtest_years`, so the `:odds` arm never produced a row).
+
+### Experiment 2 result: split — challenger ensemble NULL, market ensemble PROMISING (July 2026)
+
+Ensembles built by normalising each EVG column to unit sum (a knapsack's argmax
+is invariant to scaling one column, but a *blend* is not — simulator/direct are
+in VG points, odds is a win probability), then mixing at w ∈ {0.25, 0.5, 0.75}.
+Scored on `team_points_captured` via the one-day harness.
+
+**(a) Champion + challenger: null, as specified. CLOSED.** n=59 editions
+(2023–2026). Every blend lands at or below the simulator; `sim_dir_0.5` vs `sim`
+is **−0.004, bootstrap CI [−0.026, +0.019]**, 15 wins / 14 losses / 30 ties. The
+champion and challenger tie because they make the *same* errors, not because
+they are decorrelated, so averaging them buys nothing. This kills the "free win
+from two decorrelated predictors" premise for this pair.
+
+**(b) Champion + market odds: the real decorrelation.** n=12 marketed editions
+(all 2026).
+
+| arm | mean capture | vs sim | top-20 ρ |
+| --- | --- | --- | --- |
+| sim (production) | 0.572 | — | 0.474 |
+| odds | 0.627 | +0.055 | 0.575 |
+| direct | 0.629 | +0.056 | 0.517 |
+| **sim_odds_0.25** | **0.651** | **+0.079** | 0.543 |
+| **sim_odds_0.5** | **0.651** | **+0.079** | 0.532 |
+| sim_dir_odds | 0.642 | +0.070 | 0.533 |
+
+`sim_odds_0.5` vs `sim`: **+0.079, CI [+0.028, +0.136]** (excludes 0), **7 wins /
+0 losses / 5 ties** — it never loses to production. Robust to dropping the two
+editions that drive the raw odds advantage (drop Eschborn: +0.064, CI [+0.018,
++0.119]; drop Eschborn + Roubaix: +0.044, CI [+0.010, +0.084]). Survives honest
+weight selection (leave-one-out, weight fitted on the other 11: **+0.066**, 7
+wins / 1 loss / 4 ties). Top-20 ρ improves 0.474 → 0.532.
+
+**But the stated gate is NOT met.** It required beating *both* singles outside
+the CI. Against odds alone the blend is only **+0.024, CI [−0.015, +0.069]**;
+against direct **+0.023, CI [−0.059, +0.118]**. So: the simulator alone is
+clearly the worst of the three options on marketed races, and blending clearly
+beats it — but **that the simulator adds value on top of the raw market is not
+established at n=12**. Blending also surrenders upside where the market is much
+stronger (Eschborn −0.094 vs odds-only, Flèche −0.063).
+
+Scope limits: one season, one-day only (the GT harness has just 2 marketed
+editions). Marketless races are unaffected — there is no odds column to blend.
+
+**Next step if pursued:** wire a market blend into `solve_oneday` for races where
+odds exist, at w=0.5 (0.25 ties it and is more market-heavy than the evidence
+compels), gated as a ship-then-monitor change under the validation philosophy —
+large effect, clear mechanism, do-no-harm satisfied. Re-check after the 2027
+classics, when n roughly doubles. Pre-registered revisit trigger: if the blend's
+capture advantage over `sim` falls below +0.02 on 2027 races, revert.
