@@ -216,7 +216,6 @@ n_with_odds = count(d -> d.odds_df !== nothing, values(race_data))
 n_with_oracle = count(d -> d.oracle_df !== nothing, values(race_data))
 n_with_history = count(d -> d.race_history_df !== nothing, values(race_data))
 n_with_vg_history = count(d -> d.vg_history_df !== nothing, values(race_data))
-n_with_form = count(d -> d.form_df !== nothing, values(race_data))
 n_with_seasons = count(d -> d.seasons_df !== nothing, values(race_data))
 
 avail_df = DataFrame(
@@ -226,7 +225,6 @@ avail_df = DataFrame(
         "VG season points (cumulative)",
         "PCS race history",
         "VG race history",
-        "Archived PCS form",
         "Archived PCS seasons",
         "Archived odds",
         "Archived Cycling Oracle",
@@ -237,7 +235,6 @@ avail_df = DataFrame(
         "$n_fetched / $n_fetched",
         "$n_with_history / $n_fetched",
         "$n_with_vg_history / $n_fetched",
-        "$n_with_form / $n_fetched",
         "$n_with_seasons / $n_fetched",
         "$n_with_odds / $n_fetched",
         "$n_with_oracle / $n_fetched",
@@ -248,7 +245,6 @@ avail_df = DataFrame(
         "100%",
         "$(round(100 * n_with_history / max(n_fetched, 1), digits=0))%",
         "$(round(100 * n_with_vg_history / max(n_fetched, 1), digits=0))%",
-        "$(round(100 * n_with_form / max(n_fetched, 1), digits=0))%",
         "$(round(100 * n_with_seasons / max(n_fetched, 1), digits=0))%",
         "$(round(100 * n_with_odds / max(n_fetched, 1), digits=0))%",
         "$(round(100 * n_with_oracle / max(n_fetched, 1), digits=0))%",
@@ -294,7 +290,7 @@ write(
     "<p>Running the full prediction pipeline on all historical races and comparing to actual PCS finishing positions.</p>\n",
 )
 
-baseline_signals = [:pcs, :vg_season, :race_history, :vg_history, :form]
+baseline_signals = [:pcs, :vg_season, :race_history, :vg_history]
 
 @info "Running backtest..."
 results = backtest_season(
@@ -464,13 +460,12 @@ write(
 
 begin
     # Collect rider-level predictions with shift columns from the backtest
-    bt_shift_cols = [:shift_pcs, :shift_vg, :shift_form, :shift_history, :shift_vg_history]
+    bt_shift_cols = [:shift_pcs, :shift_vg, :shift_history, :shift_vg_history]
     dir_accuracy_rows =
         NamedTuple{(:Signal, :n_riders, :Directional_accuracy),Tuple{String,Int,String}}[]
     dir_shift_labels = Dict(
         :shift_pcs => "PCS seasons",
         :shift_vg => "VG season points",
-        :shift_form => "PCS form",
         :shift_history => "PCS race history",
         :shift_vg_history => "VG race history",
     )
@@ -504,7 +499,6 @@ write(
 shift_keys = [
     :shift_pcs,
     :shift_vg,
-    :shift_form,
     :shift_history,
     :shift_vg_history,
     :shift_oracle,
@@ -513,7 +507,6 @@ shift_keys = [
 shift_labels = Dict(
     :shift_pcs => "PCS seasons",
     :shift_vg => "VG season points",
-    :shift_form => "PCS form",
     :shift_history => "PCS race history",
     :shift_vg_history => "VG race history",
     :shift_oracle => "Cycling Oracle",
@@ -608,7 +601,7 @@ end
 write(io, html_heading("Prospective evaluation", 2))
 write(
     io,
-    "<p>Comparing archived pre-race predictions against actual results. Unlike the historical backtest, these use the full signal set including odds, oracle, and qualitative intelligence.</p>\n",
+    "<p>Comparing archived pre-race predictions against actual results. Unlike the historical backtest, these use the full signal set including odds and oracle.</p>\n",
 )
 
 current_year = year(today())
@@ -961,7 +954,7 @@ if nrow(pit_df) > 0
     write(io, html_heading("Signal value analysis", 3))
     write(
         io,
-        "<p>Mean absolute shift per signal across all prospective races. Unlike the historical backtest's signal contribution (which lacks market signals), this includes odds, oracle, and qualitative intelligence. A large mean shift indicates the signal is influential — but influential is not necessarily accurate. Compare with the directional accuracy table below to assess whether the signal's influence is well-directed.</p>\n",
+        "<p>Mean absolute shift per signal across all prospective races. Unlike the historical backtest's signal contribution (which lacks market signals), this includes odds and oracle. A large mean shift indicates the signal is influential — but influential is not necessarily accurate. Compare with the directional accuracy table below to assess whether the signal's influence is well-directed.</p>\n",
     )
 
     sig_df = signal_value_analysis(current_year)
@@ -985,12 +978,10 @@ if nrow(pit_df) > 0
         dir_labels = Dict(
             :shift_pcs => "PCS seasons",
             :shift_vg => "VG season",
-            :shift_form => "PCS form",
             :shift_history => "PCS race history",
             :shift_vg_history => "VG race history",
             :shift_oracle => "Oracle",
             :shift_odds => "Odds",
-            :shift_qualitative => "Qualitative",
         )
 
         # Build rank-based directional accuracy using PCS results
@@ -1787,56 +1778,6 @@ if nrow(pit_df) > 0
             end
 
             # ============================================================
-            # Part 1: Non-market signal selection (baseline for all races)
-            # ============================================================
-
-            write(io, html_heading("Non-market signal selection", 4))
-            write(
-                io,
-                "<p>Which non-market signals improve discrimination? Tests signal subsets without odds or oracle — the configuration used for most races. Signals with near-zero within-tier ρ (PCS form, VG race history, qualitative) may be adding noise. PCS form, VG race history, and qualitative are zeroed in production by default; the ablation re-enables them via <code>force_enable</code> so the configurations below genuinely differ.</p>\n",
-            )
-
-            nm_configs = [
-                (
-                    "All non-market",
-                    [:pcs, :vg_season, :race_history, :vg_history, :form, :qualitative],
-                ),
-                ("Drop form", [:pcs, :vg_season, :race_history, :vg_history, :qualitative]),
-                ("Drop VG history", [:pcs, :vg_season, :race_history, :form, :qualitative]),
-                ("Drop qualitative", [:pcs, :vg_season, :race_history, :vg_history, :form]),
-                ("Drop form+VG hist+qual", [:pcs, :vg_season, :race_history]),
-                ("PCS + race hist only", [:pcs, :race_history]),
-                ("PCS + VG season only", [:pcs, :vg_season]),
-            ]
-
-            nm_results = Dict{String,Dict{String,Any}}()
-            for (label, signals) in nm_configs
-                @info "  Non-market: $label"
-                local df = _run_ablation(signals, DEFAULT_BAYESIAN_CONFIG)
-                nm_results[label] = _tier_rhos(df)
-            end
-
-            # Build table
-            _format_rho(v) = v isa String ? v : (v isa Number && isnan(v)) ? "—" : "$v"
-            nm_labels = [l for (l, _) in nm_configs]
-            tier_names = ["Bottom 25%", "Middle 50%", "Top 25%", "Overall"]
-            nm_rows = []
-            for tier in tier_names
-                row = Dict{String,Any}("Tier" => tier)
-                for label in nm_labels
-                    rhos = get(nm_results, label, Dict())
-                    v = get(rhos, tier, NaN)
-                    row[label] = _format_rho(v)
-                end
-                push!(nm_rows, row)
-            end
-            if !isempty(nm_rows)
-                col_order = ["Tier"; nm_labels]
-                nm_df = DataFrame([col => [r[col] for r in nm_rows] for col in col_order])
-                write(io, html_table(nm_df))
-            end
-
-            # ============================================================
             # Part 2: Market signal configurations (races with odds)
             # ============================================================
 
@@ -1846,9 +1787,8 @@ if nrow(pit_df) > 0
                 """<p>How should market signals (odds, oracle) be integrated? Tests uniform discount values and position-dependent discount (full discount for top-quartile riders only). Also tests odds-only and oracle-only to identify which market signal adds value.</p>\n""",
             )
 
-            # Production state: form, VG history, and qualitative are zeroed by default.
-            # Market configs stack odds/oracle on top of the production non-market set,
-            # not on top of the legacy "kitchen sink" that included disabled signals.
+            # Market configs stack odds/oracle on top of the production
+            # non-market set.
             no_market_signals = [:pcs, :vg_season, :race_history]
             all_signals = [:pcs, :vg_season, :race_history, :odds, :oracle]
             odds_only = [:pcs, :vg_season, :race_history, :odds]
@@ -1988,105 +1928,6 @@ if nrow(pit_df) > 0
                 write(io, html_table(pr_df))
             end
 
-            # ============================================================
-            # Part 4: Combined configuration test
-            # ============================================================
-            # Tests findings 1-3 together (drop form + VG history + oracle +
-            # qualitative) rather than assuming individual improvements are
-            # additive. The block-correlation discount changes when signals are
-            # removed, so the combined effect may differ from the sum of parts.
-
-            write(io, html_heading("Combined configuration test", 4))
-            write(
-                io,
-                "<p>Tests whether re-enabling the disabled signals (PCS form, VG race history, qualitative) on top of the production signal set improves discrimination, with bootstrap 95% CIs. Individual ablation improvements interact through the block-correlation discount, so the combined effect is not necessarily the sum of individual improvements.</p>\n",
-            )
-
-            all_nm_extras =
-                [:pcs, :vg_season, :race_history, :vg_history, :form, :qualitative]
-            combined_configs = [
-                (
-                    "Production (no market)",
-                    [:pcs, :vg_season, :race_history],
-                    DEFAULT_BAYESIAN_CONFIG,
-                ),
-                ("Production + all non-market", all_nm_extras, DEFAULT_BAYESIAN_CONFIG),
-                (
-                    "Production + odds d=8",
-                    [:pcs, :vg_season, :race_history, :odds],
-                    BayesianConfig(; market_discount = 8.0),
-                ),
-                (
-                    "Production + odds + all non-market d=8",
-                    [all_nm_extras..., :odds],
-                    BayesianConfig(; market_discount = 8.0),
-                ),
-            ]
-
-            combined_results = Dict{String,Dict{String,Any}}()
-            for (label, signals, bc) in combined_configs
-                @info "  Combined: $label"
-                combined_results[label] = _tier_rhos(_run_ablation(signals, bc))
-            end
-
-            combined_labels = [l for (l, _, _) in combined_configs]
-            combined_rows = []
-            for tier in tier_names
-                row = Dict{String,Any}("Tier" => tier)
-                for label in combined_labels
-                    rhos = get(combined_results, label, Dict())
-                    v = get(rhos, tier, NaN)
-                    row[label] = _format_rho(v)
-                end
-                push!(combined_rows, row)
-            end
-            if !isempty(combined_rows)
-                col_order = ["Tier"; combined_labels]
-                combined_df =
-                    DataFrame([col => [r[col] for r in combined_rows] for col in col_order])
-                write(io, html_table(combined_df))
-            end
-
-            # Per-race breakdown for combined configs
-            write(io, html_heading("Per-race combined comparison", 4))
-            write(
-                io,
-                "<p>Per-race Spearman ρ for current vs proposed signal sets. Improvement sign consistency across races is more informative than the pooled average.</p>\n",
-            )
-
-            combined_race_rows = []
-            for (race, data) in sort(collect(ablation_data), by = p -> p.first.name)
-                data.actual_df === nothing && continue
-                row = Dict{String,Any}("Race" => race.name)
-                has_odds = data.odds_df !== nothing && nrow(data.odds_df) > 0
-                row["Has odds"] = has_odds ? "✓" : "—"
-
-                for (label, signals, bc) in combined_configs
-                    try
-                        r = backtest_race(
-                            race,
-                            data;
-                            signals = signals,
-                            config = bc,
-                            n_sims = n_sims,
-                            store_rider_details = false,
-                        )
-                        row["ρ ($label)"] = "$(round(r.spearman_rho, digits=3))"
-                    catch
-                        row["ρ ($label)"] = "—"
-                    end
-                end
-                push!(combined_race_rows, row)
-            end
-
-            if !isempty(combined_race_rows)
-                cr_col_order =
-                    vcat(["Race", "Has odds"], ["ρ ($l)" for (l, _, _) in combined_configs])
-                cr_df = DataFrame([
-                    col => [r[col] for r in combined_race_rows] for col in cr_col_order
-                ])
-                write(io, html_table(cr_df))
-            end
         end
     end
 
@@ -2293,7 +2134,7 @@ for slug in oneday_slugs, yr in oneday_harness_years
             backtest_oneday_race(
                 slug,
                 yr;
-                predictors = [:simulator, :simulator_risk, :direct, :odds, :maxcost],
+                predictors = [:simulator, :simulator_risk, :odds, :maxcost],
                 cache_config = bt_cache,
             )
         end

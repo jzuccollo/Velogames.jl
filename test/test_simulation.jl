@@ -31,14 +31,6 @@
         n_starters = 150,
     ).mean > 0.0
 
-    # Form signal is disabled (ablation showed near-zero rank improvement)
-    with_form = estimate_rider_strength(pcs_score = 0.0, form_score = 1.5)
-    without_form = estimate_rider_strength(pcs_score = 0.0)
-    @test with_form.mean == without_form.mean
-    @test with_form.variance == without_form.variance
-    @test with_form.shift_form == 0.0
-    @test without_form.shift_form == 0.0
-
     @test position_to_strength(1, 150) >
           position_to_strength(50, 150) >
           position_to_strength(100, 150)
@@ -374,18 +366,29 @@ end
     @test isapprox(no_penalty.mean, exact.mean; atol = 1e-10)
 end
 
-@testset "VG race history in strength estimation (disabled)" begin
-    # VG race history signal disabled April 2026 (ablation showed anti-informative
-    # for top riders). Parameters are accepted but shift_vg_history is always 0.
+@testset "VG race history is scalar-inert but live in multidim" begin
+    # The April 2026 ablation dropped VG race history from the SCALAR (one-day)
+    # estimator only — the multi-dim stage-race estimator still consumes it, which
+    # is why `RiderSignalData` keeps the fields. Pin both halves so a future
+    # cleanup can't quietly delete the multidim signal along with the scalar one.
     with_vg = estimate_rider_strength(
-        pcs_score = 0.0,
-        vg_race_history = [2.0, 1.5],
-        vg_race_history_years_ago = [1, 2],
+        Velogames.RiderSignalData(
+            pcs_score = 0.0,
+            vg_race_history = [2.0, 1.5],
+            vg_race_history_years_ago = [1, 2],
+        ),
     )
-    without_vg = estimate_rider_strength(pcs_score = 0.0)
+    @test with_vg.mean == estimate_rider_strength(pcs_score = 0.0).mean
 
-    @test with_vg.mean == without_vg.mean
-    @test with_vg.shift_vg_history == 0.0
+    md = Velogames.estimate_rider_strength_multidim(
+        Velogames.RiderSignalData(
+            pcs_score = 0.0,
+            rider_class = "allrounder",
+            vg_race_history = [2.0, 1.5],
+            vg_race_history_years_ago = [1, 2],
+        ),
+    )
+    @test any(!=(0.0), md.shifts[:vg_history])
 end
 
 @testset "predict_expected_points with variance_penalty and vg_history" begin
@@ -482,62 +485,3 @@ end
     end
 end
 
-# =========================================================================
-# Qualitative intelligence
-# =========================================================================
-
-@testset "Qualitative signal in estimate_rider_strength (disabled)" begin
-    # Qualitative signal disabled April 2026 (ablation showed negligible/anti-informative).
-    # Parameters are accepted but shift_qualitative is always 0.
-    with_qual = estimate_rider_strength(
-        pcs_score = 0.0,
-        qualitative_adjustments = [0.5],
-        qualitative_confidences = [0.8],
-    )
-    without_qual = estimate_rider_strength(pcs_score = 0.0)
-    @test with_qual.mean == without_qual.mean
-    @test with_qual.shift_qualitative == 0.0
-    @test without_qual.shift_qualitative == 0.0
-
-    # Zero confidence still returns 0
-    zero_conf = estimate_rider_strength(
-        pcs_score = 0.0,
-        qualitative_adjustments = [1.0],
-        qualitative_confidences = [0.0],
-    )
-    @test zero_conf.shift_qualitative == 0.0
-end
-
-@testset "Qualitative response parsing" begin
-    json = """[
-        {"rider": "Mathieu van der Poel", "category": "strong_positive", "confidence": "high", "reasoning": "Top form."},
-        {"rider": "Wout van Aert", "category": "slight_negative", "confidence": "medium", "reasoning": "Returning from injury."}
-    ]"""
-    df = parse_qualitative_response(json)
-    @test nrow(df) == 2
-    @test :riderkey in propertynames(df)
-    @test :adjustment in propertynames(df)
-    @test :confidence in propertynames(df)
-    @test df[1, :adjustment] == 1.0    # strong_positive
-    @test df[1, :confidence] == 0.8    # high
-    @test df[2, :adjustment] == -0.25  # slight_negative
-    @test df[2, :confidence] == 0.5    # medium
-
-    # Handles code fences
-    fenced = "```json\n$json\n```"
-    df2 = parse_qualitative_response(fenced)
-    @test nrow(df2) == 2
-
-    # Empty array returns empty DataFrame
-    df3 = parse_qualitative_response("[]")
-    @test nrow(df3) == 0
-    @test :riderkey in propertynames(df3)
-end
-
-@testset "Qualitative constants" begin
-    @test QUALITATIVE_ADJUSTMENTS["strong_positive"] == 1.0
-    @test QUALITATIVE_ADJUSTMENTS["strong_negative"] == -1.0
-    @test QUALITATIVE_ADJUSTMENTS["neutral"] == 0.0
-    @test QUALITATIVE_CONFIDENCES["high"] == 0.8
-    @test QUALITATIVE_CONFIDENCES["low"] == 0.3
-end

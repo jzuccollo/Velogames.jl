@@ -1,6 +1,2 @@
 # Copy this file to .envrc and fill in your credentials
 # Then run `direnv allow` to load them
-
-# Anthropic API key for qualitative intelligence extraction (optional)
-# Get one from https://console.anthropic.com
-export ANTHROPIC_API_KEY="your_api_key"

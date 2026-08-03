@@ -58,7 +58,6 @@ function _generate_synthetic_signals(
     available_signals::Set{Symbol} = Set([
         :pcs,
         :vg,
-        :form,
         :history,
         :vg_history,
         :odds,
@@ -78,11 +77,6 @@ function _generate_synthetic_signals(
     vg_points =
         :vg in available_signals ? true_strength + randn(rng) * sqrt(vg_variance(config)) :
         0.0
-
-    # Form
-    form_score =
-        :form in available_signals ?
-        true_strength + randn(rng) * sqrt(form_variance(config)) : 0.0
 
     # Race history
     race_history, race_history_years_ago, race_history_variance_penalties =
@@ -144,7 +138,6 @@ function _generate_synthetic_signals(
         pcs_score,
         has_pcs,
         vg_points,
-        form_score,
         race_history,
         race_history_years_ago,
         race_history_variance_penalties,
@@ -191,7 +184,6 @@ function prior_predictive_check(
     available_signals::Set{Symbol} = Set([
         :pcs,
         :vg,
-        :form,
         :history,
         :vg_history,
         :odds,
@@ -384,7 +376,6 @@ function simulation_based_calibration(
     available_signals::Set{Symbol} = Set([
         :pcs,
         :vg,
-        :form,
         :history,
         :vg_history,
         :odds,

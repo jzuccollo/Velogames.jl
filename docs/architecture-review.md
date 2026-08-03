@@ -4,6 +4,30 @@
 
 ---
 
+> **Status: HISTORICAL — retained as the diagnosis, not as a plan (updated August 2026).**
+>
+> Every recommendation in §7 has been executed, and the plan that sequenced them
+> (`docs/remediation-plan.md`) has been deleted as spent. Live conclusions and all
+> subsequent evidence live in `roadmap.md`; this file is kept for the reasoning
+> and the reproduction appendix behind the July 2026 verdict. Three specific
+> claims have since been overtaken:
+>
+> - **§2.4 "What cannot currently be measured" is closed.** League standings are
+>   now read via `load_league_standings`, and `scripts/league_eval.jl` reports
+>   cumulative placement and the entered-vs-advised delta. The answer to its own
+>   question — "2nd or 9th?" — turned out to be 4th of 15 over 12 races.
+> - **§2.4's second gap is also closed.** A one-day team-points-captured harness
+>   now exists (`backtest_oneday_race`), the twin of the stage-race one.
+> - **The §6/§7 challenger is gone.** The direct-EVG model was built (WP2.2), tied
+>   its gate on both the stage and one-day harnesses, and was deleted in August
+>   2026. §7's "champion vs challenger" framing is settled, not pending.
+>
+> §7 Phase 1's pointer to `REFACTOR_PLAN.md` is also dead — that file was
+> completed and removed; its one open item (3d, the estimator shared-block
+> refactor) is carried in `roadmap.md` instead.
+
+---
+
 ## Executive summary
 
 The system contains two models of very different maturity wearing one architecture, and the right course of action differs between them.

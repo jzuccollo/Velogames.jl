@@ -6,7 +6,7 @@ Hacky, personal Julia package to pick a Velogames team. Always in progress, alwa
 
 Estimate expected Velogames points for each rider via Monte Carlo simulation, then solve a linear programme to maximise expected points constrained by budget and rider limits.
 
-The prediction pipeline combines multiple data sources through Bayesian strength estimation: an uninformative prior is updated sequentially with PCS specialty ratings, VG season points, race-specific history from past editions, and where available betting odds and Cycling Oracle predictions. Monte Carlo simulation converts these strength estimates into probability distributions over finishing positions, which map to expected VG points through the scoring tables. An April 2026 ablation retired the PCS form score, VG race history, qualitative intelligence, and trajectory signals — the code and the data collection remain, but none of them feeds a production prediction unless you re-enable it explicitly via `force_enable`.
+The prediction pipeline combines multiple data sources through Bayesian strength estimation: an uninformative prior is updated sequentially with PCS specialty ratings, VG season points, race-specific history from past editions, and where available betting odds and Cycling Oracle predictions. Monte Carlo simulation converts these strength estimates into probability distributions over finishing positions, which map to expected VG points through the scoring tables. An April 2026 ablation retired the PCS form score, qualitative intelligence and trajectory signals; the code and its data collection were deleted in August 2026. VG race history was retired from the one-day estimator only — the stage-race estimator still uses it.
 
 For stage races the model carries a multi-dimensional posterior rather than one number: each PCS specialty source is z-scored separately and routed to strength dimensions through `SIGNAL_DIMENSION_WEIGHTS`, and `compute_stage_strengths` then projects those dimensions onto a per-stage-type strength vector. The race is simulated stage by stage with correlated cross-stage noise, so a rider's contribution reflects which stages actually suit them.
 
@@ -26,9 +26,9 @@ All scripts accept `--fresh` to bypass the cache and fetch everything from the w
 ## Features
 
 - **Monte Carlo prediction**: Bayesian strength estimation and race simulation to compute expected VG points per rider
-- **Multi-source data integration**: Combines VG costs/season points, PCS specialty ratings, race history, betting odds (Oddschecker paste), and qualitative intelligence from YouTube or web articles
-- **Qualitative intelligence**: YouTube transcripts and web articles fed to the Claude API to extract structured rider assessments. Retired as a live signal by the April 2026 ablation; still collected and archived, and available to backtests via `force_enable`
+- **Multi-source data integration**: Combines VG costs/season points, PCS specialty ratings, race history, betting odds (Oddschecker paste) and Cycling Oracle predictions
 - **Risk-adjusted optimisation**: `risk_aversion` parameter penalises high-variance riders; `domestique_discount` down-weights non-leaders relative to their strength gap
+- **Market blend (one-day)**: `market_blend_weight` mixes the bookmaker's implied win probabilities into the final team pick alongside the simulator's expected points. `race_config.toml` ships 0.5; `solve_oneday`'s own default is 1.0, which disables it. One-day races only, and inert without odds
 - **One-day and stage race support**: `solve_oneday()` for Sixes Classics, `solve_stage()` for grand tours with classification constraints
 - **Robust caching**: Feather-based caching (`CacheConfig`) with configurable TTL to avoid hammering external sites
 - **Historical analysis**: Deterministic optimisation on actual results to find optimal and cheapest-winning teams
@@ -54,7 +54,7 @@ Note that `[league]` describes the season-long league you are competing in — t
 
 ### Before each race
 
-Edit `data/race_config.toml` with the race name, year, startlist hash, and any data source URLs (odds, oracle, qualitative). Then run:
+Edit `data/race_config.toml` with the race name, year, startlist hash, and any data source URLs (odds, oracle). Then run:
 
 ```sh
 julia --project scripts/render_predictor.jl
@@ -62,7 +62,7 @@ julia --project scripts/render_predictor.jl
 julia --project scripts/render_stagerace.jl
 ```
 
-This runs the full pipeline (data fetch, strength estimation, resampled optimisation) and automatically archives predictions, odds, oracle, and qualitative data to `DEFAULT_ARCHIVE_DIR` for later evaluation. The prediction archive is write-once: re-running after the race won't overwrite the pre-race snapshot (pass `--force` to override).
+This runs the full pipeline (data fetch, strength estimation, resampled optimisation) and automatically archives predictions, odds and oracle data to `DEFAULT_ARCHIVE_DIR` for later evaluation. The prediction archive is write-once: re-running after the race won't overwrite the pre-race snapshot (pass `--force` to override).
 
 ### After each race
 

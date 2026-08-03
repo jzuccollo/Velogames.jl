@@ -43,8 +43,6 @@ standard data container between fetching and prediction.
     odds_df::Union{DataFrame,Nothing} = nothing
     oracle_df::Union{DataFrame,Nothing} = nothing
     vg_history_df::Union{DataFrame,Nothing} = nothing
-    qualitative_df::Union{DataFrame,Nothing} = nothing
-    form_df::Union{DataFrame,Nothing} = nothing
     seasons_df::Union{DataFrame,Nothing} = nothing
     actual_df::Union{DataFrame,Nothing} = nothing
     # Multi-source oracle (stage races): points jersey + KOM jersey predictions

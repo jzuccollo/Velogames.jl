@@ -16,7 +16,6 @@ export getvg_riders,
     match_vg_race_number,
     getpcs_race_results,
     getpcs_race_startlist,
-    getpcs_race_form,
     getpcs_race_history,
     getpcs_rider_seasons,
     getpcs_rider_seasons_batch,
@@ -28,17 +27,6 @@ export getvg_riders,
     getvg_stage_results,
     getvg_stage_race_totals,
     getvg_scoring
-
-# Qualitative intelligence
-export get_qualitative_auto,
-    get_qualitative_article,
-    load_qualitative_file,
-    build_qualitative_prompt,
-    parse_qualitative_response,
-    fetch_transcript,
-    fetch_article_text,
-    QUALITATIVE_ADJUSTMENTS,
-    QUALITATIVE_CONFIDENCES
 
 # Caching and archival
 export CacheConfig,
@@ -163,19 +151,12 @@ export BacktestRace,
     champion_evg_risk,
     backtest_stage_race,
     crosscheck_option_ab,
-    DirectEVGParams,
-    DEFAULT_DIRECT_EVG_PARAMS,
-    direct_evg,
-    fit_direct_evg,
     OneDayBacktestData,
     prefetch_oneday_backtest_data,
     champion_oneday_evg,
     champion_oneday_evg_risk,
     backtest_oneday_race,
-    backtest_oneday_season,
-    DEFAULT_DIRECT_ONEDAY_EVG_PARAMS,
-    direct_oneday_evg,
-    fit_direct_oneday_evg
+    backtest_oneday_season
 
 # Utilities
 export createkey,
@@ -236,16 +217,12 @@ include("pcs_scraper.jl")
 include("get_data.jl")
 include("pcs_extended.jl")
 include("data_assembly.jl")
-include("qualitative.jl")
 include("bayesian_core.jl")
 include("simulate_oneday.jl")
 include("simulate_stage.jl")
 include("strength_pipeline.jl")
 include("prior_checks.jl")
 include("backtest.jl")
-# direct_evg.jl references backtest.jl's StageRaceBacktestData in its method
-# signatures, so it must come after backtest.jl (and build_model.jl).
-include("direct_evg.jl")
 include("race_solver.jl")
 include("prospective_eval.jl")
 include("report_html.jl")

@@ -347,11 +347,6 @@ function prefetch_race_data(
         @info "Loaded archived oracle for $(race.name) $(race.year): $(nrow(oracle_df)) riders"
     end
 
-    form_df = load_race_snapshot("pcs_form", race.pcs_slug, race.year)
-    if form_df !== nothing
-        @info "Loaded archived PCS form for $(race.name) $(race.year): $(nrow(form_df)) riders"
-    end
-
     seasons_df = load_race_snapshot("pcs_seasons", race.pcs_slug, race.year)
     if seasons_df !== nothing
         @info "Loaded archived PCS seasons for $(race.name) $(race.year): $(length(unique(seasons_df.riderkey))) riders"
@@ -385,19 +380,12 @@ function prefetch_race_data(
         force_refresh = force_refresh,
     )
 
-    qualitative_df = load_race_snapshot("qualitative", race.pcs_slug, race.year)
-    if qualitative_df !== nothing
-        @info "Loaded archived qualitative for $(race.name) $(race.year): $(nrow(qualitative_df)) entries"
-    end
-
     return RaceData(;
         rider_df = riderdf,
         race_history_df = race_history_df,
         odds_df = odds_df,
         oracle_df = oracle_df,
         vg_history_df = vg_history_df,
-        qualitative_df = qualitative_df,
-        form_df = form_df,
         seasons_df = seasons_df,
         actual_df = actual_df,
     )
@@ -504,22 +492,9 @@ function backtest_race(
     odds_df = :odds in signals ? data.odds_df : nothing
     oracle_df = :oracle in signals ? data.oracle_df : nothing
 
-    # Qualitative intelligence
-    qualitative_df = :qualitative in signals ? data.qualitative_df : nothing
-
-    # PCS form
-    form_df = :form in signals ? data.form_df : nothing
-
     # Cross-season PCS points (trajectory signal removed, but seasons_df
     # may still be used by estimate_strengths for PCS recency scaling)
     seasons_df = data.seasons_df
-
-    # Form, VG history, and qualitative are zeroed in production.
-    # The ablation re-enables them for evaluation by passing force_enable.
-    force_enable = Set{Symbol}()
-    :form in signals && push!(force_enable, :form)
-    :vg_history in signals && push!(force_enable, :vg_history)
-    :qualitative in signals && push!(force_enable, :qualitative)
 
     # --- Run prediction pipeline ---
     scoring = get_scoring(race.category > 0 ? race.category : 2)
@@ -532,8 +507,6 @@ function backtest_race(
         odds_df = odds_df,
         oracle_df = oracle_df,
         vg_history_df = vg_history_df,
-        qualitative_df = qualitative_df,
-        form_df = form_df,
         seasons_df = seasons_df,
         n_sims = n_sims,
         race_type = :oneday,
@@ -543,7 +516,6 @@ function backtest_race(
         simulation_df = simulation_df,
         domestique_discount = domestique_discount,
         total_distance_km = race_distance_km,
-        force_enable = force_enable,
     )
 
     # --- Apply risk adjustment if risk_aversion > 0 ---
@@ -622,7 +594,6 @@ function backtest_race(
     shift_cols = [
         :shift_pcs,
         :shift_vg,
-        :shift_form,
         :shift_history,
         :shift_vg_history,
         :shift_oracle,
@@ -1529,8 +1500,7 @@ end
 
 Score predictors against one archived grand-tour edition. A predictor is a
 built-in `Symbol` (`:simulator` → `champion_evg`, `:simulator_risk` →
-`champion_evg_risk` (the team `solve_stage` actually enters), `:direct` →
-`direct_evg` (the WP2.2 challenger, registered when `direct_evg.jl` loads),
+`champion_evg_risk` (the team `solve_stage` actually enters),
 `:persistence` → `persistence_evg`, `:odds` → `odds_evg`) or a `name => f` pair where
 `f(data::StageRaceBacktestData) -> DataFrame(riderkey, expected_vg_points)`.
 Predictors returning `nothing` (e.g. `:odds` on a marketless edition) are
@@ -1555,7 +1525,7 @@ The string/year method prefetches via `prefetch_stage_race_data` first.
 """
 function backtest_stage_race(
     data::StageRaceBacktestData;
-    predictors = [:simulator, :simulator_risk, :direct, :persistence, :odds],
+    predictors = [:simulator, :simulator_risk, :persistence, :odds],
     target::Symbol = :vg_total,
     max_per_team::Integer = 2,
 )
@@ -1637,7 +1607,7 @@ end
 function backtest_stage_race(
     pcs_slug::String,
     year::Int;
-    predictors = [:simulator, :simulator_risk, :direct, :persistence, :odds],
+    predictors = [:simulator, :simulator_risk, :persistence, :odds],
     target::Symbol = :vg_total,
     history_years::Int = 3,
     max_per_team::Integer = 2,
@@ -2004,7 +1974,7 @@ end
 Score one-day predictors against one archived classic edition. A predictor is a
 built-in `Symbol` (`:simulator` → `champion_oneday_evg`, `:simulator_risk` →
 `champion_oneday_evg_risk` (the team `solve_oneday` actually enters), `:odds`,
-`:maxcost`, `:direct` when `direct_evg.jl` registers it) or a `name => f` pair where
+`:maxcost`) or a `name => f` pair where
 `f(data::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)`.
 Predictors returning `nothing` (e.g. `:odds` on a marketless edition) are
 skipped. Riders missing from a predictor's frame score 0.
@@ -2017,7 +1987,7 @@ optimum), `team_actual`, `optimal_actual`, `rho_full`, `rho_top20`, `overlap6`,
 """
 function backtest_oneday_race(
     data::OneDayBacktestData;
-    predictors = [:simulator, :simulator_risk, :direct, :odds, :maxcost],
+    predictors = [:simulator, :simulator_risk, :odds, :maxcost],
     max_per_team::Integer = 2,
 )
     riders = data.riders
@@ -2066,7 +2036,7 @@ end
 function backtest_oneday_race(
     pcs_slug::String,
     year::Int;
-    predictors = [:simulator, :simulator_risk, :direct, :odds, :maxcost],
+    predictors = [:simulator, :simulator_risk, :odds, :maxcost],
     category::Int = 0,
     history_years::Int = 5,
     max_per_team::Integer = 2,
@@ -2104,7 +2074,7 @@ returns the flat comparison table across editions.
 """
 function backtest_oneday_season(
     races::Vector{BacktestRace};
-    predictors = [:simulator, :simulator_risk, :direct, :odds, :maxcost],
+    predictors = [:simulator, :simulator_risk, :odds, :maxcost],
     max_per_team::Integer = 2,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = DEFAULT_ARCHIVE_DIR,

@@ -120,7 +120,7 @@ end
 # League standings — cumulative placement (WP0.1) + entered-vs-advised (WP0.2)
 #
 # Reads the vgleague package's scraped standings (../vgleague/data/...; see
-# docs/remediation-plan.md D1 — no scraper duplicated here) via
+# the July 2026 remediation plan, decision D1 — no scraper duplicated here) via
 # `load_league_standings`, plus the optional manual data/league_standings.toml
 # fallback. Requires data/race_config.toml's [league] section (see
 # race_config.toml.example); skips gracefully if either is absent.

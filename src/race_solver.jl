@@ -121,17 +121,14 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :uncertainty,
             :shift_pcs,
             :shift_vg,
-            :shift_form,
             :shift_history,
             :shift_vg_history,
             :shift_oracle,
             :shift_oracle_points,
             :shift_oracle_kom,
-            :shift_qualitative,
             :shift_odds,
             :info_share_pcs,
             :info_share_vg,
-            :info_share_form,
             :info_share_history,
             :info_share_vg_history,
             :info_share_points_history,
@@ -140,7 +137,6 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :info_share_oracle_gc,
             :info_share_oracle_points,
             :info_share_oracle_kom,
-            :info_share_qualitative,
             :info_share_odds,
             :info_share_odds_points,
             :info_share_odds_kom,
@@ -373,7 +369,6 @@ function _prepare_rider_data(
     filter_startlist::Bool = true,
     include_gt_history::Bool = true,
     apply_recency::Bool = true,
-    qualitative_df::Union{DataFrame,Nothing} = nothing,
     odds_df::Union{DataFrame,Nothing} = nothing,
     points_oracle_url::String = "",
     kom_oracle_url::String = "",
@@ -574,25 +569,6 @@ function _prepare_rider_data(
         )
     end
 
-    # --- 3c. Fetch PCS form scores (automatic) ---
-    form_df = nothing
-    if !isempty(config.pcs_slug)
-        try
-            form_df = getpcs_race_form(
-                config.pcs_slug,
-                config.year;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
-            )
-            if nrow(form_df) > 0
-                @info "Got PCS form scores for $(nrow(form_df)) riders"
-                _try_archive(form_df, "pcs_form", config.pcs_slug, config.year)
-            end
-        catch e
-            @warn "Failed to fetch PCS form data: $e"
-        end
-    end
-
     # --- 3d. Fetch cross-season PCS points for the PCS seasons signal (automatic) ---
     # Build slug map from rider names if the startlist didn't provide one
     if isempty(pcs_slug_map)
@@ -693,28 +669,13 @@ function _prepare_rider_data(
     else
         0
     end
-    n_qualitative = if qualitative_df !== nothing
-        length(intersect(riderdf.riderkey, qualitative_df.riderkey))
-    else
-        0
-    end
-    n_form = if form_df !== nothing
-        length(intersect(riderdf.riderkey, form_df.riderkey))
-    else
-        0
-    end
     n_seasons = if seasons_df !== nothing
         length(intersect(riderdf.riderkey, unique(seasons_df.riderkey)))
     else
         0
     end
 
-    # Archive qualitative data for prospective evaluation
-    if qualitative_df !== nothing && nrow(qualitative_df) > 0 && !isempty(config.pcs_slug)
-        _try_archive(qualitative_df, "qualitative", config.pcs_slug, config.year)
-    end
-
-    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" qualitative = "$n_qualitative/$n_total" form = "$n_form/$n_total" seasons = "$n_seasons/$n_total"
+    @info "Data quality summary" riders = n_total pcs_specialty = "$n_pcs/$n_total" race_history = "$n_history/$n_total" vg_history = "$n_vg_history/$n_total" odds = "$n_odds/$n_total" oracle = "$n_oracle/$n_total" seasons = "$n_seasons/$n_total"
     if n_pcs == 0
         @warn "No riders have PCS specialty data — strength estimates will rely on VG season points only"
     end
@@ -728,8 +689,6 @@ function _prepare_rider_data(
         odds_df = final_odds_df,
         oracle_df = oracle_df,
         vg_history_df = vg_history_df,
-        qualitative_df = qualitative_df,
-        form_df = form_df,
         seasons_df = seasons_df,
         actual_df = nothing,
         points_oracle_df = points_oracle_df,
@@ -780,7 +739,6 @@ function solve_oneday(
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
-    qualitative_df::Union{DataFrame,Nothing} = nothing,
     odds_df::Union{DataFrame,Nothing} = nothing,
     domestique_discount::Float64 = 0.0,
     max_per_team::Int = 0,
@@ -800,7 +758,6 @@ function solve_oneday(
         force_refresh;
         pcs_check_col = :oneday,
         filter_startlist = filter_startlist,
-        qualitative_df = qualitative_df,
         odds_df = odds_df,
         apply_recency = false,
     )
@@ -1049,7 +1006,6 @@ function solve_stage(
     filter_startlist::Bool = true,
     cache_config::CacheConfig = config.cache,
     force_refresh::Bool = false,
-    qualitative_df::Union{DataFrame,Nothing} = nothing,
     odds_df::Union{DataFrame,Nothing} = nothing,
     points_odds_df::Union{DataFrame,Nothing} = nothing,
     kom_odds_df::Union{DataFrame,Nothing} = nothing,
@@ -1080,7 +1036,6 @@ function solve_stage(
         pcs_check_col = :gc,
         filter_startlist = filter_startlist,
         include_gt_history = include_gt_history,
-        qualitative_df = qualitative_df,
         odds_df = odds_df,
         points_oracle_url = points_oracle_url,
         kom_oracle_url = kom_oracle_url,

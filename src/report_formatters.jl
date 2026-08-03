@@ -23,7 +23,6 @@ function precision_budget(
     signals = [
         ("Odds", odds_variance(config), true),
         ("Oracle", oracle_variance(config), true),
-        ("Form", form_variance(config), false),
         ("PCS race history ($(n_history_years)y)", hist_base_variance(config), false),
         ("VG race history ($(n_history_years)y)", vg_hist_base_variance(config), false),
         ("PCS seasons", pcs_variance(config), false),
@@ -65,10 +64,7 @@ function precision_budget(
     )
 end
 
-# One-day production display: only the signals active after the April 2026
-# ablation (PCS form, VG race history and qualitative are disabled, so their
-# always-zero columns are omitted). The backtesting report renders the full set,
-# where those signals still vary.
+# One-day production display: the signals the scalar estimator actually runs.
 const _SIGNAL_NAMES = ["PCS", "VG", "Hist", "Oracle", "Odds"]
 # Parallel info-share columns. Order-invariant precision-share metric:
 # `signal_precision / total_observed_precision`, computed in
@@ -93,7 +89,6 @@ const _INFO_SHARE_COLS = [
 const _SIGNAL_NAMES_STAGE = [
     "PCS",
     "VG",
-    "Form",
     "Hist",
     "VG hist",
     "Pts hist",
@@ -105,12 +100,10 @@ const _SIGNAL_NAMES_STAGE = [
     "Odds Pts",
     "Odds KOM",
     "Odds Stage",
-    "Qual",
 ]
 const _INFO_SHARE_COLS_STAGE = [
     :info_share_pcs,
     :info_share_vg,
-    :info_share_form,
     :info_share_history,
     :info_share_vg_history,
     :info_share_points_history,
@@ -122,7 +115,6 @@ const _INFO_SHARE_COLS_STAGE = [
     :info_share_odds_points,
     :info_share_odds_kom,
     :info_share_odds_stagewin,
-    :info_share_qualitative,
 ]
 
 """

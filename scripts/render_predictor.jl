@@ -27,9 +27,6 @@ race_year = _cfg["race"]["year"]
 racehash = _cfg["race"]["racehash"]
 
 oracle_url = _cfg["data_sources"]["oracle_url"]
-qualitative_youtube_url = get(_cfg["data_sources"], "qualitative_youtube_url", "")
-qualitative_article_url = get(_cfg["data_sources"], "qualitative_article_url", "")
-qualitative_json_file = get(_cfg["data_sources"], "qualitative_json_file", "")
 
 odds_df = if get(_cfg["data_sources"], "use_oddschecker", false)
     try
@@ -62,85 +59,6 @@ race_cache = CacheConfig(DEFAULT_CACHE_DIR, FRESH ? 0 : 6)
 config = setup_race(race_name, race_year; cache_config = race_cache)
 scoring = get_scoring(config.category > 0 ? config.category : 2)
 
-# --- Qualitative intelligence ---
-# Fetch from configured URLs if present; fall back to archive only when no sources are configured
-has_qual_sources =
-    !isempty(qualitative_youtube_url) ||
-    !isempty(qualitative_article_url) ||
-    !isempty(qualitative_json_file)
-qual_sources = DataFrame[]
-
-if has_qual_sources
-    _qual_riders = Ref{Vector{String}}()
-    function _get_qual_riders()
-        if !isassigned(_qual_riders)
-            _qual_riders[] = String.(
-                suppress_output() do
-                    getvg_riders(config.current_url; cache_config = race_cache)
-                end.rider,
-            )
-        end
-        return _qual_riders[]
-    end
-
-    if !isempty(qualitative_youtube_url)
-        try
-            df = get_qualitative_auto(
-                qualitative_youtube_url,
-                _get_qual_riders(),
-                race_name,
-                string(Dates.today()),
-            )
-            @info "YouTube qualitative: $(nrow(df)) rider assessments"
-            push!(qual_sources, df)
-        catch e
-            @warn "Failed to extract qualitative intelligence from YouTube: $e"
-        end
-    end
-
-    if !isempty(qualitative_article_url)
-        try
-            df = get_qualitative_article(
-                qualitative_article_url,
-                _get_qual_riders(),
-                race_name,
-                string(Dates.today()),
-            )
-            @info "Article qualitative: $(nrow(df)) rider assessments"
-            push!(qual_sources, df)
-        catch e
-            @warn "Failed to extract qualitative intelligence from article: $e"
-        end
-    end
-
-    if isempty(qual_sources) && !isempty(qualitative_json_file)
-        try
-            push!(qual_sources, load_qualitative_file(qualitative_json_file))
-            @info "Qualitative intelligence: $(nrow(last(qual_sources))) rider assessments loaded from file"
-        catch e
-            @warn "Failed to load qualitative file: $e"
-        end
-    end
-end
-
-qualitative_df = if !isempty(qual_sources)
-    combined = reduce(vcat, qual_sources)
-    combine(
-        groupby(combined, :riderkey),
-        :adjustment => mean => :adjustment,
-        :confidence => mean => :confidence,
-        :reasoning => first => :reasoning,
-    )
-elseif !has_qual_sources
-    archived = load_race_snapshot("qualitative", config.pcs_slug, race_year)
-    if archived !== nothing
-        @info "Qualitative intelligence: loaded $(nrow(archived)) rider assessments from archive"
-    end
-    archived
-else
-    nothing
-end
-
 predicted, chosenteam, top_teams, sim_vg_points = solve_oneday(
     config;
     racehash = racehash,
@@ -148,7 +66,6 @@ predicted, chosenteam, top_teams, sim_vg_points = solve_oneday(
     oracle_url = oracle_url,
     n_resamples = n_resamples,
     excluded_riders = excluded_riders,
-    qualitative_df = qualitative_df,
     odds_df = odds_df,
     domestique_discount = domestique_discount,
     risk_aversion = risk_aversion,
