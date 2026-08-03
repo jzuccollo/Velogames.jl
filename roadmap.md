@@ -4,7 +4,7 @@ See `CLAUDE.md` for current architecture, prediction model details, signal inven
 
 ## Remediation phases 0–1 executed (July 2026)
 
-Phases 0 and 1 of `docs/remediation-plan.md` (following `docs/architecture-review.md`) shipped on branch `remediation/phase-0-1`. **The mechanism moratorium is in force**: no new signals or simulation layers until the Phase 2 stage-race harness exists; genuine bug fixes only. Decisions D1–D4 were executed as follows:
+Phases 0 and 1 of the July 2026 remediation plan (following `docs/architecture-review.md`; the plan itself was deleted as spent in August 2026) shipped on branch `remediation/phase-0-1`. **The mechanism moratorium is in force**: no new signals or simulation layers until the Phase 2 stage-race harness exists; genuine bug fixes only. Decisions D1–D4 were executed as follows:
 
 - **D1 (league standings)**: resolved without a new scraper — the sibling `../vgleague` package already scrapes full league standings; `load_league_standings` (data_assembly.jl) reads its JSON cache, with `data/league_standings.toml` manual paste as fallback. First measurement: **over the 9 races with both archived model teams and standings, the model would place 2nd of 15 cumulatively** (11,198 vs leader 11,616), slightly ahead of the entered teams (11,076; delta −122). After a vgleague refresh and the gent-wevelgem name fix widened coverage to 12 races, the model places **4th of 15** — the three added races (Gent-Wevelgem, GP de Plumelec, Tro-Bro Léon) were among its weaker ones, consistent with the review's stochastic-race diagnosis. Note: "Mud Springs Eternal", read by the review as a strong opponent, is the user's own team. Entered-vs-advised deltas now reported per race by `scripts/league_eval.jl`. Later-season races need `vgleague update dpcc` run in `../vgleague`.
 - **D2 (final-KOM fix, review defects 1+2)**: final mountains jersey now ranked by cumulative daily-KOM points (driven by `kom_s`, hilly+mountain); `mountain_top5_counts` deleted. Fixed-seed Giro 2026 diff: movement confined to the KOM component (sum |ΔEVG| 185.3); Ciccone +29.4, Vine +26.9, Scaroni +10.1 up; Caruso/Vendrame/Narváez down. Caveat: Giro/Tour 2026 prediction archives predate the `strength_kom` column, so retrospective reconstructions fall back to `strength_mountain` for the KOM channel.
@@ -13,11 +13,184 @@ Phases 0 and 1 of `docs/remediation-plan.md` (following `docs/architecture-revie
 
 Other Phase 1 fixes: GC-favourite protection no longer silently skipped when `gc_strengths` is empty (review defect 4); simulation layers (attrition, breakaway participation, aleatoric) now draw from independent per-sim RNG sub-streams so toggling one layer leaves the others' streams unchanged — the enabler for Phase 2's clean ablations. Seeded outputs changed once at that commit. Prediction archives now write a mandatory column set plus `schema_version` (review defect 5); readers warn on legacy archives (pre-April-2026 archives cannot be re-created).
 
-Dead-knob prune (WP1.5): the two dead `BayesianConfig` fields the review counted (`form_absence_floor`, `qualitative_absence_floor`) are deleted — the estimation-path knob count drops by 2. The REFACTOR_PLAN audit found Phases 1–4 essentially already shipped (the plan document had not been kept in sync); only its optional 3d (estimator shared-block refactor) remains open, worth scheduling since the estimators keep needing edits. `qualitative_base_variance` stays a hardcoded 2.0 literal in its accessor, deliberately not promoted to a config field while the qualitative signal is production-dead.
+Dead-knob prune (WP1.5): the two dead `BayesianConfig` fields the review counted (`form_absence_floor`, `qualitative_absence_floor`) are deleted — the estimation-path knob count drops by 2. The REFACTOR_PLAN audit found Phases 1–4 essentially already shipped (the plan document had not been kept in sync); only its optional 3d (estimator shared-block refactor) remained open, and the plan file was deleted as spent in August 2026 — 3d is carried here instead: worth scheduling, since the estimators keep needing edits. `qualitative_base_variance` was left as a hardcoded 2.0 literal rather than promoted to a config field; the accessor was deleted with the signal in August 2026.
 
 Known bugs recorded, not fixed (moratorium): `find_race`'s fuzzy fallback mis-resolves short aliases ("Tour" → "Paris-Tours Elite"). The gent-wevelgem display-name mismatch was subsequently verified against VG's races.php and league pages (VG has no "From") and fixed — that race now matches league standings.
 
 ## Known issues
+
+### Package simplification (August 2026)
+
+Acting on the champion/challenger tie and the April 2026 ablation, three things
+were deleted rather than left dormant:
+
+- **`src/direct_evg.jl` and its tests.** The fitted challenger tied its gate on
+  both the stage harness (WP2.3) and the one-day harness. The finding — that the
+  strength→points transform is saturated — is recorded below and does not need
+  the code kept alive to restate it. `:direct` is gone from every predictor list.
+- **PCS form and qualitative intelligence, end to end.** The April 2026 ablation
+  turned both off in the estimator but left the fetch, the archival, the
+  `RaceData` fields, the `force_enable` re-enable gate, the `qualitative.jl`
+  module (YouTube transcript → Claude API) and the `getpcs_race_form` scraper in
+  place — so every production race was still making network calls for signals
+  the estimator discarded. All removed, along with the ablation report sections
+  that existed only to re-enable them.
+- **`_STAGE_RACE_PATTERNS`.** 100 lines fully derivable from the two slug dicts
+  it sat beside; the invariant is now pinned by a test.
+
+**VG race history was NOT removed.** The ablation disabled it in the *scalar*
+one-day estimator only; the multi-dim stage-race estimator consumes it
+unconditionally (`strength_pipeline.jl`, "VG race history (per-class
+projection)"). `RiderSignalData` keeps `vg_race_history`, and a test now pins
+both halves so a future cleanup cannot delete the live signal along with the
+dead one.
+
+Verified as a strict no-op on production numbers: the one-day harness returns
+identical team-points-captured and rank ρ for every surviving arm on
+Ronde van Vlaanderen 2026 and 2024.
+
+
+### Stage assists scored zero everywhere — FIXED, archives patched 2 August 2026
+
+`_vg_scoring_field` tested `occursin("team", …)` before `occursin("stage", …)`.
+Every VG assist heading contains "Team" ("Assists - Teammate stage positions",
+"Assists - Overall Team competition"), so the stage-assist table matched the
+team test first and was filed as `team_class_assist_points`; first-match-wins
+then skipped the real team-class table, leaving `stage_assist_points` empty.
+`simulate_stage.jl` gates its whole assist loop on
+`length(scoring.stage_assist_points)`, so **top-3 teammate stage finishes scored
+zero in every run built on a poisoned snapshot.**
+
+The parser is fixed and `getvg_scoring` now re-scrapes on detecting an empty
+`stage_assist_points`, which self-heals any edition whose `scores.php` still
+resolves — `tour-de-france/2026` and `tour-de-romandie/2026` were healed that
+way on 2 August 2026 (returning `[8, 4, 2]` and `[6, 4, 2]` respectively). The
+2023/2024 pages now 302 to the site root, so the six grand-tour snapshots
+(`tour-de-france`, `giro-d-italia`, `vuelta-a-espana` × 2023, 2024) were patched
+by hand the same day: `stage_assist_points = [8, 4, 2]` appended, nothing else
+touched. Nothing was actually lost to the dropped team-class table — VG uses one
+assist schedule for all three assist types in a given game (8/4/2 for grand
+tours, 6/4/2 for shorter stage races), verified across the clean 2026 snapshots
+and confirmed by the two live re-scrapes.
+
+**Consequence for the evidence base: every stage-race backtest number computed
+before 2 August 2026 scored stage assists as zero.** That includes the WP2.3
+gate figures, the layer-adjudication Δtpc table, and the one-day/stage harness
+means recorded above. In particular the **pinned `crosscheck_option_ab` baseline
+(`base_*`, ±0.03) predates the patch and must be re-based on the next
+`render_backtesting.jl` render** — expect the alarm to trip, and treat that trip
+as expected rather than as drift.
+
+### Early-race GC is static, so sprinters never score daily-GC points (July 2026)
+
+**The biggest of the four defects surfaced by the 2026 Tour de France Femmes, and it
+affects men's grand tours identically.**
+
+`simulate_stage_race` accumulates `cumulative_gc_score[i] += gc_strengths[i] + epistemic
++ gc_sep * aleatoric` (`src/simulate_stage.jl` ~line 466), then takes
+`sortperm(cumulative_gc_score, rev=true)` as the GC order for daily-GC scoring. The
+`gc_sep = clamp(w.mountain + w.itt, 0, 1)` guard correctly stops flat stages injecting
+spurious GC time — but `gc_strengths[i]` is still added on *every* stage from stage 1,
+so the simulated GC table is essentially the static GC-strength ordering from day one.
+
+Reality: after a bunch-sprint opening stage the whole peloton records the same time, and
+GC is ordered by bonus seconds and stage placing. The sprinter who wins stage 1 wears the
+leader's jersey and banks 25 daily-GC points a day until the race separates on time.
+
+Measured on the 2026 Femmes field (zero out `daily_gc_points`, diff the EVG):
+
+| Rider | EVG | of which daily GC | share |
+| ----- | --- | ----------------- | ----- |
+| Vollering | 1089 | 220 | 20% |
+| Reusser | 700 | 161 | 23% |
+| Ferrand-Prévot | 601 | 192 | 32% |
+| Wiebes | 576 | **12** | **2%** |
+| Rüegg | 323 | **0.8** | 0.2% |
+| Vos | 304 | **0.0** | 0% |
+
+Sprinters collect essentially nothing across all nine stages. Field-wide, daily GC is
+1989 of 14700 total EVG, of which **663 falls in stages 1–3** — before the stage-4 ITT
+separates anyone on time — and all of it is allocated on GC strength.
+
+Fix requires modelling bonus seconds (typically 10/6/4 on the stage and at intermediate
+sprints) and ordering early GC by cumulative time-then-placing rather than by strength.
+Not a small change; needs validation on the stage-race harness before shipping.
+
+### PCS recency scores treat a missed season as a zero (July 2026)
+
+`src/race_solver.jl` ~line 349 builds the `<spec>_r` recency columns as
+`scores[i] = sum(w .* pts)` — a decay-weighted **sum** over seasons present. A season a
+rider did not race contributes nothing, exactly as though they had raced and scored
+nothing. Absence is scored as weakness.
+
+This is inconsistent with the fallback path: `currency_factors`
+(`src/strength_pipeline.jl` ~line 1124) uses `decay_avg = sum(w.*pts)/sum(w)`, a weighted
+*average* over seasons present, which is absence-neutral. The preferred path is the
+punitive one.
+
+Worked example — 2026 Femmes ITT, `pcs_season_decay = 0.7` (≈1-year half-life):
+
+| Rider | 2026 | 2025 | 2024 | decayed sum | career |
+| ----- | ---- | ---- | ---- | ----------- | ------ |
+| Bäckstedt | 610 | 530 | 210 | 947 | 1532 |
+| Reusser | 220 | 530 | *no row (illness)* | 572 | 3208 |
+| van der Breggen | 120 | 260 | *retired* | 273 | 5452 |
+
+The model ranked Bäckstedt above both on `strength_itt`. Switching to the weighted-average
+form is cheap and clearly right; it narrows but does not close the gap here (Reusser ≈ 671).
+
+Two aggravating factors, worth considering alongside:
+- `pcs_season_decay = 0.7` is one global constant across all five specialties. A ~1-year
+  half-life suits volatile climbing form; time-trial ability is far more stable and is
+  over-discounted by it.
+- The `:itt` dimension is fed by a single signal (`pcs_tt → itt 1.0`) with **no market
+  input** — `odds_gc` routes `itt = 0.0` by design — so every rider's `uncertainty_itt` is
+  identical and nothing can correct a bad PCS read, unlike the other dimensions.
+
+### `stage_dimension_weights` ProfileScore ramp is calibrated on men's stage lengths (July 2026)
+
+`stage_dimension_weights` (`src/simulate_stage.jl` ~line 279) ramps flat→hilly across
+ProfileScore 40–90, and above PS 40 it discards PCS's categorical `stage_type` label
+entirely, going on ProfileScore alone.
+
+Men's Tour 2026 flat stages score PS 13–58, so five of six resolve to `flat = 1.0`. The
+2026 Femmes route's only PCS-labelled flat stage is PS 69 → `flat = 0.42`; the flattest
+treatment on the whole route is stage 8 at `flat = 0.54`. **No stage is treated as a pure
+sprint**, so the flat dimension is starved and sprinters are systematically under-rated.
+Women's stages are shorter (99–172 km against 133–180 km) at comparable vertical, so
+ProfileScore per km runs higher for the same race character.
+
+Forcing stages 2 and 8 to sprint weighting raised Wiebes +46%, Consonni +186%, Balsamo
++39% — though it did not change the chosen team on its own (9/9 overlap).
+
+Candidate fixes: normalise the ramp by distance or vertical-metres-per-km; or floor the
+flat weight when PCS's own `stage_type` says `:flat` rather than discarding the label.
+
+### Archived VG scoring snapshots carry the stage-assist parse bug (July 2026)
+
+Fixed in `_vg_scoring_field` (`src/get_data.jl`) July 2026: every VG assist heading
+contains "Team" — either "Teammate" or "Overall Team" — and the `occursin("team", l)` test
+ran before the `"stage"` test, so the stage-assist table was filed under
+`team_class_assist_points` and the real team-assist table was dropped. `simulate_stage.jl`
+gates the whole assist loop on `length(scoring.stage_assist_points)`, so stage assists
+(8/4/2 per stage for a teammate finishing top 3) scored **zero**. GC assists were never
+affected — the `"general classification"` test already ran first.
+
+Eight of eleven archived snapshots hold the bad parse: tour-de-france 2023/2024/2026,
+giro-d-italia 2023/2024, vuelta-a-espana 2023/2024, tour-de-romandie 2026. Clean:
+giro-d-italia 2026, itzulia-basque-country 2026, tour-de-france-femmes 2026. Since
+`backtest.jl` feeds these to the stage-race harness, past stage-race backtests scored
+stage assists as zero — and `getvg_scoring` returns the archive ahead of any live scrape,
+so `render_stagerace.jl` / `render_assessor.jl` were doing the same on **live** stage-race
+predictions.
+
+**Handled, not merely recorded (July 2026).** `getvg_scoring` now treats a snapshot with
+empty `stage_assist_points` as stale: it warns, re-scrapes, and overwrites the archive, so
+2026 editions self-heal on the next run. The loud "missing essential scoring table" guard
+was extended to cover stage assists, so a future heading rename fails at the scrape rather
+than silently zeroing the channel. **2023/2024 still cannot be re-scraped** — those
+`scores.php` pages 302 to the site root — so the re-scrape throws, the stale table is kept
+with a warning, and those two years still need patching by hand from the known `[8, 4, 2]`.
 
 ### VG points distributions underestimate scoring riders (March–April 2026)
 
@@ -379,14 +552,14 @@ Sparsity is the main risk: cross-region race pairs share 15–30 common riders p
 | 2. Calibration framework | Prior predictive checks, SBC, backtesting, prospective evaluation | `BayesianConfig` reparameterised to 3 scale factors + 2 decay rates. `render_backtesting.jl` serves as unified calibration frontend. |
 | 3. Course profile matching | Terrain-similar race history via `SIMILAR_RACES` | Manual curation of terrain groupings; automatic PCS profile scraping deferred as low priority. |
 | 4. Leader/domestique roles | Domestique strength discount + max-per-team constraint | Heuristic leader detection by estimated strength within the field. |
-| 5. Recent form signal | PCS form page scraping, z-scored as Bayesian update | Covers top ~40-60 riders; race-agnostic (no terrain filtering). |
+| 5. Recent form signal | PCS form page scraping, z-scored as Bayesian update | Disabled by the April 2026 ablation; scraper and signal deleted August 2026. |
 | 6. Season-adaptive VG | VG variance scales with season progress | `vg_season_penalty` inflates early-season VG variance. Trajectory signal removed April 2026 (negligible contribution). |
 | 7. Student's t noise | Heavy-tailed simulation noise via `simulation_df` parameter | `_rand_t(rng, df)` in `simulation.jl`. Default `simulation_df=nothing` (Gaussian); render scripts use df=5. |
-| 8. Qualitative intelligence | YouTube transcript → Claude API extraction → rider adjustments | Automated pipeline via `get_qualitative_auto()` or manual workflow via `build_qualitative_prompt()`. |
+| 8. Qualitative intelligence | YouTube transcript → Claude API extraction → rider adjustments | Disabled by the April 2026 ablation; `qualitative.jl` deleted August 2026. |
 | 9. Signal cleanup (April 2026) | Trajectory removed, oracle precision reduced, VG history decay reduced | `_odds_to_oracle_ratio` 2.0 → 3.5 (April) → 5.0 (post 13-race review); `vg_hist_decay_rate` 1.3 → 0.8; trajectory signal fully deleted. |
 | 10. Enhanced backtesting report (April 2026) | Per-signal SBC, predicted-vs-actual scatter, signal directional accuracy, race selectivity clustering, calibration history tracking | Standalone HTML report via `render_backtesting.jl`. 11 prospective races archived. |
 | 11. Discrimination diagnostics (April 2026) | Per-position-band ρ, within-tier signal discrimination, signal ablation study | Revealed PCS form, VG race history, and qualitative are noise. Position-dependent market discount shows promise but deferred pending more data. |
-| 12. Signal pruning (April 2026) | Disabled PCS form, VG race history, qualitative from estimation pipeline | Red team review + bootstrap CIs confirmed low-value signals. Data collection/archival continues; backtesting can re-enable via signal flags. Retained signal set: PCS seasons + VG season + PCS race history + oracle + odds. |
+| 12. Signal pruning (April 2026) | Disabled PCS form, VG race history, qualitative from estimation pipeline | Red team review + bootstrap CIs confirmed low-value signals. Code and data collection deleted August 2026 (VG race history survives in the stage-race estimator only). Retained signal set: PCS seasons + VG season + PCS race history + oracle + odds. |
 | 13. Per-stage simulation (April 2026) | Per-stage scoring, PCS stage scraping, stage-type strength modifiers, cross-stage correlated simulation | `StageRaceScoringTable`, `simulate_stage_race`, `resample_optimise_stage!`. Validated against TDF 2024/2025 (scoring ρ=0.94–0.96, prediction ρ=0.77 vs aggregate 0.66). Extended to all VG stage races including week-long races (Itzulia, Catalunya, etc.) with optional class constraints. |
 
 ---
@@ -601,7 +774,34 @@ The implementation would add faceted PIT histograms or a calibration table by st
 
 **Caveats, recorded honestly.** (i) The challenger's 2023–24 editions are in-sample (its fit years); the simulator carries its own in-sample exposure (PL-fitted aleatoric noise, attrition hazards fitted on these same archives), so neither side is clean and the primary set slightly favours the challenger while the 8/10 win count favours the simulator. (ii) The deleted attrition layer was the model's only DNF mechanism; sprinter DNF risk (~32% for 2nd–4th-tier GT sprinters) returns to explicitly unmodelled — it was not being converted into team-points anyway. (iii) Deleting GC protection removes a determinism-increasing layer, which should move simulated GC win% toward the market (the direction the WP1.6 investigation wants). (iv) Both engines beat naive persistence on mean tpc (simulator 0.563, challenger 0.524, persistence 0.451), and the simulator beat the odds-implied baseline on the one edition with odds (Giro 26: 0.596 vs 0.546).
 
-**Pre-registered next test (Vuelta 2026, WP2.4):** archive predictions from BOTH engines before the deadline; compare team-points-captured prospectively after the race. If the challenger wins that comparison (making it 2 of 4 recent out-of-sample GTs, given Giro 25), re-run this gate with the 2026 editions included as validation before any further simulator investment.
+**Pre-registered next test (Vuelta 2026, WP2.4) — RE-SCOPED, August 2026.**
+
+The original registration was "archive predictions from BOTH engines before the
+deadline, compare team-points-captured prospectively". That became unrunnable
+when `direct_evg.jl` was deleted in the August 2026 simplification: the
+challenger had tied its gate twice (here and on the one-day harness), the
+simulator was no longer on trial against it, and carrying ~500 lines to service
+one more tie was not judged worth it. Recording the cancellation rather than
+letting the deadline pass quietly.
+
+**Replacement, pre-registered before the race:** on Vuelta 2026, run
+`backtest_stage_race` with `predictors = [:simulator, :simulator_risk,
+:persistence, :odds]` and compare team-points-captured. This keeps a genuine
+out-of-sample check on the same deadline, against baselines that already exist
+and need no new code.
+
+- **`:persistence` will run unconditionally** — Vuelta `vg_stage_totals` are
+  archived for 2023, 2024 and 2025.
+- **`:odds` requires action before the deadline.** There is no
+  `archive/odds/vuelta-a-espana/` directory yet; the GC winner market has to be
+  pasted and archived pre-race or that arm silently drops out, exactly as it did
+  for every pre-2026 edition. This is the one manual precondition.
+- **Reading it:** the simulator failing to beat naive persistence would be a
+  serious result and should trigger a re-examination of the whole stage stack —
+  the WP2.3 sweep had it at 0.563 vs 0.451. Losing to `:odds` alone would raise
+  the same question the one-day market blend raised: why simulate a marketed
+  race at all. Neither is a pass/fail gate on a single edition; both are
+  triggers to look, given n = 1.
 
 ### One-day champion/challenger harness (July 2026)
 
@@ -623,7 +823,7 @@ Ranked by cost-adjusted expected value:
 
 3. **Risk-aware / upside team construction (highest conceptual upside, least proven).** If EVG is at ceiling, the edge is in the *team given* the EVG. The simulator's unique output the challenger cannot supply is per-rider `downside_semi_dev` + selection frequency; the harness currently picks the plain EVG-max team. In stochastic races the winning team is built from cheap high-variance over-performers, so an upside-tilted objective (mean-variance / CVaR on the simulator's per-draw distribution) may beat EVG-max. This **reframes the simulator's justification: keep it for its variance, not its mean.** Gate: upside objective beats EVG-max on team-points-captured across the harness, and survives the cumulative-season objective (it may not — upside-chasing can lose over a season). This is the one experiment that could give the retained simulator a reason we can point to.
 
-4. **New information, not new machinery (speculative, gate hard).** Technique is saturated, so the ceiling only lifts with inputs the market has not priced: the disabled **qualitative/YouTube signal** (DS interviews, form intel), **echelon/weather risk**, **parcours-specific breakaway propensity**, live odds movement. The review's own evidence is that most added signals have not moved the numbers, so treat each as a speculative bet gated on the challenger's held-out harness before belief; expect most to fail.
+4. **New information, not new machinery (speculative, gate hard).** Technique is saturated, so the ceiling only lifts with inputs the market has not priced: a **qualitative/YouTube signal** (DS interviews, form intel — the deleted August 2026 implementation would have to be rebuilt), **echelon/weather risk**, **parcours-specific breakaway propensity**, live odds movement. The review's own evidence is that most added signals have not moved the numbers, so treat each as a speculative bet gated on the challenger's held-out harness before belief; expect most to fail.
 
 **Caveats.** The 0.005 champion–challenger gap is inside the noise on 39 races and neither number is fully clean (the challenger's 2023–24 are its fit years; 2025 is its clean held-out; the champion carries its own in-sample noise-fitting exposure). Act on the tie, not on the ordering. Experiment 3 is highest-upside but least certain to survive the season objective; 1 and 2 are the safe, cheap shots on goal to run first.
 
@@ -632,7 +832,7 @@ Ranked by cost-adjusted expected value:
 **Both halves of experiment 1 are dead. Do not re-run it.**
 
 **(b) Oracle-floor disablement was already shipped.** `floor_signals` defaults to
-`Set([:odds, :qualitative])` and `strength_pipeline.jl` gates the oracle floor on
+`Set([:odds])` and `strength_pipeline.jl` gates the oracle floor on
 `:oracle in config.floor_signals`, so the floor has never been active in
 production. The experiment-1 entry above listing it as a candidate was simply
 wrong about the code.
@@ -727,4 +927,84 @@ odds exist, at w=0.5 (0.25 ties it and is more market-heavy than the evidence
 compels), gated as a ship-then-monitor change under the validation philosophy —
 large effect, clear mechanism, do-no-harm satisfied. Re-check after the 2027
 classics, when n roughly doubles. Pre-registered revisit trigger: if the blend's
-capture advantage over `sim` falls below +0.02 on 2027 races, revert.
+capture advantage falls below +0.02 on 2027 races, revert — measured against
+`simulator_risk`, paired on common editions. See "SHIPPED: one-day market blend"
+below for why that baseline and not `sim`.
+
+### SHIPPED: one-day market blend (July 2026)
+
+Wired into `solve_oneday` / `_oneday_prediction_core` as specified above. Stage
+races are untouched — the GT harness has 2 marketed editions, nowhere near
+enough.
+
+**⚠️ PRE-REGISTERED REVERT TRIGGER.** If `simulator_market` minus
+**`simulator_risk`** mean team-points-captured falls below **+0.02** on the 2027
+classics, back the blend out. The check is a report render, not a re-analysis —
+`render_backtesting.jl`'s one-day harness section renders a dedicated "Market
+blend — paired comparison" table, and `oneday_harness_years` runs to the current
+season so 2027 rows appear without editing the script.
+
+Two things that table exists to prevent. First, **the arms cover different
+edition sets** — `simulator_market` and `odds` only exist where odds were
+archived — so subtracting the summary-table means compares the blend on marketed
+2026 editions against a `simulator` averaged over 2023–2026. The trigger must be
+computed paired, on editions where both arms produced a row. Second, **the
+baseline is `simulator_risk`, not `simulator`**: the blend sits on top of the
+risk-adjusted column, so differencing against the unadjusted arm bundles the
+risk adjustment into the measured effect. The +0.079 quoted below is the
+`simulator` difference, which is what the experiment reported; the paired table
+renders both.
+
+Note *which* claim this protects: the blend clearly beating the simulator is
+established (+0.079, CI [+0.028, +0.136]); the blend beating the raw market is
+**not** (+0.024, CI [−0.015, +0.069]) — and that weaker, unestablished claim is
+the one justifying keeping the simulator at all on marketed races. If 2027 shows
+the blend still failing to beat odds alone, the live question is not "revert the
+blend" but "why are we simulating marketed classics".
+
+Implementation notes:
+
+- Insertion point: `_resample_core!` in `build_model.jl`, on the **risk-adjusted**
+  column (`expected_pts / (1 + risk_aversion·cv_down)`), immediately before the
+  k-best team enumeration. Both arms are unit-normalised
+  (`blend_market_points`) — mandatory, since EVG is in VG points and the market
+  arm is a probability; mixed raw, the market would be swamped.
+- Blending *after* the risk adjustment rather than before is what makes `w = 1`
+  bit-identical to the pre-blend path (blending raw EVG would have quietly
+  dropped production's risk adjustment at `w = 1`). The experiment blended raw
+  EVG and re-optimised EVG-max; the difference is second-order — `risk_aversion`
+  was 44/50 ties on the one-day harness — and the harness re-run below confirms
+  it does not move the headline.
+- `market_blend_weight` is per-race config (`[optimisation]`, default 0.5). 0.25
+  scored identically on the 2026 evidence, so going lower on races where the
+  book is trusted more is supported; 1.0 disables.
+- Marketless races are bit-identical to before at any `w` — there is no market
+  column to blend, and the code short-circuits on that.
+- `champion_oneday_evg` (`:simulator`) deliberately stays UNBLENDED so the
+  standing champion comparison keeps its meaning; `champion_oneday_market_evg`
+  (`:simulator_market`) is the new arm, and it runs the production code path
+  rather than reimplementing the blend.
+
+**Harness re-run through the shipped code, 12 marketed 2026 editions:**
+
+| arm | mean capture | vs sim | top-20 ρ |
+| --- | --- | --- | --- |
+| simulator | 0.572 | — | 0.474 |
+| odds | 0.630 | +0.058 | 0.575 |
+| **simulator_market** | **0.651** | **+0.079** | 0.533 |
+
+`simulator_market` − `simulator`: **+0.0793, bootstrap CI [+0.028, +0.137], 7
+wins / 0 losses / 5 ties** — the experiment's headline reproduced exactly
+through the production path, which settles the risk-adjustment placement
+question empirically: blending after the risk adjustment does not move it.
+(`odds` reads 0.630 here against 0.627 in the experiment; a 0.003 arm-level
+drift, direction of the result unaffected.)
+
+Per-edition shape, for what the blend is actually doing: it never loses to the
+simulator, and its wins are large where the simulator failed outright — Roubaix
+0.303 → 0.569, Brabantse Pijl 0.618 → 0.774, Eschborn 0.270 → 0.521. In the
+other direction it protects against the market: Gent-Wevelgem holds the
+simulator's 0.431 where odds alone captured 0.235. The cost is the upside it
+surrenders when the market is simply better — Eschborn 0.521 against odds-only's
+0.615, Flèche 0.701 against 0.764. That trade is the whole unresolved question
+above.
