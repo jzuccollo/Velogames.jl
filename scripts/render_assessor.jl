@@ -29,6 +29,8 @@ history_years = _cfg["optimisation"]["history_years"]
 domestique_discount = _cfg["optimisation"]["domestique_discount"]
 risk_aversion = _cfg["optimisation"]["risk_aversion"]
 max_per_team = _cfg["optimisation"]["max_per_team"]
+market_blend_weight =
+    Float64(get(_cfg["optimisation"], "market_blend_weight", DEFAULT_MARKET_BLEND_WEIGHT))
 excluded_riders = String[x for x in _cfg["optimisation"]["excluded_riders"]]
 simulation_df = let v = _cfg["optimisation"]["simulation_df"]
     v isa Integer ? v : nothing
@@ -126,6 +128,7 @@ else
             max_per_team = max_per_team,
             breakaway_dir = breakaway_dir,
             simulation_df = simulation_df,
+            market_blend_weight = market_blend_weight,
         )
     end
 end
@@ -210,13 +213,18 @@ if sim_vg_points !== nothing && !hasproperty(predicted, :expected_vg_points)
         [mean(@view sim_vg_points[i, :]) for i = 1:nrow(predicted)]
 end
 
-# Compute optimal team from simulation if archive lacked :chosen
+# Compute optimal team from simulation if archive lacked :chosen. Optimise the
+# blended column when the archive carries one, or this reconstructs a different
+# team from the one the blend-aware `solve_oneday` would have entered.
 if optimal_team === nothing && hasproperty(predicted, :expected_vg_points)
     build_fn = is_stage ? build_model_stage : build_model_oneday
+    opt_col =
+        :market_blend_points in propertynames(predicted) ? :market_blend_points :
+        :expected_vg_points
     sol = build_fn(
         predicted,
         config.team_size,
-        :expected_vg_points,
+        opt_col,
         :cost;
         totalcost = 100,
         max_per_team = max_per_team,
@@ -295,6 +303,7 @@ if prediction_ok
                 :team,
                 :cost,
                 :expected_vg_points,
+                :market_blend_points,
                 :selection_frequency,
                 :strength,
                 :uncertainty,
@@ -321,6 +330,20 @@ if prediction_ok && nrow(optimal_team) > 0
         io,
         "<p><strong>Total cost:</strong> $opt_cost / 100 credits | <strong>Expected VG points:</strong> $(round(opt_evg, digits=1)) | <strong>Budget remaining:</strong> $(100 - opt_cost)</p>\n",
     )
+
+    if :market_blend_points in propertynames(predicted)
+        write(
+            io,
+            html_callout(
+                "This team was picked on a blend of the simulator and the bookmaker " *
+                "market (<code>market_blend_weight = $(market_blend_weight)</code>), so " *
+                "it need not be the top-6 by expected VG points alone. " *
+                "<code>market_blend_points</code> is the blended score actually " *
+                "optimised; the swap analysis below is priced in unblended EVG.";
+                title = "Market blend active",
+            ),
+        )
+    end
 
     display_cols = intersect(
         [

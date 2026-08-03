@@ -44,6 +44,8 @@ history_years = _cfg["optimisation"]["history_years"]
 domestique_discount = _cfg["optimisation"]["domestique_discount"]
 risk_aversion = _cfg["optimisation"]["risk_aversion"]
 max_per_team = _cfg["optimisation"]["max_per_team"]
+market_blend_weight =
+    Float64(get(_cfg["optimisation"], "market_blend_weight", DEFAULT_MARKET_BLEND_WEIGHT))
 excluded_riders = String[x for x in _cfg["optimisation"]["excluded_riders"]]
 simulation_df = let v = _cfg["optimisation"]["simulation_df"]
     v isa Integer ? v : nothing
@@ -72,6 +74,7 @@ predicted, chosenteam, top_teams, sim_vg_points = solve_oneday(
     max_per_team = max_per_team,
     breakaway_dir = breakaway_dir,
     simulation_df = simulation_df,
+    market_blend_weight = market_blend_weight,
     cache_config = race_cache,
 )
 
@@ -169,12 +172,26 @@ if nrow(chosenteam) > 0
         "<p><strong>Total cost:</strong> $(total_cost) / 100 credits | <strong>Expected VG points:</strong> $(round(total_evg, digits=1)) | <strong>Budget remaining:</strong> $(100 - total_cost)</p>\n",
     )
 
+    if :market_blend_points in propertynames(predicted)
+        write(
+            io,
+            html_callout(
+                "The team was picked on a blend of the simulator and the bookmaker market " *
+                "(<code>market_blend_weight = $(market_blend_weight)</code>), so it need not be the " *
+                "top-6 by expected VG points alone. <code>market_blend_points</code> is the " *
+                "blended score actually optimised.";
+                title = "Market blend active",
+            ),
+        )
+    end
+
     display_cols = intersect(
         [
             :rider,
             :team,
             :cost,
             :expected_vg_points,
+            :market_blend_points,
             :selection_frequency,
             :strength,
             :uncertainty,
@@ -218,6 +235,7 @@ ranking_cols = intersect(
         :team,
         :cost,
         :expected_vg_points,
+        :market_blend_points,
         :selection_frequency,
         :strength,
         :uncertainty,

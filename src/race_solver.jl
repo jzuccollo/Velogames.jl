@@ -154,6 +154,7 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
             :uncertainty_gc,
             :uncertainty_kom,
             :expected_vg_points,
+            :market_blend_points,
             :selection_frequency,
             :chosen,
         ]),
@@ -720,6 +721,15 @@ optimisation of expected Velogames points.
 4. Optionally use pre-parsed odds and Cycling Oracle predictions
 5. Estimate rider strength via Bayesian updating
 6. Resampled optimisation: draw strengths, score, optimise, repeat
+7. Optionally blend the market into the final team pick (`market_blend_weight`)
+
+## Market blend
+`market_blend_weight < 1` mixes the bookmaker's implied win probabilities into
+the column the final team optimisation maximises:
+`w · unitnorm(risk-adjusted EVG) + (1 − w) · unitnorm(implied win prob)`. On the
+12 marketed 2026 classics this lifted team-points-captured from 0.572 to 0.651
+(see roadmap.md, "Experiment 2"). `w = 1` (the default) disables it, as does a
+race with no odds.
 
 ## Returns
 A tuple `(predicted, chosenteam, top_teams, sim_vg_points)` where `predicted` is
@@ -746,6 +756,7 @@ function solve_oneday(
     n_alternatives::Int = 20,
     breakaway_dir::String = "",
     simulation_df::Union{Int,Nothing} = nothing,
+    market_blend_weight::Float64 = 1.0,
 )
     data = _prepare_rider_data(
         config,
@@ -787,6 +798,7 @@ function solve_oneday(
         breakaway_rates = b_rates,
         breakaway_mean_sectors = b_sectors,
         simulation_df = simulation_df,
+        market_blend_weight = market_blend_weight,
     )
 
     predicted, chosenteam = _extract_chosen_team!(predicted, top_teams)
@@ -924,6 +936,10 @@ one-day backtest harness (`champion_oneday_evg` in backtest.jl): scalar
 `estimate_strengths` → `resample_optimise!(build_model_oneday)`. No I/O or
 archival side effects — callers handle data fetching, breakaway-rate loading,
 and prediction archival. The one-day twin of `_stage_prediction_core`.
+
+`market_blend_weight < 1` mixes the bookmaker market into the final team
+optimisation (see `blend_market_points`); on a marketless race there is nothing
+to blend and the run is identical to `w = 1`.
 """
 function _oneday_prediction_core(
     data::RaceData,
@@ -938,6 +954,7 @@ function _oneday_prediction_core(
     breakaway_rates::Vector{Float64} = Float64[],
     breakaway_mean_sectors::Vector{Float64} = Float64[],
     simulation_df::Union{Int,Nothing} = nothing,
+    market_blend_weight::Float64 = 1.0,
     config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     rng::AbstractRNG = Random.default_rng(),
 )
@@ -948,6 +965,10 @@ function _oneday_prediction_core(
         domestique_discount = domestique_discount,
         config = config,
     )
+
+    # After `estimate_strengths`, which rematches odds riderkeys against the
+    # rider frame in place. Empty vector on a marketless race ⇒ no blend.
+    market_probs = market_win_probs(data.odds_df, predicted.riderkey)
 
     @info "Running resampled optimisation ($n_resamples resamples)..."
     predicted, top_teams, sim_vg_points = resample_optimise!(
@@ -963,6 +984,8 @@ function _oneday_prediction_core(
         breakaway_rates = breakaway_rates,
         breakaway_mean_sectors = breakaway_mean_sectors,
         simulation_df = simulation_df,
+        market_probs = market_probs,
+        market_blend_weight = market_blend_weight,
     )
 
     return predicted, top_teams, sim_vg_points

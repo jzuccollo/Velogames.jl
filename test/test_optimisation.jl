@@ -322,17 +322,21 @@ end
     @test breakaway_sectors_from_km(257.0, 257.0) == 4  # all checkpoints
 end
 
+"""12-rider field used by both resampling testsets: costs and points descend
+together, so riders 10–12 are the cheap outsiders the blend tests reach for."""
+_resample_fixture() = DataFrame(
+    rider = ["R$i" for i = 1:12],
+    team = repeat(["A", "B", "C", "D"], 3),
+    cost = [20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 4, 4],
+    points = Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 0, 0, 0]),
+    riderkey = ["r$i" for i = 1:12],
+    oneday = [2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 10, 10, 10],
+    has_pcs_data = trues(12),
+)
+
 @testset "resample_optimise!" begin
     rng = Random.MersenneTwister(42)
-    rider_df = DataFrame(
-        rider = ["R$i" for i = 1:12],
-        team = repeat(["A", "B", "C", "D"], 3),
-        cost = [20, 18, 16, 14, 12, 10, 8, 6, 5, 4, 4, 4],
-        points = Float64.([500, 400, 350, 300, 250, 200, 150, 100, 80, 0, 0, 0]),
-        riderkey = ["r$i" for i = 1:12],
-        oneday = [2000, 1500, 1200, 1000, 800, 600, 400, 300, 200, 10, 10, 10],
-        has_pcs_data = [trues(9); trues(3)],
-    )
+    rider_df = _resample_fixture()
 
     strengths_df = estimate_strengths(rider_df)
 
@@ -359,4 +363,108 @@ end
     # sim_vg_points matrix has correct dimensions
     @test size(sim_vg_pts) == (nrow(result_df), 100)
     @test all(sim_vg_pts .>= 0.0)
+end
+
+@testset "market blend" begin
+    @testset "market_win_probs" begin
+        keys_ = ["r1", "r2", "r3"]
+        odds = DataFrame(riderkey = ["r2", "r3"], odds = [2.0, 1.0])
+        p = market_win_probs(odds, keys_)
+        @test p[1] == 0.0                    # unpriced → 0, the book's own verdict
+        @test p[2] == 0.5
+        @test p[3] ≈ 1 / 1.01                # odds floored at 1.01
+        # No market at all → empty, which callers read as "do not blend"
+        @test market_win_probs(nothing, keys_) == Float64[]
+        @test market_win_probs(DataFrame(riderkey = ["r1"]), keys_) == Float64[]
+        # A frame with the right columns but no rider on this roster is not a
+        # market either. Returning zeros(n) would hand the optimiser a flat
+        # objective and an arbitrary team instead of "skip me".
+        @test market_win_probs(
+            DataFrame(riderkey = String[], odds = Float64[]),
+            keys_,
+        ) == Float64[]
+        @test market_win_probs(DataFrame(riderkey = ["nobody"], odds = [2.0]), keys_) ==
+              Float64[]
+    end
+
+    @testset "blend_market_points normalisation" begin
+        pts = [100.0, 50.0, 10.0]
+        probs = [0.1, 0.6, 0.0]
+        b = blend_market_points(pts, probs, 0.5)
+        @test sum(b) ≈ 1.0                   # both arms unit-normalised
+        # Each arm is scale-free: rescaling EVG must not shift the blend. This is
+        # the property that makes the mixture meaningful rather than dominated by
+        # whichever arm happens to carry bigger numbers.
+        @test blend_market_points(1000 .* pts, probs, 0.5) ≈ b
+        @test blend_market_points(pts, 100 .* probs, 0.5) ≈ b
+        # Endpoints
+        @test blend_market_points(pts, probs, 1.0) ≈ pts ./ sum(pts)
+        @test blend_market_points(pts, probs, 0.0) ≈ probs ./ sum(probs)
+        # The market arm genuinely bites: rider 2 is second on EVG but the
+        # market's favourite, and the blend puts them top.
+        @test argmax(b) == 2
+        # All-zero market (nobody priced) degrades to the simulator's ordering
+        # for any w > 0; at w = 0 there is nothing left to order by, which is why
+        # callers must not reach here with an empty market (`market_win_probs`
+        # returns `Float64[]`, and `_resample_core!` guards on `any(>(0), …)`).
+        for w in (0.25, 0.5, 1.0)
+            @test sortperm(blend_market_points(pts, zeros(3), w), rev = true) ==
+                  sortperm(pts, rev = true)
+        end
+        @test all(iszero, blend_market_points(pts, zeros(3), 0.0))
+    end
+
+    @testset "resample_optimise! blending" begin
+        strengths_df = estimate_strengths(_resample_fixture())
+
+        blend_run(df; kwargs...) = resample_optimise!(
+            copy(df),
+            SCORING_CAT2,
+            build_model_oneday;
+            team_size = 6,
+            n_resamples = 100,
+            rng = Random.MersenneTwister(42),
+            kwargs...,
+        )
+
+        base_df, base_teams, _ = blend_run(strengths_df)
+        # The market rates the model's cheap outsiders, and only them.
+        probs = [zeros(9); [0.4, 0.35, 0.25]]
+
+        # w = 1 with a real market present must be bit-identical to no blend.
+        w1_df, w1_teams, _ = blend_run(strengths_df; market_probs = probs,
+            market_blend_weight = 1.0)
+        @test :market_blend_points ∉ propertynames(w1_df)
+        @test w1_df.expected_vg_points == base_df.expected_vg_points
+        @test w1_df.selection_frequency == base_df.selection_frequency
+        @test sort(w1_teams[1].riderkey) == sort(base_teams[1].riderkey)
+
+        # A marketless race is untouched. Tested at w = 0, the weight that would
+        # do most damage if the guard failed (it would hand the optimiser an
+        # all-zero objective); the guard has no other w-dependence, so one is
+        # enough. Both spellings of "no market" — all-zero and empty.
+        for probs_none in (zeros(12), Float64[])
+            m_df, m_teams, _ = blend_run(strengths_df; market_probs = probs_none,
+                market_blend_weight = 0.0)
+            @test :market_blend_points ∉ propertynames(m_df)
+            @test sort(m_teams[1].riderkey) == sort(base_teams[1].riderkey)
+        end
+
+        # w < 1 with a market: the blended column is written, and it — not raw
+        # EVG — drives the pick. The three market-backed outsiders are the
+        # model's worst riders, so a real blend must pull them in.
+        b_df, b_teams, _ = blend_run(strengths_df; market_probs = probs,
+            market_blend_weight = 0.5)
+        @test :market_blend_points in propertynames(b_df)
+        @test b_df.expected_vg_points == base_df.expected_vg_points  # EVG untouched
+        @test sort(b_teams[1].riderkey) != sort(base_teams[1].riderkey)
+        @test count(k -> k in ("r10", "r11", "r12"), b_teams[1].riderkey) >
+              count(k -> k in ("r10", "r11", "r12"), base_teams[1].riderkey)
+
+        # w = 0 hands the pick to the market: only the three priced riders carry
+        # any weight, so all three must be bought.
+        z_df, z_teams, _ = blend_run(strengths_df; market_probs = probs,
+            market_blend_weight = 0.0)
+        @test issubset(["r10", "r11", "r12"], z_teams[1].riderkey)
+    end
 end

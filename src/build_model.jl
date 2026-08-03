@@ -234,6 +234,62 @@ function _kbest_team_keys(
 end
 
 """
+    market_win_probs(odds_df, riderkeys) -> Vector{Float64}
+
+Implied win probability per rider from a bookmaker winner market:
+`1 / max(odds, 1.01)`, and `0` for riders the market did not price (their
+absence is itself information — the book judged them no-hopers). Returns an
+empty vector when there is no usable market, which callers read as "do not
+blend". Shared by the production one-day market blend and the `:odds` backtest
+arm so both read the market identically.
+
+"No usable market" covers a missing frame, a frame without the odds/riderkey
+columns, and a frame that prices nobody on `riderkeys` — an all-zero vector is
+not a market, and returning one would hand the optimiser a flat objective and a
+meaningless team rather than telling the caller to skip.
+
+`riderkeys` must come from the frame the probabilities will be used against —
+`estimate_strengths` rematches odds riderkeys in place, so call this *after* it.
+"""
+function market_win_probs(odds_df::Union{DataFrame,Nothing}, riderkeys::AbstractVector)
+    odds_df === nothing && return Float64[]
+    cols = propertynames(odds_df)
+    (:odds in cols && :riderkey in cols) || return Float64[]
+    p = Dict(
+        String(r.riderkey) => 1.0 / max(Float64(r.odds), 1.01) for r in eachrow(odds_df)
+    )
+    probs = [get(p, String(k), 0.0) for k in riderkeys]
+    return any(>(0), probs) ? probs : Float64[]
+end
+
+_unitnorm(x::AbstractVector{Float64}) = (s = sum(x); s > 0 ? x ./ s : copy(x))
+
+"""The shipped one-day blend weight: the config default, and what the backtest
+harness's `simulator_market` arm measures. One const so moving production off
+0.5 cannot leave the harness silently measuring the old value."""
+const DEFAULT_MARKET_BLEND_WEIGHT = 0.5
+
+"""
+    blend_market_points(pts, market_probs, w) -> Vector{Float64}
+
+`w * unitnorm(pts) + (1 - w) * unitnorm(market_probs)`, with
+`unitnorm(x) = x / sum(x)`.
+
+Normalising both arms to unit sum is not cosmetic. A knapsack's argmax is
+invariant to scaling *one* points column, so each arm is scale-free on its own —
+but a *mixture* is not. `pts` is in VG points (tens to hundreds) and
+`market_probs` is a probability in [0, 1]; mixed raw, the market arm would be
+swamped and the blend would silently reduce to the simulator.
+"""
+function blend_market_points(
+    pts::AbstractVector{Float64},
+    market_probs::AbstractVector{Float64},
+    w::Float64,
+)
+    return w .* _unitnorm(Float64.(pts)) .+ (1 - w) .* _unitnorm(Float64.(market_probs))
+end
+
+"""
     _resample_core!(df, sim_vg_points, build_model_fn; team_size, max_per_team, risk_aversion, n_alternatives)
         -> (df, top_teams)
 
@@ -245,6 +301,11 @@ then enumerates the `n_alternatives` best distinct teams on risk-adjusted points
 (k-best via no-good cuts) and returns them ranked best-first. The per-draw
 optimise is RNG-free, so building the matrix upfront (one-day) or via
 `simulate_stage_race` (stage) yields identical results.
+
+When `market_blend_weight < 1` and `market_probs` prices at least one rider, the
+final optimisation runs on `blend_market_points(risk_adjusted_pts, market_probs,
+w)` instead, and `df` gains a `:market_blend_points` column. The blend sits
+*after* the risk adjustment, so `w = 1` is bit-identical to the unblended path.
 """
 function _resample_core!(
     df::DataFrame,
@@ -254,6 +315,8 @@ function _resample_core!(
     max_per_team::Integer,
     risk_aversion::Float64,
     n_alternatives::Integer = 20,
+    market_probs::Vector{Float64} = Float64[],
+    market_blend_weight::Float64 = 1.0,
 )
     n_riders, n_resamples = size(sim_vg_points)
     selection_counts = zeros(Int, n_riders)
@@ -313,6 +376,27 @@ function _resample_core!(
 
     @info "Resampled optimisation: $n_successful/$n_resamples successful"
 
+    # Market blend (one-day production path; inert everywhere else). Applied to
+    # the risk-adjusted column so that w = 1 leaves this path untouched, and so
+    # the blend mixes the market against the points production actually races on.
+    final_pts = if market_blend_weight < 1.0 && any(>(0), market_probs)
+        # 8 dp, not the 1–3 dp the display columns above use: the blend is
+        # unit-normalised, so a 150-rider field puts typical values near 0.007
+        # and back-markers below 1e-3. Rounding coarsely would collapse the tail
+        # into tie blocks. Round once and optimise the rounded vector, so the
+        # column `champion_oneday_market_evg` re-optimises in the harness is
+        # exactly the one production optimised.
+        blended = round.(
+            blend_market_points(risk_adjusted_pts, market_probs, market_blend_weight),
+            digits = 8,
+        )
+        df[!, :market_blend_points] = blended
+        @info "Market blend applied: w=$market_blend_weight over $(count(>(0), market_probs)) priced riders"
+        blended
+    else
+        risk_adjusted_pts
+    end
+
     # Deterministic optimisation on risk-adjusted expected points. Per-resample
     # team-frequency tracking is too noisy (hundreds of unique compositions with ~150
     # riders), so we optimise on points that account for both Jensen's inequality
@@ -320,7 +404,7 @@ function _resample_core!(
     # best distinct teams (k-best via no-good cuts): the near-optimal set sits within
     # a whisker of the best in EVG, so surfacing it lets the report expose the
     # interchangeable "filler" slots and the structural either/or decisions.
-    df[!, :_final_pts] = risk_adjusted_pts
+    df[!, :_final_pts] = final_pts
     key_lists = _kbest_team_keys(
         df,
         build_model_fn,
@@ -348,6 +432,10 @@ deterministic optimisation on the resampled expected points selects the team.
 Uses Student's t-distribution with `simulation_df` degrees of freedom for
 heavy-tailed noise (set `simulation_df=nothing` for Gaussian).
 
+`market_probs` / `market_blend_weight` optionally blend the final optimisation
+column with the bookmaker market — see `_resample_core!`. Default `w = 1` is no
+blend.
+
 Returns `(df, top_teams, sim_vg_points)` where:
 - `df` gains columns `:selection_frequency` and `:expected_vg_points`
 - `top_teams` is a `Vector{DataFrame}` of the `n_alternatives` best distinct teams,
@@ -368,6 +456,8 @@ function resample_optimise!(
     breakaway_rates::Vector{Float64} = Float64[],
     breakaway_mean_sectors::Vector{Float64} = Float64[],
     simulation_df::Union{Int,Nothing} = nothing,
+    market_probs::Vector{Float64} = Float64[],
+    market_blend_weight::Float64 = 1.0,
 )
     n_riders = nrow(df)
     strengths = Float64.(df.strength)
@@ -416,6 +506,8 @@ function resample_optimise!(
         max_per_team = max_per_team,
         risk_aversion = risk_aversion,
         n_alternatives = n_alternatives,
+        market_probs = market_probs,
+        market_blend_weight = market_blend_weight,
     )
     return df, top_teams, sim_vg_points
 end

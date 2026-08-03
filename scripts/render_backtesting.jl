@@ -2108,7 +2108,7 @@ ab_df !== nothing && write(io, html_table(ab_df))
 write(io, html_heading("One-day harness", 2))
 write(
     io,
-    """<p>A curated set of major classics reconstructed as-of race day (<code>prefetch_oneday_backtest_data</code>) and scored against actual scraped VG totals — the true scoreboard, with assist and breakaway points, not the finish-only proxy the per-race calibration section uses. Each predictor's 6-rider team is optimised on its own EVG under the budget and the same <code>max_per_team</code> cap production races under; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production one-day stack, <code>champion_oneday_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code> — the team <code>solve_oneday</code> actually enters at its default <code>risk_aversion=0.5</code>), <code>direct</code> (the direct-EVG challenger), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years), <code>maxcost</code> (the star-buying baseline). This is the one-day twin of the stage-race harness above. Scope is limited to the classics below to bound the champion's resampling cost; widen <code>oneday_slugs</code> to cover more.</p>\n""",
+    """<p>A curated set of major classics reconstructed as-of race day (<code>prefetch_oneday_backtest_data</code>) and scored against actual scraped VG totals — the true scoreboard, with assist and breakaway points, not the finish-only proxy the per-race calibration section uses. Each predictor's 6-rider team is optimised on its own EVG under the budget and the same <code>max_per_team</code> cap production races under; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production one-day stack, <code>champion_oneday_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code> — the team <code>solve_oneday</code> actually enters at its default <code>risk_aversion=0.5</code>), <code>simulator_market</code> (the SHIPPED one-day rule since July 2026 — the risk-adjusted column blended with the market at <code>market_blend_weight=0.5</code>, both arms unit-normalised; marketed editions only, and it runs the production code path rather than reimplementing it), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years), <code>maxcost</code> (the star-buying baseline). The blend's <strong>pre-registered revert trigger</strong> is computed in the paired table below. This is the one-day twin of the stage-race harness above. Scope is limited to the classics below to bound the champion's resampling cost; widen <code>oneday_slugs</code> to cover more.</p>\n""",
 )
 
 # Curated major classics (the review §2.1 set + monuments) — bounded so the
@@ -2125,18 +2125,15 @@ oneday_slugs = [
 # using it here silently excluded the entire 2026 season — the only year with
 # archived odds, so the `:odds` arm never produced a single row. Editions with no
 # archived VG truth (Lombardia 2026, an October race) are skipped by the catch.
-oneday_harness_years = [2023, 2024, 2025, 2026]
+# Runs to the current season so the market blend's pre-registered 2027 check
+# needs a render, not an edit to this line.
+oneday_harness_years = collect(2023:Dates.year(Dates.today()))
 
 oneday_harness_rows = DataFrame[]
 for slug in oneday_slugs, yr in oneday_harness_years
     try
         edition_df = suppress_output() do
-            backtest_oneday_race(
-                slug,
-                yr;
-                predictors = [:simulator, :simulator_risk, :odds, :maxcost],
-                cache_config = bt_cache,
-            )
+            backtest_oneday_race(slug, yr; cache_config = bt_cache)
         end
         push!(oneday_harness_rows, edition_df)
     catch e
@@ -2163,6 +2160,84 @@ else
     sort!(oneday_summary, :mean_capture, rev = true)
     write(io, html_heading("Summary across editions", 3))
     write(io, html_table(oneday_summary))
+    write(
+        io,
+        html_callout(
+            "Arms cover different edition sets — <code>simulator_market</code> and " *
+            "<code>odds</code> exist only where odds were archived, the rest run " *
+            "everywhere — so differences of <code>mean_capture</code> between rows of " *
+            "this table are not paired comparisons. Check <code>n_editions</code>, and " *
+            "use the paired table below for the revert trigger.",
+        ),
+    )
+
+    # Paired market-blend comparison. The pre-registered revert trigger is a
+    # difference between two arms, so it has to be computed on the editions where
+    # BOTH produced a row — subtracting the summary means above compares
+    # `simulator_market` (marketed editions only) against a `simulator` averaged
+    # over every year in the harness. `simulator_risk` is the like-for-like
+    # baseline: it is the team `solve_oneday` actually enters, and the blend is
+    # applied on top of that same risk-adjusted column, so the difference
+    # isolates the blend. `simulator` is kept alongside because the roadmap's
+    # shipped figure quotes it.
+    blend_pairs = let
+        cap = unstack(
+            select(oneday_rows, [:race, :year, :predictor, :team_points_captured]),
+            [:race, :year],
+            :predictor,
+            :team_points_captured,
+        )
+        arms = intersect(["simulator_market", "simulator", "simulator_risk"], names(cap))
+        "simulator_market" in arms ?
+        dropmissing(cap[:, vcat(["race", "year"], arms)]) : DataFrame()
+    end
+
+    if nrow(blend_pairs) > 0
+        write(io, html_heading("Market blend — paired comparison", 3))
+        deltas = DataFrame(
+            baseline = String[],
+            n_paired = Int[],
+            mean_baseline = Float64[],
+            mean_blend = Float64[],
+            delta = Float64[],
+            wins = Int[],
+            losses = Int[],
+        )
+        blend = Float64.(blend_pairs.simulator_market)
+        for base in ("simulator_risk", "simulator")
+            base in names(blend_pairs) || continue
+            b = Float64.(blend_pairs[!, base])
+            push!(
+                deltas,
+                (
+                    base,
+                    length(b),
+                    round(mean(b); digits = 3),
+                    round(mean(blend); digits = 3),
+                    round(mean(blend .- b); digits = 4),
+                    count(blend .> b),
+                    count(blend .< b),
+                ),
+            )
+        end
+        write(io, html_table(deltas))
+        write(
+            io,
+            html_callout(
+                "<strong>Pre-registered revert trigger.</strong> Back the market blend " *
+                "out if <code>delta</code> against <code>simulator_risk</code> falls " *
+                "below <strong>+0.02</strong> on the 2027 classics. " *
+                "<code>simulator_risk</code>, not <code>simulator</code>: the blend is " *
+                "applied to the risk-adjusted column, so differencing against the " *
+                "unadjusted arm bundles the risk adjustment into the measured effect. " *
+                "See roadmap.md, \"SHIPPED: one-day market blend\".";
+                title = "Revert trigger",
+            ),
+        )
+        write(io, html_heading("Per-edition paired capture", 4))
+        write(io, html_table(sort(blend_pairs, [:year, :race])))
+    end
+
     write(io, html_heading("Per-edition detail", 3))
     write(io, html_table(sort(oneday_rows, [:year, :race, :predictor])))
 end

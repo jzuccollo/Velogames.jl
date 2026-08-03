@@ -38,6 +38,14 @@ max_per_team = 2             # Max riders from any single team (0 = no limit)
 simulation_df = 5            # Student's t degrees of freedom ("" = Gaussian)
 excluded_riders = []
 
+# --- one-day races only ---
+# Weight on the simulator when blending its (risk-adjusted, unit-normalised) EVG
+# with the bookmaker's unit-normalised implied win probabilities before the final
+# team pick. 1.0 = pure simulator (no blend); lower leans harder on the market.
+# 0.5 is the shipped default; 0.25 scored identically on the 2026 evidence, so go
+# lower only on races where you trust the book more. No effect without odds.
+market_blend_weight = 0.5
+
 # --- stage races only ---
 n_alternatives = 20          # Near-optimal teams to enumerate (k-best) for the team switcher / filler pool / structural forks
 cross_stage_alpha = 0.7      # Cross-stage noise correlation (0 = independent, 1 = identical)

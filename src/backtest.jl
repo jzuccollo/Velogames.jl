@@ -1448,18 +1448,14 @@ function persistence_evg(data::StageRaceBacktestData)
 end
 
 """Odds-implied baseline: implied win probability `1/odds` per priced rider,
-0 for unpriced riders (mirrors `scripts/league_eval.jl`). Returns `nothing`
-when the edition has no archived odds (pre-2026), which drops the predictor
-from the harness output."""
+0 for unpriced riders. Returns `nothing` when the edition has no archived odds
+(pre-2026) or the market prices nobody on the startlist — either way there is no
+market to rank on, and the predictor drops out of the harness output."""
 function odds_evg(data::StageRaceBacktestData)
-    odds = data.race_data.odds_df
-    (odds === nothing || !(:odds in propertynames(odds))) && return nothing
-    p = Dict(String(r.riderkey) => 1.0 / max(Float64(r.odds), 1.01) for r in eachrow(odds))
     keys_ = String.(data.riders.riderkey)
-    return DataFrame(
-        riderkey = keys_,
-        expected_vg_points = [get(p, k, 0.0) for k in keys_],
-    )
+    probs = market_win_probs(data.race_data.odds_df, keys_)
+    isempty(probs) && return nothing
+    return DataFrame(riderkey = keys_, expected_vg_points = probs)
 end
 
 const _STAGE_PREDICTORS = Dict{Symbol,Function}(
@@ -1853,6 +1849,17 @@ function prefetch_oneday_backtest_data(
         force_refresh = force_refresh,
     )
     riders = select(rd.rider_df, :riderkey, :rider, :team, :cost)
+
+    # Surname-rematch market frames against the roster ONCE here, exactly as
+    # `prefetch_stage_race_data` does, so every predictor sees identical
+    # riderkeys regardless of call order: `_assemble_signals` rematches these
+    # frames IN PLACE at estimation time, which would otherwise make the `:odds`
+    # baseline's market coverage depend on whether a simulator arm ran first on
+    # the same struct.
+    for mdf in (rd.odds_df, rd.oracle_df)
+        mdf !== nothing && :rider in propertynames(mdf) && rematch_riderkeys!(mdf, riders)
+    end
+
     totals =
         _oneday_vg_totals_asof(race.pcs_slug, race.year; cache_config, archive_dir)
     riders[!, :actual_total] =
@@ -1883,7 +1890,17 @@ Seeded for reproducibility. Breakaway rates are unavailable in reconstruction,
 so the breakaway channel is inert (a small, documented gap). The one-day twin of
 `champion_evg`.
 """
-function champion_oneday_evg(
+function champion_oneday_evg(data::OneDayBacktestData; kwargs...)
+    predicted = _oneday_champion_predicted(data; kwargs...)
+    return select(predicted, :riderkey, :expected_vg_points, :downside_semi_dev)
+end
+
+"""Run the production one-day core as-of race day and return the full predicted
+frame. Shared by every champion arm so the resample count and seed cannot drift
+apart between them — the market blend's pre-registered trigger is a *paired*
+difference against `simulator_risk`, which only means anything if both arms ran
+the same simulation."""
+function _oneday_champion_predicted(
     data::OneDayBacktestData;
     n_resamples::Int = 500,
     seed::Int = 20260704,
@@ -1897,7 +1914,7 @@ function champion_oneday_evg(
         rng = Random.MersenneTwister(seed),
         kwargs...,
     )
-    return select(predicted, :riderkey, :expected_vg_points, :downside_semi_dev)
+    return predicted
 end
 
 """
@@ -1925,13 +1942,45 @@ end
 """Odds baseline: implied win probability `1/max(odds, 1.01)`, 0 for unpriced
 riders. Returns `nothing` on a marketless edition. Mirrors `odds_evg`."""
 function odds_oneday_evg(data::OneDayBacktestData)
-    odds = data.race_data.odds_df
-    (odds === nothing || !(:odds in propertynames(odds))) && return nothing
-    p = Dict(
-        String(r.riderkey) => 1.0 / max(Float64(r.odds), 1.01) for r in eachrow(odds)
-    )
     keys_ = String.(data.riders.riderkey)
-    return DataFrame(riderkey = keys_, expected_vg_points = [get(p, k, 0.0) for k in keys_])
+    probs = market_win_probs(data.race_data.odds_df, keys_)
+    isempty(probs) && return nothing
+    return DataFrame(riderkey = keys_, expected_vg_points = probs)
+end
+
+"""
+    champion_oneday_market_evg(data; market_blend_weight=0.5, kwargs...) -> DataFrame
+
+The market-blended production arm: the same `_oneday_prediction_core` as
+`champion_oneday_evg`, run with `market_blend_weight` so the blend happens at
+production's real insertion point (risk-adjusted EVG mixed with implied win
+probability, both unit-normalised), and returning the blended column the final
+team optimisation maximises. The harness then optimises EVG-max on it, which is
+exactly what production does — so this row measures the shipped construction
+rule, not a reimplementation of it.
+
+Returns `nothing` on a marketless edition. `champion_oneday_evg` remains the
+UNBLENDED arm so the standing champion comparison keeps its meaning.
+"""
+function champion_oneday_market_evg(
+    data::OneDayBacktestData;
+    market_blend_weight::Float64 = DEFAULT_MARKET_BLEND_WEIGHT,
+    kwargs...,
+)
+    # Checked up front so a marketless edition skips the resampling run entirely,
+    # and via the same helper the blend itself uses — so "priced" means exactly
+    # what it means in production.
+    isempty(market_win_probs(data.race_data.odds_df, data.riders.riderkey)) &&
+        return nothing
+    predicted = _oneday_champion_predicted(
+        data;
+        market_blend_weight = market_blend_weight,
+        kwargs...,
+    )
+    return DataFrame(
+        riderkey = predicted.riderkey,
+        expected_vg_points = predicted.market_blend_points,
+    )
 end
 
 """Max-cost ("star-buying") baseline: EVG = rider cost, so the harness optimiser
@@ -1946,9 +1995,14 @@ end
 const _ONEDAY_PREDICTORS = Dict{Symbol,Function}(
     :simulator => champion_oneday_evg,
     :simulator_risk => champion_oneday_evg_risk,
+    :simulator_market => champion_oneday_market_evg,
     :odds => odds_oneday_evg,
     :maxcost => maxcost_oneday_evg,
 )
+
+"""Every built-in one-day arm, in report order."""
+const ONEDAY_PREDICTORS_ALL =
+    [:simulator, :simulator_risk, :simulator_market, :odds, :maxcost]
 
 _resolve_oneday_predictor(p::Symbol) = (String(p), _ONEDAY_PREDICTORS[p])
 _resolve_oneday_predictor(p::Pair) = (String(first(p)), last(p))
@@ -1973,7 +2027,9 @@ end
 
 Score one-day predictors against one archived classic edition. A predictor is a
 built-in `Symbol` (`:simulator` → `champion_oneday_evg`, `:simulator_risk` →
-`champion_oneday_evg_risk` (the team `solve_oneday` actually enters), `:odds`,
+`champion_oneday_evg_risk` (the team `solve_oneday` actually enters),
+`:simulator_market` → `champion_oneday_market_evg` (the same, with the market
+blended in at `w=0.5`), `:odds`,
 `:maxcost`) or a `name => f` pair where
 `f(data::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)`.
 Predictors returning `nothing` (e.g. `:odds` on a marketless edition) are
@@ -1987,7 +2043,7 @@ optimum), `team_actual`, `optimal_actual`, `rho_full`, `rho_top20`, `overlap6`,
 """
 function backtest_oneday_race(
     data::OneDayBacktestData;
-    predictors = [:simulator, :simulator_risk, :odds, :maxcost],
+    predictors = ONEDAY_PREDICTORS_ALL,
     max_per_team::Integer = 2,
 )
     riders = data.riders
@@ -2036,7 +2092,7 @@ end
 function backtest_oneday_race(
     pcs_slug::String,
     year::Int;
-    predictors = [:simulator, :simulator_risk, :odds, :maxcost],
+    predictors = ONEDAY_PREDICTORS_ALL,
     category::Int = 0,
     history_years::Int = 5,
     max_per_team::Integer = 2,
@@ -2074,7 +2130,7 @@ returns the flat comparison table across editions.
 """
 function backtest_oneday_season(
     races::Vector{BacktestRace};
-    predictors = [:simulator, :simulator_risk, :odds, :maxcost],
+    predictors = ONEDAY_PREDICTORS_ALL,
     max_per_team::Integer = 2,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = DEFAULT_ARCHIVE_DIR,

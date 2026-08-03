@@ -98,6 +98,9 @@ export solve_oneday,
     minimise_cost_stage,
     resample_optimise!,
     resample_optimise_stage!,
+    market_win_probs,
+    blend_market_points,
+    DEFAULT_MARKET_BLEND_WEIGHT,
     gt_propensity_factors
 
 # Simulation and strength estimation
@@ -155,6 +158,8 @@ export BacktestRace,
     prefetch_oneday_backtest_data,
     champion_oneday_evg,
     champion_oneday_evg_risk,
+    champion_oneday_market_evg,
+    ONEDAY_PREDICTORS_ALL,
     backtest_oneday_race,
     backtest_oneday_season
 

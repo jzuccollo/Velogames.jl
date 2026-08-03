@@ -86,10 +86,9 @@ for w in winners
 
     # naive baseline 2: odds-implied team (archived odds only)
     odds_score = missing
-    odds = loadf("odds", slug, yr)
-    if odds !== nothing && :odds in propertynames(odds)
-        op = Dict(String(r.riderkey) => 1.0 / max(Float64(r.odds), 1.01) for r in eachrow(odds))
-        df.oddsprob = [get(op, String(k), 0.0) for k in df.riderkey]
+    probs = market_win_probs(loadf("odds", slug, yr), df.riderkey)
+    if !isempty(probs)
+        df.oddsprob = probs
         ot = best_team(df, :oddsprob; n = n_riders)
         odds_score = ot === nothing ? missing : sum(ot.actual)
     end
