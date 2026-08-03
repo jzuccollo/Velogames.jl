@@ -101,7 +101,7 @@ println(out)
 
 ok = filter(r -> r.status == "ok" && !ismissing(r.model_score), out)
 if nrow(ok) > 0
-    oneday = filter(r -> r.slug in ("giro-d-italia", "tour-de-france", "vuelta-a-espana") ? false : true, ok)
+    oneday = filter(r -> !is_stage_race(r.slug), ok)
     println("\n=== One-day races (n=$(nrow(oneday))) ===")
     @printf("model total %.0f | winner total %.0f | optimal total %.0f | maxcost total %.0f\n",
         sum(oneday.model_score), sum(oneday.wscore), sum(skipmissing(oneday.opt_score)), sum(skipmissing(oneday.mc_score)))

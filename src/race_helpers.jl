@@ -568,94 +568,6 @@ vg_classics_url(
 """VG game ID for one-day classics ridescore URLs."""
 vg_classics_game_id() = 13
 
-"""Stage race URL patterns (separate VG competitions from one-day classics)."""
-const _STAGE_RACE_PATTERNS = Dict(
-    # Grand tours
-    "tdf" => (
-        slug = "velogame",
-        template = "https://www.velogames.com/velogame/{year}/riders.php",
-    ),
-    "tour" => (
-        slug = "velogame",
-        template = "https://www.velogames.com/velogame/{year}/riders.php",
-    ),
-    "tourdefrance" => (
-        slug = "velogame",
-        template = "https://www.velogames.com/velogame/{year}/riders.php",
-    ),
-    "vuelta" => (
-        slug = "spain",
-        template = "https://www.velogames.com/spain/{year}/riders.php",
-    ),
-    "spain" => (
-        slug = "spain",
-        template = "https://www.velogames.com/spain/{year}/riders.php",
-    ),
-    "giro" => (
-        slug = "italy",
-        template = "https://www.velogames.com/italy/{year}/riders.php",
-    ),
-    "giroditalia" => (
-        slug = "italy",
-        template = "https://www.velogames.com/italy/{year}/riders.php",
-    ),
-    # Week-long stage races
-    "parisnice" =>
-        (slug = "pn", template = "https://www.velogames.com/pn/{year}/riders.php"),
-    "tirrenoadriatico" => (
-        slug = "tirreno-adriatico",
-        template = "https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
-    ),
-    "tirreno" => (
-        slug = "tirreno-adriatico",
-        template = "https://www.velogames.com/tirreno-adriatico/{year}/riders.php",
-    ),
-    "catalunya" => (
-        slug = "catalunya",
-        template = "https://www.velogames.com/catalunya/{year}/riders.php",
-    ),
-    "voltaacatalunya" => (
-        slug = "catalunya",
-        template = "https://www.velogames.com/catalunya/{year}/riders.php",
-    ),
-    "itzulia" => (
-        slug = "itzulia",
-        template = "https://www.velogames.com/itzulia/{year}/riders.php",
-    ),
-    "itzuliabasquecountry" => (
-        slug = "itzulia",
-        template = "https://www.velogames.com/itzulia/{year}/riders.php",
-    ),
-    "romandie" => (
-        slug = "romandie",
-        template = "https://www.velogames.com/romandie/{year}/riders.php",
-    ),
-    "tourderomandie" => (
-        slug = "romandie",
-        template = "https://www.velogames.com/romandie/{year}/riders.php",
-    ),
-    "dauphine" => (
-        slug = "criterium-du-dauphine",
-        template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
-    ),
-    "criteriumdudauphine" => (
-        slug = "criterium-du-dauphine",
-        template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
-    ),
-    "tourauvergne" => (
-        slug = "criterium-du-dauphine",
-        template = "https://www.velogames.com/criterium-du-dauphine/{year}/riders.php",
-    ),
-    "suisse" => (
-        slug = "suisse",
-        template = "https://www.velogames.com/suisse/{year}/riders.php",
-    ),
-    "tourdesuisse" => (
-        slug = "suisse",
-        template = "https://www.velogames.com/suisse/{year}/riders.php",
-    ),
-)
-
 """Human-friendly aliases mapping to PCS slugs for one-day classics races."""
 const _CLASSICS_ALIASES = Dict{String,String}(
     # Monuments
@@ -722,13 +634,14 @@ race schedule; grand tours have their own URL patterns.
 function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()))
     race_lower = replace(lowercase(strip(race_name)), r"[-\s]" => "")
 
-    # Stage races have their own URL templates
-    if haskey(_STAGE_RACE_PATTERNS, race_lower)
-        gt = _STAGE_RACE_PATTERNS[race_lower]
-        pcs_slug = get(_STAGE_RACE_PCS_SLUGS, race_lower, "")
+    # Stage races run their own VG competitions, one per race, each on the same
+    # URL shape — so alias → PCS slug → VG slug is the whole mapping.
+    if haskey(_STAGE_RACE_PCS_SLUGS, race_lower)
+        pcs_slug = _STAGE_RACE_PCS_SLUGS[race_lower]
+        vg_slug = _STAGE_RACE_VG_SLUGS[pcs_slug]
         return (
-            slug = gt.slug,
-            template = gt.template,
+            slug = vg_slug,
+            template = "https://www.velogames.com/$vg_slug/{year}/riders.php",
             category = 0,
             pcs_slug = pcs_slug,
             total_distance_km = 0.0,
@@ -1006,6 +919,7 @@ ttt_stage(n; km = 30.0) = StageProfile(n, :ttt, km, 5, 200, 0.1, 0, 0, 0, false)
 """Stage race VG slug mapping (PCS slug → VG slug)."""
 const _STAGE_RACE_VG_SLUGS = Dict(
     "tour-de-france" => "velogame",
+    "tour-de-france-femmes" => "velogame-femmes",
     "giro-d-italia" => "italy",
     "vuelta-a-espana" => "spain",
     "paris-nice" => "pn",
@@ -1027,6 +941,10 @@ const _STAGE_RACE_PCS_SLUGS = Dict(
     "giroditalia" => "giro-d-italia",
     "vuelta" => "vuelta-a-espana",
     "spain" => "vuelta-a-espana",
+    # Women's grand tours
+    "tourdefrancefemmes" => "tour-de-france-femmes",
+    "femmes" => "tour-de-france-femmes",
+    "tdff" => "tour-de-france-femmes",
     # Week-long stage races
     "parisnice" => "paris-nice",
     "tirrenoadriatico" => "tirreno-adriatico",
@@ -1114,11 +1032,19 @@ weak-but-real evidence about another. Kept separate from the terrain-based
 `SIMILAR_RACES` (classics) so it can carry a larger variance penalty: GT GC form
 transfers more noisily than a terrain-matched classic, and the recency decay
 already applied to race history downweights older editions automatically.
+
+Membership in this dict is also what marks a slug as a grand tour for
+`assemble_pcs_race_history`, which reads it to fetch `/gc` rather than
+`/result` (the latter returns the final stage's sprint). A grand tour with no
+cross-history partners therefore still belongs here, mapped to an empty vector.
 """
 const GT_SIMILAR_RACES = Dict{String,Vector{String}}(
     "tour-de-france" => ["giro-d-italia", "vuelta-a-espana"],
     "giro-d-italia" => ["tour-de-france", "vuelta-a-espana"],
     "vuelta-a-espana" => ["tour-de-france", "giro-d-italia"],
+    # Women's grand tours: present so `/gc` scraping is used, but with no
+    # cross-history partners — the men's GTs share no riders with them.
+    "tour-de-france-femmes" => String[],
 )
 
 """
@@ -1133,6 +1059,7 @@ const _GT_APPROX_DATE = Dict{String,Tuple{Int,Int}}(
     "giro-d-italia" => (5, 9),
     "tour-de-france" => (7, 1),
     "vuelta-a-espana" => (8, 23),
+    "tour-de-france-femmes" => (7, 26),
 )
 
 """

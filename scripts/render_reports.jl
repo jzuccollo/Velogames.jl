@@ -812,13 +812,20 @@ const GRAND_TOUR_RACES = [
     (pcs_slug = "giro-d-italia", name = "Giro d'Italia", month = 5, n_stages = 21),
     (pcs_slug = "tour-de-france", name = "Tour de France", month = 7, n_stages = 21),
     (pcs_slug = "vuelta-a-espana", name = "Vuelta a España", month = 9, n_stages = 21),
+    (
+        pcs_slug = "tour-de-france-femmes",
+        name = "Tour de France Femmes",
+        month = 7,
+        n_stages = 9,
+    ),
 ]
 
 # Per-race accent colour (leader's jersey); classics fall back to the default gold.
 const _RACE_ACCENT = Dict(
-    "giro-d-italia" => "#d6336c",   # maglia rosa
-    "tour-de-france" => "#e0a500",  # maillot jaune
-    "vuelta-a-espana" => "#d92c3a", # la roja
+    "giro-d-italia" => "#d6336c",         # maglia rosa
+    "tour-de-france" => "#e0a500",        # maillot jaune
+    "vuelta-a-espana" => "#d92c3a",       # la roja
+    "tour-de-france-femmes" => "#7b5cd6", # distinct from the men's yellow
 )
 race_accent(pcs_slug) = get(_RACE_ACCENT, pcs_slug, "#d4a843")
 

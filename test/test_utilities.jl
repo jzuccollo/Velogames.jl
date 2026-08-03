@@ -128,6 +128,22 @@ end
     @test get_url_pattern("tdf").category == 0
     @test get_url_pattern("tdf").total_distance_km == 0.0
 
+    # Stage-race URLs are derived, not tabulated: alias → PCS slug → VG slug.
+    # `get_url_pattern` indexes the VG dict unguarded, so every PCS slug an alias
+    # resolves to must have a VG slug or a lookup throws.
+    @test Set(values(Velogames._STAGE_RACE_PCS_SLUGS)) ==
+          Set(keys(Velogames._STAGE_RACE_VG_SLUGS))
+    for alias in ("tdf", "giro", "vuelta", "tdff", "romandie", "dauphine")
+        p = get_url_pattern(alias)
+        @test p.template == "https://www.velogames.com/$(p.slug)/{year}/riders.php"
+    end
+    @test get_url_pattern("tdff").slug == "velogame-femmes"
+    @test get_url_pattern("tdff").pcs_slug == "tour-de-france-femmes"
+
+    # Grand-tour membership is read off GT_SIMILAR_RACES (it gates /gc scraping),
+    # and resolve_race_date needs an approximate date for each.
+    @test Set(keys(Velogames.GT_SIMILAR_RACES)) == Set(keys(Velogames._GT_APPROX_DATE))
+
     # RaceInfo carries total_distance_km
     omloop_info = find_race("Omloop")
     @test omloop_info !== nothing
