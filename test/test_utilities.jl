@@ -240,3 +240,27 @@ end
     race_no_date = BacktestRace("Test", 2024, "test-slug", 2, 5, nothing)
     @test Velogames._compute_cumulative_vg_points(race_no_date) === nothing
 end
+
+@testset "rematch_riderkeys! compound surnames" begin
+    # VG hyphenates compound surnames; bookmakers usually space them. That
+    # changes the riderkey (which keeps the hyphen) AND the whitespace-split
+    # surname, so surname-only matching misses them.
+    reference = DataFrame(
+        rider = ["Pauline Ferrand-Prévot", "Demi Vollering"],
+        riderkey = createkey.(["Pauline Ferrand-Prévot", "Demi Vollering"]),
+    )
+    external = DataFrame(
+        rider = ["Pauline Ferrand Prevot", "Demi Vollering"],
+        riderkey = createkey.(["Pauline Ferrand Prevot", "Demi Vollering"]),
+    )
+    Velogames.rematch_riderkeys!(external, reference)
+    @test external.riderkey[1] == createkey("Pauline Ferrand-Prévot")
+    @test external.riderkey[2] == createkey("Demi Vollering")
+
+    # Surname-only matching still works for given-name variants
+    ref2 = DataFrame(rider = ["Thomas Pidcock"], riderkey = [createkey("Thomas Pidcock")])
+    ext2 = DataFrame(rider = ["Tom Pidcock"], riderkey = [createkey("Tom Pidcock")])
+    Velogames.rematch_riderkeys!(ext2, ref2)
+    @test ext2.riderkey[1] == createkey("Thomas Pidcock")
+end
+

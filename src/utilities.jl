@@ -59,9 +59,11 @@ end
     rematch_riderkeys!(external_df, reference_df)
 
 For riders in `external_df` whose `riderkey` doesn't match any in `reference_df`,
-try surname-only matching. If the normalised surname is unique in both datasets,
-update the external rider's key to match. Handles common name variations like
-"Tom Pidcock" (Oddschecker) vs "Thomas Pidcock" (VG).
+try the punctuation-stripped key first, then fall back to surname-only matching.
+Either way the match must be unique to be applied. Handles common name
+variations like "Tom Pidcock" (Oddschecker) vs "Thomas Pidcock" (VG), and
+compound surnames hyphenated in one source and spaced in the other
+("Ferrand-Prévot" vs "Ferrand Prevot").
 """
 function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
     # Materialise riderkey column so Arrow/Feather read-only backing doesn't block mutation
@@ -69,29 +71,44 @@ function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
         external_df.riderkey = Vector{String}(external_df.riderkey)
     end
     ref_keys = Set(reference_df.riderkey)
-    # Build surname → riderkey lookup for reference riders (only unique surnames)
+    # Compound surnames get hyphenated in one source and spaced in the other
+    # ("Ferrand-Prévot" on VG, "Ferrand Prevot" from the bookmaker). That shifts
+    # both the riderkey (which keeps the hyphen) and the whitespace-split
+    # surname ("prevot" vs "ferrandprevot"), so surname matching alone misses
+    # them. Try the punctuation-stripped key first. `normalisename` already
+    # eats apostrophes, so hyphens and stops are what survive into a key.
+    #
+    # Stripping these in `createkey` instead would be the cleaner layer, but the
+    # permanent archives hold ~112 hyphenated riderkeys that readers join against
+    # freshly computed ones, and prediction archives cannot be re-created — so
+    # the fix has to live at match time.
+    depunct(k) = replace(k, r"[-.]" => "")
+    ref_depunct = Dict{String,Vector{String}}()
     ref_surname = Dict{String,Vector{String}}()
     for row in eachrow(reference_df)
+        push!(get!(ref_depunct, depunct(row.riderkey), String[]), row.riderkey)
         parts = split(strip(row.rider))
         isempty(parts) && continue
         surname = normalisename(String(last(parts)), true)
-        keys = get!(ref_surname, surname, String[])
-        push!(keys, row.riderkey)
+        push!(get!(ref_surname, surname, String[]), row.riderkey)
     end
 
     n_fixed = 0
     for row in eachrow(external_df)
         row.riderkey in ref_keys && continue
-        parts = split(strip(row.rider))
-        isempty(parts) && continue
-        surname = normalisename(String(last(parts)), true)
-        candidates = get(ref_surname, surname, String[])
+        candidates = get(ref_depunct, depunct(row.riderkey), String[])
+        if length(candidates) != 1
+            parts = split(strip(row.rider))
+            isempty(parts) && continue
+            surname = normalisename(String(last(parts)), true)
+            candidates = get(ref_surname, surname, String[])
+        end
         if length(candidates) == 1
             row.riderkey = candidates[1]
             n_fixed += 1
         end
     end
-    n_fixed > 0 && @info "Re-matched $n_fixed riders by surname"
+    n_fixed > 0 && @info "Re-matched $n_fixed riders by punctuation-stripped key or surname"
     return external_df
 end
 
