@@ -378,6 +378,7 @@ function _prepare_rider_data(
     stagewin_odds_df::Union{DataFrame,Nothing} = nothing,
     use_gt_vg_history::Bool = false,
     use_gt_vg_propensity::Bool = false,
+    season_round_slugs::Vector{String} = String[],
 )
     # --- 1. Fetch VG rider data ---
     @info "Fetching VG rider data from $(config.current_url)..."
@@ -444,6 +445,48 @@ function _prepare_rider_data(
     if nrow(riderdf) < min_riders
         @warn "Not enough riders ($(nrow(riderdf))) for a $(min_riders)-rider team"
         return nothing
+    end
+
+    # Single-race VG games (the Femmes/GT format) open with `points` at zero for
+    # the whole field, which z-scores to a constant and switches the VG-season
+    # signal off entirely. Substitute mean points per round from the other
+    # rounds of the same season-long series.
+    #
+    # Placed AFTER every row filter above: `fill_value` has to be the mean of the
+    # frame that actually gets z-scored, or the filled riders land at a non-zero
+    # z and the substitution starts saying something about them.
+    if !isempty(season_round_slugs) && all(iszero, coalesce.(riderdf.points, 0.0))
+        season = assemble_season_vg_points(
+            config.year,
+            season_round_slugs;
+            cache_config = cache_config,
+            force_refresh = force_refresh,
+        )
+        lookup =
+            season === nothing ? Dict{String,Float64}() :
+            Dict(r.riderkey => r.points for r in eachrow(season))
+        covered = [k in keys(lookup) for k in riderdf.riderkey]
+        if !any(covered)
+            @warn "Season VG points: no rider on this startlist appears in " *
+                  "$(season_round_slugs) — leaving `points` at zero"
+        else
+            # Riders who skipped every scored round are missing data, not weak
+            # ones: give them the covered-field mean so they z-score to exactly
+            # 0 and leave the posterior untouched, rather than 0 points, which
+            # would read as evidence of weakness.
+            fill_value = mean(lookup[k] for k in riderdf.riderkey[covered])
+            riderdf.points = [
+                covered[i] ? lookup[riderdf.riderkey[i]] : fill_value for
+                i = 1:nrow(riderdf)
+            ]
+            # `frac_nonzero` in `_assemble_signals` reads this when present. The
+            # fill makes every rider's `points` non-zero, so counting non-zeros
+            # would report full season coverage and switch off the very variance
+            # widening (`vg_season_penalty`) that thin VG data calls for.
+            riderdf[!, :vg_points_observed] = covered
+            @info "Season VG points: filled $(count(covered))/$(nrow(riderdf)) riders " *
+                  "($(round(Int, 100count(covered) / nrow(riderdf)))% covered)"
+        end
     end
 
     # --- 2. Fetch PCS specialty ratings ---
@@ -1046,6 +1089,7 @@ function solve_stage(
     use_gt_vg_history::Bool = false,
     use_gt_vg_propensity::Bool = false,
     gt_vg_propensity_mode::Symbol = :posthoc,
+    season_round_slugs::Vector{String} = String[],
 )
     data = _prepare_rider_data(
         config,
@@ -1067,6 +1111,7 @@ function solve_stage(
         stagewin_odds_df = stagewin_odds_df,
         use_gt_vg_history = use_gt_vg_history,
         use_gt_vg_propensity = use_gt_vg_propensity,
+        season_round_slugs = season_round_slugs,
     )
     if data === nothing
         return StageResult(

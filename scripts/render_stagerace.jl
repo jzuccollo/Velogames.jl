@@ -77,6 +77,10 @@ end
 
 cross_stage_alpha = get(_cfg["optimisation"], "cross_stage_alpha", 0.7)
 pcs_stage_scrape = get(_cfg["optimisation"], "pcs_stage_scrape", true)
+# Other rounds of the same season-long series (e.g. the Velogames Womens Cycling
+# Championship). Only used when this game's own `points` column is all zeros.
+season_round_slugs =
+    String[x for x in get(_cfg["data_sources"], "season_round_slugs", String[])]
 # GT VG-history signal (Option A, July 2026 — see roadmap.md). ON by default:
 # injects each rider's own prior GT VG totals as a role/propensity strength
 # signal (leader/debutant-inert, upward-only). Set `gt_vg_history = false` in
@@ -160,6 +164,7 @@ result = solve_stage(
     use_gt_vg_history = use_gt_vg_history,
     use_gt_vg_propensity = use_gt_vg_propensity,
     gt_vg_propensity_mode = gt_vg_propensity_mode,
+    season_round_slugs = season_round_slugs,
 )
 
 predicted = result.predicted

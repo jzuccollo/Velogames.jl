@@ -495,6 +495,60 @@ function assemble_gt_vg_history(
 end
 
 
+"""
+    assemble_season_vg_points(year, round_slugs; cache_config, force_refresh) -> Union{DataFrame, Nothing}
+
+Mean VG points per round across other rounds of the same season-long series
+(e.g. the Velogames Womens Cycling Championship), for games whose own `points`
+column starts at zero. Returns `riderkey`, `points`, or `nothing`.
+
+Mean, not sum: riders ride wildly different numbers of rounds, and rounds-ridden
+is *negatively* rank-correlated with strength (ρ = −0.28 against the bookmaker
+market on the 2026 Femmes field), so a cumulative total scores volume rather
+than ability. Mean per round ranked best of the variants tried (ρ = 0.70 vs
+market, against 0.65 for the sum).
+
+Rounds VG has opened but nobody has scored in yet are skipped. `ridescore.php`
+serves the full roster at zero for a round that has not been ridden, and those
+rows would otherwise land in the denominator — deflating the mean of exactly the
+riders entered in the most upcoming rounds, which is the opposite of what the
+mean is here to avoid. The denominator is still rounds a rider was *rostered*
+for, not rounds ridden: a DNS is indistinguishable from a scoreless finish on
+this page, and both count as a zero-scoring round.
+"""
+function assemble_season_vg_points(
+    year::Int,
+    round_slugs::Vector{String};
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    isempty(round_slugs) && return nothing
+    rounds = DataFrame[]
+    for slug in round_slugs
+        try
+            df = getvg_stage_race_totals(
+                year,
+                slug;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            if all(iszero, df.score)
+                @info "Season round '$slug' $year has no scores yet — skipping"
+                continue
+            end
+            push!(rounds, select(df, :riderkey, :score))
+        catch e
+            @warn "Failed to fetch season round '$slug' $year" exception = e
+        end
+    end
+    isempty(rounds) && return nothing
+    out = combine(groupby(vcat(rounds...), :riderkey), :score => mean => :points)
+    @info "Season VG points: $(nrow(out)) riders across $(length(rounds)) scored rounds " *
+          "of $year ($(length(round_slugs)) configured)"
+    return out
+end
+
+
 # ---------------------------------------------------------------------------
 # VG race list pre-fetching
 # ---------------------------------------------------------------------------

@@ -27,6 +27,14 @@ kom_oracle_url           = "" # Cycling Oracle KOM URL (routes to mountain dimen
 points_odds_paste_file   = "" # Bookmaker points-jersey paste filename (relative to project root)
 kom_odds_paste_file      = "" # Bookmaker KOM paste filename
 stagewin_odds_paste_file = "" # Bookmaker "Rider To Win A Stage" paste filename
+# VG slugs for other rounds of the same season-long series. Stage races only —
+# `solve_oneday` ignores this. Only consulted when this game's own `points`
+# column is all zeros (the single-race Femmes/GT format), in which case the VG
+# season-points signal is filled with each rider's mean points per round across
+# these games. Example, 2026 Womens Championship:
+#   season_round_slugs = ["spain-femenina", "italy-women", "suisse-women",
+#                         "burgos-feminas", "itzulia-women"]
+season_round_slugs = []
 
 [optimisation]
 # --- shared ---

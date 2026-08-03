@@ -173,6 +173,47 @@ end
     @test result_with_odds[result_with_odds.riderkey .== "ridera", :shift_odds][1] != 0.0
 end
 
+@testset "vg_points_observed gates the season-adaptive VG variance" begin
+    # The season-round substitution fills riders with no prior-round data with
+    # the field mean, so every rider ends up with non-zero `points`. Counting
+    # non-zeros would report 100% season coverage and cancel the very variance
+    # widening (`vg_season_penalty`) that a thin, substituted column calls for.
+    # `:vg_points_observed` carries the real coverage.
+    base = DataFrame(
+        rider = ["R$i" for i = 1:10],
+        team = repeat(["A", "B"], 5),
+        cost = collect(20:-2:2),
+        points = Float64.(collect(100:-10:10)),
+        riderkey = ["r$i" for i = 1:10],
+        oneday = collect(1000:-100:100),
+        has_pcs_data = trues(10),
+    )
+
+    full = estimate_strengths(copy(base))
+
+    thin = copy(base)
+    thin[!, :vg_points_observed] = [i <= 3 for i = 1:10]   # only 30% observed
+    thin_est = estimate_strengths(thin)
+
+    # Same points column, same z-scores — only the variance differs, so every
+    # rider's VG-signal shift must shrink.
+    @test all(abs.(thin_est.shift_vg) .< abs.(full.shift_vg) .+ 1e-12)
+    @test any(abs.(thin_est.shift_vg) .< abs.(full.shift_vg) .- 1e-6)
+
+    # Absent column ⇒ fall back to counting non-zeros. Pinned against an
+    # independent expectation rather than against itself: half this field scores
+    # zero, so the fallback must see 50% coverage — which an explicit all-true
+    # `vg_points_observed` (100% coverage, narrower variance) must beat.
+    zeroed = copy(base)
+    zeroed.points = Float64.([100, 90, 80, 70, 60, 0, 0, 0, 0, 0])
+    implicit = estimate_strengths(copy(zeroed))
+    explicit = copy(zeroed)
+    explicit[!, :vg_points_observed] = trues(10)
+    explicit_est = estimate_strengths(explicit)
+    @test all(abs.(implicit.shift_vg) .< abs.(explicit_est.shift_vg) .+ 1e-12)
+    @test any(abs.(implicit.shift_vg) .< abs.(explicit_est.shift_vg) .- 1e-6)
+end
+
 @testset "_rand_t distribution" begin
     rng = Random.MersenneTwister(99)
     samples = [Velogames._rand_t(rng, 5) for _ = 1:50000]

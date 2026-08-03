@@ -975,7 +975,13 @@ function _assemble_signals(
     vg_mean = mean(vg_pts)
     vg_std = std(vg_pts)
     vg_z = vg_std > 0 ? (vg_pts .- vg_mean) ./ vg_std : zeros(n_riders)
-    frac_nonzero = count(vg_pts .> 0) / max(length(vg_pts), 1)
+    # `:vg_points_observed` marks riders whose `points` is a real observation.
+    # Set by the season-round substitution in `_prepare_rider_data`, which fills
+    # uncovered riders with the field mean — non-zero, so counting non-zeros
+    # would read as full season coverage and cancel the widening below.
+    observed =
+        :vg_points_observed in propertynames(df) ? df.vg_points_observed : vg_pts .> 0
+    frac_nonzero = count(observed) / max(n_riders, 1)
     season_scale = 1.0 + config.vg_season_penalty * (1.0 - frac_nonzero)
     effective_vg_variance = vg_variance(config) * season_scale
     @info "Season-adaptive VG variance: $(round(effective_vg_variance, digits=2)) " *
