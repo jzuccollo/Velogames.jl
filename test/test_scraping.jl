@@ -78,3 +78,25 @@ end
     @test all(.!mock_df.in_breakaway)
     @test all(ismissing.(mock_df.breakaway_km))
 end
+
+@testset "_vg_scoring_field assist headings" begin
+    # Every VG assist heading contains "Team" — either "Teammate" or "Overall
+    # Team". The bare "team" test used to run ahead of the "stage" test and
+    # swallow the stage-assist table, silently zeroing stage assists in the
+    # simulator. GC was never affected: its test already ran first.
+    @test Velogames._vg_scoring_field("Assists - Teammate stage positions") ==
+          :stage_assist_points
+    @test Velogames._vg_scoring_field(
+        "Assists - Teammate General Classification positions",
+    ) == :gc_assist_points
+    @test Velogames._vg_scoring_field("Assists - Overall Team competition") ==
+          :team_class_assist_points
+    @test Velogames._vg_scoring_field("Assists - Overall Team Classification positions") ==
+          :team_class_assist_points
+    # "stage" is tested after "general classification", not before it, so a
+    # heading naming both still files as GC rather than being captured by the
+    # broader stage test.
+    @test Velogames._vg_scoring_field(
+        "Assists - Teammate General Classification positions after each stage",
+    ) == :gc_assist_points
+end

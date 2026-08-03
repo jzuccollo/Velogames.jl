@@ -812,13 +812,10 @@ function _scoring_to_df(s::StageRaceScoringTable)
     DataFrame(rows)
 end
 
-function _df_to_scoring(df::DataFrame)
-    fields = Dict{Symbol,Vector{Int}}()
-    for gdf in groupby(df, :field)
-        fname = Symbol(gdf.field[1])
-        sorted = sort(gdf, :position)
-        fields[fname] = Int.(sorted.points)
-    end
+"""Build the scoring table from a field → positions-vector map, defaulting any
+field the source did not supply to empty. Shared by the archive reader and the
+live scraper so the two can never drift in field order."""
+function _scoring_from_fields(fields::Dict{Symbol,Vector{Int}})
     get_vec(f) = get(fields, f, Int[])
     bp = haskey(fields, :breakaway_points) ? fields[:breakaway_points][1] : 0
     StageRaceScoringTable(
@@ -839,6 +836,16 @@ function _df_to_scoring(df::DataFrame)
         get_vec(:final_team_class),
         get_vec(:ttt_team_points),
     )
+end
+
+function _df_to_scoring(df::DataFrame)
+    fields = Dict{Symbol,Vector{Int}}()
+    for gdf in groupby(df, :field)
+        fname = Symbol(gdf.field[1])
+        sorted = sort(gdf, :position)
+        fields[fname] = Int.(sorted.points)
+    end
+    return _scoring_from_fields(fields)
 end
 
 """
@@ -866,9 +873,16 @@ function _vg_scoring_field(heading::AbstractString)
         occursin("team", l) && return :final_team_class
     end
     if occursin("assist", l)
+        # Order matters: every assist heading VG writes begins "Assists -
+        # Teammate ..." or "Assists - Overall Team ...", so a bare "team" test
+        # matches "teammate". It used to run ahead of the "stage" test and
+        # swallow the stage-assist table; "general classification" already ran
+        # first, so GC was never affected. Keep "team" last, as the fallback,
+        # and keep GC ahead of "stage" so a heading naming both still files as
+        # GC.
         occursin("general classification", l) && return :gc_assist_points
-        occursin("team", l) && return :team_class_assist_points
         occursin("stage", l) && return :stage_assist_points
+        occursin("team", l) && return :team_class_assist_points
     end
     occursin("intermediate sprint", l) && return :intermediate_sprint_points
     occursin("hc category", l) && return :hc_climb_points
@@ -917,14 +931,49 @@ function _vg_walk_scoring!(
     end
 end
 
+"""
+    getvg_scoring(vg_slug, year; pcs_slug) -> StageRaceScoringTable
+
+Archived `vg_scoring` snapshot when one exists and parses cleanly, otherwise a
+live scrape of `scores.php` (which is then archived under `pcs_slug`).
+
+Snapshots written before the July 2026 heading-order fix have an empty
+`stage_assist_points` — the "Assists - Teammate stage positions" table was
+filed under `team_class_assist_points` — and `simulate_stage.jl` gates its whole
+assist loop on that vector's length, so they silently score stage assists as
+zero. Such a snapshot is treated as stale: re-scrape and overwrite it. Editions
+whose `scores.php` no longer resolves (2023/2024 now 404) keep the stale table,
+with a warning, rather than losing scoring altogether — only on an HTTP error,
+so a parse failure on a live page still throws.
+"""
 function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
+    stale = nothing
     if !isempty(pcs_slug)
         archived = load_race_snapshot("vg_scoring", pcs_slug, year)
         if archived !== nothing && nrow(archived) > 0
-            return _df_to_scoring(archived)
+            cached = _df_to_scoring(archived)
+            isempty(cached.stage_assist_points) || return cached
+            @warn "Archived VG scoring for $pcs_slug $year predates the stage-assist " *
+                  "heading fix (stage assists would score zero) — re-scraping"
+            stale = cached
         end
     end
 
+    try
+        return _scrape_vg_scoring(vg_slug, year; pcs_slug = pcs_slug)
+    catch e
+        # Only a dead page falls back. A parse failure means the headings moved,
+        # which is exactly what the validation below exists to shout about —
+        # swallowing it here would restore the silent-zero bug it guards.
+        (stale !== nothing && e isa HTTP.Exceptions.StatusError) || rethrow()
+        @warn "Could not re-scrape VG scoring for $vg_slug $year (HTTP $(e.status)); " *
+              "keeping the stale archive, which scores stage assists as ZERO. " *
+              "Patch it by hand from the published [8, 4, 2]."
+        return stale
+    end
+end
+
+function _scrape_vg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
     url = "https://www.velogames.com/$vg_slug/$year/scores.php"
     response = HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
     page = Gumbo.parsehtml(String(response.body))
@@ -940,36 +989,25 @@ function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
         fields[field] = pts
     end
 
-    get_vec(f) = get(fields, f, Int[])
-    bp = haskey(fields, :breakaway_points) ? fields[:breakaway_points][1] : 0
-    scoring = StageRaceScoringTable(
-        get_vec(:stage_finish_points),
-        get_vec(:daily_gc_points),
-        get_vec(:daily_points_class),
-        get_vec(:daily_mountains_class),
-        get_vec(:intermediate_sprint_points),
-        get_vec(:hc_climb_points),
-        get_vec(:cat1_climb_points),
-        bp,
-        get_vec(:stage_assist_points),
-        get_vec(:gc_assist_points),
-        get_vec(:team_class_assist_points),
-        get_vec(:final_gc_points),
-        get_vec(:final_points_class),
-        get_vec(:final_mountains_class),
-        get_vec(:final_team_class),
-        get_vec(:ttt_team_points),
-    )
+    scoring = _scoring_from_fields(fields)
 
     # Heading-based mapping silently yields empty vectors when a section label
     # changes, which would collapse a whole scoring component to zero with no
-    # error. The stage-finish and final-GC tables are the two the simulator
-    # cannot do without, so fail loudly if either failed to parse.
-    if isempty(scoring.stage_finish_points) || isempty(scoring.final_gc_points)
+    # error. Stage finish and final GC the simulator cannot do without; stage
+    # assists it *can* (the loop is length-gated), which is exactly why their
+    # mis-filing went unnoticed across every archived snapshot until July 2026.
+    # All three fail loudly.
+    missing_tables = [
+        n for (n, v) in (
+            "stage_finish" => scoring.stage_finish_points,
+            "final_gc" => scoring.final_gc_points,
+            "stage_assist" => scoring.stage_assist_points,
+        ) if isempty(v)
+    ]
+    if !isempty(missing_tables)
         error(
-            "getvg_scoring($vg_slug, $year): missing essential scoring table " *
-            "(stage_finish=$(length(scoring.stage_finish_points)), " *
-            "final_gc=$(length(scoring.final_gc_points))). " *
+            "getvg_scoring($vg_slug, $year): missing scoring table(s) " *
+            "$(join(missing_tables, ", ")). " *
             "VG section headings may have changed — check $url.",
         )
     end
