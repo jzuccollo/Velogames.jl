@@ -174,3 +174,9 @@ pcs_slug = "tour-de-france"
 year = 2026
 name = "There Bini"
 score = 11884
+
+[[winners]]
+pcs_slug = "tour-de-france-femmes"
+year = 2026
+name = "TdFF avec Thrift p/b Haribo"
+score = 4382
