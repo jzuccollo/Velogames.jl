@@ -277,21 +277,56 @@ function _write_top_scorers!(
     write(io, rider_html_table(top))
 end
 
-"""Set of riderkeys who finished the race (from archived PCS GC results), or `nothing`
-if unavailable. Lets the report separate genuine underperformers from crashes/abandons."""
-function load_finishers(pcs_slug, year)
-    gc = load_race_snapshot("pcs_gc_results", pcs_slug, year)
-    gc === nothing && return nothing
-    fin = Set(gc.riderkey[gc.position .< Velogames.DNF_POSITION])
-    return isempty(fin) ? nothing : fin
-end
+"""PCS rider name => the VG spelling of the same rider, for the handful whose names
+key differently across the two sources. `createkey` sorts every letter of the full
+name, so a diminutive ("Tom" v "Thomas"), an extra middle name, a changed surname, a
+transliterated vowel or a parenthetical maiden name all yield a different key.
+
+A lookup table rather than fuzzy matching: PCS lists riders VG never carries (Benjamin
+Thomas rode the 2026 Tour but is absent from the VG game), and every token rule tried
+against that mis-linked him to Thomas Pidcock. Seven names are cheaper than a wrong
+match. `_warn_unkeyed_riders` prints new cases as they appear."""
+const PCS_NAME_ALIASES = Dict(
+    "Pidcock Tom" => "Thomas Pidcock",
+    "Gee-West Derek" => "Derek Gee",
+    "Honoré Mikkel Frølich" => "Mikkel Honoré",
+    "Dversnes Lavik Fredrik" => "Fredrik Dversnes",
+    "Koerdt Bjorn" => "Bjoern Koerdt",
+    "Le Court-Pienaar Kim" => "Kimberley Le Court-Pienaar",
+    "Berthet Juliette" => "Juliette Berthet (Labous)",
+)
+
+"""Riderkey for a PCS row, resolved through `PCS_NAME_ALIASES` when it doesn't already
+match a VG rider. The guard matters because VG re-spells riders between seasons: Derek
+Gee became "Derek Gee-West" in 2026, which keys identically to PCS, so applying the
+alias unconditionally would break the years that already agree."""
+_vg_key(pcs_rider, pcs_key, vg_keys) =
+    pcs_key ∉ vg_keys && haskey(PCS_NAME_ALIASES, pcs_rider) ?
+    createkey(PCS_NAME_ALIASES[pcs_rider]) : pcs_key
 
 """Map of riderkey => stage a rider abandoned on (from archived PCS per-stage results),
-or `nothing` if unavailable."""
-function load_abandons(pcs_slug, year)
+keyed to match `vg_keys`, or `nothing` if unavailable."""
+function load_abandons(pcs_slug, year, vg_keys)
     df = load_race_snapshot("pcs_abandons", pcs_slug, year)
     df === nothing && return nothing
-    return Dict(df.riderkey .=> df.abandon_stage)
+    return Dict(_vg_key(r.rider, r.riderkey, vg_keys) => r.abandon_stage for r in eachrow(df))
+end
+
+"""Warn about scoring riders the PCS archives can't account for — present in neither the
+GC results nor the abandons. Each is either a new name-key mismatch (add it to
+`PCS_NAME_ALIASES`) or a gap in the stage scrape."""
+function _warn_unkeyed_riders(allriders, pcs_slug, year)
+    gc = load_race_snapshot("pcs_gc_results", pcs_slug, year)
+    ab = load_race_snapshot("pcs_abandons", pcs_slug, year)
+    gc === nothing && return
+    vg_keys = Set(allriders.riderkey)
+    known = Set(_vg_key(r.rider, r.riderkey, vg_keys) for r in eachrow(gc))
+    ab !== nothing &&
+        union!(known, Set(_vg_key(r.rider, r.riderkey, vg_keys) for r in eachrow(ab)))
+    stray = [r.rider for r in eachrow(allriders) if r.score > 0 && !(r.riderkey in known)]
+    isempty(stray) ||
+        @warn "$pcs_slug $year: scoring riders in neither PCS GC nor abandons — check PCS_NAME_ALIASES or the stage scrape" riders =
+            stray
 end
 
 """Write the biggest single-stage point hauls — standout individual stage performances."""
@@ -343,20 +378,22 @@ function _write_best_value!(io::IOBuffer, scorers::DataFrame; has_class::Bool = 
 end
 
 """Write "The ones to avoid" section: priciest blanks and premium disappointments.
-When `finishers` is supplied, the blame tables are restricted to riders who finished
-the race, and a separate table lists expensive riders who crashed out or withdrew."""
-function _write_ones_to_avoid!(
-    io::IOBuffer,
-    allriders::DataFrame,
-    finishers = nothing,
-    abandons = nothing,
-)
+When `abandons` is supplied, the blame tables exclude riders PCS recorded as
+abandoning, and a separate table lists them instead.
+
+Both tables key off `abandons` — a positive record — rather than absence from the
+GC results. Absence has several innocent causes (a rider whose PCS and VG names
+key differently, a gap in the stage scrape, a non-starter), and treating it as
+proof of an abandon labelled ten finishers across six grand tours as DNFs,
+Kimberley Le Court-Pienaar among them after finishing the 2026 Femmes 9th."""
+function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame, abandons = nothing)
     write(io, html_heading("The ones to avoid", 2))
 
-    # Only blame riders who actually finished; crashes/abandons are shown separately.
+    # Only blame riders who didn't abandon; crashes/withdrawals are shown separately.
     blame =
-        finishers === nothing ? allriders : filter(r -> r.riderkey in finishers, allriders)
-    fin_clause = finishers === nothing ? "" : "finished the race but "
+        abandons === nothing ? allriders :
+        filter(r -> !haskey(abandons, r.riderkey), allriders)
+    fin_clause = abandons === nothing ? "" : "finished the race but "
 
     write(io, html_heading("Priciest blanks", 3))
     pricey_zeroes = filter(row -> row.cost >= 8 && row.score == 0, blame)
@@ -378,7 +415,7 @@ function _write_ones_to_avoid!(
             :score => :Points,
         )
         write(io, rider_html_table(display_df))
-    elseif finishers !== nothing
+    elseif abandons !== nothing
         write(
             io,
             "<p>Every rider priced at 8+ credits who finished the race scored at least once &mdash; the priciest blanks all abandoned (see below).</p>\n",
@@ -412,15 +449,19 @@ function _write_ones_to_avoid!(
     end
 
     # Expensive riders who abandoned — separated from genuine underperformance.
-    if finishers !== nothing
-        dnf = filter(row -> row.cost >= 8 && !(row.riderkey in finishers), allriders)
+    if abandons !== nothing
+        dnf = filter(row -> row.cost >= 8 && haskey(abandons, row.riderkey), allriders)
         if nrow(dnf) > 0
             write(io, html_heading("Expensive riders who abandoned", 3))
             write(
                 io,
                 "<p>Pricey picks who crashed out or withdrew before the finish. Points shown are what they managed beforehand &mdash; lost potential rather than necessarily a bad pick.</p>\n",
             )
-            sort!(dnf, :value)  # most credits wasted first; big-scoring late abandons last
+            # Dearest first, and among equal prices the one who salvaged least. The
+            # section is about credits sunk into a rider who didn't make it, so cost
+            # leads; sorting by points-per-credit instead buried a 14-credit abandon
+            # below an 8-credit one.
+            sort!(dnf, [order(:cost, rev = true), :score])
             top = dnf[1:min(8, nrow(dnf)), :]
             display_df = DataFrame(
                 Rider = top.rider,
@@ -858,8 +899,8 @@ function stage_race_report_html(;
         cache_config = _report_cache,
     )
     stages = reclassify_stages(load_stage_profiles(pcs_slug, year))
-    finishers = load_finishers(pcs_slug, year)
-    abandons = load_abandons(pcs_slug, year)
+    abandons = load_abandons(pcs_slug, year, Set(allriders.riderkey))
+    _warn_unkeyed_riders(allriders, pcs_slug, year)
 
     has_class = hasproperty(allriders, :class)
 
@@ -1418,7 +1459,7 @@ function stage_race_report_html(;
         shared.x_max,
     )
     _write_best_value!(io, scorers; has_class = has_class)
-    _write_ones_to_avoid!(io, allriders, finishers, abandons)
+    _write_ones_to_avoid!(io, allriders, abandons)
     _write_classification_performance!(io, allriders, has_class)
     _write_team_performance!(io, allriders)
 
@@ -1468,19 +1509,21 @@ end
 
 """riderkey => (rank, label) for a stage race, from archived GC results and abandons.
 Abandons take precedence over a GC placing (a rider who abandoned has no GC time)."""
-function _stage_finish_lookup(pcs_slug, year)
+function _stage_finish_lookup(pcs_slug, year, vg_keys)
     d = Dict{String,Tuple{Int,String}}()
     gc = load_race_snapshot("pcs_gc_results", pcs_slug, year)
     if gc !== nothing
         for r in eachrow(gc)
             r.position < Velogames.DNF_POSITION || continue
-            d[r.riderkey] = (r.position, "GC " * _ordinal(r.position))
+            d[_vg_key(r.rider, r.riderkey, vg_keys)] =
+                (r.position, "GC " * _ordinal(r.position))
         end
     end
     abandons = load_race_snapshot("pcs_abandons", pcs_slug, year)
     if abandons !== nothing
         for r in eachrow(abandons)
-            d[r.riderkey] = (Velogames.DNF_POSITION, "DNF · st $(r.abandon_stage)")
+            d[_vg_key(r.rider, r.riderkey, vg_keys)] =
+                (Velogames.DNF_POSITION, "DNF · st $(r.abandon_stage)")
         end
     end
     return d
@@ -1534,7 +1577,7 @@ function collect_rider_rows(years)
             nothing
         end
         df === nothing && continue
-        finish = _stage_finish_lookup(gt.pcs_slug, year)
+        finish = _stage_finish_lookup(gt.pcs_slug, year, Set(df.riderkey))
         date = "$year-$(lpad(gt.month, 2, '0'))-15"
         for rr in eachrow(df)
             rank, label = get(finish, rr.riderkey, (0, "Finished"))
