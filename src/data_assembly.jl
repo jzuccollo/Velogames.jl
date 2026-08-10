@@ -1000,11 +1000,21 @@ function archive_stage_race_results(
             if need_abandons
                 lastfin = Dict{String,Int}()
                 namemap = Dict{String,String}()
+                # Stages where a rider is listed but not classified. Riders who crash
+                # out or DNS on day one never record a finishing position at all, so
+                # `lastfin` alone leaves them at 0 — and without these rows there is
+                # nothing to date their exit by.
+                dnfstages = Dict{String,Vector{Int}}()
                 for (s, df) in res, r in eachrow(df)
                     namemap[r.riderkey] = r.rider
                     if r.position < DNF_POSITION
                         lastfin[r.riderkey] = max(get(lastfin, r.riderkey, 0), s)
+                    else
+                        push!(get!(dnfstages, r.riderkey, Int[]), s)
                     end
+                    # Seed every rider seen, so a never-classified rider still reaches
+                    # the emit loop instead of being dropped from the frame entirely.
+                    get!(lastfin, r.riderkey, 0)
                 end
                 # Anchor on the last stage with a real classification, not n_stages: some final
                 # stages are neutralised (e.g. the 2025 Vuelta's Madrid finale, protested) and
@@ -1018,9 +1028,14 @@ function archive_stage_race_results(
                     Tuple{String,String,Int},
                 }[]
                 for (k, lf) in lastfin
-                    lf < final_stage && push!(
+                    lf < final_stage || continue
+                    # Normally the stage after their last finish. Riders who never
+                    # finish one sit at lf = 0, which would date them all to stage 1,
+                    # so fall back to the first stage they are listed unclassified.
+                    stage = lf > 0 ? lf + 1 : minimum(get(dnfstages, k, [1]))
+                    push!(
                         rows,
-                        (riderkey = k, rider = namemap[k], abandon_stage = lf + 1),
+                        (riderkey = k, rider = namemap[k], abandon_stage = stage),
                     )
                 end
                 final_finishers = count(==(final_stage), values(lastfin))
