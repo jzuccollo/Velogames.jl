@@ -456,12 +456,21 @@ function render_assessor(rc::RenderConfig)
             ),
         )
     else
+        # Results pages change from empty to partial to final on race day, and
+        # what they say gets archived permanently, so the retrospective always
+        # reads them fresh rather than off a cache filled before the finish.
+        results_cache = CacheConfig(race_cache.cache_dir, 0)
+
         # Fetch actual VG results
         local actual_results = nothing
         if is_stage
             actual_results = try
                 suppress_output() do
-                    getvg_stage_race_totals(race_year, config.slug; cache_config = race_cache)
+                    getvg_stage_race_totals(
+                        race_year,
+                        config.slug;
+                        cache_config = results_cache,
+                    )
                 end
             catch e
                 @warn "Failed to fetch VG stage race totals: $e"
@@ -494,7 +503,7 @@ function render_assessor(rc::RenderConfig)
                         getvg_race_results(
                             race_year,
                             actual_race_number;
-                            cache_config = race_cache,
+                            cache_config = results_cache,
                         )
                     end
                 catch e
@@ -510,7 +519,7 @@ function render_assessor(rc::RenderConfig)
                                 config.pcs_slug,
                                 config.year;
                                 vg_race_number = actual_race_number,
-                                cache_config = race_cache,
+                                cache_config = results_cache,
                             )
                         end
                     catch e

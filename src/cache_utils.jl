@@ -28,6 +28,10 @@ const DEFAULT_CACHE = CacheConfig(
 # Session-scoped in-memory cache (avoids redundant disk reads within a session)
 const _MEMORY_CACHE = Dict{String,DataFrame}()
 
+# An empty fetch means "not published yet", not "this page is empty", so it is
+# held only briefly regardless of the configured TTL.
+const EMPTY_CACHE_MAX_AGE_HOURS = 1
+
 """
     clear_memory_cache!() -> Nothing
 
@@ -155,9 +159,15 @@ function cached_fetch(
         return _MEMORY_CACHE[key]
     end
 
-    # 2. Check on-disk cache
-    if !force_refresh &&
-       is_cache_valid(key, cache_config.max_age_hours, cache_config.cache_dir)
+    # 2. Check on-disk cache. An empty entry means the page had nothing on it
+    # yet (results fetched before the race finished), so it expires quickly
+    # rather than at the full TTL — otherwise the race results stay invisible
+    # for a week after they appear.
+    data_file, _ = cache_paths(key, cache_config.cache_dir)
+    max_age =
+        isfile(data_file) ? cache_config.max_age_hours :
+        min(cache_config.max_age_hours, EMPTY_CACHE_MAX_AGE_HOURS)
+    if !force_refresh && is_cache_valid(key, max_age, cache_config.cache_dir)
         cached_data = load_from_cache(key, cache_config.cache_dir)
         if cached_data !== nothing
             verbose && @info "Loading from cache: $url"
@@ -166,18 +176,19 @@ function cached_fetch(
         end
         # Metadata exists but no data file → cached empty result
         verbose && @info "Loading cached empty result: $url"
-        empty_df = DataFrame()
-        _MEMORY_CACHE[key] = empty_df
-        return empty_df
+        return DataFrame()
     end
 
     # 3. Fetch from network
     verbose && @info "Fetching fresh data: $url"
     data = fetch_func(url, params)
 
-    # Save to both caches
+    # Save to both caches. Empty results stay out of the in-memory cache so a
+    # long-lived process (scripts/serve.jl) rechecks them on the next request.
     save_to_cache(data, key, url, cache_config.cache_dir, params)
-    _MEMORY_CACHE[key] = data
+    if nrow(data) > 0
+        _MEMORY_CACHE[key] = data
+    end
 
     return data
 end

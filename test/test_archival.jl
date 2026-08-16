@@ -151,3 +151,50 @@ end
     @test result !== nothing
     @test result.n_matched == 5
 end
+
+@testset "Empty cache entries expire quickly" begin
+    # A results page fetched before the race finishes caches as empty. Holding
+    # that for the full TTL hides the real results for days afterwards, and the
+    # failure is silent — the report just says results are unavailable.
+    cache_dir = mktempdir()
+    cache = Velogames.CacheConfig(cache_dir, 168)
+    url = "https://example.invalid/ridescore.php?ga=13&st=26"
+
+    n_fetches = Ref(0)
+    fetch_func = function (_, _)
+        n_fetches[] += 1
+        n_fetches[] == 1 ? DataFrame() :
+        DataFrame(rider = ["A"], score = [100], riderkey = ["a"])
+    end
+
+    empty_result = Velogames.cached_fetch(fetch_func, url; cache_config = cache)
+    @test nrow(empty_result) == 0
+    @test n_fetches[] == 1
+
+    # Empty results stay out of the in-memory cache, so a long-lived process
+    # rechecks rather than serving the miss forever.
+    @test !haskey(Velogames._MEMORY_CACHE, Velogames.cache_key(url, Dict()))
+
+    # Still within the empty-entry window → served from disk, no refetch.
+    @test nrow(Velogames.cached_fetch(fetch_func, url; cache_config = cache)) == 0
+    @test n_fetches[] == 1
+
+    # Age the entry past the empty-entry window but well inside the 168h TTL.
+    _, meta_file = Velogames.cache_paths(Velogames.cache_key(url, Dict()), cache_dir)
+    meta = Velogames.JSON3.read(read(meta_file, String), Velogames.CacheMetadata)
+    aged = Velogames.CacheMetadata(
+        meta.url,
+        meta.timestamp - Hour(Velogames.EMPTY_CACHE_MAX_AGE_HOURS + 1),
+        meta.version,
+        meta.params,
+    )
+    write(meta_file, Velogames.JSON3.write(aged))
+
+    refetched = Velogames.cached_fetch(fetch_func, url; cache_config = cache)
+    @test n_fetches[] == 2
+    @test nrow(refetched) == 1
+
+    # A non-empty entry keeps the full TTL.
+    @test nrow(Velogames.cached_fetch(fetch_func, url; cache_config = cache)) == 1
+    @test n_fetches[] == 2
+end
