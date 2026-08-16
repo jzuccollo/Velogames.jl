@@ -1063,7 +1063,8 @@ function _fetch_specialty_seasons(
     for row in eachrow(riders)
         slug = get(slug_map, row.riderkey, "")
         if isempty(slug)
-            slug = get(PCS_SLUG_OVERRIDES, normalisename(row.rider), normalisename(row.rider))
+            slug =
+                get(PCS_SLUG_OVERRIDES, normalisename(row.rider), normalisename(row.rider))
         end
         for spec in specialties
             df = try
@@ -1204,7 +1205,8 @@ function prefetch_stage_race_data(
     seasons_long = load_race_snapshot("pcs_specialty_seasons", pcs_slug, year; archive_dir)
     if seasons_long === nothing
         @info "No pcs_specialty_seasons archive for $pcs_slug $year — fetching per-season specialty (long-TTL cache)"
-        seasons_long = _fetch_specialty_seasons(riders, slug_map; cache_config = cache_config)
+        seasons_long =
+            _fetch_specialty_seasons(riders, slug_map; cache_config = cache_config)
     end
 
     # Career specialty only where a race-day snapshot exists (note 3).
@@ -1249,12 +1251,8 @@ function prefetch_stage_race_data(
     )
 
     # --- Prior-edition GT VG totals: same GT + other GTs strictly before ---
-    gt_vg_history = DataFrame(
-        riderkey = String[],
-        score = Float64[],
-        year = Int[],
-        gt_slug = String[],
-    )
+    gt_vg_history =
+        DataFrame(riderkey = String[], score = Float64[], year = Int[], gt_slug = String[])
     for gt in vcat([pcs_slug], get(GT_SIMILAR_RACES, pcs_slug, String[]))
         gvs = _STAGE_RACE_VG_SLUGS[gt]
         yrs = collect((year-history_years):(year-1))
@@ -1270,12 +1268,8 @@ function prefetch_stage_race_data(
             end
         end
     end
-    same_gt_history = select(
-        filter(:gt_slug => ==(pcs_slug), gt_vg_history),
-        :riderkey,
-        :score,
-        :year,
-    )
+    same_gt_history =
+        select(filter(:gt_slug => ==(pcs_slug), gt_vg_history), :riderkey, :score, :year)
     nrow(same_gt_history) == 0 && (same_gt_history = nothing)
 
     # --- Archived market snapshots (2026 editions only; nothing otherwise) ---
@@ -1293,16 +1287,23 @@ function prefetch_stage_race_data(
     # `_assemble_signals` rematches these frames IN PLACE at estimation time,
     # which would otherwise make a challenger's market coverage depend on
     # whether the champion ran first on the same struct.
-    for mdf in (odds_df, oracle_df, points_odds_df, kom_odds_df,
-                stagewin_odds_df, points_oracle_df, kom_oracle_df)
-        mdf !== nothing && :rider in propertynames(mdf) &&
-            rematch_riderkeys!(mdf, riders)
+    for mdf in (
+        odds_df,
+        oracle_df,
+        points_odds_df,
+        kom_odds_df,
+        stagewin_odds_df,
+        points_oracle_df,
+        kom_oracle_df,
+    )
+        mdf !== nothing && :rider in propertynames(mdf) && rematch_riderkeys!(mdf, riders)
     end
 
     # --- Stage profiles + scoring table ---
     stages = load_stage_profiles(pcs_slug, year; archive_dir = archive_dir)
-    isempty(stages) &&
-        error("No pcs_stage_profiles archive for $pcs_slug $year — per-stage pipeline needs it")
+    isempty(stages) && error(
+        "No pcs_stage_profiles archive for $pcs_slug $year — per-stage pipeline needs it",
+    )
     scoring_df = snap("vg_scoring")
     scoring = scoring_df === nothing ? SCORING_GRAND_TOUR : _df_to_scoring(scoring_df)
 
@@ -1311,13 +1312,15 @@ function prefetch_stage_race_data(
     # mid-race standings would be cached (9999-day TTL) as if final.
     gc_results = snap("pcs_gc_results")
     race_over = race_date !== nothing && today() >= race_date + Day(25)
-    points_results = !race_over ? nothing :
+    points_results =
+        !race_over ? nothing :
         try
             getpcs_race_results(pcs_slug, year; classification = :points, cache_config)
         catch
             nothing
         end
-    kom_results = !race_over ? nothing :
+    kom_results =
+        !race_over ? nothing :
         try
             getpcs_race_results(pcs_slug, year; classification = :kom, cache_config)
         catch
@@ -1465,30 +1468,127 @@ const _STAGE_PREDICTORS = Dict{Symbol,Function}(
     :odds => odds_evg,
 )
 
-_resolve_predictor(p::Symbol) = (String(p), _STAGE_PREDICTORS[p])
-_resolve_predictor(p::Pair) = (String(first(p)), last(p))
+"""Resolve one predictor spec against a format's built-in table. A `Symbol` names
+a built-in; a `name => f` pair supplies a custom one."""
+_resolve_predictor(p::Symbol, table::Dict{Symbol,Function}) = (String(p), table[p])
+_resolve_predictor(p::Pair, ::Dict{Symbol,Function}) = (String(first(p)), last(p))
 
 """Spearman ρ rounded to 3 dp, `missing` when either vector is constant — a
 degenerate prediction (e.g. an all-zero persistence baseline) has no defined
 rank correlation; the tie-averaged formula would otherwise return exactly 0.5.
 `missing` cells are excluded from any downstream aggregation."""
 _safe_spearman(x, y) =
-    (allequal(x) || allequal(y)) ? missing :
-    round(spearman_correlation(x, y), digits = 3)
+    (allequal(x) || allequal(y)) ? missing : round(spearman_correlation(x, y), digits = 3)
 
-"""Select the 9-rider budget-constrained team maximising `points_col` and
-return the chosen riderkeys. Class constraints apply automatically when the
-frame carries VG class data (`build_model_stage`), else cost-only — the same
-rule for every predictor and for the hindsight optimum, so team-points-captured
-compares like with like. `max_per_team` mirrors production's diversification cap
-(`[optimisation] max_per_team`, 2); it is applied to the optimum as well as to
-each predictor's team, keeping the metric a measure of prediction quality within
-the constraint set production actually races under."""
-function _stage_team_keys(df::DataFrame, points_col::Symbol; max_per_team::Integer)
-    sol = build_model_stage(df, 9, points_col, :cost; max_per_team = max_per_team)
-    sol === nothing && error("Stage team optimisation infeasible on $points_col")
+# ---------------------------------------------------------------------------
+# Shared harness core (one-day and stage race)
+# ---------------------------------------------------------------------------
+
+"""
+    GameFormat(team_size, build_model, name, predictors)
+
+Everything the team-points-captured metric needs to know about which Velogames
+game it is scoring. The two harnesses differ only in these four values, so the
+scoring core below is written once against this rather than twice against the
+two formats — a divergence between them would be invisible, producing plausible
+numbers rather than an error.
+"""
+struct GameFormat
+    team_size::Int
+    build_model::Function
+    name::String
+    predictors::Dict{Symbol,Function}
+end
+
+"""Select the budget-constrained team of `fmt.team_size` riders maximising
+`points_col` and return the chosen riderkeys. Stage-race class constraints apply
+automatically when the frame carries VG class data (`build_model_stage`), else
+cost-only — the same rule for every predictor and for the hindsight optimum, so
+team-points-captured compares like with like. `max_per_team` mirrors production's
+diversification cap (`[optimisation] max_per_team`, 2); it is applied to the
+optimum as well as to each predictor's team, keeping the metric a measure of
+prediction quality within the constraint set production actually races under."""
+function _team_keys(
+    df::DataFrame,
+    points_col::Symbol,
+    fmt::GameFormat;
+    max_per_team::Integer,
+)
+    sol = fmt.build_model(
+        df,
+        fmt.team_size,
+        points_col,
+        :cost;
+        totalcost = 100,
+        max_per_team = max_per_team,
+    )
+    sol === nothing && error("$(fmt.name) team optimisation infeasible on $points_col")
     return [String(k) for k in df.riderkey if sol[k] > 0.5]
 end
+
+"""
+    _score_team_points_captured(data, predictors, fmt; max_per_team, truth_source) -> Vector{NamedTuple}
+
+The team-points-captured scoring loop both harnesses run: optimise a team on each
+predictor's EVG, score it on the archived truth, and divide by the hindsight
+optimum under the same constraints. Also returns full-field and top-20 Spearman ρ
+and the top-N overlaps.
+
+`data` needs `.riders` (with `riderkey` and `actual_total`), `.pcs_slug` and
+`.year`. The top-N overlap column is named for the team size — `overlap6` on a
+classic, `overlap9` on a grand tour — so the two report tables keep the headings
+they have always had.
+"""
+function _score_team_points_captured(
+    data,
+    predictors,
+    fmt::GameFormat;
+    max_per_team::Integer,
+    truth_source::AbstractString,
+)
+    riders = data.riders
+    actual = Float64.(riders.actual_total)
+    any(isnan, actual) && error(
+        "No $truth_source archived for $(data.pcs_slug) $(data.year) — cannot score team-points-captured",
+    )
+    work = copy(riders)
+    actual_of = Dict(String(k) => a for (k, a) in zip(riders.riderkey, actual))
+    opt_score =
+        sum(actual_of[k] for k in _team_keys(work, :actual_total, fmt; max_per_team))
+    actual_rank = invperm(sortperm(actual, rev = true))
+    top20 = partialsortperm(actual, 1:min(20, length(actual)), rev = true)
+
+    rows = NamedTuple[]
+    for p in predictors
+        name, fn = _resolve_predictor(p, fmt.predictors)
+        pred = fn(data)
+        pred === nothing && continue
+        evg_of =
+            Dict(String(r.riderkey) => Float64(r.expected_vg_points) for r in eachrow(pred))
+        evg = [get(evg_of, String(k), 0.0) for k in riders.riderkey]
+        work[!, :_pred] = evg
+        team_score = sum(actual_of[k] for k in _team_keys(work, :_pred, fmt; max_per_team))
+        head = (
+            race = data.pcs_slug,
+            year = data.year,
+            predictor = name,
+            n = nrow(riders),
+            team_points_captured = round(team_score / opt_score, digits = 3),
+            team_actual = team_score,
+            optimal_actual = opt_score,
+            rho_full = _safe_spearman(evg, actual),
+            rho_top20 = _safe_spearman(evg[top20], actual[top20]),
+        )
+        overlaps = NamedTuple{(Symbol("overlap$(fmt.team_size)"), :overlap20)}((
+            top_n_overlap(evg, actual_rank, fmt.team_size),
+            top_n_overlap(evg, actual_rank, 20),
+        ))
+        push!(rows, merge(head, overlaps))
+    end
+    return rows
+end
+
+const FORMAT_STAGE = GameFormat(9, build_model_stage, "Stage", _STAGE_PREDICTORS)
 
 """
     backtest_stage_race(data::StageRaceBacktestData; predictors, target=:vg_total) -> DataFrame
@@ -1525,77 +1625,53 @@ function backtest_stage_race(
     target::Symbol = :vg_total,
     max_per_team::Integer = 2,
 )
-    riders = data.riders
-    rows = NamedTuple[]
-
     if target == :vg_total
-        actual = Float64.(riders.actual_total)
-        any(isnan, actual) && error(
-            "No vg_stage_totals archived for $(data.pcs_slug) $(data.year) — cannot score :vg_total",
+        return DataFrame(
+            _score_team_points_captured(
+                data,
+                predictors,
+                FORMAT_STAGE;
+                max_per_team = max_per_team,
+                truth_source = "vg_stage_totals",
+            ),
         )
-        work = copy(riders)
-        actual_of = Dict(String(k) => a for (k, a) in zip(riders.riderkey, actual))
-        opt_score =
-            sum(actual_of[k] for k in _stage_team_keys(work, :actual_total; max_per_team))
-        actual_rank = invperm(sortperm(actual, rev = true))
-        top20 = partialsortperm(actual, 1:min(20, length(actual)), rev = true)
-    else
-        standings =
-            target == :gc ? data.gc_results :
-            target == :points ? data.points_results :
-            target == :kom ? data.kom_results : error("Unknown target $target")
-        standings === nothing &&
-            error("No archived $target standings for $(data.pcs_slug) $(data.year)")
-        pos_of = Dict{String,Int}()
-        for r in eachrow(standings)
-            0 < r.position < DNF_POSITION && (pos_of[String(r.riderkey)] = Int(r.position))
-        end
     end
 
+    # Secondary targets: rank the EVG against an archived classification, which
+    # has no team-selection step and so shares nothing with the scoring core.
+    riders = data.riders
+    standings =
+        target == :gc ? data.gc_results :
+        target == :points ? data.points_results :
+        target == :kom ? data.kom_results : error("Unknown target $target")
+    standings === nothing &&
+        error("No archived $target standings for $(data.pcs_slug) $(data.year)")
+    pos_of = Dict{String,Int}()
+    for r in eachrow(standings)
+        0 < r.position < DNF_POSITION && (pos_of[String(r.riderkey)] = Int(r.position))
+    end
+
+    rows = NamedTuple[]
     for p in predictors
-        name, fn = _resolve_predictor(p)
+        name, fn = _resolve_predictor(p, FORMAT_STAGE.predictors)
         pred = fn(data)
         pred === nothing && continue
-        evg_of = Dict(
-            String(r.riderkey) => Float64(r.expected_vg_points) for r in eachrow(pred)
-        )
+        evg_of =
+            Dict(String(r.riderkey) => Float64(r.expected_vg_points) for r in eachrow(pred))
         evg = [get(evg_of, String(k), 0.0) for k in riders.riderkey]
-
-        if target == :vg_total
-            work[!, :_pred] = evg
-            team_score =
-                sum(actual_of[k] for k in _stage_team_keys(work, :_pred; max_per_team))
-            push!(
-                rows,
-                (
-                    race = data.pcs_slug,
-                    year = data.year,
-                    predictor = name,
-                    n = nrow(riders),
-                    team_points_captured = round(team_score / opt_score, digits = 3),
-                    team_actual = team_score,
-                    optimal_actual = opt_score,
-                    rho_full = _safe_spearman(evg, actual),
-                    rho_top20 = _safe_spearman(evg[top20], actual[top20]),
-                    overlap9 = top_n_overlap(evg, actual_rank, 9),
-                    overlap20 = top_n_overlap(evg, actual_rank, 20),
-                ),
-            )
-        else
-            idx = [i for (i, k) in enumerate(riders.riderkey) if haskey(pos_of, String(k))]
-            pos = Float64[pos_of[String(riders.riderkey[i])] for i in idx]
-            push!(
-                rows,
-                (
-                    race = data.pcs_slug,
-                    year = data.year,
-                    predictor = name,
-                    target = target,
-                    n = length(idx),
-                    rho = _safe_spearman(evg[idx], -pos),
-                ),
-            )
-        end
+        idx = [i for (i, k) in enumerate(riders.riderkey) if haskey(pos_of, String(k))]
+        pos = Float64[pos_of[String(riders.riderkey[i])] for i in idx]
+        push!(
+            rows,
+            (
+                race = data.pcs_slug,
+                year = data.year,
+                predictor = name,
+                target = target,
+                n = length(idx),
+                rho = _safe_spearman(evg[idx], -pos),
+            ),
+        )
     end
     return DataFrame(rows)
 end
@@ -1610,7 +1686,8 @@ function backtest_stage_race(
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = DEFAULT_ARCHIVE_DIR,
 )
-    data = prefetch_stage_race_data(pcs_slug, year; history_years, cache_config, archive_dir)
+    data =
+        prefetch_stage_race_data(pcs_slug, year; history_years, cache_config, archive_dir)
     return backtest_stage_race(data; predictors, target, max_per_team)
 end
 
@@ -1860,8 +1937,7 @@ function prefetch_oneday_backtest_data(
         mdf !== nothing && :rider in propertynames(mdf) && rematch_riderkeys!(mdf, riders)
     end
 
-    totals =
-        _oneday_vg_totals_asof(race.pcs_slug, race.year; cache_config, archive_dir)
+    totals = _oneday_vg_totals_asof(race.pcs_slug, race.year; cache_config, archive_dir)
     riders[!, :actual_total] =
         totals === nothing ? fill(NaN, nrow(riders)) :
         [get(totals, String(k), 0.0) for k in riders.riderkey]
@@ -2004,21 +2080,7 @@ const _ONEDAY_PREDICTORS = Dict{Symbol,Function}(
 const ONEDAY_PREDICTORS_ALL =
     [:simulator, :simulator_risk, :simulator_market, :odds, :maxcost]
 
-_resolve_oneday_predictor(p::Symbol) = (String(p), _ONEDAY_PREDICTORS[p])
-_resolve_oneday_predictor(p::Pair) = (String(first(p)), last(p))
-
-function _oneday_team_keys(df::DataFrame, points_col::Symbol; max_per_team::Integer)
-    sol = build_model_oneday(
-        df,
-        6,
-        points_col,
-        :cost;
-        totalcost = 100,
-        max_per_team = max_per_team,
-    )
-    sol === nothing && error("One-day team optimisation infeasible on $points_col")
-    return [String(k) for k in df.riderkey if sol[k] > 0.5]
-end
+const FORMAT_ONEDAY = GameFormat(6, build_model_oneday, "One-day", _ONEDAY_PREDICTORS)
 
 
 """
@@ -2046,47 +2108,15 @@ function backtest_oneday_race(
     predictors = ONEDAY_PREDICTORS_ALL,
     max_per_team::Integer = 2,
 )
-    riders = data.riders
-    actual = Float64.(riders.actual_total)
-    any(isnan, actual) && error(
-        "No vg_results archived for $(data.pcs_slug) $(data.year) — cannot score team-points-captured",
+    return DataFrame(
+        _score_team_points_captured(
+            data,
+            predictors,
+            FORMAT_ONEDAY;
+            max_per_team = max_per_team,
+            truth_source = "vg_results",
+        ),
     )
-    work = copy(riders)
-    actual_of = Dict(String(k) => a for (k, a) in zip(riders.riderkey, actual))
-    opt_score =
-        sum(actual_of[k] for k in _oneday_team_keys(work, :actual_total; max_per_team))
-    actual_rank = invperm(sortperm(actual, rev = true))
-    top20 = partialsortperm(actual, 1:min(20, length(actual)), rev = true)
-
-    rows = NamedTuple[]
-    for p in predictors
-        name, fn = _resolve_oneday_predictor(p)
-        pred = fn(data)
-        pred === nothing && continue
-        evg_of = Dict(
-            String(r.riderkey) => Float64(r.expected_vg_points) for r in eachrow(pred)
-        )
-        evg = [get(evg_of, String(k), 0.0) for k in riders.riderkey]
-        work[!, :_pred] = evg
-        team_score = sum(actual_of[k] for k in _oneday_team_keys(work, :_pred; max_per_team))
-        push!(
-            rows,
-            (
-                race = data.pcs_slug,
-                year = data.year,
-                predictor = name,
-                n = nrow(riders),
-                team_points_captured = round(team_score / opt_score, digits = 3),
-                team_actual = team_score,
-                optimal_actual = opt_score,
-                rho_full = _safe_spearman(evg, actual),
-                rho_top20 = _safe_spearman(evg[top20], actual[top20]),
-                overlap6 = top_n_overlap(evg, actual_rank, 6),
-                overlap20 = top_n_overlap(evg, actual_rank, 20),
-            ),
-        )
-    end
-    return DataFrame(rows)
 end
 
 function backtest_oneday_race(

@@ -558,7 +558,10 @@ function _switcher_fallback(top_teams::Vector{DataFrame})
     write(io, "<details><summary>All near-optimal teams (no-JavaScript view)</summary>\n")
     for (i, team) in enumerate(top_teams)
         evg = round(sum(Float64.(team.expected_vg_points)), digits = 1)
-        write(io, "<p><strong>Team $i</strong> — cost $(sum(team.cost))/100, EVG $evg</p>\n")
+        write(
+            io,
+            "<p><strong>Team $i</strong> — cost $(sum(team.cost))/100, EVG $evg</p>\n",
+        )
         cols = intersect(
             [:rider, :team, :classraw, :cost, :expected_vg_points],
             propertynames(team),
@@ -571,7 +574,8 @@ end
 
 """
     format_near_optimal_section(top_teams, predicted, build_model_fn;
-                                team_size, max_per_team, n_forks=5) -> String
+                                team_size, max_per_team, n_forks=5,
+                                points_col=:expected_vg_points) -> String
 
 Render the full "near-optimal team set" section: an interactive team switcher
 (tabs repopulating one table, swing riders highlighted, EVG + %-gap-vs-best), the
@@ -579,6 +583,13 @@ explicit core/filler decomposition (`compute_filler_pool`), and the ranked
 structural forks (`compute_structural_forks`). Degrades to a static `<details>`
 list when JavaScript is disabled. `predicted` (the live frame, which carries the
 class columns) and `build_model_fn` drive the fork re-solves.
+
+`points_col` must be the column the team was actually picked on, or the forks
+describe a different team from the one displayed above them. On the one-day path
+with the market blend active that is `:market_blend_points`, whose unit-normalised
+values are far too small to print as points — hence fork sizes are reported as a
+share of the optimal team's total, with the absolute only shown when the objective
+really is expected VG points.
 """
 function format_near_optimal_section(
     top_teams::Vector{DataFrame},
@@ -587,6 +598,7 @@ function format_near_optimal_section(
     team_size::Integer,
     max_per_team::Integer,
     n_forks::Integer = 5,
+    points_col::Symbol = :expected_vg_points,
 )
     isempty(top_teams) && return ""
     n_teams = length(top_teams)
@@ -608,8 +620,7 @@ function format_near_optimal_section(
     write(io, html_callout(intro; title = "Why a switcher?", type = "note"))
 
     # --- Interactive switcher (JS) + no-JS fallback ---
-    teams_json =
-        JSON3.write([_team_switcher_dict(t, i) for (i, t) in enumerate(top_teams)])
+    teams_json = JSON3.write([_team_switcher_dict(t, i) for (i, t) in enumerate(top_teams)])
     css = """<style>
 #near-optimal .no-tabbar { display:flex; flex-wrap:wrap; gap:.4em; margin:1em 0; }
 #near-optimal .no-tab { border:1px solid #ccc; background:#f7f7f7; border-radius:6px; padding:.35em .7em; cursor:pointer; font-size:.9em; font-family:inherit; }
@@ -729,9 +740,20 @@ $(_switcher_fallback(top_teams))
         build_model_fn;
         team_size = team_size,
         max_per_team = max_per_team,
+        points_col = points_col,
         n_forks = n_forks,
     )
     write(io, html_heading("Key decisions (structural forks)", 3))
+
+    # Percentage of the optimal team's total is the one unit that reads the same
+    # whether the objective is VG points or a unit-normalised market blend.
+    is_evg = points_col === :expected_vg_points
+    best_obj = forks_result.best_obj
+    pct(d) = best_obj > 0 ? "$(round(100 * d / best_obj, digits = 2))%" : "n/a"
+    cost_of(d) =
+        is_evg ?
+        "<strong>$(round(d, digits=1)) EVG</strong> ($(pct(d)) of the team total)" :
+        "<strong>$(pct(d))</strong> of the team total"
 
     shape = forks_result.shape
     fork_lines = String[]
@@ -742,28 +764,28 @@ $(_switcher_fallback(top_teams))
             "<strong>one leader plus depth</strong> wins (dropping one of $(shape.leader1)/$(shape.leader2))"
         push!(
             fork_lines,
-            "<li><strong>Two GC leaders vs one:</strong> $verdict by " *
-            "<strong>$(round(shape.delta, digits=1)) EVG</strong> " *
-            "(both-leaders team $(round(shape.both_evg, digits=1)) vs " *
-            "best at-most-one $(round(shape.atmost_evg, digits=1))).</li>",
+            "<li><strong>Two GC leaders vs one:</strong> $verdict by $(cost_of(shape.delta)).</li>",
         )
     end
+    # Drop forks too small to render as anything but zero in every unit shown.
+    negligible(d) =
+        round(100 * d / max(best_obj, eps()), digits = 2) <= 0.0 &&
+        (!is_evg || round(d, digits = 1) <= 0.0)
     for f in forks_result.forks
-        f.delta < 0.05 && continue
+        negligible(f.delta) && continue
         incoming =
             isempty(f.comes_in) ? "no replacement (roster shrinks)" :
             join(
                 [
-                    "$(c.rider) ($(c.cost)cr, $(round(c.evg, digits=1)) EVG)" for
-                    c in f.comes_in
+                    is_evg ? "$(c.rider) ($(c.cost)cr, $(round(c.evg, digits=1)) EVG)" :
+                    "$(c.rider) ($(c.cost)cr)" for c in f.comes_in
                 ],
                 ", ",
             )
         push!(
             fork_lines,
-            "<li><strong>Drop $(f.rider)</strong> ($(f.cost)cr): costs " *
-            "<strong>$(round(f.delta, digits=1)) EVG</strong>. Frees $(f.cost) credits, which buy " *
-            "$incoming — no combination matches their points-per-slot.</li>",
+            "<li><strong>Drop $(f.rider)</strong> ($(f.cost)cr): costs $(cost_of(f.delta)). " *
+            "Frees $(f.cost) credits, which buy $incoming — no combination matches their points-per-slot.</li>",
         )
     end
     if isempty(fork_lines)
@@ -775,7 +797,7 @@ $(_switcher_fallback(top_teams))
         write(
             io,
             html_callout(
-                "<p>The roster decisions that move the most EVG, best first. Each shows the EVG " *
+                "<p>The roster decisions that move the score most, best first. Each shows what is " *
                 "at stake and which riders swing in to fill the freed budget.</p>\n<ul>\n" *
                 join(fork_lines, "\n") *
                 "\n</ul>\n";
@@ -784,6 +806,119 @@ $(_switcher_fallback(top_teams))
                 collapsed = false,
             ),
         )
+    end
+
+    return String(take!(io))
+end
+
+# ---------------------------------------------------------------------------
+# Full rankings + alternative picks (shared by both prediction reports)
+# ---------------------------------------------------------------------------
+
+"""
+    format_rankings_and_alternatives(predicted, chosenteam; ranking_cols, top_n=30) -> String
+
+Render the "Full prediction rankings" and "Alternative picks" sections that close
+both prediction reports: the top-`top_n` table, the signal waterfall for those
+riders, and the best-value / high-upside / budget breakdowns over the riders the
+optimiser left out.
+
+`ranking_cols` is the *candidate* column list, intersected with what `predicted`
+actually carries. It stays a caller's choice rather than a shared union because
+the two reports order their columns differently — the stage frame carries both
+scalar `:strength` and per-dimension `:strength_gc`, so a merged list would
+silently reshuffle the stage table.
+
+Class columns are optional throughout: the one-day frame has no `:classraw` and
+the rider tables simply omit it.
+"""
+function format_rankings_and_alternatives(
+    predicted::DataFrame,
+    chosenteam::DataFrame;
+    ranking_cols::Vector{Symbol},
+    top_n::Integer = 30,
+)
+    io = IOBuffer()
+
+    write(io, html_heading("Full prediction rankings", 2))
+    write(io, "<p>Top $(top_n) riders by expected VG points:</p>\n")
+
+    cols = intersect(ranking_cols, propertynames(predicted))
+    ranking = sort(predicted, :expected_vg_points, rev = true)
+    n = min(top_n, nrow(ranking))
+    write(io, html_table(ranking[1:n, cols]))
+
+    waterfall_full = format_signal_waterfall(ranking[1:n, :]; max_riders = n)
+    write(
+        io,
+        html_callout(
+            "<p>Signal shifts for top-ranked riders.</p>\n" * waterfall_full;
+            title = "Signal breakdown",
+            collapsed = true,
+        ),
+    )
+
+    write(io, html_heading("Alternative picks", 2))
+
+    if nrow(chosenteam) > 0
+        not_chosen = filter(:chosen => ==(false), predicted)
+
+        if nrow(not_chosen) > 0
+            not_chosen[!, :value] = not_chosen.expected_vg_points ./ not_chosen.cost
+            has_class = :classraw in propertynames(not_chosen)
+            base_cols = has_class ? [:rider, :team, :classraw] : [:rider, :team]
+
+            write(io, html_heading("Best value not selected", 3))
+            write(
+                io,
+                "<p>Riders with the highest expected points per credit, not in the optimal team.</p>\n",
+            )
+            top_value = sort(not_chosen, :value, rev = true)[1:min(10, nrow(not_chosen)), :]
+            write(
+                io,
+                html_table(
+                    top_value[:, vcat(base_cols, [:cost, :expected_vg_points, :value])],
+                ),
+            )
+
+            write(io, html_heading("High upside", 3))
+            write(
+                io,
+                "<p>Strong riders with high uncertainty — potential outperformers if conditions suit them.</p>\n",
+            )
+            not_chosen[!, :upside] = not_chosen.strength .+ not_chosen.uncertainty
+            upside = sort(not_chosen, :upside, rev = true)[1:min(5, nrow(not_chosen)), :]
+            write(
+                io,
+                html_table(
+                    upside[
+                        :,
+                        vcat(
+                            base_cols,
+                            [:cost, :expected_vg_points, :strength, :uncertainty],
+                        ),
+                    ],
+                ),
+            )
+
+            write(io, html_heading("Budget options", 3))
+            cheap_options = filter(row -> row.cost <= 6, not_chosen)
+            if nrow(cheap_options) > 0
+                write(io, "<p>Best riders costing 6 credits or less.</p>\n")
+                cheap_sorted = sort(cheap_options, :expected_vg_points, rev = true)[
+                    1:min(5, nrow(cheap_options)),
+                    :,
+                ]
+                write(
+                    io,
+                    html_table(
+                        cheap_sorted[:, vcat(base_cols, [:cost, :expected_vg_points])],
+                    ),
+                )
+            else
+                write(io, "<p>No riders at cost 6 or below available.</p>\n")
+            end
+        end
     end
 
     return String(take!(io))

@@ -210,3 +210,18 @@ end
 # ---------------------------------------------------------------------------
 # Race report data assembly (used by site/race_report.qmd)
 # ---------------------------------------------------------------------------
+
+"""
+    write_report(page, dir, filename) -> String
+
+Write a rendered page to `dir/filename`, creating the directory if needed, and
+log where it landed. Returns the path, which every renderer returns to its
+caller (the CLI shim and the web frontend both use it).
+"""
+function write_report(page::AbstractString, dir::AbstractString, filename::AbstractString)
+    mkpath(dir)
+    path = joinpath(dir, filename)
+    write(path, page)
+    @info "Written to $path"
+    return path
+end

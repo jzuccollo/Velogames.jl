@@ -106,36 +106,42 @@ end
 
 
 """
-    build_model_oneday(inputdf::DataFrame, n::Integer=6, points::Symbol=:expected_vg_points, cost::Symbol=:cost; totalcost::Integer=100)
+    _build_team_model(inputdf, n, points, cost; totalcost, max_per_team, exclude,
+                      force_in, force_out, classes) -> solution or nothing
 
-Build the optimisation model for one-day races in the velogames game.
+The budget knapsack both game formats share: pick exactly `n` riders maximising
+`points` subject to `cost <= totalcost`, an optional per-team cap, no-good cuts
+(k-best) and forced in/out riders. `classes = true` additionally imposes the VG
+Sixes classification minimums — the *only* structural difference between the
+one-day and stage-race models.
 
-- `inputdf::DataFrame`: the rider data
-- `n::Integer`: number of riders to select (default: 6)
-- `points::Symbol`: column name for points/score to maximise (default: :expected_vg_points)
-- `cost::Symbol`: column name for rider cost (default: :cost)
-- `totalcost::Integer`: maximum total cost allowed (default: 100)
-
-Returns the optimisation solution values or nothing if no feasible solution exists.
+Prefer the named wrappers `build_model_oneday` / `build_model_stage`: they carry
+the right team size and are what gets passed around as `build_model_fn`.
 """
-function build_model_oneday(
+function _build_team_model(
     inputdf::DataFrame,
-    n::Integer = 6,
-    points::Symbol = :expected_vg_points,
-    cost::Symbol = :cost;
-    totalcost::Integer = 100,
-    max_per_team::Integer = 0,
-    exclude::Vector{Vector{String}} = Vector{String}[],
-    force_in::Vector{String} = String[],
-    force_out::Vector{String} = String[],
+    n::Integer,
+    points::Symbol,
+    cost::Symbol;
+    totalcost::Integer,
+    max_per_team::Integer,
+    exclude::Vector{Vector{String}},
+    force_in::Vector{String},
+    force_out::Vector{String},
+    classes::Bool,
 )
+    # Only the class path needs a copy — `ensure_classification_columns!` mutates.
+    df = classes ? copy(inputdf) : inputdf
+    has_classes = classes ? ensure_classification_columns!(df) : false
+
     model = JuMP.Model(HiGHS.Optimizer)
     JuMP.set_silent(model)
-    JuMP.@variable(model, x[inputdf.riderkey], Bin)
-    JuMP.@objective(model, Max, inputdf[!, points]' * x) # maximise the total score
-    JuMP.@constraint(model, inputdf[!, cost]' * x <= totalcost) # cost must be <= totalcost
-    JuMP.@constraint(model, sum(x) == n) # exactly n riders must be chosen
-    _add_team_cap!(model, x, inputdf, max_per_team)
+    JuMP.@variable(model, x[df.riderkey], Bin)
+    JuMP.@objective(model, Max, df[!, points]' * x)
+    JuMP.@constraint(model, df[!, cost]' * x <= totalcost)
+    JuMP.@constraint(model, sum(x) == n)
+    classes && _add_class_constraints!(model, x, df, has_classes)
+    _add_team_cap!(model, x, df, max_per_team)
     _add_nogood_cuts!(model, x, exclude, n)
     _add_force_constraints!(model, x, force_in, force_out)
     JuMP.optimize!(model)
@@ -146,6 +152,42 @@ function build_model_oneday(
     return JuMP.value.(x)
 end
 
+"""
+    build_model_oneday(inputdf::DataFrame, n::Integer=6, points::Symbol=:expected_vg_points, cost::Symbol=:cost; totalcost::Integer=100)
+
+Build the optimisation model for one-day races in the velogames game: 6 riders,
+budget only, no classification constraints.
+
+- `inputdf::DataFrame`: the rider data
+- `n::Integer`: number of riders to select (default: 6)
+- `points::Symbol`: column name for points/score to maximise (default: :expected_vg_points)
+- `cost::Symbol`: column name for rider cost (default: :cost)
+- `totalcost::Integer`: maximum total cost allowed (default: 100)
+
+Returns the optimisation solution values or nothing if no feasible solution exists.
+"""
+build_model_oneday(
+    inputdf::DataFrame,
+    n::Integer = 6,
+    points::Symbol = :expected_vg_points,
+    cost::Symbol = :cost;
+    totalcost::Integer = 100,
+    max_per_team::Integer = 0,
+    exclude::Vector{Vector{String}} = Vector{String}[],
+    force_in::Vector{String} = String[],
+    force_out::Vector{String} = String[],
+) = _build_team_model(
+    inputdf,
+    n,
+    points,
+    cost;
+    totalcost = totalcost,
+    max_per_team = max_per_team,
+    exclude = exclude,
+    force_in = force_in,
+    force_out = force_out,
+    classes = false,
+)
 
 """
     build_model_stage(inputdf::DataFrame, n::Integer=9, points::Symbol=:expected_vg_points, cost::Symbol=:cost; totalcost::Integer=100)
@@ -162,7 +204,7 @@ columns (e.g. `build_model_stage(df, 9, :points, :cost)`).
 
 Returns the optimisation solution values or nothing if no feasible solution exists.
 """
-function build_model_stage(
+build_model_stage(
     inputdf::DataFrame,
     n::Integer = 9,
     points::Symbol = :expected_vg_points,
@@ -172,28 +214,18 @@ function build_model_stage(
     exclude::Vector{Vector{String}} = Vector{String}[],
     force_in::Vector{String} = String[],
     force_out::Vector{String} = String[],
+) = _build_team_model(
+    inputdf,
+    n,
+    points,
+    cost;
+    totalcost = totalcost,
+    max_per_team = max_per_team,
+    exclude = exclude,
+    force_in = force_in,
+    force_out = force_out,
+    classes = true,
 )
-    df = copy(inputdf)
-
-    has_classes = ensure_classification_columns!(df)
-
-    model = JuMP.Model(HiGHS.Optimizer)
-    JuMP.set_silent(model)
-    JuMP.@variable(model, x[df.riderkey], Bin)
-    JuMP.@objective(model, Max, df[!, points]' * x)
-    JuMP.@constraint(model, df[!, cost]' * x <= totalcost)
-    JuMP.@constraint(model, sum(x) == n)
-    _add_class_constraints!(model, x, df, has_classes)
-    _add_team_cap!(model, x, df, max_per_team)
-    _add_nogood_cuts!(model, x, exclude, n)
-    _add_force_constraints!(model, x, force_in, force_out)
-    JuMP.optimize!(model)
-    if JuMP.termination_status(model) != JuMP.OPTIMAL
-        @warn("The model was not solved correctly.")
-        return nothing
-    end
-    return JuMP.value.(x)
-end
 
 """
     _kbest_team_keys(df, build_model_fn, points_col; team_size, max_per_team, n_alternatives)
@@ -823,7 +855,8 @@ end
 
 """
     compute_structural_forks(predicted, build_model_fn; team_size, max_per_team,
-                             points_col=:expected_vg_points, n_forks=5) -> (forks, shape)
+                             points_col=:expected_vg_points, n_forks=5)
+        -> (forks, shape, best_obj)
 
 Surface the major either/or roster decisions in the optimal team, each with the
 EVG it puts at stake and its knock-on.
@@ -834,6 +867,10 @@ with that rider **banned** (`force_out`) and reports:
 - `comes_in` — the riders that enter to spend the freed budget (name/cost/evg).
 The pivotal picks (expensive leaders) dominate this ranking; `forks` is the top
 `n_forks` by `delta`.
+
+`best_obj` is the global optimum's objective value, so callers can express each
+`delta` as a share of the team's total — the only readable unit when `points_col`
+is a unit-normalised blend rather than raw VG points.
 
 `shape` (when `:strength_gc` is present) is the genuinely structural fork: the two
 strongest-GC riders. It compares the best team forced to carry **both** leaders
@@ -941,5 +978,5 @@ function compute_structural_forks(
         end
     end
 
-    return (forks = forks, shape = shape)
+    return (forks = forks, shape = shape, best_obj = global_obj)
 end

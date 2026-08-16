@@ -1081,6 +1081,28 @@ end
     @test issorted([f.delta for f in forks.forks], rev = true)
     # GC-shape fork is absent here (no :strength_gc column).
     @test forks.shape === nothing
+    # `best_obj` is the optimum itself, and is what the report divides deltas by
+    # to express them as a share of the team total.
+    @test forks.best_obj ≈ maximum(sum(t.expected_vg_points) for t in top_teams)
+    @test all(f -> f.delta <= forks.best_obj, forks.forks)
+
+    # `points_col` must be able to follow whichever column the team was picked
+    # on — the one-day report passes :market_blend_points when the blend is live.
+    df2 = copy(df)
+    df2[!, :blend] = df2.expected_vg_points ./ 1000
+    blended = compute_structural_forks(
+        df2,
+        build_model_stage;
+        team_size = 9,
+        max_per_team = 0,
+        points_col = :blend,
+        n_forks = 5,
+    )
+    @test blended.best_obj ≈ forks.best_obj / 1000
+    # Scaling the objective leaves the *shares* the report prints unchanged.
+    # Compared as a sorted multiset, not pairwise: riders tied on delta can come
+    # back in either order once the values are divided through.
+    @test sort([f.delta / blended.best_obj for f in blended.forks]) ≈ sort([f.delta / forks.best_obj for f in forks.forks])
 end
 
 @testset "multidim block-correlation discount (WP1.6)" begin
