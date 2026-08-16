@@ -1,3 +1,53 @@
+@testset "load_league_team" begin
+    # The league scrape spells races the Velogames way ("Ronde van Brugge"),
+    # which has to resolve to the PCS slug the renderers work in.
+    classics = """
+    {"meta": {"game_slug": "sixes-classics", "year": 2026, "series_type": "classics"},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "races": {
+        "Ronde van Brugge": {"race_number": 7, "score": 300,
+                             "riders": ["Jasper Philipsen", "Max Kanter"]}}}}}
+    """
+    gt = """
+    {"meta": {"game_slug": "velogame", "year": 2026, "series_type": "grand_tour"},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "races": {
+        "Stage 1: A-B": {"race_number": 1, "score": 10, "riders": ["Old Pick"]},
+        "Stage 2: B-C": {"race_number": 2, "score": 20, "riders": ["Tadej Pogačar"]}}}}}
+    """
+    mktempdir() do dir
+        write(joinpath(dir, "sixes-classics_2026_1.json"), classics)
+        write(joinpath(dir, "velogame_2026_2.json"), gt)
+        pull(; kwargs...) = load_league_team(;
+            data_dir = dir,
+            year = 2026,
+            username = "JZ",
+            kwargs...,
+        )
+
+        @test pull(
+            game_slug = "sixes-classics",
+            league_id = "1",
+            pcs_slug = "classic-brugge-de-panne",
+        ) == ["Jasper Philipsen", "Max Kanter"]
+
+        # A race the entrant hasn't a scraped roster for, an unknown entrant and
+        # a missing snapshot all fall back to empty rather than throwing — the
+        # normal state before the entry deadline.
+        @test pull(game_slug = "sixes-classics", league_id = "1", pcs_slug = "il-lombardia") ==
+              String[]
+        @test load_league_team(
+            joinpath(dir, "sixes-classics_2026_1.json");
+            username = "Nobody",
+            pcs_slug = "classic-brugge-de-panne",
+        ) == String[]
+        @test pull(game_slug = "absent", league_id = "9", pcs_slug = "il-lombardia") == String[]
+
+        # Grand tour rosters are locked, so the slug is ignored and the latest
+        # stage's roster is the entered team.
+        @test pull(game_slug = "velogame", league_id = "2", pcs_slug = "tour-de-france") ==
+              ["Tadej Pogačar"]
+    end
+end
+
 # =========================================================================
 # Smoke test: VG rider scraping
 # =========================================================================
@@ -105,6 +155,23 @@ end
           omloop.pcs_slug == "omloop-het-nieuwsblad"
     @test find_race("Paris-Roubaix").category == 1
     @test find_race("NonExistentRace") === nothing
+    # Prefix match, not substring: "Tour" used to resolve to Paris-Tours Elite.
+    @test find_race("Tour") === nothing
+
+    # Every race the picker can offer must resolve, and round-trip its slug.
+    # `all_races()` emits PCS slugs, so this is what stops the race list from
+    # containing entries `get_url_pattern` cannot look up.
+    races = all_races()
+    @test length(races) == 55
+    @test count(r -> r.type == :oneday, races) == 44
+    for r in races
+        p = get_url_pattern(r.slug; year = 2026)
+        @test p.pcs_slug == r.slug
+    end
+
+    # An unresolved name must throw rather than silently become a stage race.
+    @test_throws ErrorException get_url_pattern("not-a-real-race")
+    @test_throws ErrorException setup_race("not-a-real-race", 2026)
 
     config = RaceConfig(
         "test",
@@ -120,6 +187,35 @@ end
     )
     @test config.category == 2 && config.pcs_slug == "omloop-het-nieuwsblad"
     @test config.total_distance_km == 200.0
+
+    # RenderConfig: the TOML -> config mapping the renderers and the form share.
+    toml_oneday = Dict(
+        "race" => Dict("name" => "roubaix", "year" => 2026, "racehash" => "#PR"),
+        "data_sources" => Dict("oracle_url" => "", "use_oddschecker" => false),
+        "optimisation" => Dict(
+            "n_resamples" => 250,
+            "history_years" => 4,
+            "domestique_discount" => 1.0,
+            "risk_aversion" => 0.5,
+            "max_per_team" => 2,
+            "simulation_df" => 5,
+            "excluded_riders" => ["Some Rider"],
+        ),
+    )
+    rc = RenderConfig(toml_oneday; repo_root = "/tmp")
+    @test rc.race.type == :oneday && rc.race.team_size == 6
+    @test rc.racehash == "#PR" && rc.n_resamples == 250 && rc.history_years == 4
+    @test rc.simulation_df == 5 && rc.excluded_riders == ["Some Rider"]
+    @test rc.odds_df === nothing
+    @test rc.market_blend_weight == DEFAULT_MARKET_BLEND_WEIGHT  # absent -> shipped default
+
+    toml_stage = deepcopy(toml_oneday)
+    toml_stage["race"]["name"] = "tdf"
+    @test RenderConfig(toml_stage; repo_root = "/tmp").race.type == :stage
+    @test RenderConfig(toml_stage; repo_root = "/tmp").race.team_size == 9
+
+    toml_stage["optimisation"]["gt_vg_propensity_mode"] = "posthock"
+    @test_throws ErrorException RenderConfig(toml_stage; repo_root = "/tmp")
 
     pattern = get_url_pattern("omloop")
     @test pattern.category == 2 && pattern.pcs_slug == "omloop-het-nieuwsblad"

@@ -1175,6 +1175,70 @@ function load_league_standings_json(json_path::AbstractString)
 end
 
 """
+    load_league_team(json_path; username, pcs_slug) -> Vector{String}
+
+The riders `username` actually entered for the race identified by `pcs_slug`,
+read from a `vgleague` JSON snapshot. Returns `String[]` when the file, the
+entrant or that race is absent — Velogames hides every team roster until the
+entry deadline passes, so a lookup run before the race legitimately comes back
+empty and the caller should fall back to a hand-entered team.
+
+League race names are matched to `pcs_slug` through `CLASSICS_RACES_2026`,
+which carries the Velogames display names, so the league's own spelling
+("Ronde van Brugge", "In Flanders Fields - Middelkerke to Wevelgem") resolves.
+Grand tour snapshots record the same locked roster against every stage, so
+`pcs_slug` is ignored there and the latest stage's roster is returned.
+"""
+function load_league_team(
+    json_path::AbstractString;
+    username::AbstractString,
+    pcs_slug::AbstractString,
+)
+    isfile(json_path) || return String[]
+    data = JSON3.read(read(json_path, String))
+    team = get(data.teams, Symbol(username), nothing)
+    team === nothing && return String[]
+    races = team.races
+    isempty(races) && return String[]
+
+    if String(get(data.meta, :series_type, "")) == "grand_tour"
+        latest = argmax(k -> Int(races[k].race_number), collect(keys(races)))
+        return String[String(r) for r in races[latest].riders]
+    end
+
+    for (race_name, race) in pairs(races)
+        _league_race_slug(String(race_name)) == pcs_slug || continue
+        return String[String(r) for r in race.riders]
+    end
+    return String[]
+end
+
+"""
+    load_league_team(; data_dir, game_slug, year, league_id, username, pcs_slug) -> Vector{String}
+
+Convenience method: builds the `vgleague` JSON path from its components, as
+`load_league_standings` does.
+"""
+function load_league_team(;
+    data_dir::AbstractString,
+    game_slug::AbstractString,
+    year::Integer,
+    league_id::AbstractString,
+    username::AbstractString,
+    pcs_slug::AbstractString,
+)
+    json_path = joinpath(expanduser(data_dir), "$(game_slug)_$(year)_$(league_id).json")
+    return load_league_team(json_path; username = username, pcs_slug = pcs_slug)
+end
+
+"""PCS slug for a league standings race name, or `""` if it isn't a known classic."""
+function _league_race_slug(race_name::AbstractString)
+    key = normalise_race_name(String(race_name))
+    i = findfirst(r -> normalise_race_name(r.name) == key, CLASSICS_RACES_2026)
+    return i === nothing ? "" : CLASSICS_RACES_2026[i].pcs_slug
+end
+
+"""
     load_league_standings_toml(toml_path::AbstractString) -> DataFrame
 
 Load manually-recorded league standings (fallback for races the `vgleague`

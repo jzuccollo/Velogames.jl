@@ -437,7 +437,9 @@ function find_race(name::String)
     ri !== nothing && return ri
     name_norm = replace(lowercase(name), r"[-\s]" => "")
     for race in CLASSICS_RACES_2026
-        if occursin(name_norm, replace(lowercase(race.name), r"[-\s]" => ""))
+        # `startswith`, not `occursin`: a substring match resolved "Tour" to
+        # Paris-Tours Elite, since "tour" appears mid-name.
+        if startswith(replace(lowercase(race.name), r"[-\s]" => ""), name_norm)
             return race
         end
     end
@@ -554,6 +556,195 @@ function setup_race(
 end
 
 
+# ---------------------------------------------------------------------------
+# Render configuration (data/race_config.toml)
+# ---------------------------------------------------------------------------
+
+"""
+Everything a render script needs that `RaceConfig` does not already derive from
+the race itself: the tuning knobs, the parsed bookmaker markets, and the output
+location.
+
+Built once by `load_render_config`, so every renderer and the local server hand
+the solvers an identical argument set. The bookmaker markets are stored parsed
+rather than as filenames — assembling them at each call site is what previously
+let `render_assessor.jl` run without the odds the other renderers used.
+"""
+struct RenderConfig
+    race::RaceConfig
+    racehash::String
+    output_dir::String
+    oracle_url::String
+    points_oracle_url::String
+    kom_oracle_url::String
+    odds_df::Union{DataFrame,Nothing}
+    points_odds_df::Union{DataFrame,Nothing}
+    kom_odds_df::Union{DataFrame,Nothing}
+    stagewin_odds_df::Union{DataFrame,Nothing}
+    season_round_slugs::Vector{String}
+    n_resamples::Int
+    history_years::Int
+    domestique_discount::Float64
+    risk_aversion::Float64
+    max_per_team::Int
+    simulation_df::Union{Int,Nothing}
+    excluded_riders::Vector{String}
+    market_blend_weight::Float64
+    n_alternatives::Int
+    cross_stage_alpha::Float64
+    pcs_stage_scrape::Bool
+    use_gt_vg_history::Bool
+    use_gt_vg_propensity::Bool
+    gt_vg_propensity_mode::Symbol
+    vg_race_number::Int
+    my_team::Vector{String}
+    breakaway_dir::String
+    fresh::Bool
+end
+
+function _parse_paste_file(path::String)
+    isfile(path) || return nothing
+    try
+        return parse_oddschecker_odds(read(path, String))
+    catch e
+        @warn "Failed to parse $(basename(path)): $e"
+        return nothing
+    end
+end
+
+"""
+The team the assessor treats as "yours". Normally the hand-entered
+`[team_assessor] my_team`, but with `use_league_team` set it is pulled from the
+`vgleague` scrape of the `[league]` you play in, so the roster does not have to
+be retyped after entry. Velogames publishes team rosters only once the entry
+deadline has passed, so the pull comes back empty before the race — the
+hand-entered list stands in, with a warning saying why.
+"""
+function _resolve_my_team(cfg::AbstractDict, ta::AbstractDict, race::RaceConfig)
+    my_team = String[x for x in get(ta, "my_team", String[])]
+    get(ta, "use_league_team", false) || return my_team
+
+    league = get(cfg, "league", Dict{String,Any}())
+    if isempty(league)
+        @warn "use_league_team is set but there is no [league] section — using [team_assessor] my_team."
+        return my_team
+    end
+
+    league_team = load_league_team(;
+        data_dir = league["vgleague_data_dir"],
+        game_slug = league["game_slug"],
+        year = league["year"],
+        league_id = string(league["league_id"]),
+        username = league["user_name"],
+        pcs_slug = race.pcs_slug,
+    )
+    if isempty(league_team)
+        @warn "No scraped roster for $(league["user_name"]) in $(race.name) — using [team_assessor] my_team. Velogames hides teams until the entry deadline, so this is expected before the race."
+        return my_team
+    end
+    @info "Entered team pulled from the league scrape" user = league["user_name"] riders =
+        length(league_team)
+    return league_team
+end
+
+function RenderConfig(cfg::AbstractDict; repo_root::String, fresh::Bool = false)
+    race_tbl = cfg["race"]
+    ds = cfg["data_sources"]
+    opt = cfg["optimisation"]
+    ta = get(cfg, "team_assessor", Dict{String,Any}())
+
+    cache = CacheConfig(DEFAULT_CACHE_DIR, fresh ? 0 : 6)
+    race = setup_race(race_tbl["name"], race_tbl["year"]; cache_config = cache)
+
+    odds_df = if get(ds, "use_oddschecker", false)
+        _parse_paste_file(joinpath(repo_root, "oddschecker_paste.txt"))
+    else
+        nothing
+    end
+    paste(key) =
+        let f = get(ds, key, "")
+            isempty(f) ? nothing : _parse_paste_file(joinpath(repo_root, f))
+        end
+
+    sim_df = let v = opt["simulation_df"]
+        v isa Integer ? v : nothing
+    end
+
+    mode = Symbol(get(opt, "gt_vg_propensity_mode", "posthoc"))
+    mode in (:posthoc, :sim) ||
+        error("gt_vg_propensity_mode must be \"posthoc\" or \"sim\", got \"$mode\"")
+
+    my_team = _resolve_my_team(cfg, ta, race)
+
+    return RenderConfig(
+        race,
+        race_tbl["racehash"],
+        joinpath(repo_root, get(get(cfg, "output", Dict()), "dir", "prediction_docs")),
+        ds["oracle_url"],
+        get(ds, "points_oracle_url", ""),
+        get(ds, "kom_oracle_url", ""),
+        odds_df,
+        paste("points_odds_paste_file"),
+        paste("kom_odds_paste_file"),
+        paste("stagewin_odds_paste_file"),
+        String[x for x in get(ds, "season_round_slugs", String[])],
+        opt["n_resamples"],
+        opt["history_years"],
+        opt["domestique_discount"],
+        opt["risk_aversion"],
+        # A diversification preference, not a game rule, so it does NOT derive from
+        # race format — both formats race under the same cap, and the backtest
+        # harness defaults to the same 2 so its metric matches production.
+        get(opt, "max_per_team", 2),
+        sim_df,
+        String[x for x in opt["excluded_riders"]],
+        Float64(get(opt, "market_blend_weight", DEFAULT_MARKET_BLEND_WEIGHT)),
+        get(opt, "n_alternatives", 20),
+        get(opt, "cross_stage_alpha", 0.7),
+        get(opt, "pcs_stage_scrape", true),
+        get(opt, "gt_vg_history", true),
+        get(opt, "gt_vg_propensity", true),
+        mode,
+        get(ta, "vg_race_number", 0),
+        my_team,
+        joinpath(DEFAULT_ARCHIVE_DIR, "pcs_breakaways"),
+        fresh,
+    )
+end
+
+"""
+    load_render_config(path=<repo>/data/race_config.toml; fresh=false)
+
+Parse `race_config.toml` into a `RenderConfig`. The single TOML-to-config
+mapping in the codebase; the local server writes this same file and reloads
+through here rather than building a config of its own.
+"""
+function load_render_config(
+    path::String = joinpath(dirname(@__DIR__), "data", "race_config.toml");
+    fresh::Bool = false,
+)
+    return RenderConfig(
+        TOML.parsefile(path);
+        repo_root = dirname(dirname(path)),
+        fresh = fresh,
+    )
+end
+
+"""
+    all_races()
+
+Every selectable race as `(name, slug, type)`. Joins the one-day catalogue
+`CLASSICS_RACES_2026` with the stage-race slug tables, which are otherwise
+unexported and have no combined view.
+"""
+all_races() = vcat(
+    [(name = r.name, slug = r.pcs_slug, type = :oneday) for r in CLASSICS_RACES_2026],
+    [
+        (name = titlecase(replace(s, "-" => " ")), slug = s, type = :stage) for
+        s in sort(collect(keys(_STAGE_RACE_VG_SLUGS)))
+    ],
+)
+
 """Earliest year VG ran the one-day classics competition (Superclasico)."""
 const VG_CLASSICS_FIRST_YEAR = 2023
 
@@ -648,6 +839,21 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
         )
     end
 
+    # Stage races addressed by their PCS slug rather than an alias. `all_races()`
+    # emits PCS slugs, so without this arm the race picker cannot resolve its own
+    # entries — hyphen-stripping turns "vuelta-a-espana" into a non-key.
+    pcs_direct = replace(lowercase(strip(race_name)), r"\s+" => "-")
+    if haskey(_STAGE_RACE_VG_SLUGS, pcs_direct)
+        vg_slug = _STAGE_RACE_VG_SLUGS[pcs_direct]
+        return (
+            slug = vg_slug,
+            template = "https://www.velogames.com/$vg_slug/{year}/riders.php",
+            category = 0,
+            pcs_slug = pcs_direct,
+            total_distance_km = 0.0,
+        )
+    end
+
     slug = vg_classics_slug(year)
     template = "https://www.velogames.com/$slug/{year}/riders.php"
 
@@ -690,23 +896,17 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
         )
     end
 
-    @warn """Unknown race: '$race_name'
-
-    Supported races:
-      Grand Tours: tdf, vuelta, giro
-      Monuments: roubaix, flanders, liege, lombardia, sanremo
-      Classics: amstel, fleche
-
-    Using generic pattern - you'll need to check the URL manually.
-    """
-
-    sanitized = replace(race_lower, r"[^a-z0-9]" => "-")
-    return (
-        slug = sanitized,
-        template = "https://www.velogames.com/$sanitized/{year}/riders.php",
-        category = 0,
-        pcs_slug = "",
-        total_distance_km = 0.0,
+    # No fabricated fallback: an unresolved name used to become a 9-rider stage
+    # race on a made-up URL, because `category = 0` is what `setup_race` reads as
+    # "stage race". Failing here is the difference between a typo costing a
+    # second and a typo costing a whole plausible-looking report.
+    near =
+        [r.slug for r in all_races() if startswith(r.slug, first(lowercase(race_name), 3))]
+    error(
+        "Unknown race: '$race_name'. Not a stage-race alias or PCS slug, and no " *
+        "match in CLASSICS_RACES_2026." *
+        (isempty(near) ? "" : " Did you mean: $(join(near, ", "))?") *
+        " Check [race] name in data/race_config.toml, or list options with all_races().",
     )
 end
 
@@ -794,21 +994,6 @@ struct StageProfile
     n_cat1_climbs::Int
     n_intermediate_sprints::Int
     is_summit_finish::Bool
-end
-
-"""
-    StageRaceConfig
-
-Configuration for a grand tour stage race prediction.
-"""
-struct StageRaceConfig
-    name::String
-    year::Int
-    pcs_slug::String
-    vg_slug::String
-    n_stages::Int
-    stages::Vector{StageProfile}
-    cache::CacheConfig
 end
 
 """
@@ -961,46 +1146,6 @@ const _STAGE_RACE_PCS_SLUGS = Dict(
     "suisse" => "tour-de-suisse",
     "tourdesuisse" => "tour-de-suisse",
 )
-
-"""
-    setup_stage_race(race_name, year, stages; cache_config) -> StageRaceConfig
-
-Set up a grand tour stage race with stage profiles.
-
-`race_name` can be an alias (e.g. "tdf", "giro") or a PCS slug.
-`stages` should come from `getpcs_stage_profiles` or manual construction
-via convenience constructors (`flat_stage`, `mountain_stage`, etc.).
-"""
-function setup_stage_race(
-    race_name::String,
-    year::Int,
-    stages::Vector{StageProfile};
-    cache_config::CacheConfig = DEFAULT_CACHE,
-)
-    key = replace(lowercase(race_name), " " => "", "-" => "")
-    pcs_slug = get(_STAGE_RACE_PCS_SLUGS, key, race_name)
-    vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
-    if isempty(vg_slug)
-        @warn "Unknown grand tour '$race_name' — VG slug unknown, data fetching may fail"
-        vg_slug = pcs_slug
-    end
-
-    n_stages = length(stages)
-    config =
-        StageRaceConfig(race_name, year, pcs_slug, vg_slug, n_stages, stages, cache_config)
-
-    stage_types = [s.stage_type for s in stages]
-    n_flat = count(==(:flat), stage_types)
-    n_hilly = count(==(:hilly), stage_types)
-    n_mountain = count(==(:mountain), stage_types)
-    n_itt = count(==(:itt), stage_types)
-    n_ttt = count(==(:ttt), stage_types)
-    @info "Stage race setup" race = race_name year n_stages flat = n_flat hilly = n_hilly mountain =
-        n_mountain itt = n_itt ttt = n_ttt
-
-    return config
-end
-
 
 # ---------------------------------------------------------------------------
 # Race lookup helpers (used by data assembly and backtesting)

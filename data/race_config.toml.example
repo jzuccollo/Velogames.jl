@@ -42,7 +42,9 @@ n_resamples = 500            # Resampled optimisation iterations (more = smoothe
 history_years = 3            # Years of PCS race history to fetch
 domestique_discount = 1.0    # Penalise non-leaders proportionally to strength gap (0 = off)
 risk_aversion = 0.5          # Penalise volatile riders via downside CV (0 = off)
-max_per_team = 2             # Max riders from any single team (0 = no limit)
+max_per_team = 2             # Diversification cap, not a game rule: max riders from any
+                             # single team (0 = no limit). Same for both formats; the
+                             # backtest harness defaults to 2 so its metric matches.
 simulation_df = 5            # Student's t degrees of freedom ("" = Gaussian)
 excluded_riders = []
 
@@ -64,6 +66,10 @@ gt_vg_propensity_mode = "posthoc"  # Option B injection point: "posthoc" (scale 
 
 [team_assessor]
 vg_race_number = 0           # 0 = auto-detect, -1 = skip, or set manually (e.g. 3)
+# Pull the entered team from the [league] scrape below rather than my_team.
+# Velogames only publishes rosters after the entry deadline, so this finds
+# nothing before the race and my_team is used instead (with a warning).
+use_league_team = false
 my_team = [
     "Mathieu Van Der Poel",
     "Mads Pedersen"

@@ -852,6 +852,33 @@ function solve_oneday(
     return predicted, chosenteam, top_teams, sim_vg_points
 end
 
+"""
+    solve_oneday(rc::RenderConfig)
+
+Run the one-day pipeline from a `RenderConfig`. See `solve_stage(::RenderConfig, ...)`
+for why the unpacking lives here rather than at each render script.
+"""
+function solve_oneday(rc::RenderConfig)
+    return solve_oneday(
+        rc.race;
+        racehash = rc.racehash,
+        history_years = rc.history_years,
+        oracle_url = rc.oracle_url,
+        n_resamples = rc.n_resamples,
+        excluded_riders = rc.excluded_riders,
+        cache_config = rc.race.cache,
+        force_refresh = rc.fresh,
+        odds_df = rc.odds_df,
+        domestique_discount = rc.domestique_discount,
+        max_per_team = rc.max_per_team,
+        risk_aversion = rc.risk_aversion,
+        n_alternatives = rc.n_alternatives,
+        breakaway_dir = rc.breakaway_dir,
+        simulation_df = rc.simulation_df,
+        market_blend_weight = rc.market_blend_weight,
+    )
+end
+
 
 """
     _stage_prediction_core(data, stages, scoring_table; race_year, ...)
@@ -1198,4 +1225,47 @@ function solve_stage(
     _archive_predictions(predicted, config)
 
     return StageResult(predicted, chosenteam, top_teams, sim_vg_points, diagnostics)
+end
+
+"""
+    solve_stage(rc::RenderConfig, stages, stage_scoring)
+
+Run the stage-race pipeline from a `RenderConfig`. The single place the knobs
+are unpacked — every renderer goes through here, so none of them can pass a
+different subset of the solver's inputs than the others.
+"""
+function solve_stage(
+    rc::RenderConfig,
+    stages::Vector{StageProfile},
+    stage_scoring::Union{StageRaceScoringTable,Nothing},
+)
+    return solve_stage(
+        rc.race;
+        stages = stages,
+        racehash = rc.racehash,
+        history_years = rc.history_years,
+        oracle_url = rc.oracle_url,
+        points_oracle_url = rc.points_oracle_url,
+        kom_oracle_url = rc.kom_oracle_url,
+        n_resamples = rc.n_resamples,
+        excluded_riders = rc.excluded_riders,
+        cache_config = rc.race.cache,
+        force_refresh = rc.fresh,
+        odds_df = rc.odds_df,
+        points_odds_df = rc.points_odds_df,
+        kom_odds_df = rc.kom_odds_df,
+        stagewin_odds_df = rc.stagewin_odds_df,
+        domestique_discount = rc.domestique_discount,
+        max_per_team = rc.max_per_team,
+        risk_aversion = rc.risk_aversion,
+        n_alternatives = rc.n_alternatives,
+        breakaway_dir = rc.breakaway_dir,
+        simulation_df = rc.simulation_df,
+        cross_stage_alpha = rc.cross_stage_alpha,
+        stage_scoring = stage_scoring,
+        use_gt_vg_history = rc.use_gt_vg_history,
+        use_gt_vg_propensity = rc.use_gt_vg_propensity,
+        gt_vg_propensity_mode = rc.gt_vg_propensity_mode,
+        season_round_slugs = rc.season_round_slugs,
+    )
 end
