@@ -20,6 +20,7 @@ Analysis reports are Julia scripts that generate standalone HTML. Output goes to
 - `scripts/render_backtesting.jl` — model calibration: prior predictive checks, backtesting, prospective evaluation
 - `scripts/render_reports.jl` → `site/docs/` — public race reports website with per-race retrospectives
 - `scripts/league_eval.jl` — offline league evaluation: model team vs realised points, the hindsight-optimal team, and naive baselines
+- `scripts/serve.jl` — local web frontend: a config form that adapts to the race format, runs any of the three reports and serves the result
 
 All scripts accept `--fresh` to bypass the cache and fetch everything from the web. The predictor and stagerace scripts also accept `--force` to overwrite an existing prediction archive.
 
@@ -39,14 +40,22 @@ The prediction and calibration workflow revolves around three scripts, each run 
 
 ### Race configuration
 
-The predictor and team assessor share a single configuration file, `data/race_config.toml`, so race settings stay in sync between the pre-race and post-race steps. This file is gitignored because it changes every race.
+All three renderers share a single configuration file, `data/race_config.toml`, so race settings stay in sync between the pre-race and post-race steps. This file is gitignored because it changes every race. Every script reads it through `load_render_config`, which parses it into one typed `RenderConfig` — including parsing the odds pastes — so no renderer can quietly skip a data source another one uses.
 
-To set up for a new race, copy the example and edit:
+Easiest way to set up a race is the local frontend, which presents the config as a form and only shows the knobs that apply to the chosen race format:
+
+```sh
+julia --project scripts/serve.jl   # then open http://localhost:8080
+```
+
+It writes the same `race_config.toml`, so the CLI scripts stay usable and unaffected. To edit the file directly instead, copy the example:
 
 ```sh
 cp data/race_config.toml.example data/race_config.toml
 # Edit race_config.toml with race name, year, data source URLs, your team, etc.
 ```
+
+A race name that does not resolve is an error, not a warning — it will not silently become a stage race with a made-up URL.
 
 The `[race]`, `[data_sources]`, `[output]`, and `[optimisation]` sections are shared by all scripts. The `[team_assessor]` section holds your team roster and the VG race number for retrospective analysis. Two further sections feed `scripts/league_eval.jl`: `[league]` names the minileague to score against and where to read its standings, and `[entered_team]` optionally records the team you actually entered when it differs from the advised one, so the evaluation can report the override delta.
 

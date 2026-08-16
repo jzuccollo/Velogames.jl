@@ -50,6 +50,57 @@ identical team-points-captured and rank ρ for every surviving arm on
 Ronde van Vlaanderen 2026 and 2024.
 
 
+### Config consolidation and twin-path convergence (August 2026)
+
+Structural only — no modelling change, so it sits inside the mechanism
+moratorium rather than against it.
+
+**One config object.** `RenderConfig` / `load_render_config` replace the untyped
+TOML `Dict` that every renderer was unpacking by hand into 17+ loose kwargs.
+The trigger: setting up ADAC Cyclassics Hamburg with the config still in its
+Velogames Femmes shape, where `max_per_team = 0` would have carried over
+unnoticed. Two real defects fell out by construction — `render_assessor`'s
+fresh-solve path had been passing a strict subset of the kwargs
+`render_stagerace` passed (no odds frames, no jersey oracles, no `gt_vg_*`, no
+`season_round_slugs`), and it read `market_blend_weight` while never building
+`odds_df`, so the blend was inert there. An unresolved race name now throws
+instead of fabricating a URL.
+
+**A local web frontend** (`scripts/serve.jl`) makes the config a format-adaptive
+form, so per-format knobs are structurally unreachable on the wrong format
+rather than merely documented.
+
+**Twin paths merged where the difference was incidental:**
+
+- `_build_team_model` — the one-day and stage knapsacks differed by a single
+  class-constraint call.
+- `_score_team_points_captured` + `GameFormat` — `backtest_oneday_race` was
+  `backtest_stage_race`'s `:vg_total` branch with the model, team size and one
+  column name swapped. This is the one that mattered: the assessor bug above was
+  a twin that had drifted, and drift in the *harness* is invisible — it yields
+  plausible numbers, not an error.
+- `format_rankings_and_alternatives`, `format_near_optimal_section`,
+  `write_report` — shared by both prediction reports. The near-optimal
+  section (team switcher, locked core, filler pool, structural forks) had been
+  built for grand tours and never wired into the one-day report, which was
+  already computing the k-best set and discarding it.
+
+Left deliberately separate: `_oneday_prediction_core` vs
+`_stage_prediction_core` (106 of ~158 lines genuinely differ — one simulates a
+single race, the other 21 correlated stages), and `report_html` vs
+`stage_race_report_html` in `render_reports.jl`.
+
+**`max_per_team` does NOT derive from race format.** The consolidation plan
+assumed it was a game rule and that a wrong value meant an illegal team. It is
+not: it is production's *diversification cap* (see `_team_keys`), the same for
+both formats, and the harness defaults to the same 2 so its metric matches
+production. Deriving 0 for stage races from the old Femmes config would have
+quietly changed the objective. The plan was wrong; the knob stays a preference.
+
+Gated as a strict no-op: predictor (Hamburg 2026) and stage-race (Tour 2026)
+HTML byte-identical under a pinned seed, and all 14 backtest rows across both
+harnesses numerically identical, re-checked after formatting.
+
 ### Stage assists scored zero everywhere — FIXED, archives patched 2 August 2026
 
 `_vg_scoring_field` tested `occursin("team", …)` before `occursin("stage", …)`.
@@ -403,7 +454,7 @@ The only soft spot is that fitted noise under-shoots Pogačar's hilly points (53
 
 #### Recommended change
 
-Wire the fitted per-type stage-finish aleatoric noise into `simulate_stage_race` as a config-driven parameter (fold `BREAKAWAY_NOISE_BY_EVENT` into the proposed `StageRaceConfig`, see Phase 6), defaulting to `stage_finish = (flat=1.5, hilly=2.1, mountain=1.2, itt=0.4)`. Conceptually this term is the *aleatoric* per-stage scatter and should be documented as decoupled from the epistemic posterior $\sigma$ (which remains the resample and $\alpha$-persistent term). Prototyped by editing the `const` directly and reverted; not yet in production.
+Wire the fitted per-type stage-finish aleatoric noise into `simulate_stage_race` as a config-driven parameter (fold `BREAKAWAY_NOISE_BY_EVENT` into `StageSimConfig`, see Phase 6), defaulting to `stage_finish = (flat=1.5, hilly=2.1, mountain=1.2, itt=0.4)`. Conceptually this term is the *aleatoric* per-stage scatter and should be documented as decoupled from the epistemic posterior $\sigma$ (which remains the resample and $\alpha$-persistent term). Prototyped by editing the `const` directly and reverted; not yet in production.
 
 #### SHIPPED (July 2026 — Phase A1)
 
@@ -658,7 +709,7 @@ Deferred work surfaced by the May 2026 cleanup. Listed roughly in priority order
 - PCS race history projection through the actual stage-type mix of each past race rather than the Phase 5 fallback of projecting via the rider's own class profile.
 - Stage-winner bookmaker markets routed per stage type (no infrastructure exists yet).
 - Multi-dim prior predictive checks and SBC.
-- Promote per-stage scoring tables (`STAGE_POINTS_JERSEY_ALLOCATION`, `INTERMEDIATE_SPRINT_POINTS`, `BREAKAWAY_NOISE_BY_EVENT`) into a `StageRaceConfig` struct alongside `BayesianConfig`, so race-specific scoring (Giro vs Tour vs Vuelta) is one parameter swap rather than five `const` reassignments.
+- Promote per-stage scoring tables (`STAGE_POINTS_JERSEY_ALLOCATION`, `INTERMEDIATE_SPRINT_POINTS`, `BREAKAWAY_NOISE_BY_EVENT`) into `StageSimConfig` alongside `BayesianConfig` (the unrelated `StageRaceConfig` struct this once proposed was deleted unused in August 2026; `StageSimConfig` is the live home), so race-specific scoring (Giro vs Tour vs Vuelta) is one parameter swap rather than five `const` reassignments.
 - Routing-principle empirical validation: should VG season points stay on per-class projection or move to direct weights?
 - Migrate one-day races to the multi-dim model if the architecture proves robust on stage races.
 
