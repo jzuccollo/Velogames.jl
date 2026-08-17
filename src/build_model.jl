@@ -689,39 +689,91 @@ end
 
 
 """
+    _cheapest_winning_core(inputdf, target_score, n, points, cost; totalcost, classes)
+
+The cheapest fieldable team that beats `target_score`, solved **lexicographically**:
+first the minimum cost, then the highest score among the teams achieving it.
+
+The second stage is not decoration. Minimising cost subject to
+`score >= target + 1` alone leaves every min-cost team that clears the target
+equally optimal, so the solver returns whichever it happens to find — on
+Hamburg 2026 that is a 1,332-point team from HiGHS and a 1,273-point one from
+CBC, both costing 42. Reports were displaying an arbitrary member of that tie
+set. Pinning cost and maximising score picks the same team every time, whatever
+the solver.
+
+`totalcost` is a real constraint here: a "cheapest team that would have beaten
+them" costing more than the budget was never fieldable, so it is not an answer.
+"""
+function _cheapest_winning_core(
+    inputdf::DataFrame,
+    target_score::Real,
+    n::Integer,
+    points::Symbol,
+    cost::Symbol;
+    totalcost::Integer,
+    classes::Bool,
+)
+    df = classes ? copy(inputdf) : inputdf
+    has_classes = classes ? ensure_classification_columns!(df) : false
+
+    # Both stages share a feasible set; only the objective differs.
+    function feasible_model()
+        model = JuMP.Model(HiGHS.Optimizer)
+        JuMP.set_silent(model)
+        JuMP.@variable(model, x[df.riderkey], Bin)
+        JuMP.@constraint(model, df[!, points]' * x >= target_score + 1)
+        JuMP.@constraint(model, df[!, cost]' * x <= totalcost)
+        JuMP.@constraint(model, sum(x) == n)
+        classes && _add_class_constraints!(model, x, df, has_classes)
+        return model, x
+    end
+
+    model, x = feasible_model()
+    JuMP.@objective(model, Min, df[!, cost]' * x)
+    JuMP.optimize!(model)
+    if JuMP.termination_status(model) != JuMP.OPTIMAL
+        @warn("The cost minimisation model was not solved correctly.")
+        return nothing
+    end
+    min_cost = round(Int, JuMP.objective_value(model))
+
+    model, x = feasible_model()
+    JuMP.@constraint(model, df[!, cost]' * x == min_cost)
+    JuMP.@objective(model, Max, df[!, points]' * x)
+    JuMP.optimize!(model)
+    if JuMP.termination_status(model) != JuMP.OPTIMAL
+        @warn("The cheapest-team tie-break did not solve correctly.")
+        return nothing
+    end
+    return JuMP.value.(x)
+end
+
+"""
     minimise_cost_stage(inputdf::DataFrame, target_score::Real, n::Integer=9, points::Symbol=:points, cost::Symbol=:cost; totalcost::Integer=100)
 
-Minimise team cost while achieving at least the target score.
-Used for historical analysis to find the cheapest team that would have beaten a given benchmark.
+Minimise team cost while achieving at least the target score, with stage-race
+class constraints. Used for historical analysis to find the cheapest team that
+would have beaten a given benchmark.
 
 Returns the optimisation solution values or nothing if no feasible solution exists.
 """
-function minimise_cost_stage(
+minimise_cost_stage(
     inputdf::DataFrame,
     target_score::Real,
     n::Integer = 9,
     points::Symbol = :points,
     cost::Symbol = :cost;
     totalcost::Integer = 100,
+) = _cheapest_winning_core(
+    inputdf,
+    target_score,
+    n,
+    points,
+    cost;
+    totalcost = totalcost,
+    classes = true,
 )
-    df = copy(inputdf)
-
-    has_classes = ensure_classification_columns!(df)
-
-    model = JuMP.Model(HiGHS.Optimizer)
-    JuMP.set_silent(model)
-    JuMP.@variable(model, x[df.riderkey], Bin)
-    JuMP.@objective(model, Min, df[!, cost]' * x)
-    JuMP.@constraint(model, df[!, points]' * x >= target_score + 1)
-    JuMP.@constraint(model, sum(x) == n)
-    _add_class_constraints!(model, x, df, has_classes)
-    JuMP.optimize!(model)
-    if JuMP.termination_status(model) != JuMP.OPTIMAL
-        @warn("The cost minimisation model was not solved correctly.")
-        return nothing
-    end
-    return JuMP.value.(x)
-end
 
 # ---------------------------------------------------------------------------
 # Hindsight-optimal and cheapest-winning team selection (report retrospectives)
@@ -742,20 +794,21 @@ end
 """
     compute_cheapest_winning_team(df, target_score) -> Union{DataFrame, Nothing}
 
-Find the minimum-cost one-day team that beats `target_score`.
+Find the minimum-cost one-day team (6 riders, cost <= 100) that beats
+`target_score`, breaking cost ties on score — see `_cheapest_winning_core`.
 """
 function compute_cheapest_winning_team(df::DataFrame, target_score::Real)
-    model = JuMP.Model(HiGHS.Optimizer)
-    JuMP.set_silent(model)
-    JuMP.@variable(model, x[df.riderkey], Bin)
-    JuMP.@objective(model, Min, df.cost' * x)
-    JuMP.@constraint(model, df.score' * x >= target_score + 1)
-    JuMP.@constraint(model, sum(x) == 6)
-    JuMP.optimize!(model)
-    if JuMP.termination_status(model) != JuMP.OPTIMAL
-        return nothing
-    end
-    chosen_keys = Set(k for k in df.riderkey if JuMP.value(x[k]) > 0.5)
+    result = _cheapest_winning_core(
+        df,
+        target_score,
+        6,
+        :score,
+        :cost;
+        totalcost = 100,
+        classes = false,
+    )
+    result === nothing && return nothing
+    chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
     return filter(row -> row.riderkey in chosen_keys, df)
 end
 
