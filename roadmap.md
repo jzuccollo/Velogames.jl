@@ -19,6 +19,34 @@ Known bugs recorded, not fixed (moratorium): `find_race`'s fuzzy fallback mis-re
 
 ## Known issues
 
+### Derived league winners disagree with the hand-typed record in 4 of 29 (August 2026)
+
+`scripts/auto_publish.jl` now derives every league winner from the vgleague
+snapshots, grand tours included. Reproducing the whole 2026 record from scratch
+and diffing it against the entries typed by hand gives 25 exact matches out of
+29 and two distinct kinds of disagreement. Neither blocks anything — the winner
+*names* are right in every live case — but both are unexplained.
+
+**Grand tour totals are off by a handful of points.** Giro 8351 recorded
+against 8359 derived, Tour 11884 against 11880, Femmes 4382 against 4382. The
+derived figure is the sum of the per-race scores, which equals the snapshot's
+own `scored_total` exactly for all three, and `scored_races = []` for those
+leagues so nothing is being filtered. So the disagreement is between the scrape
+and whatever the hand-typed numbers were read off — probably the Velogames
+standings page at a moment when a stage had been rescored. Worth ten minutes
+with the live page during the next grand tour; not worth reconstructing now.
+
+**Team names are mutable, and the scrape returns the current one.**
+Paris-Roubaix is recorded as won by "Megaton-Structo NimaRent" and derives as
+"Lowering The Toon" — same entrant, same 1630 points, renamed since. Two more
+differ only in capitalisation ("Voecklers to the Left" → "Voecklers To The
+Left"). This is harmless in normal operation, because a race is published
+within about a day of being ridden, so the name recorded is the name the
+entrant raced under. It only bites when backfilling old races, where the
+derived name silently rewrites history. If that ever matters, the fix is to
+prefer an existing record over a re-derivation — which is already what the
+`(pcs_slug, year)` check does.
+
 ### Package simplification (August 2026)
 
 Acting on the champion/challenger tie and the April 2026 ablation, three things

@@ -106,7 +106,9 @@ One-day races publish themselves. `./scripts/auto_publish.sh` reads the `vgleagu
 
 It reads the `[league]` section of `data/race_config.toml` to find the snapshot, and skips a race until 24 hours after its pick deadline (`--min-age-hours`), because Velogames revises scores after a race and the record is append-only — a wrong winner has to be unpicked by hand, and that race's HTML deleted so it rebuilds.
 
-Grand tours stay manual, through `./scripts/publish_stage_race.sh <pcs_slug> <year> "<winner>" <score>`. Their winners are in the snapshots too and the names match, but the scraped totals disagree with the recorded ones by a few points (Giro 8351 against 8359, Tour 11884 against 11880) for reasons nobody has run down. That is three races a year against the risk of publishing a wrong number as fact.
+Grand tours come along the same path, one entry for the whole tour rather than one per stage, and wait until every race in the catalogue has been scored — including End-of-Tour, without which the cumulative totals are a partial sum and the leader isn't the winner. There is no manual publishing script; this is the only path.
+
+Re-deriving the entire 2026 record from scratch reproduces 25 of its 29 entries exactly. The four that differ are written up under "Known issues" in `roadmap.md`: grand tour totals that disagree by a handful of points, and team names that have changed since the race was ridden, since the scrape returns whatever the entrant is called today.
 
 Both go through `scripts/deploy_site.sh`, which uploads `site/docs/` to Netlify from disk and reads its `NETLIFY_AUTH_TOKEN` / `NETLIFY_SITE_ID` from a gitignored `.env` at the repo root (see `.env.example`). Neither writes anything to git: the rendered site is build output, and the winners record lives in the archive beside every other piece of race data. `auto_publish.sh` pulls the code it is about to run and that is all, so no git failure can keep a report offline.
 
