@@ -1207,7 +1207,7 @@ function load_league_team(
     end
 
     for (race_name, race) in pairs(races)
-        _league_race_slug(String(race_name)) == pcs_slug || continue
+        league_race_slug(String(race_name)) == pcs_slug || continue
         return String[String(r) for r in race.riders]
     end
     return String[]
@@ -1232,7 +1232,7 @@ function load_league_team(;
 end
 
 """PCS slug for a league standings race name, or `""` if it isn't a known classic."""
-function _league_race_slug(race_name::AbstractString)
+function league_race_slug(race_name::AbstractString)
     key = normalise_race_name(String(race_name))
     i = findfirst(r -> normalise_race_name(r.name) == key, CLASSICS_RACES_2026)
     return i === nothing ? "" : CLASSICS_RACES_2026[i].pcs_slug

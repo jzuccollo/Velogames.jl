@@ -1,3 +1,12 @@
+@testset "league_race_slug" begin
+    # scripts/auto_publish.jl decides whether a scraped league race is a
+    # publishable classic by whether this comes back non-empty, so the empty
+    # string for a grand tour stage is load-bearing, not just a miss.
+    @test league_race_slug("Ronde van Brugge") == "classic-brugge-de-panne"
+    @test league_race_slug("In Flanders Fields-Middelkerke to Wevelgem") == "gent-wevelgem"
+    @test league_race_slug("Stage 4: Pau - Luchon") == ""
+end
+
 @testset "load_league_team" begin
     # The league scrape spells races the Velogames way ("Ronde van Brugge"),
     # which has to resolve to the PCS slug the renderers work in.
