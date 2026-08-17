@@ -25,14 +25,12 @@ const FRESH = "--fresh" in ARGS
 const _RIDER_LINK = "../riders.html#"
 rider_html_table(df; kwargs...) = html_table(df; rider_link_base = _RIDER_LINK, kwargs...)
 
-function load_league_winners()
-    toml_path = joinpath(@__DIR__, "..", "data", "league_winners.toml")
-    data = TOML.parsefile(toml_path)
-    winners = Dict{Tuple{String,Int},NamedTuple{(:name, :score),Tuple{String,Int}}}()
-    for w in get(data, "winners", [])
-        winners[(w["pcs_slug"], w["year"])] = (name = w["name"], score = w["score"])
-    end
-    return winners
+"""League winners keyed by `(pcs_slug, year)`, from the archive record."""
+function league_winners_by_race()
+    return Dict(
+        (w.pcs_slug, w.year) => (name = w.name, score = w.score) for
+        w in load_league_winners()
+    )
 end
 
 const _report_cache = CacheConfig(DEFAULT_CACHE_DIR, FRESH ? 0 : 168)
@@ -2334,7 +2332,7 @@ function main()
         end
     end
 
-    league_winners = load_league_winners()
+    league_winners = league_winners_by_race()
 
     # Archive results for any league winners not yet in the archive.
     # Grand tours are excluded: `_ensure_results_archived` auto-detects the VG

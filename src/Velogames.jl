@@ -37,6 +37,9 @@ export CacheConfig,
     save_race_snapshot,
     load_race_snapshot,
     archive_path,
+    league_winners_path,
+    load_league_winners,
+    append_league_winner,
     DEFAULT_ARCHIVE_DIR
 
 # Race setup and metadata

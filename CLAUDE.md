@@ -32,10 +32,9 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `scripts/render_reports.jl` - Public race reports site: generates per-race HTML retrospectives to `site/docs/`, incremental build (skips existing)
 - `scripts/league_eval.jl` - Offline league evaluation: scores archived model teams against realised VG points, the hindsight-optimal team, and max-cost / odds-implied baselines, then reports cumulative league placement and the entered-vs-advised delta from the `[league]` config. Its placement section matches standings race names against `CLASSICS_RACES_2026`, so it is classics-shaped — a grand tour league's per-stage race names will not resolve.
 - `scripts/baseline_compare.jl` - Naive-persistence yardstick for grand tours: mean VG points across the two prior Tours, fed through `build_model_stage`, set beside the model's archived optimal team
-- `scripts/publish_race.sh` / `scripts/publish_stage_race.sh` - Publish a one-day / stage race report. See the Commands section for which to use and a known bug in the stage-race one.
+- `scripts/auto_publish.jl` / `scripts/auto_publish.sh` - **The** publishing path for one-day races: derive each race's league winner from the `vgleague` snapshot instead of typing it, record it in the archive, render and deploy. See "Unattended publishing" below
+- `scripts/publish_stage_race.sh` - The one manual publishing path, for grand tours only (see "Unattended publishing" for why they are excluded from the automatic one)
 - `scripts/deploy_site.sh` - Upload `site/docs/` to Netlify from disk. The single deploy step every publish path goes through
-- `scripts/archive_race.sh` - Archive PCS and VG results for every current-season race that has predictions but no results
-- `scripts/auto_publish.jl` / `scripts/auto_publish.sh` - Unattended publishing: derive each race's league winner from the `vgleague` snapshot instead of typing it, then render, commit and push. See "Unattended publishing" below
 - `data/race_config.toml` - Shared per-race configuration (gitignored); `race_config.toml.example` is the committed template. Sections: `[race]`, `[output]`, `[data_sources]`, `[optimisation]`, `[team_assessor]`, `[league]`, `[entered_team]`
 
 ## Key functions
@@ -67,31 +66,30 @@ Team assessor fieldset.
 
 ### Unattended publishing (August 2026)
 
-`scripts/auto_publish.sh` is `publish_race.sh` with nobody at the keyboard. The
-winner name and score that `publish_race.sh` asks you to type are already in the
-`vgleague` snapshot — they are just `argmax(score)` over that race's entrants —
-so `scripts/auto_publish.jl` derives them, appends every `[[winners]]` entry the
-scrape has that `league_winners.toml` lacks, and the wrapper renders, commits and
-pushes. It is triggered by `POST_UPDATE_HOOK` in the `vgleague` deploy clone's
+One-day races publish themselves, with nobody at the keyboard and nothing
+written to git. The winner name and score a human used to type are already in
+the `vgleague` snapshot — just `argmax(score)` over that race's entrants — so
+`scripts/auto_publish.jl` derives them, appends every `[[winners]]` entry the
+scrape has that the archive's record lacks, and the wrapper renders and
+deploys. Triggered by `POST_UPDATE_HOOK` in the `vgleague` deploy clone's
 `.env`, which both of that repo's launchd jobs run after fresh data lands.
 
-- **It waits 24h after the pick deadline** (`--min-age-hours`). Velogames revises
-  scores after a race and `league_winners.toml` is append-only, so a wrong winner
+- **It waits 24h after the pick deadline** (`--min-age-hours`). Velogames
+  revises scores after a race and the record is append-only, so a wrong winner
   published the same evening has to be unpicked by hand. The `local_update.sh`
-  backstop, not the probe, is what fires the deferred publish — the probe only
-  runs on days a league is due.
+  backstop, not the probe, is what fires a deferred publish: `local_check.sh`
+  exits at "nothing due, no new code" *before* it reaches the hook, so on a
+  quiet day the hook never runs from the hourly job at all.
 - **A race already rendered without a winner gets its HTML deleted** before the
-  build. `render_reports.jl` skips existing files, so appending alone would leave
-  the winner-less page up for ever.
-- **Grand tours are skipped** — `league_race_slug` returns `""` for a stage name,
-  which is the gate. They still publish through `publish_stage_race.sh`, one
+  build. `render_reports.jl` skips existing files, so appending alone would
+  leave the winner-less page up for ever.
+- **Grand tours are skipped** — `league_race_slug` returns `""` for a stage
+  name, which is the gate. They publish through `publish_stage_race.sh`, one
   entry per tour rather than per stage.
-- It runs from `~/code/velogames-deploy`, and refuses to start if
-  `league_winners.toml` has uncommitted changes: an unattended `git add` in a
-  dev tree is the one failure here with no easy undo.
-- **Deploy happens before the commit.** The site going live is the job; git is
-  bookkeeping. In the other order one flaky push both kept the report offline
-  and left a local commit that made the next run's `--ff-only` pull refuse.
+- **Nothing writes to git.** The only git operation is the `--ff-only` pull
+  that fetches the code about to run. That is what the winners record moving to
+  the archive bought: no commit, no push, no dirty-tree guard, and no way for a
+  git failure to keep a report offline or wedge the next run.
 
 ### Site deployment (August 2026)
 
@@ -102,12 +100,23 @@ until the move off GitHub Pages, which could only publish what was in the repo �
 so every race cost a push of megabytes of generated HTML, and the unattended
 publish could not run without git succeeding.
 
-- `data/league_winners.toml` stays tracked. It is the **only** record of the
-  2025 and grand tour winners; the 2026 classics ones are re-derivable from the
-  league scrape, the earlier ones are not.
-- Tracking it was never what made the site rebuildable, whatever the old README
-  said: `list_completed_races` scans `DEFAULT_ARCHIVE_DIR/vg_results/`, so a
-  clone without the Dropbox archive renders nothing at all.
+`league_winners.toml` followed it out of the repo, to
+`DEFAULT_ARCHIVE_DIR/league_winners.toml` (`league_winners_path`,
+`load_league_winners`, `append_league_winner` in `cache_utils.jl` are the only
+things that know that path).
+
+- Every entry in it is 2026 and, in principle, re-derivable from the vgleague
+  snapshots — but those live in a gitignored, machine-local `data/` dir that
+  nothing backs up, so this file is the durable record. (There are **no** 2025
+  entries: all 43 of those reports render without a league winner.)
+- Grand tour winners are derivable from the same snapshots and the names match,
+  but the recorded scores don't: Giro 8351 vs 8359 scraped, Tour 11884 vs
+  11880, Femmes 4382 both. `scored_races = []` for those leagues, so it is not
+  a scoring filter. Unexplained — which is why `auto_publish.jl` still skips
+  grand tours rather than deriving them.
+- Keeping it in git was never what made the site rebuildable, whatever the old
+  README said: `list_completed_races` scans `DEFAULT_ARCHIVE_DIR/vg_results/`,
+  so a clone without the Dropbox archive renders nothing at all.
 - `deploy_site.sh` refuses to deploy when `site/docs/index.html` is missing.
   Pulling the commit that untracked these files **deletes them from every
   existing clone**, so a deploy from a clone that hasn't re-rendered would have
@@ -314,9 +323,10 @@ comparison. See `roadmap.md` "SHIPPED: one-day market blend".
 - Run backtesting: `julia --project scripts/render_backtesting.jl`
 - Local web frontend: `julia --project scripts/serve.jl [--port 8080]`, then open `http://localhost:8080`. Serves a format-adaptive config form, writes `data/race_config.toml`, runs the chosen renderer in-process and serves the report. Long-lived, so it pays the package load and JIT once — but nothing caches the resampled optimisation, so each render is a full solve. Every control carries hover help. Served reports get a back-to-form / re-run bar injected on the way out (never written to the report file, so published reports are unaffected). **`TOML.print` strips comments**: the first save copies the hand-written file to `data/race_config.toml.backup`. A `/render` POST rewrites the config only when it carries the form's hidden `form=1` marker — the bar's Re-run button omits it and so re-runs the config as it stands, rather than reading its absent fields as cleared ones.
 - Generate race reports: `julia --project scripts/render_reports.jl` (add `--force` to regenerate all)
-- Publish a race: `./scripts/publish_race.sh <pcs_slug> <year> "<winner>" <score>`. Needs a terminal — it prompts before deploying, and with no stdin the prompt hits EOF and `set -e` aborts it after rendering. `publish_stage_race.sh` is the grand-tour variant: it archives the stage data explicitly first and publishes without prompting. Either works for a stage race, since `render_reports.jl` calls `archive_stage_race_results` regardless. Both deploy through `deploy_site.sh` and commit only `data/league_winners.toml` — the rendered site is gitignored build output.
+- Publish every one-day race the league has scored: `./scripts/auto_publish.sh` (add `--dry-run` to see what it would do). Normally runs itself from the vgleague hook; see "Unattended publishing" above
+- Publish a grand tour: `./scripts/publish_stage_race.sh <pcs_slug> <year> "<winner>" <score>`. The only manual path left, and the only one that takes a hand-typed winner
+- Correct a published winner: edit `DEFAULT_ARCHIVE_DIR/league_winners.toml`, `rm site/docs/reports/<slug>-<year>.html`, then `julia --project scripts/render_reports.jl && ./scripts/deploy_site.sh`. The record is append-only and the build skips existing HTML, so both halves are needed
 - Deploy the site without publishing a race (template or style change): `julia --project scripts/render_reports.jl --force && ./scripts/deploy_site.sh`
-- Publish everything the league has scored, unattended: `./scripts/auto_publish.sh` (add `--dry-run` to see what it would do). Runs from the vgleague hook; see "Unattended publishing" above
 - Evaluate the league: `julia --project scripts/league_eval.jl` (reads the `[league]` section; point `vgleague_data_dir` at the deploy clone `~/code/vgleague-deploy/data`, which is what the launchd job writes — `~/code/vgleague` is a dev clone and goes stale)
 - Run tests: `julia --project -e "using Pkg; Pkg.test()"`
 

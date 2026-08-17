@@ -102,35 +102,27 @@ This generates the full calibration picture, covering:
 
 A separate static website in `site/docs/` provides post-race retrospectives for the minileague. Each race gets an interactive report with the hindsight-optimal team, cheapest winning team, scatter plots (points vs cost, value vs cost), and performance tables.
 
-Publish a race report in one step (results are auto-archived if not already done):
+One-day races publish themselves. `./scripts/auto_publish.sh` reads the `vgleague` scrape, takes the highest-scoring entrant of any race the winners record hasn't caught up with, renders that report and deploys it — the name and score nobody now types were always just `argmax(score)` over the league. Run it with `--dry-run` to see what it would publish and write nothing.
 
-```sh
-./scripts/publish_race.sh gent-wevelgem 2026 "Team Name" 1234
-```
+It reads the `[league]` section of `data/race_config.toml` to find the snapshot, and skips a race until 24 hours after its pick deadline (`--min-age-hours`), because Velogames revises scores after a race and the record is append-only — a wrong winner has to be unpicked by hand, and that race's HTML deleted so it rebuilds.
 
-This appends the league winner to `data/league_winners.toml` and generates the HTML report, then stops so you can review the page locally before it prompts you to deploy. Answering anything other than `y` leaves the changes in place and prints the commands to run when you are ready. Because it waits on that prompt the script needs a terminal, so run it interactively rather than piping its output — with no stdin the prompt hits end-of-file and `set -e` aborts the script before it can publish anything.
+Grand tours stay manual, through `./scripts/publish_stage_race.sh <pcs_slug> <year> "<winner>" <score>`. Their winners are in the snapshots too and the names match, but the scraped totals disagree with the recorded ones by a few points (Giro 8351 against 8359, Tour 11884 against 11880) for reasons nobody has run down. That is three races a year against the risk of publishing a wrong number as fact.
 
-For grand tours there is `scripts/publish_stage_race.sh`, which archives the stage data explicitly before rendering and publishes without prompting. Either script works for a stage race — `render_reports.jl` calls `archive_stage_race_results` on its own, so the stage data gets archived whichever you use.
-
-Both go through `scripts/deploy_site.sh`, which uploads `site/docs/` to Netlify from disk and reads its `NETLIFY_AUTH_TOKEN` / `NETLIFY_SITE_ID` from a gitignored `.env` at the repo root (see `.env.example`). The rendered site is build output and is **not** tracked: it used to be committed because GitHub Pages can only publish what is in the repo, which put a `git push` on the critical path of every race and churned megabytes of generated HTML through the history. Only `data/league_winners.toml` is committed now, and it is committed *after* the deploy — the site going live is the job, recording the winner is bookkeeping.
+Both go through `scripts/deploy_site.sh`, which uploads `site/docs/` to Netlify from disk and reads its `NETLIFY_AUTH_TOKEN` / `NETLIFY_SITE_ID` from a gitignored `.env` at the repo root (see `.env.example`). Neither writes anything to git: the rendered site is build output, and the winners record lives in the archive beside every other piece of race data. `auto_publish.sh` pulls the code it is about to run and that is all, so no git failure can keep a report offline.
 
 One consequence worth knowing: a clone that has never rendered has an empty `site/docs/`, and deploying that would replace the live site with nothing, so `deploy_site.sh` refuses when `site/docs/index.html` is missing. Run `julia --project scripts/render_reports.jl --force` first on a new machine.
 
-### Publishing without typing anything
+### Running it unattended
 
-The winner name and score you type into `publish_race.sh` are already sitting in the `vgleague` scrape: they are simply the highest-scoring entrant for that race. `./scripts/auto_publish.sh` derives them instead, appending an entry for every scored classic that `data/league_winners.toml` hasn't caught up with, then rendering, deploying and recording the winner. Run it with `--dry-run` to see what it would publish and write nothing.
-
-It reads the `[league]` section of `data/race_config.toml` to find the snapshot, and skips a race until 24 hours after its pick deadline (`--min-age-hours`), because Velogames revises scores after a race and `league_winners.toml` is append-only — a wrong winner has to be unpicked by hand. Grand tour stages are skipped too; they publish as one entry for the whole tour through `publish_stage_race.sh`.
-
-The point of it is to run unattended. Set `POST_UPDATE_HOOK` in the `vgleague` deploy clone's `.env` and both of that repo's launchd jobs will call it once fresh league data has landed:
+Set `POST_UPDATE_HOOK` in the `vgleague` deploy clone's `.env` and both of that repo's launchd jobs will call it once fresh league data has landed:
 
 ```sh
 POST_UPDATE_HOOK=/Users/you/code/velogames-deploy/scripts/auto_publish.sh
 ```
 
-Point it at a dedicated deploy clone rather than your working tree. The script commits `data/league_winners.toml` and `site/docs/` without looking at them, and it refuses to start if either already has uncommitted changes, so a dev tree with work in progress will simply stop it. Setting one up is a clone, a `Pkg.instantiate()`, and a `data/race_config.toml` holding the `[league]` block (nothing else in that file is read).
+Point it at a dedicated deploy clone rather than your working tree, so it only ever runs committed, pushed code. Setting one up is a clone, a `Pkg.instantiate()`, an `.env`, and a `data/race_config.toml` holding the `[league]` block (nothing else in that file is read).
 
-The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winner data lives in `data/league_winners.toml`, which is tracked because it is the only record of the 2025 and grand tour winners — 2026 classics winners are now derivable from the league scrape, but the earlier ones were typed by hand and exist nowhere else. Note that tracking it is not what makes the site rebuildable: the render is driven by the archive, so a clone without `DEFAULT_ARCHIVE_DIR` produces no reports at all, winners file or no. Full standings are a different matter — `data/league_standings.toml` carries every entrant's real name and stays gitignored. The index page lists all races grouped by year.
+The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winner data lives in `DEFAULT_ARCHIVE_DIR/league_winners.toml`, alongside every other piece of race data rather than in the repo. Every entry is derivable in principle from the vgleague snapshots, but those sit in a gitignored, machine-local directory that nothing backs up, so this file is the durable record — and it holds no 2025 entries at all, so the whole 2025 back-catalogue renders without a league winner. Full standings are a different matter — `data/league_standings.toml` carries every entrant's real name and stays gitignored. The index page lists all races grouped by year.
 
 ## Data storage
 

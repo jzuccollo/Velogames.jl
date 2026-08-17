@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # league_eval.jl — score archived pre-race model teams against league winners
 #
-# For every race in data/league_winners.toml with an archived prediction and
+# For every race in the archive's league_winners.toml with an archived prediction and
 # archived VG results, computes:
 #   - the model's chosen team's realised VG points
 #   - the hindsight-optimal team over the prediction universe
@@ -45,11 +45,11 @@ blank(slug, yr, wscore, status) = (; slug, yr, wscore, status,
     model_score = missing, model_cost = missing, opt_score = missing,
     mc_score = missing, odds_score = missing)
 
-winners = TOML.parsefile(joinpath(REPO, "data", "league_winners.toml"))["winners"]
+winners = load_league_winners()
 
 rows = NamedTuple[]
 for w in winners
-    slug, yr, wscore = w["pcs_slug"], w["year"], w["score"]
+    slug, yr, wscore = w.pcs_slug, w.year, w.score
     is_gt = is_stage_race(slug)
     preds = loadf("predictions", slug, yr)
     res = results_for(slug, yr)

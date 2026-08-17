@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Publish the report for any league race that has been scored in the vgleague
-# scrape but has no entry in data/league_winners.toml yet.
+# scrape but has no entry in the archive's league_winners.toml yet.
 #
-# Unattended equivalent of publish_race.sh: scripts/auto_publish.jl derives the
-# winner from the league snapshot instead of asking you to type it, and this
-# renders, deploys and records it without prompting. Safe to run on every tick —
-# it exits without touching anything when there is nothing new.
+# This is the whole publishing path for one-day races: scripts/auto_publish.jl
+# derives the winner from the league snapshot, records it in the archive, and
+# this renders and deploys. Safe to run on every tick — it exits without
+# touching anything when there is nothing new.
 #
 # Intended to run from the vgleague update job's POST_UPDATE_HOOK against a
 # dedicated deploy clone (not a dev working directory), so it only ever
@@ -39,18 +39,14 @@ main() {
 
     echo "=== $(date '+%Y-%m-%d %H:%M:%S') velogames auto-publish starting in $REPO_ROOT ==="
 
+    # The only git operation left: fetch the code to run. Nothing is written
+    # back — the winners record lives in the archive and the site deploys from
+    # disk — so a git failure can no longer keep a report offline or wedge the
+    # next run.
     if [ -z "$DRY_RUN" ]; then
         echo "--- git pull ---"
         if ! git pull --ff-only origin main; then
             echo "git pull failed (clone diverged from origin/main?); aborting." >&2
-            exit 1
-        fi
-
-        # Refuse to run on a tree with edits to the file we commit blind: this is
-        # meant to be a deploy clone, and sweeping up someone's half-finished work
-        # into an unattended push is the one failure with no easy undo.
-        if [ -n "$(git status --porcelain -- data/league_winners.toml)" ]; then
-            echo "data/league_winners.toml has uncommitted changes; aborting." >&2
             exit 1
         fi
     fi
@@ -93,26 +89,8 @@ main() {
 
     SLUGS="$(echo "$NEW" | awk '{print $1}' | paste -sd' ' -)"
 
-    # Deploy before committing. The site going live is the job; recording the winner
-    # in git is bookkeeping. In the other order a failed push meant the report never
-    # reached anyone, and left a local commit that made the next run's --ff-only
-    # pull refuse — one flaky push wedging the whole loop.
     if ! "$REPO_ROOT/scripts/deploy_site.sh"; then
-        echo "deploy failed; new winners are still in data/league_winners.toml, so a re-run retries." >&2
-        exit 1
-    fi
-
-    echo "--- committing ---"
-    git add data/league_winners.toml
-    # league_winners.toml has changed by this point, so there is always something to
-    # commit — a failure here is a real one (hook, identity, index lock), not an
-    # empty diff, and leaves the appended entries in place for the next run.
-    if ! git commit -m "Add race winners: $SLUGS"; then
-        echo "git commit failed, but the site is live; the winners are in data/league_winners.toml." >&2
-        exit 1
-    fi
-    if ! git push; then
-        echo "git push failed, but the site is live. Push by hand: a later run's --ff-only pull will refuse once origin moves on." >&2
+        echo "deploy failed; the new winners are already recorded, so a re-run retries the render and deploy." >&2
         exit 1
     fi
 

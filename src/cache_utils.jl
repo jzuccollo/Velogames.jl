@@ -203,6 +203,76 @@ Default directory for permanent race data archives.
 const DEFAULT_ARCHIVE_DIR = joinpath(homedir(), "Dropbox", "code", "velogames", "archive")
 
 """
+    league_winners_path(; archive_dir) -> String
+
+The league winners record, `<archive_dir>/league_winners.toml`.
+
+It lives in the archive rather than the repo because it is race data, like
+everything else here, and because that keeps git out of the unattended publish
+path entirely — `auto_publish.sh` pulls code, renders and deploys, and writes
+nothing back. Every entry is derivable in principle from the vgleague
+snapshots, but those sit in a gitignored, machine-local directory that nothing
+backs up, so this file is the durable record.
+"""
+league_winners_path(; archive_dir::String = DEFAULT_ARCHIVE_DIR) =
+    joinpath(archive_dir, "league_winners.toml")
+
+"""
+    load_league_winners(; archive_dir) -> Vector{@NamedTuple{pcs_slug::String, year::Int, name::String, score::Int}}
+
+Every recorded league winner, in file order. Empty when the file is absent.
+"""
+function load_league_winners(; archive_dir::String = DEFAULT_ARCHIVE_DIR)
+    path = league_winners_path(; archive_dir)
+    isfile(path) || return NamedTuple[]
+    return [
+        (
+            pcs_slug = String(w["pcs_slug"]),
+            year = Int(w["year"]),
+            name = String(w["name"]),
+            score = Int(w["score"]),
+        ) for w in get(TOML.parsefile(path), "winners", [])
+    ]
+end
+
+"""
+    append_league_winner(pcs_slug, year, name, score; archive_dir) -> Nothing
+
+Append one `[[winners]]` entry. The file is append-only: correcting a winner
+means editing it by hand and deleting that race's rendered HTML so the next
+render rebuilds it.
+"""
+function append_league_winner(
+    pcs_slug::AbstractString,
+    year::Integer,
+    name::AbstractString,
+    score::Integer;
+    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+)
+    path = league_winners_path(; archive_dir)
+    mkpath(dirname(path))
+    escaped = replace(String(name), "\\" => "\\\\", "\"" => "\\\"")
+    open(path, "a+") do io
+        # A file that doesn't end in a newline would swallow the blank line
+        # separating this entry from the last.
+        seekend(io)
+        if position(io) > 0
+            seek(io, position(io) - 1)
+            read(io, Char) == '\n' || write(io, "\n")
+        end
+        write(io, """
+
+        [[winners]]
+        pcs_slug = "$pcs_slug"
+        year = $year
+        name = "$escaped"
+        score = $score
+        """)
+    end
+    return nothing
+end
+
+"""
     archive_path(data_type, pcs_slug, year; archive_dir) -> String
 
 Compute the archive file path for a given data type, race, and year.

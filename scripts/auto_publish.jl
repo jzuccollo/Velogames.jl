@@ -1,7 +1,7 @@
 #!/usr/bin/env julia
 """
-Record league winners for races the vgleague scrape has scored but
-`data/league_winners.toml` hasn't caught up with yet.
+Record league winners for races the vgleague scrape has scored but the
+archive's `league_winners.toml` hasn't caught up with yet.
 
 Usage:
     julia --project scripts/auto_publish.jl [--dry-run] [--min-age-hours=24] [--config=PATH]
@@ -10,7 +10,7 @@ Reads the `[league]` section of `data/race_config.toml` (the same block
 `scripts/league_eval.jl` uses) to find the vgleague JSON snapshot, then for
 every scored classic in it: maps the league's race name to a PCS slug, takes
 the highest-scoring entrant as that race's winner, and appends a `[[winners]]`
-entry — exactly what `publish_race.sh` asks you to type by hand.
+entry.
 
 Prints one `slug year score winner` line per appended race to stdout (nothing
 when there is nothing to do), so a calling script can tell whether to bother
@@ -19,8 +19,8 @@ re-rendering. Reasoning goes to stderr.
 Gates, all deliberate:
   * `--min-age-hours` (default 24) — Velogames revises scores after a race, so
     a winner published the same evening can be wrong. Waiting a day costs
-    nothing, and `league_winners.toml` is append-only: a bad entry has to be
-    unpicked by hand.
+    nothing, and the record is append-only: a bad entry has to be unpicked by
+    hand (and that race's rendered HTML deleted so it rebuilds).
   * grand tours are skipped — they get one entry for the whole tour via
     `publish_stage_race.sh`, not one per stage.
   * a race whose top score is 0 is skipped: `ridescore.php` serves the full
@@ -31,31 +31,6 @@ using Velogames
 using DataFrames, Dates, JSON3, TOML
 
 const REPO = dirname(@__DIR__)
-
-toml_escape(s) = replace(s, "\\" => "\\\\", "\"" => "\\\"")
-
-function append_winner(path, slug, year, name, score)
-    # publish_race.sh's heredoc can leave the file without a trailing newline,
-    # which would swallow the blank line separating the entry being added.
-    open(path, "a+") do io
-        seekend(io)
-        if position(io) > 0
-            seek(io, position(io) - 1)
-            read(io, Char) == '\n' || write(io, "\n")
-        end
-        write(
-            io,
-            """
-
-            [[winners]]
-            pcs_slug = "$slug"
-            year = $year
-            name = "$(toml_escape(name))"
-            score = $score
-            """,
-        )
-    end
-end
 
 function main(args)
     dry_run = "--dry-run" in args
@@ -92,10 +67,7 @@ function main(args)
         return
     end
 
-    winners_path = joinpath(REPO, "data", "league_winners.toml")
-    recorded = Set(
-        (w["pcs_slug"], w["year"]) for w in get(TOML.parsefile(winners_path), "winners", [])
-    )
+    recorded = Set((w.pcs_slug, w.year) for w in load_league_winners())
 
     # Deadlines date each race: the catalogue is the only thing in the snapshot
     # that knows when a classic was ridden (team rows carry no timestamp).
@@ -138,7 +110,7 @@ function main(args)
         if dry_run
             @info "would append $slug $year: $(top.teamname) ($score)"
         else
-            append_winner(winners_path, slug, year, String(top.teamname), score)
+            append_league_winner(slug, year, String(top.teamname), score)
         end
         push!(appended, slug)
         println("$slug $year $score $(top.teamname)")
