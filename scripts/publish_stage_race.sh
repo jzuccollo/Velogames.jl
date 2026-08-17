@@ -7,7 +7,7 @@ usage() {
     echo "Example: $0 tour-de-france 2026 \"Team Name\" 12345"
     echo ""
     echo "Appends the winner to data/league_winners.toml, archives stage race"
-    echo "data, regenerates reports, commits, and pushes."
+    echo "data, regenerates reports, deploys the site, and records the winner."
     exit 1
 }
 
@@ -44,11 +44,13 @@ archive_stage_race_results(\"$PCS_SLUG\", $YEAR)
 echo "Generating reports..."
 julia --project="$REPO_ROOT" "$REPO_ROOT/scripts/render_reports.jl"
 
-# Commit and push
+# Deploy first, record second: the site going live is the job, git is bookkeeping.
+"$REPO_ROOT/scripts/deploy_site.sh"
+
 echo "Committing..."
 cd "$REPO_ROOT"
-git add data/league_winners.toml site/docs/
-git commit -m "Add $PCS_SLUG $YEAR stage race report ($WINNER_NAME, $WINNER_SCORE)"
+git add data/league_winners.toml
+git commit -m "Add $PCS_SLUG $YEAR stage race winner ($WINNER_NAME, $WINNER_SCORE)"
 git push
 
 echo "Done."

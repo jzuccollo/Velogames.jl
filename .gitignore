@@ -21,12 +21,16 @@ Manifest.toml
 # Private prediction output (local only, not committed)
 prediction_docs/
 
-# site/docs/ is committed for GitHub Pages
-!site/docs/
-!site/docs/**
-# ...but that negation also re-includes the .DS_Store ignored at the top of
-# this file, so re-exclude it here (last matching pattern wins).
-site/docs/**/.DS_Store
+# The rendered race reports site is build output, deployed to Netlify straight
+# from disk by scripts/deploy_site.sh. It used to be committed because GitHub
+# Pages could only publish what was in the repo, which put a push on the
+# critical path of every race and churned megabytes of generated HTML.
+# Regenerate it with scripts/render_reports.jl (--force for a full rebuild);
+# that needs DEFAULT_ARCHIVE_DIR, which a clone alone never had.
+site/docs/
+
+# Netlify credentials for scripts/deploy_site.sh (see .env.example)
+.env
 
 # LLM permissions
 .claude/settings.local.json
@@ -50,3 +54,6 @@ data/league_standings.toml
 
 # Local refactor plan (working notes, not version controlled)
 REFACTOR_PLAN.md
+
+# Netlify CLI scratch state (contains an absolute publish path)
+.netlify/
