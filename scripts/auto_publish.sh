@@ -4,8 +4,8 @@
 #
 # Unattended equivalent of publish_race.sh: scripts/auto_publish.jl derives the
 # winner from the league snapshot instead of asking you to type it, and this
-# renders, commits and pushes without prompting. Safe to run on every tick —
-# it exits without touching git when there is nothing new.
+# renders, deploys and records it without prompting. Safe to run on every tick —
+# it exits without touching anything when there is nothing new.
 #
 # Intended to run from the vgleague update job's POST_UPDATE_HOOK against a
 # dedicated deploy clone (not a dev working directory), so it only ever
@@ -38,11 +38,11 @@ if [ -z "$DRY_RUN" ]; then
         exit 1
     fi
 
-    # Refuse to run on a tree with edits to the paths we commit blind: this is
+    # Refuse to run on a tree with edits to the file we commit blind: this is
     # meant to be a deploy clone, and sweeping up someone's half-finished work
     # into an unattended push is the one failure with no easy undo.
-    if [ -n "$(git status --porcelain -- data/league_winners.toml site/docs/)" ]; then
-        echo "data/league_winners.toml or site/docs/ has uncommitted changes; aborting." >&2
+    if [ -n "$(git status --porcelain -- data/league_winners.toml)" ]; then
+        echo "data/league_winners.toml has uncommitted changes; aborting." >&2
         exit 1
     fi
 fi
@@ -84,17 +84,27 @@ if ! julia --project="$REPO_ROOT" "$REPO_ROOT/scripts/render_reports.jl"; then
 fi
 
 SLUGS="$(echo "$NEW" | awk '{print $1}' | paste -sd' ' -)"
+
+# Deploy before committing. The site going live is the job; recording the winner
+# in git is bookkeeping. In the other order a failed push meant the report never
+# reached anyone, and left a local commit that made the next run's --ff-only
+# pull refuse — one flaky push wedging the whole loop.
+if ! "$REPO_ROOT/scripts/deploy_site.sh"; then
+    echo "deploy failed; new winners are still in data/league_winners.toml, so a re-run retries." >&2
+    exit 1
+fi
+
 echo "--- committing ---"
-git add data/league_winners.toml site/docs/
+git add data/league_winners.toml
 # league_winners.toml has changed by this point, so there is always something to
 # commit — a failure here is a real one (hook, identity, index lock), not an
 # empty diff, and leaves the appended entries in place for the next run.
-if ! git commit -m "Add race reports: $SLUGS"; then
-    echo "git commit failed; new winners are still in data/league_winners.toml." >&2
+if ! git commit -m "Add race winners: $SLUGS"; then
+    echo "git commit failed, but the site is live; the winners are in data/league_winners.toml." >&2
     exit 1
 fi
 if ! git push; then
-    echo "git push failed; the commit is local, so push it by hand (a later run's --ff-only pull will refuse once origin moves on)." >&2
+    echo "git push failed, but the site is live. Push by hand: a later run's --ff-only pull will refuse once origin moves on." >&2
     exit 1
 fi
 
