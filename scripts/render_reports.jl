@@ -2490,6 +2490,31 @@ function main()
     if total_skipped > 0
         println("Pass --force to regenerate all reports")
     end
+
+    # A race with a recorded league winner must come out of this with a page.
+    # Three failure paths reach here silently — `load_report_data` returning
+    # nothing, the grand tour `has_data` check, and a race that never entered
+    # `list_completed_races` because archival failed — and by the time this runs
+    # `auto_publish.sh` has already deleted the race's previous HTML so the
+    # incremental build would regenerate it. Without this the script exits 0, the
+    # deploy proceeds, and a transient Velogames or PCS outage takes a good
+    # report off the live site while printing "published". The winner is already
+    # in the archive, so failing here leaves it there for the retry.
+    missing_reports = sort([
+        (slug, yr) for ((slug, yr), _) in league_winners if
+        yr in years && !isfile(joinpath(reports_dir, "$slug-$yr.html"))
+    ])
+    if !isempty(missing_reports)
+        println(
+            stderr,
+            "\nERROR: $(length(missing_reports)) race(s) with a recorded league winner produced no report:",
+        )
+        for (slug, yr) in missing_reports
+            println(stderr, "  $slug $yr")
+        end
+        println(stderr, "Holding the deploy — re-run once the results are available.")
+        exit(1)
+    end
 end
 
 main()
