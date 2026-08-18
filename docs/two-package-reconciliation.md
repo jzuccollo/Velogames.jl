@@ -38,6 +38,13 @@ and `roadmap.md` for model work.
   snapshot contemporaneous with the race, never the latest one.
 - **Dropbox is written from one place at a time**, by one person. Conflict
   handling can stay a convention rather than machinery.
+- **The whole programme lands as one merge.** Work sits on the
+  `two-package-reconciliation` branch until it is finished, rather than merging
+  phase by phase. See "Operating constraints while the branch is unmerged".
+- **The vgleague hook gets paused** for the archive-mutating work rather than
+  the migration being reshaped to keep unattended publishing alive through it.
+  A short pause is acceptable; the site keeps serving every report it already
+  has throughout, and only a new race would be delayed.
 
 ### Tested (August 2026)
 
@@ -634,15 +641,66 @@ Phase 1a is written to task level because its dependencies are known; the later
 phases are outlines with entry conditions, because 1a and 2 are what settle their
 detail.
 
+All of it lands on the `two-package-reconciliation` branch, unmerged until the
+programme finishes — read "Operating constraints while the branch is unmerged"
+before starting anything from WP2 onwards, because that is where the work stops
+being confined to the repo. **Next job: WP1a.**
+
 | Phase | Work | State |
 | --- | --- | --- |
-| 0 | Two solver tie-breaks, a publish-path guard, one re-render | code shipped; re-render outstanding |
-| 1a | Archive hygiene: Arrow, retirements, the write-time guard | next, five evenings |
+| 0 | Two solver tie-breaks, a publish-path guard, one re-render | code shipped; re-render deferred to WP1b |
+| 1a | Archive hygiene: Arrow, retirements, the write-time guard | next: WP1a, five evenings |
 | 1b | League data into the archive; retire `league_winners.toml` | after WP5 |
 | 1c | Python persists `riders.php` per race | after WP5 |
 | 2 | Ingest as a phase, with completeness markers | after 1b and 1c |
 | 3 | League recap and entrant pages in Python, one site | after 2 |
 | 4 | Optional: lab/publication split, report port, drop Playwright | evidence-led |
+
+### Operating constraints while the branch is unmerged
+
+Git isolates the code. It does not isolate the two things this programme
+actually mutates: the **Dropbox archive** and the **live site**. Meanwhile
+`~/code/velogames-deploy` keeps running `main` from the vgleague
+`POST_UPDATE_HOOK` on every race, so `main`'s code and the branch's data
+assumptions can part company without a single merge conflict to warn anybody.
+
+That splits the remaining work in two:
+
+- **Safe unmerged, indefinitely**: Phase 0 and WP1a. Pure code, touching no
+  file outside the repo.
+- **Mutates state `main` still reads**: WP2 (moving `pcs_form`, `qualitative`
+  and `pcs_breakaways` out of the archive), WP3 (retiring the narrow
+  `stage_profiles` files), WP1b (rewriting every archive file to Arrow) and
+  Phase 1b (moving the league snapshots in).
+
+**WP1b is the forcing point**, since it is a hard cutover by design: the moment
+the migration script runs, `main`'s Feather reads fail and the next race breaks
+the unattended publish. The chosen answer is to pause the vgleague launchd jobs
+for the duration rather than merge early or build a dual-read path the note has
+already argued against.
+
+The sequence that keeps the site honest through it:
+
+1. Put a maintenance banner up **before** touching the archive — one deploy of
+   the existing `site/docs/` with nothing re-rendered.
+2. Pause the vgleague jobs. Run WP2, WP3, WP1b.
+3. `render_reports.jl --force`, drop the banner, deploy. That is Phase 0.4,
+   folded in at the end, and it doubles as WP1b's verification: a forced
+   re-render exercises every archive read path in the reporting layer against
+   the converted files.
+4. Unpause.
+
+**The banner belongs in Netlify, not in the templates.** Snippet injection
+(Site configuration → Build & deploy → Post processing) adds raw HTML to every
+page at deploy time with no repo change and no re-render, and comes back off
+the same way — worth confirming in the dashboard that it still applies to
+`--dir` deploys from the CLI. A banner in `html_page` would instead need a
+forced re-render of all 72 pages to appear, which is the one thing that cannot
+be done mid-migration. Netlify's other lever, a `_redirects` 503, takes the
+site down rather than annotating it, and is the wrong tool.
+
+Cheapest option of all: run the migration in a gap in the race calendar, and
+the question does not arise.
 
 ### Phase 0 — standalone fixes
 
@@ -708,6 +766,12 @@ once, from the clone that holds the rendered site. By hand — publishing is a
 deliberate act. Note that `site/docs/` is build output and a dev clone's copy is
 typically empty, so this belongs in `~/code/velogames-deploy` after it has pulled the
 0.1–0.3 commits.
+
+**Deferred to the WP1b landing**, deliberately. The displayed numbers are already
+right — minimum cost is unique even when the team achieving it is not, and the same
+holds for maximum score — so what is stale is which member of a tie set each page
+shows. Nothing accumulates while it waits, and the re-render is worth more attached
+to the archive migration, where it doubles as verification.
 
 **The "orphan archive types" item was wrong and is dropped.** Investigated before
 deleting anything, and none of the three was an orphan:
