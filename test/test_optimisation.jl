@@ -185,6 +185,107 @@
 end
 
 # =========================================================================
+# Retrospective knapsack tie-breaks
+# =========================================================================
+
+# Both retrospective pairs are lexicographic: the first objective alone leaves a
+# tie set the solver resolves arbitrarily, so each test builds a frame with a
+# deliberate tie and asserts the pinned member is the one returned.
+@testset "Retrospective team tie-breaks" begin
+    @testset "compute_optimal_team breaks score ties on cost" begin
+        # cheap6 and dear6 score the same, so the 450-point team is only unique
+        # once cost breaks the tie.
+        df = DataFrame(
+            rider = ["a", "b", "c", "d", "e", "cheap6", "dear6"],
+            riderkey = ["a", "b", "c", "d", "e", "cheap6", "dear6"],
+            team = ["T$i" for i = 1:7],
+            score = [100, 90, 80, 70, 60, 50, 50],
+            cost = [10, 10, 10, 10, 10, 2, 9],
+        )
+
+        team = compute_optimal_team(df)
+        @test team !== nothing
+        @test nrow(team) == 6
+        @test sum(team.score) == 450
+        @test "cheap6" in team.riderkey
+        @test "dear6" ∉ team.riderkey
+        @test sum(team.cost) == 52
+    end
+
+    @testset "compute_optimal_stage_team breaks score ties on cost" begin
+        # a9 and a10 tie at 20 points; the class minimums are satisfied either
+        # way, so only the cost tie-break separates them.
+        df = DataFrame(
+            rider = ["a$i" for i = 1:12],
+            riderkey = ["a$i" for i = 1:12],
+            team = ["T$i" for i = 1:12],
+            class = [
+                "All rounder",
+                "All rounder",
+                "Climber",
+                "Climber",
+                "Sprinter",
+                "Unclassed",
+                "Unclassed",
+                "Unclassed",
+                "Unclassed",
+                "Unclassed",
+                "Sprinter",
+                "Climber",
+            ],
+            score = [100, 90, 80, 70, 60, 50, 40, 30, 20, 20, 10, 10],
+            cost = [10, 10, 10, 10, 10, 10, 10, 10, 2, 9, 5, 5],
+        )
+
+        team = compute_optimal_stage_team(df)
+        @test team !== nothing
+        @test nrow(team) == 9
+        @test sum(team.score) == 540
+        @test "a9" in team.riderkey
+        @test "a10" ∉ team.riderkey
+        @test sum(team.class .== "All rounder") >= 2
+        @test sum(team.class .== "Climber") >= 2
+        @test sum(team.class .== "Sprinter") >= 1
+        @test sum(team.class .== "Unclassed") >= 3
+    end
+
+    @testset "compute_cheapest_winning_team breaks cost ties on score" begin
+        # Every 6-rider team clearing 300 at the minimum cost of 50 is optimal
+        # on cost alone; the score stage picks the best of them.
+        df = DataFrame(
+            rider = ["a", "b", "c", "d", "e", "f", "cheap", "dear"],
+            riderkey = ["a", "b", "c", "d", "e", "f", "cheap", "dear"],
+            team = ["T$i" for i = 1:8],
+            score = [100, 90, 80, 70, 60, 50, 0, 0],
+            cost = [10, 10, 10, 10, 10, 10, 1, 9],
+        )
+
+        team = compute_cheapest_winning_team(df, 300)
+        @test team !== nothing
+        @test nrow(team) == 6
+        @test sum(team.cost) == 50
+        @test sum(team.score) == 340   # not 330, which also costs 50
+    end
+
+    @testset "cheapest-winning respects the budget" begin
+        # Beating 500 needs one of the two 60-credit riders, and no six-rider
+        # team containing one fits the budget. A fieldable team exists — it just
+        # loses — so `nothing` here is the budget constraint biting, not
+        # infeasibility of the roster.
+        df = DataFrame(
+            rider = ["a$i" for i = 1:8],
+            riderkey = ["a$i" for i = 1:8],
+            team = ["T$i" for i = 1:8],
+            score = [10, 10, 10, 10, 10, 10, 1000, 1000],
+            cost = [10, 10, 10, 10, 10, 10, 60, 60],
+        )
+
+        @test compute_optimal_team(df) !== nothing
+        @test compute_cheapest_winning_team(df, 500) === nothing
+    end
+end
+
+# =========================================================================
 # Integration tests
 # =========================================================================
 

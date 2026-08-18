@@ -105,15 +105,57 @@ function _add_force_constraints!(
 end
 
 
+function _prepare_team_df(inputdf::DataFrame, classes::Bool)
+    # Only the class path needs a copy — `ensure_classification_columns!` mutates.
+    df = classes ? copy(inputdf) : inputdf
+    has_classes = classes ? ensure_classification_columns!(df) : false
+    return df, has_classes
+end
+
+"""
+    _team_model(df, n, cost; totalcost, max_per_team, exclude, force_in,
+                force_out, classes, has_classes) -> (model, x)
+
+The feasible set, with no objective attached: exactly `n` riders, `cost <=
+totalcost`, an optional per-team cap, no-good cuts (k-best) and forced in/out
+riders.
+
+Separate from the objective because the retrospective knapsacks optimise the
+same constraints twice with different objectives (see `_lexicographic_team`),
+and building the set was the one thing they were duplicating.
+"""
+function _team_model(
+    df::DataFrame,
+    n::Integer,
+    cost::Symbol;
+    totalcost::Integer,
+    max_per_team::Integer = 0,
+    exclude::Vector{Vector{String}} = Vector{String}[],
+    force_in::Vector{String} = String[],
+    force_out::Vector{String} = String[],
+    classes::Bool,
+    has_classes::Bool,
+)
+    model = JuMP.Model(HiGHS.Optimizer)
+    JuMP.set_silent(model)
+    JuMP.@variable(model, x[df.riderkey], Bin)
+    JuMP.@constraint(model, df[!, cost]' * x <= totalcost)
+    JuMP.@constraint(model, sum(x) == n)
+    classes && _add_class_constraints!(model, x, df, has_classes)
+    _add_team_cap!(model, x, df, max_per_team)
+    _add_nogood_cuts!(model, x, exclude, n)
+    _add_force_constraints!(model, x, force_in, force_out)
+    return model, x
+end
+
 """
     _build_team_model(inputdf, n, points, cost; totalcost, max_per_team, exclude,
                       force_in, force_out, classes) -> solution or nothing
 
 The budget knapsack both game formats share: pick exactly `n` riders maximising
-`points` subject to `cost <= totalcost`, an optional per-team cap, no-good cuts
-(k-best) and forced in/out riders. `classes = true` additionally imposes the VG
-Sixes classification minimums — the *only* structural difference between the
-one-day and stage-race models.
+`points` over `_team_model`'s feasible set. `classes = true` additionally
+imposes the VG Sixes classification minimums — the *only* structural difference
+between the one-day and stage-race models.
 
 Prefer the named wrappers `build_model_oneday` / `build_model_stage`: they carry
 the right team size and are what gets passed around as `build_model_fn`.
@@ -130,20 +172,20 @@ function _build_team_model(
     force_out::Vector{String},
     classes::Bool,
 )
-    # Only the class path needs a copy — `ensure_classification_columns!` mutates.
-    df = classes ? copy(inputdf) : inputdf
-    has_classes = classes ? ensure_classification_columns!(df) : false
-
-    model = JuMP.Model(HiGHS.Optimizer)
-    JuMP.set_silent(model)
-    JuMP.@variable(model, x[df.riderkey], Bin)
+    df, has_classes = _prepare_team_df(inputdf, classes)
+    model, x = _team_model(
+        df,
+        n,
+        cost;
+        totalcost = totalcost,
+        max_per_team = max_per_team,
+        exclude = exclude,
+        force_in = force_in,
+        force_out = force_out,
+        classes = classes,
+        has_classes = has_classes,
+    )
     JuMP.@objective(model, Max, df[!, points]' * x)
-    JuMP.@constraint(model, df[!, cost]' * x <= totalcost)
-    JuMP.@constraint(model, sum(x) == n)
-    classes && _add_class_constraints!(model, x, df, has_classes)
-    _add_team_cap!(model, x, df, max_per_team)
-    _add_nogood_cuts!(model, x, exclude, n)
-    _add_force_constraints!(model, x, force_in, force_out)
     JuMP.optimize!(model)
     if JuMP.termination_status(model) != JuMP.OPTIMAL
         @warn("The model was not solved correctly.")
@@ -689,18 +731,65 @@ end
 
 
 """
+    _lexicographic_team(feasible_model, df, sense1, col1, sense2, col2) -> solution or nothing
+
+Optimise `col1` over `feasible_model`'s constraint set, then optimise `col2`
+among the teams that achieve it.
+
+The second stage is not decoration. A single-objective knapsack leaves every
+team tied on that objective equally optimal, so the solver returns whichever it
+happens to find — on Hamburg 2026 the cheapest team beating the league was a
+1,332-point one from HiGHS and a 1,273-point one from CBC, both costing 42, and
+the report displayed an arbitrary member of that tie set. Pinning the first
+objective and optimising the second picks the same team every time, whatever the
+solver.
+
+`feasible_model` is a zero-argument closure because the set is built twice: JuMP
+cannot re-solve a model against a constraint written from its own objective
+value.
+"""
+function _lexicographic_team(
+    feasible_model,
+    df::DataFrame,
+    sense1::JuMP.MOI.OptimizationSense,
+    col1::Symbol,
+    sense2::JuMP.MOI.OptimizationSense,
+    col2::Symbol,
+)
+    model, x = feasible_model()
+    JuMP.set_objective(model, sense1, df[!, col1]' * x)
+    JuMP.optimize!(model)
+    if JuMP.termination_status(model) != JuMP.OPTIMAL
+        @warn("The team model was not solved correctly.")
+        return nothing
+    end
+    best = JuMP.objective_value(model)
+
+    model, x = feasible_model()
+    pinned = df[!, col1]' * x
+    # Bounded rather than pinned exactly: every column reaching here is integer,
+    # but an equality against a solver's own objective value need not hold in
+    # floating point.
+    if sense1 == JuMP.MOI.MAX_SENSE
+        JuMP.@constraint(model, pinned >= best - 1e-6)
+    else
+        JuMP.@constraint(model, pinned <= best + 1e-6)
+    end
+    JuMP.set_objective(model, sense2, df[!, col2]' * x)
+    JuMP.optimize!(model)
+    if JuMP.termination_status(model) != JuMP.OPTIMAL
+        @warn("The team tie-break did not solve correctly.")
+        return nothing
+    end
+    return JuMP.value.(x)
+end
+
+"""
     _cheapest_winning_core(inputdf, target_score, n, points, cost; totalcost, classes)
 
-The cheapest fieldable team that beats `target_score`, solved **lexicographically**:
-first the minimum cost, then the highest score among the teams achieving it.
-
-The second stage is not decoration. Minimising cost subject to
-`score >= target + 1` alone leaves every min-cost team that clears the target
-equally optimal, so the solver returns whichever it happens to find — on
-Hamburg 2026 that is a 1,332-point team from HiGHS and a 1,273-point one from
-CBC, both costing 42. Reports were displaying an arbitrary member of that tie
-set. Pinning cost and maximising score picks the same team every time, whatever
-the solver.
+The cheapest fieldable team that beats `target_score`: minimum cost first, then
+the highest score among the teams achieving it — see `_lexicographic_team` for
+why the second stage is needed.
 
 `totalcost` is a real constraint here: a "cheapest team that would have beaten
 them" costing more than the budget was never fieldable, so it is not an answer.
@@ -714,39 +803,62 @@ function _cheapest_winning_core(
     totalcost::Integer,
     classes::Bool,
 )
-    df = classes ? copy(inputdf) : inputdf
-    has_classes = classes ? ensure_classification_columns!(df) : false
-
-    # Both stages share a feasible set; only the objective differs.
+    df, has_classes = _prepare_team_df(inputdf, classes)
     function feasible_model()
-        model = JuMP.Model(HiGHS.Optimizer)
-        JuMP.set_silent(model)
-        JuMP.@variable(model, x[df.riderkey], Bin)
+        model, x = _team_model(
+            df,
+            n,
+            cost;
+            totalcost = totalcost,
+            classes = classes,
+            has_classes = has_classes,
+        )
         JuMP.@constraint(model, df[!, points]' * x >= target_score + 1)
-        JuMP.@constraint(model, df[!, cost]' * x <= totalcost)
-        JuMP.@constraint(model, sum(x) == n)
-        classes && _add_class_constraints!(model, x, df, has_classes)
         return model, x
     end
+    return _lexicographic_team(
+        feasible_model,
+        df,
+        JuMP.MOI.MIN_SENSE,
+        cost,
+        JuMP.MOI.MAX_SENSE,
+        points,
+    )
+end
 
-    model, x = feasible_model()
-    JuMP.@objective(model, Min, df[!, cost]' * x)
-    JuMP.optimize!(model)
-    if JuMP.termination_status(model) != JuMP.OPTIMAL
-        @warn("The cost minimisation model was not solved correctly.")
-        return nothing
-    end
-    min_cost = round(Int, JuMP.objective_value(model))
+"""
+    _optimal_team_core(inputdf, n, points, cost; totalcost, classes)
 
-    model, x = feasible_model()
-    JuMP.@constraint(model, df[!, cost]' * x == min_cost)
-    JuMP.@objective(model, Max, df[!, points]' * x)
-    JuMP.optimize!(model)
-    if JuMP.termination_status(model) != JuMP.OPTIMAL
-        @warn("The cheapest-team tie-break did not solve correctly.")
-        return nothing
-    end
-    return JuMP.value.(x)
+The hindsight-optimal team: the highest-scoring fieldable team, breaking score
+ties on cost. The same two solves as `_cheapest_winning_core` with the
+objectives swapped, and for the same reason — a plain max-score knapsack leaves
+the displayed team at the solver's discretion.
+"""
+function _optimal_team_core(
+    inputdf::DataFrame,
+    n::Integer,
+    points::Symbol,
+    cost::Symbol;
+    totalcost::Integer,
+    classes::Bool,
+)
+    df, has_classes = _prepare_team_df(inputdf, classes)
+    feasible_model() = _team_model(
+        df,
+        n,
+        cost;
+        totalcost = totalcost,
+        classes = classes,
+        has_classes = has_classes,
+    )
+    return _lexicographic_team(
+        feasible_model,
+        df,
+        JuMP.MOI.MAX_SENSE,
+        points,
+        JuMP.MOI.MIN_SENSE,
+        cost,
+    )
 end
 
 """
@@ -782,10 +894,11 @@ minimise_cost_stage(
 """
     compute_optimal_team(df) -> Union{DataFrame, Nothing}
 
-Find the hindsight-optimal one-day team (6 riders, cost <= 100) from actual results.
+Find the hindsight-optimal one-day team (6 riders, cost <= 100) from actual
+results, breaking score ties on cost — see `_lexicographic_team`.
 """
 function compute_optimal_team(df::DataFrame)
-    result = build_model_oneday(df, 6, :score, :cost; totalcost = 100)
+    result = _optimal_team_core(df, 6, :score, :cost; totalcost = 100, classes = false)
     result === nothing && return nothing
     chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
     return filter(row -> row.riderkey in chosen_keys, df)
@@ -815,10 +928,11 @@ end
 """
     compute_optimal_stage_team(df) -> Union{DataFrame, Nothing}
 
-Find the hindsight-optimal stage race team (9 riders, class constraints, cost <= 100).
+Find the hindsight-optimal stage race team (9 riders, class constraints,
+cost <= 100), breaking score ties on cost — see `_lexicographic_team`.
 """
 function compute_optimal_stage_team(df::DataFrame)
-    result = build_model_stage(df, 9, :score, :cost; totalcost = 100)
+    result = _optimal_team_core(df, 9, :score, :cost; totalcost = 100, classes = true)
     result === nothing && return nothing
     chosen_keys = Set(k for k in df.riderkey if result[k] > 0.5)
     return filter(row -> row.riderkey in chosen_keys, df)
