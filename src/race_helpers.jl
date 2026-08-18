@@ -707,7 +707,7 @@ function RenderConfig(cfg::AbstractDict; repo_root::String, fresh::Bool = false)
         mode,
         get(ta, "vg_race_number", 0),
         my_team,
-        joinpath(DEFAULT_ARCHIVE_DIR, "pcs_breakaways"),
+        joinpath(archive_dir(), "pcs_breakaways"),
         fresh,
     )
 end

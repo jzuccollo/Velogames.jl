@@ -14,19 +14,15 @@
 #
 # Run:  julia --project scripts/league_eval.jl
 # ---------------------------------------------------------------------------
-using DataFrames, Feather, JuMP, HiGHS, TOML, Statistics, Printf, Velogames
+using DataFrames, JuMP, HiGHS, TOML, Statistics, Printf, Velogames
 
-const ARCH = joinpath(homedir(), "Dropbox", "code", "velogames", "archive")
 const REPO = normpath(joinpath(@__DIR__, ".."))
-
-fpath(dt, slug, yr) = joinpath(ARCH, dt, slug, "$yr.feather")
-loadf(dt, slug, yr) = isfile(fpath(dt, slug, yr)) ? Feather.read(fpath(dt, slug, yr)) : nothing
 
 # Stage races archive their VG results under vg_stage_totals (their own VG
 # competition); one-day classics under vg_results.
 is_stage_race(slug) = haskey(Velogames._STAGE_RACE_VG_SLUGS, slug)
-results_for(slug, yr) =
-    is_stage_race(slug) ? loadf("vg_stage_totals", slug, yr) : loadf("vg_results", slug, yr)
+results_for(slug, yr) = load_race_snapshot(
+    is_stage_race(slug) ? "vg_stage_totals" : "vg_results", slug, yr)
 
 function best_team(df, points_col; n = 6, budget = 100)
     m = Model(HiGHS.Optimizer)
@@ -51,7 +47,7 @@ rows = NamedTuple[]
 for w in winners
     slug, yr, wscore = w.pcs_slug, w.year, w.score
     is_gt = is_stage_race(slug)
-    preds = loadf("predictions", slug, yr)
+    preds = load_race_snapshot("predictions", slug, yr)
     res = results_for(slug, yr)
     (preds === nothing || res === nothing) && (push!(rows, blank(slug, yr, wscore, preds === nothing ? "no preds" : "no results")); continue)
 
@@ -86,7 +82,7 @@ for w in winners
 
     # naive baseline 2: odds-implied team (archived odds only)
     odds_score = missing
-    probs = market_win_probs(loadf("odds", slug, yr), df.riderkey)
+    probs = market_win_probs(load_race_snapshot("odds", slug, yr), df.riderkey)
     if !isempty(probs)
         df.oddsprob = probs
         ot = best_team(df, :oddsprob; n = n_riders)

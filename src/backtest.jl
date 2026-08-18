@@ -1117,7 +1117,7 @@ function _gt_vg_totals_asof(
     gt_vg_slug::String,
     edition_year::Int;
     cache_config::CacheConfig = DEFAULT_CACHE,
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     archived = load_race_snapshot("vg_stage_totals", gt_pcs_slug, edition_year; archive_dir)
     archived !== nothing && nrow(archived) > 0 && return archived
@@ -1137,7 +1137,7 @@ end
 """
     prefetch_stage_race_data(pcs_slug, year; history_years=3,
         cache_config=CacheConfig(DEFAULT_CACHE_DIR, 9999),
-        archive_dir=DEFAULT_ARCHIVE_DIR) -> StageRaceBacktestData
+        archive_dir=archive_dir()) -> StageRaceBacktestData
 
 Reconstruct everything needed to re-predict and score an archived grand tour
 as-of race day. Archived inputs (VG roster/totals/scoring, stage profiles,
@@ -1151,7 +1151,7 @@ function prefetch_stage_race_data(
     year::Int;
     history_years::Int = 3,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     race_date = resolve_race_date(pcs_slug, year)
 
@@ -1684,7 +1684,7 @@ function backtest_stage_race(
     history_years::Int = 3,
     max_per_team::Integer = 2,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     data =
         prefetch_stage_race_data(pcs_slug, year; history_years, cache_config, archive_dir)
@@ -1735,7 +1735,7 @@ function crosscheck_option_ab(;
     n_resamples::Int = 2500,
     seed::Int = 20260703,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     data === nothing && (
         data = prefetch_stage_race_data(
@@ -1880,7 +1880,7 @@ function _oneday_vg_totals_asof(
     pcs_slug::String,
     year::Int;
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     vg = load_race_snapshot("vg_results", pcs_slug, year; archive_dir = archive_dir)
     if vg === nothing
@@ -1916,7 +1916,7 @@ function prefetch_oneday_backtest_data(
     race::BacktestRace;
     vg_racelists::Union{Dict{Int,DataFrame},Nothing} = nothing,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
     force_refresh::Bool = false,
 )
     rd = prefetch_race_data(
@@ -2127,7 +2127,7 @@ function backtest_oneday_race(
     history_years::Int = 5,
     max_per_team::Integer = 2,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     ri = _find_race_by_slug(pcs_slug)
     cat = category > 0 ? category : (ri !== nothing ? ri.category : 2)
@@ -2163,7 +2163,7 @@ function backtest_oneday_season(
     predictors = ONEDAY_PREDICTORS_ALL,
     max_per_team::Integer = 2,
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     frames = DataFrame[]
     for race in races

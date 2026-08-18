@@ -62,6 +62,53 @@
     @test endswith(p, joinpath("oracle", "milano-sanremo", "2024.feather"))
 end
 
+@testset "Archive enumeration API (WP1a)" begin
+    tree = mktempdir()
+
+    for (slug, years) in ("milano-sanremo" => [2024, 2025], "paris-roubaix" => [2025])
+        for yr in years
+            save_race_snapshot(
+                DataFrame(riderkey = ["a"], odds = [2.5]),
+                "odds",
+                slug,
+                yr;
+                archive_dir = tree,
+            )
+        end
+    end
+
+    # Salt the tree with everything the live archive actually carries: Finder
+    # droppings, a loose non-tabular input at type level, and a retired subtree.
+    touch(joinpath(tree, "odds", ".DS_Store"))
+    touch(joinpath(tree, "odds", "milano-sanremo", ".DS_Store"))
+    touch(joinpath(tree, "odds", "milano-sanremo", "notes.txt"))
+    touch(joinpath(tree, "odds", "breakaways-2025.mhtml"))
+    mkpath(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke"))
+    touch(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke", "2025.feather"))
+
+    @test archive_races("odds"; archive_dir = tree) ==
+          ["milano-sanremo", "paris-roubaix"]
+    @test archive_races("oracle"; archive_dir = tree) == String[]
+
+    @test archive_years("odds", "milano-sanremo"; archive_dir = tree) == [2024, 2025]
+    @test archive_years("odds", "paris-roubaix"; archive_dir = tree) == [2025]
+    @test archive_years("odds", "nonexistent"; archive_dir = tree) == Int[]
+
+    @test has_race_snapshot("odds", "milano-sanremo", 2024; archive_dir = tree)
+    @test !has_race_snapshot("odds", "milano-sanremo", 2026; archive_dir = tree)
+    @test !has_race_snapshot("oracle", "milano-sanremo", 2024; archive_dir = tree)
+
+    # `_retired/` is a sibling of the types, so it never shows up as one.
+    @test !("_retired" in archive_races("odds"; archive_dir = tree))
+    @test archive_races("_retired"; archive_dir = tree) == ["pcs_form"]
+
+    # The env var is read per call, not baked in at precompile time.
+    withenv("VELOGAMES_ARCHIVE" => tree) do
+        @test archive_dir() == tree
+        @test archive_races("odds") == ["milano-sanremo", "paris-roubaix"]
+    end
+end
+
 @testset "Prediction archive schema hardening (WP0.3)" begin
     # Future year so `_race_has_happened` short-circuits false and no I/O
     # against the real archive happens before the mandatory-column check.

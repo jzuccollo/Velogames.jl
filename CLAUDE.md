@@ -18,7 +18,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/prospective_eval.jl` - Prospective evaluation: compares archived pre-race predictions against actual results. Computes Spearman rho, top-N overlap, signal value analysis.
 - `src/build_model.jl` - JuMP optimisation models: `_build_team_model` (the shared budget knapsack) with the `build_model_oneday` (6 riders) / `build_model_stage` (9 riders + class constraints) wrappers over it, `resample_optimise!` (resampled optimisation that draws noisy strengths, scores VG points, and optimises per draw), `minimise_cost_stage`. Also hindsight-optimal / cheapest-winning team selection for report retrospectives (`compute_optimal_team`, `compute_cheapest_winning_team`, `compute_optimal_stage_team`, `compute_cheapest_winning_stage_team`). All four are **lexicographic**, via `_lexicographic_team` over `_team_model`'s objective-free feasible set: a single-objective knapsack leaves a tie set the solver resolves arbitrarily, so the displayed team was not reproducible across solvers. Optimal maximises score then minimises cost; cheapest-winning minimises cost then maximises score
 - `src/race_solver.jl` - High-level solvers: `solve_oneday` and `solve_stage` (estimate strengths → resampled optimisation pipeline, returns top teams). Fetch-free prediction cores `_oneday_prediction_core`/`_stage_prediction_core` (estimate_strengths → resample_optimise, no I/O or archival) are shared by the production solvers and the backtest champions. Also archives predictions for prospective evaluation, and provides `archive_race_results` for post-race archival.
-- `src/cache_utils.jl` - Feather-based caching with configurable TTL (default ~/.velogames_cache, 7 days), plus permanent archival storage (`DEFAULT_ARCHIVE_DIR`, ~/Dropbox/code/velogames/archive) for odds/oracle snapshots
+- `src/cache_utils.jl` - Feather-based caching with configurable TTL (default ~/.velogames_cache, 7 days), plus permanent archival storage (`archive_dir()`, ~/Dropbox/code/velogames/archive unless `VELOGAMES_ARCHIVE` says otherwise) for odds/oracle snapshots
 - `src/race_helpers.jl` - `RaceInfo` struct (canonical race metadata), `RaceConfig` struct, `setup_race()`, `RenderConfig` / `load_render_config()` (the single typed object every renderer takes — see "Render configuration" below), `all_races()` (the 44 classics + 11 stage races as one catalogue), URL alias lookup, `CLASSICS_RACES_2026` schedule, `SIMILAR_RACES` (derived from `RaceInfo`), year-aware VG slug/URL/game ID functions
 - `src/utilities.jl` - Name normalisation (`normalisename`), key creation (`createkey`), sentinel constants (`DNF_POSITION`, `UNRANKED_POSITION`), and report/display utilities (`suppress_output`, `clean_team_names!`, `round_numeric_columns!`)
 - `src/backtest.jl` - Backtesting framework: race catalogue, season-level evaluation, calibration diagnostics, VG race history integration, cumulative VG season points, PCS specialty archiving. Stage-race harness: `prefetch_stage_race_data` (as-of-race-day grand tour reconstruction into `StageRaceBacktestData`), `backtest_stage_race` (team-points-captured + rank metrics for `:simulator`/`:persistence`/`:odds` or custom predictors; targets `:vg_total`/`:gc`/`:points`/`:kom`), `champion_evg` (full production stack as a predictor), `crosscheck_option_ab` (Option A/B drift alarm: pass vs a pinned post-WP2.3 baseline ±0.03, historical roadmap values carried as `rec_*`). Both harnesses score team-points-captured through one shared core: `GameFormat` (team size, model function, name, predictor table) + `_score_team_points_captured`, so the two cannot drift apart — a divergence there would be invisible, producing plausible numbers rather than an error. The top-N overlap column is named for the team size (`overlap6` / `overlap9`). One-day harness: `prefetch_oneday_backtest_data` (as-of-race-day classic reconstruction into `OneDayBacktestData`, scoring against TRUE scraped `vg_results` totals incl. assist/breakaway, not the finish-only proxy of `backtest_race`), `backtest_oneday_race`/`backtest_oneday_season` (team-points-captured + rank metrics for `:simulator` (`champion_oneday_evg`, runs `_oneday_prediction_core`)/`:simulator_market` (`champion_oneday_market_evg` — the shipped market-blended rule, marketed editions only)/`:odds`/`:maxcost` or custom `name => f` predictors)
@@ -108,7 +108,7 @@ so every race cost a push of megabytes of generated HTML, and the unattended
 publish could not run without git succeeding.
 
 `league_winners.toml` followed it out of the repo, to
-`DEFAULT_ARCHIVE_DIR/league_winners.toml` (`league_winners_path`,
+`archive_dir()/league_winners.toml` (`league_winners_path`,
 `load_league_winners`, `append_league_winner` in `cache_utils.jl` are the only
 things that know that path).
 
@@ -123,7 +123,7 @@ things that know that path).
   old race can rewrite it — Paris-Roubaix is recorded to a team name its winner
   no longer uses).
 - Keeping it in git was never what made the site rebuildable, whatever the old
-  README said: `list_completed_races` scans `DEFAULT_ARCHIVE_DIR/vg_results/`,
+  README said: `list_completed_races` scans `archive_dir()/vg_results/`,
   so a clone without the Dropbox archive renders nothing at all.
 - `deploy_site.sh` refuses to deploy when `site/docs/index.html` is missing.
   Pulling the commit that untracked these files **deletes them from every
@@ -181,9 +181,11 @@ things that know that path).
 
 ### Archival storage (src/cache_utils.jl)
 
-- `save_race_snapshot(df, data_type, pcs_slug, year)` - Permanently archive a DataFrame (e.g. odds, oracle) to `{DEFAULT_ARCHIVE_DIR}/{data_type}/{pcs_slug}/{year}.feather`
+- `save_race_snapshot(df, data_type, pcs_slug, year)` - Permanently archive a DataFrame (e.g. odds, oracle) to the path `archive_path` computes
 - `load_race_snapshot(data_type, pcs_slug, year)` - Load archived data; returns `nothing` if not found
-- `archive_path(data_type, pcs_slug, year)` - Compute the archive file path
+- `archive_path(data_type, pcs_slug, year)` - Compute the archive file path. The one place the layout and the `.feather` extension (`ARCHIVE_EXT`) are written down
+- `archive_races(data_type)` / `archive_years(data_type, pcs_slug)` / `has_race_snapshot(data_type, pcs_slug, year)` - Enumerate the archive without building paths by hand. Directories only, and a strict `NNNN.feather` match, because the live tree carries `.DS_Store`, `league_winners.toml` and four `.mhtml` inputs. Added by WP1a so nothing outside `cache_utils.jl` knows the layout — `prospective_eval.jl`, `list_completed_races`, `league_eval.jl` and `baseline_compare.jl` each reimplemented it, which is why a one-character extension change touched nine places
+- `archive_dir()` - Archive root: `VELOGAMES_ARCHIVE`, else `~/Dropbox/code/velogames/archive`. A function, not a const — a const is evaluated at precompile time and baked into the image, so the environment variable would silently stop working
 
 ### Backtesting (src/backtest.jl)
 
@@ -317,7 +319,7 @@ comparison. See `roadmap.md` "SHIPPED: one-day market blend".
 - VG URLs: `https://www.velogames.com/{race-slug}/{year}/riders.php`
 - One-day classics races share one VG URL per year: `sixes-classics/{year}/riders.php` (2026+) or `sixes-superclasico/{year}/riders.php` (≤2025), with startlist hash filtering
 - Archival storage: `_prepare_rider_data` automatically archives odds/oracle/PCS specialty data on successful fetch; solvers archive predictions after `estimate_strengths`; `archive_race_results` archives post-race PCS and VG results; `prefetch_race_data` loads archived data for backtesting
-- Archival paths: `{DEFAULT_ARCHIVE_DIR}/{data_type}/{pcs_slug}/{year}.feather` (DEFAULT_ARCHIVE_DIR = ~/Dropbox/code/velogames/archive) — data_type includes odds, oracle, pcs_specialty, vg_results, predictions, pcs_results. Prediction archives always write `riderkey, rider, team, cost, chosen, selection_frequency, expected_vg_points` plus `schema_version` (archiving throws if any is missing); readers warn on legacy pre-April-2026 archives, which cannot be re-created
+- Archival paths: `{archive_dir()}/{data_type}/{pcs_slug}/{year}.feather` (`archive_dir()` = ~/Dropbox/code/velogames/archive, overridable with `VELOGAMES_ARCHIVE`) — data_type includes odds, oracle, pcs_specialty, vg_results, predictions, pcs_results. Prediction archives always write `riderkey, rider, team, cost, chosen, selection_frequency, expected_vg_points` plus `schema_version` (archiving throws if any is missing); readers warn on legacy pre-April-2026 archives, which cannot be re-created
 - VG race URLs: `ridescore.php?ga={game_id}&st={race_number}` where game_id is from `vg_classics_game_id(year)`, `st` is race number 1-44 from races.php
 - Backtesting temporal integrity: `estimate_strengths`/`predict_expected_points` accept `race_year`/`race_date` for correct recency weighting; cumulative VG season points prevent end-of-year leakage; archived PCS specialty scores prevent current-day leakage
 - Production pipeline: `estimate_strengths` → `resample_optimise!` (avoids Jensen's inequality bias from scoring floor at position 31+). Backtesting pipeline: `predict_expected_points` (MC simulation) for rank-based metrics.
@@ -332,7 +334,7 @@ comparison. See `roadmap.md` "SHIPPED: one-day market blend".
 - Local web frontend: `julia --project scripts/serve.jl [--port 8080]`, then open `http://localhost:8080`. Serves a format-adaptive config form, writes `data/race_config.toml`, runs the chosen renderer in-process and serves the report. Long-lived, so it pays the package load and JIT once — but nothing caches the resampled optimisation, so each render is a full solve. Every control carries hover help. Served reports get a back-to-form / re-run bar injected on the way out (never written to the report file, so published reports are unaffected). **`TOML.print` strips comments**: the first save copies the hand-written file to `data/race_config.toml.backup`. A `/render` POST rewrites the config only when it carries the form's hidden `form=1` marker — the bar's Re-run button omits it and so re-runs the config as it stands, rather than reading its absent fields as cleared ones.
 - Generate race reports: `julia --project scripts/render_reports.jl` (add `--force` to regenerate all)
 - Publish every race the league has scored: `./scripts/auto_publish.sh` (add `--dry-run` to see what it would do). Normally runs itself from the vgleague hook; see "Unattended publishing" above. There is no manual publishing script — this is the only path
-- Correct a published winner: edit `DEFAULT_ARCHIVE_DIR/league_winners.toml`, `rm site/docs/reports/<slug>-<year>.html`, then `julia --project scripts/render_reports.jl && ./scripts/deploy_site.sh`. The record is append-only and the build skips existing HTML, so both halves are needed
+- Correct a published winner: edit `archive_dir()/league_winners.toml`, `rm site/docs/reports/<slug>-<year>.html`, then `julia --project scripts/render_reports.jl && ./scripts/deploy_site.sh`. The record is append-only and the build skips existing HTML, so both halves are needed
 - Deploy the site without publishing a race (template or style change): `julia --project scripts/render_reports.jl --force && ./scripts/deploy_site.sh`
 - Evaluate the league: `julia --project scripts/league_eval.jl` (reads the `[league]` section; point `vgleague_data_dir` at the deploy clone `~/code/vgleague-deploy/data`, which is what the launchd job writes — `~/code/vgleague` is a dev clone and goes stale)
 - Run tests: `julia --project -e "using Pkg; Pkg.test()"`

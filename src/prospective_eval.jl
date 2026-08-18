@@ -1,7 +1,7 @@
 """
 Prospective evaluation: compare archived predictions against actual race results.
 
-Loads predictions and results from the archive (`DEFAULT_ARCHIVE_DIR`, under
+Loads predictions and results from the archive (`archive_dir()`, under
 `~/Dropbox/code/velogames/archive/`) and computes the same metrics as the
 backtesting framework (Spearman rho, top-N overlap, signal shifts).
 """
@@ -47,7 +47,7 @@ or results are missing.
 function evaluate_prospective(
     pcs_slug::String,
     year::Int;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     predictions =
         load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
@@ -132,19 +132,17 @@ end
 Load all archived predictions and results for a year. Returns per-race metrics.
 Scans the predictions archive directory for available races.
 """
-function prospective_season_summary(year::Int; archive_dir::String = DEFAULT_ARCHIVE_DIR)
-    pred_dir = joinpath(archive_dir, "predictions")
-    if !isdir(pred_dir)
-        @info "No predictions archive found at $pred_dir"
+function prospective_season_summary(year::Int; archive_dir::String = archive_dir())
+    races = archive_races("predictions"; archive_dir = archive_dir)
+    if isempty(races)
+        @info "No predictions archive found under $archive_dir"
         return DataFrame()
     end
 
     rows = []
-    for race_dir in readdir(pred_dir; join = true)
-        isdir(race_dir) || continue
-        pcs_slug = basename(race_dir)
-        feather_path = joinpath(race_dir, "$year.feather")
-        isfile(feather_path) || continue
+    for pcs_slug in races
+        has_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir) ||
+            continue
 
         # Auto-archive PCS results if predictions exist but results don't
         if load_race_snapshot("pcs_results", pcs_slug, year; archive_dir = archive_dir) ===
@@ -200,23 +198,16 @@ pit_value, scored. Empty DataFrame if no data available.
 """
 function prospective_pit_values(
     year::Int;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
     n_draws::Int = 500,
     breakaway_dir::String = "",
     simulation_df::Union{Int,Nothing} = nothing,
 )
-    pred_dir = joinpath(archive_dir, "predictions")
-    if !isdir(pred_dir)
-        return DataFrame()
-    end
-
     all_pit = DataFrame[]
 
-    for race_dir in readdir(pred_dir; join = true)
-        isdir(race_dir) || continue
-        pcs_slug = basename(race_dir)
-        feather_path = joinpath(race_dir, "$year.feather")
-        isfile(feather_path) || continue
+    for pcs_slug in archive_races("predictions"; archive_dir = archive_dir)
+        has_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir) ||
+            continue
 
         # `simulate_vg_draws` only knows the one-day `ScoringTable` (single race,
         # scalar strength, one-day finish/assist/breakaway rules). Stage races need
@@ -373,20 +364,13 @@ For each signal, compute:
 Requires archived predictions. Signal direction correctness requires
 actual results (computed only for races with both).
 """
-function signal_value_analysis(year::Int; archive_dir::String = DEFAULT_ARCHIVE_DIR)
-    pred_dir = joinpath(archive_dir, "predictions")
-    if !isdir(pred_dir)
-        return DataFrame()
-    end
-
+function signal_value_analysis(year::Int; archive_dir::String = archive_dir())
     # Accumulate per-signal stats across races
     signal_totals = Dict{Symbol,Vector{Float64}}()
 
-    for race_dir in readdir(pred_dir; join = true)
-        isdir(race_dir) || continue
-        pcs_slug = basename(race_dir)
-        feather_path = joinpath(race_dir, "$year.feather")
-        isfile(feather_path) || continue
+    for pcs_slug in archive_races("predictions"; archive_dir = archive_dir)
+        has_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir) ||
+            continue
 
         predictions =
             load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
@@ -453,7 +437,7 @@ lack archived predictions or PCS results have `missing` in our columns.
 Caveat: Cycling Oracle is a signal in our model, so this measures
 "us-with-Oracle vs Oracle alone" rather than a clean head-to-head.
 """
-function oracle_2026_comparison(year::Int = 2026; archive_dir::String = DEFAULT_ARCHIVE_DIR)
+function oracle_2026_comparison(year::Int = 2026; archive_dir::String = archive_dir())
     rows = []
     for pcs_slug in sort(collect(keys(ORACLE_2026_BASELINE)))
         oracle_pct = ORACLE_2026_BASELINE[pcs_slug]

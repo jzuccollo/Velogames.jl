@@ -593,32 +593,27 @@ pcs_slug, year, name, date, category.
 """
 function list_completed_races(
     years::Vector{Int} = [2025, 2026];
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     rows = NamedTuple{
         (:pcs_slug, :year, :name, :date, :category),
         Tuple{String,Int,String,String,Int},
     }[]
-    vg_dir = joinpath(archive_dir, "vg_results")
-    isdir(vg_dir) || return DataFrame(rows)
-
-    for slug_dir in readdir(vg_dir; join = true)
-        isdir(slug_dir) || continue
-        pcs_slug = basename(slug_dir)
+    for pcs_slug in archive_races("vg_results"; archive_dir = archive_dir)
         ri = _find_race_by_slug(pcs_slug)
         # Only include one-day classics (races in CLASSICS_RACES_2026)
         ri === nothing && continue
-        for f in readdir(slug_dir)
-            m = match(r"^(\d{4})\.feather$", f)
-            m === nothing && continue
-            yr = parse(Int, m[1])
+        for yr in archive_years("vg_results", pcs_slug; archive_dir = archive_dir)
             yr in years || continue
-            name = ri !== nothing ? ri.name : replace(pcs_slug, "-" => " ") |> titlecase
-            date = ri !== nothing ? replace(ri.date, r"^\d{4}" => string(yr)) : "$yr-01-01"
-            cat = ri !== nothing ? ri.category : 0
             push!(
                 rows,
-                (pcs_slug = pcs_slug, year = yr, name = name, date = date, category = cat),
+                (
+                    pcs_slug = pcs_slug,
+                    year = yr,
+                    name = ri.name,
+                    date = replace(ri.date, r"^\d{4}" => string(yr)),
+                    category = ri.category,
+                ),
             )
         end
     end
@@ -1061,7 +1056,7 @@ Returns empty vector if not archived.
 function load_stage_profiles(
     pcs_slug::String,
     year::Int;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     df = load_race_snapshot("pcs_stage_profiles", pcs_slug, year; archive_dir)
     df === nothing && return StageProfile[]

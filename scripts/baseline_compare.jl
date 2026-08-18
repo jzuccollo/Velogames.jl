@@ -26,18 +26,15 @@
 
 using Velogames
 using DataFrames
-using Feather
 using JuMP
 using Statistics
 using Printf
 
 const TOUR_VG_SLUG = "velogame"
 const TOUR_PCS_SLUG = "tour-de-france"
-const ARCHIVE_PRED_DIR =
-    joinpath(homedir(), "Dropbox", "code", "velogames", "archive", "predictions", TOUR_PCS_SLUG)
 
 vg_riders_url(year::Int) = "https://www.velogames.com/$TOUR_VG_SLUG/$year/riders.php"
-archive_pred_path(year::Int) = joinpath(ARCHIVE_PRED_DIR, "$year.feather")
+archived_predictions(year::Int) = load_race_snapshot("predictions", TOUR_PCS_SLUG, year)
 
 # ---------------------------------------------------------------------------
 # 1. Baseline expected points per rider
@@ -141,7 +138,11 @@ joined on from the live VG rider pool (the archive lacks `:classraw`).
 `:baseline_points` is added.
 """
 function load_universe(year::Int)
-    arch = Feather.read(archive_pred_path(year))
+    arch = archived_predictions(year)
+    arch === nothing && error(
+        "No archived prediction for $TOUR_PCS_SLUG $year at " *
+        archive_path("predictions", TOUR_PCS_SLUG, year),
+    )
     pool = Velogames.getvg_riders(vg_riders_url(year))
     classcols = select(pool, :riderkey, :classraw, :class)
     universe = leftjoin(arch, classcols, on = :riderkey)
@@ -283,9 +284,8 @@ function baseline_backtest(year::Int; n_prior::Int = 2)
     _rule()
     @printf("%-30s %6d %10s %12.1f\n", "TOTAL", sum(base_team.cost), "", base_realised)
 
-    predpath = archive_pred_path(year)
-    if isfile(predpath)
-        arch = Feather.read(predpath)
+    arch = archived_predictions(year)
+    if arch !== nothing
         model_team = filter(r -> coalesce(r.chosen, false), arch)
         model_realised = realised(model_team.riderkey)
         _hdr("RESULT")
@@ -296,7 +296,10 @@ function baseline_backtest(year::Int; n_prior::Int = 2)
         _hdr("RESULT")
         @printf("Baseline realised points : %.1f\n", base_realised)
         println("No archived model prediction for $year — the model side becomes")
-        println("computable once a prediction is archived at $(predpath).")
+        println(
+            "computable once a prediction is archived at " *
+            "$(archive_path("predictions", TOUR_PCS_SLUG, year)).",
+        )
     end
     return base_realised
 end

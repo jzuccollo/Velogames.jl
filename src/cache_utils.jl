@@ -198,9 +198,24 @@ end
 # ---------------------------------------------------------------------------
 
 """
-Default directory for permanent race data archives.
+    archive_dir() -> String
+
+Root of the permanent race data archive. `VELOGAMES_ARCHIVE` overrides the
+default `~/Dropbox/code/velogames/archive`.
+
+A function rather than a `const`: a const is evaluated at precompile time and
+baked into the image, so the environment variable would silently stop working.
 """
-const DEFAULT_ARCHIVE_DIR = joinpath(homedir(), "Dropbox", "code", "velogames", "archive")
+archive_dir() = get(
+    ENV,
+    "VELOGAMES_ARCHIVE",
+    joinpath(homedir(), "Dropbox", "code", "velogames", "archive"),
+)
+
+"""
+Extension every archive file carries. The one place it is written down.
+"""
+const ARCHIVE_EXT = ".feather"
 
 """
     league_winners_path(; archive_dir) -> String
@@ -214,7 +229,7 @@ nothing back. Every entry is derivable in principle from the vgleague
 snapshots, but those sit in a gitignored, machine-local directory that nothing
 backs up, so this file is the durable record.
 """
-league_winners_path(; archive_dir::String = DEFAULT_ARCHIVE_DIR) =
+league_winners_path(; archive_dir::String = archive_dir()) =
     joinpath(archive_dir, "league_winners.toml")
 
 """
@@ -222,7 +237,7 @@ league_winners_path(; archive_dir::String = DEFAULT_ARCHIVE_DIR) =
 
 Every recorded league winner, in file order. Empty when the file is absent.
 """
-function load_league_winners(; archive_dir::String = DEFAULT_ARCHIVE_DIR)
+function load_league_winners(; archive_dir::String = archive_dir())
     path = league_winners_path(; archive_dir)
     isfile(path) || return NamedTuple[]
     return [
@@ -247,7 +262,7 @@ function append_league_winner(
     year::Integer,
     name::AbstractString,
     score::Integer;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     path = league_winners_path(; archive_dir)
     mkpath(dirname(path))
@@ -282,10 +297,59 @@ function archive_path(
     data_type::String,
     pcs_slug::String,
     year::Int;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
-    return joinpath(archive_dir, data_type, pcs_slug, "$(year).feather")
+    return joinpath(archive_dir, data_type, pcs_slug, "$(year)$(ARCHIVE_EXT)")
 end
+
+"""
+    archive_races(data_type; archive_dir) -> Vector{String}
+
+Every race slug archived under `data_type`, sorted. Empty when the type has no
+directory. Only directories count: `pcs_breakaways` holds loose `.mhtml`
+inputs, and the tree carries `.DS_Store` throughout.
+"""
+function archive_races(data_type::String; archive_dir::String = archive_dir())
+    dir = joinpath(archive_dir, data_type)
+    isdir(dir) || return String[]
+    return sort!([
+        e for e in readdir(dir) if !startswith(e, ".") && isdir(joinpath(dir, e))
+    ])
+end
+
+"""
+    archive_years(data_type, pcs_slug; archive_dir) -> Vector{Int}
+
+Every year archived for one race under `data_type`, ascending. Empty when the
+race has no directory.
+"""
+function archive_years(
+    data_type::String,
+    pcs_slug::String;
+    archive_dir::String = archive_dir(),
+)
+    dir = joinpath(archive_dir, data_type, pcs_slug)
+    isdir(dir) || return Int[]
+    pattern = Regex("^(\\d{4})\\Q" * ARCHIVE_EXT * "\\E\$")
+    years = Int[]
+    for f in readdir(dir)
+        m = match(pattern, f)
+        m === nothing || push!(years, parse(Int, m[1]))
+    end
+    return sort!(years)
+end
+
+"""
+    has_race_snapshot(data_type, pcs_slug, year; archive_dir) -> Bool
+
+Whether a snapshot exists, without reading it.
+"""
+has_race_snapshot(
+    data_type::String,
+    pcs_slug::String,
+    year::Int;
+    archive_dir::String = archive_dir(),
+) = isfile(archive_path(data_type, pcs_slug, year; archive_dir = archive_dir))
 
 """
     save_race_snapshot(df, data_type, pcs_slug, year; archive_dir) -> Nothing
@@ -298,7 +362,7 @@ function save_race_snapshot(
     data_type::String,
     pcs_slug::String,
     year::Int;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     mkpath(dirname(path))
@@ -316,7 +380,7 @@ function load_race_snapshot(
     data_type::String,
     pcs_slug::String,
     year::Int;
-    archive_dir::String = DEFAULT_ARCHIVE_DIR,
+    archive_dir::String = archive_dir(),
 )
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     if isfile(path)

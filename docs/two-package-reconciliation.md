@@ -644,12 +644,12 @@ detail.
 All of it lands on the `two-package-reconciliation` branch, unmerged until the
 programme finishes — read "Operating constraints while the branch is unmerged"
 before starting anything from WP2 onwards, because that is where the work stops
-being confined to the repo. **Next job: WP1a.**
+being confined to the repo. **Next job: WP2.**
 
 | Phase | Work | State |
 | --- | --- | --- |
 | 0 | Two solver tie-breaks, a publish-path guard, one re-render | code shipped; re-render deferred to WP1b |
-| 1a | Archive hygiene: Arrow, retirements, the write-time guard | next: WP1a, five evenings |
+| 1a | Archive hygiene: Arrow, retirements, the write-time guard | WP1a shipped; next WP2, then WP3, WP1b, WP5, WP4 |
 | 1b | League data into the archive; retire `league_winners.toml` | after WP5 |
 | 1c | Python persists `riders.php` per race | after WP5 |
 | 2 | Ingest as a phase, with completeness markers | after 1b and 1c |
@@ -838,6 +838,23 @@ places instead of one, and it is the same drift class that produced
 **Risk**: `league_eval.jl` and `baseline_compare.jl` are lab scripts with no test
 coverage. Run both end to end and diff stdout before and after. `baseline_compare`
 also fetches from Velogames, so pin a warm cache.
+
+**WP1a shipped, August 2026.** `DEFAULT_ARCHIVE_DIR` is now `archive_dir()`, read
+per call from `VELOGAMES_ARCHIVE`; `ARCHIVE_EXT` holds the extension so WP1b changes
+it in one place; `archive_races`, `archive_years` and `has_race_snapshot` join
+`archive_path` as the enumeration API. All four bypassing sites go through it —
+`prospective_eval.jl`'s three scan loops, `list_completed_races`' year regex, and
+both lab scripts, which drop `using Feather` and their hardcoded Dropbox roots.
+`league_eval.jl`'s `loadf` was deleted outright, its semantics being
+`load_race_snapshot`'s.
+
+Verification: `league_eval.jl` prints byte-identical stdout across the change (109
+lines, all 29 races). `baseline_compare.jl` **fails at HEAD for an unrelated reason**
+— `prior_edition_scores` fetches the 2024 Tour `ridescore.php`, which Velogames now
+404s, so the two-prior-Tours baseline cannot be built at all and no warm cache saves
+it. It fails at the identical line before and after; its archive read was verified
+directly instead (`load_race_snapshot` and `Feather.read` return `isequal` frames for
+the 183-row 2026 Tour prediction). Worth knowing before WP4 leans on that script.
 
 #### WP2 — retire the dead types
 

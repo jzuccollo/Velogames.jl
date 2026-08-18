@@ -71,7 +71,7 @@ julia --project scripts/render_predictor.jl
 julia --project scripts/render_stagerace.jl
 ```
 
-This runs the full pipeline (data fetch, strength estimation, resampled optimisation) and automatically archives predictions, odds and oracle data to `DEFAULT_ARCHIVE_DIR` for later evaluation. The prediction archive is write-once: re-running after the race won't overwrite the pre-race snapshot (pass `--force` to override).
+This runs the full pipeline (data fetch, strength estimation, resampled optimisation) and automatically archives predictions, odds and oracle data to the archive (`archive_dir()`) for later evaluation. The prediction archive is write-once: re-running after the race won't overwrite the pre-race snapshot (pass `--force` to override).
 
 ### After each race
 
@@ -124,13 +124,13 @@ POST_UPDATE_HOOK=/Users/you/code/velogames-deploy/scripts/auto_publish.sh
 
 Point it at a dedicated deploy clone rather than your working tree, so it only ever runs committed, pushed code. Setting one up is a clone, a `Pkg.instantiate()`, an `.env`, and a `data/race_config.toml` holding the `[league]` block (nothing else in that file is read).
 
-The render script scans `DEFAULT_ARCHIVE_DIR/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winner data lives in `DEFAULT_ARCHIVE_DIR/league_winners.toml`, alongside every other piece of race data rather than in the repo. Every entry is derivable in principle from the vgleague snapshots, but those sit in a gitignored, machine-local directory that nothing backs up, so this file is the durable record — and it holds no 2025 entries at all, so the whole 2025 back-catalogue renders without a league winner. Full standings are a different matter — `data/league_standings.toml` carries every entrant's real name and stays gitignored. The index page lists all races grouped by year.
+The render script scans `archive_dir()/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winner data lives in `archive_dir()/league_winners.toml`, alongside every other piece of race data rather than in the repo. Every entry is derivable in principle from the vgleague snapshots, but those sit in a gitignored, machine-local directory that nothing backs up, so this file is the durable record — and it holds no 2025 entries at all, so the whole 2025 back-catalogue renders without a league winner. Full standings are a different matter — `data/league_standings.toml` carries every entrant's real name and stays gitignored. The index page lists all races grouped by year.
 
 ## Data storage
 
 The package uses two storage layers:
 
-- **Permanent archive** (`DEFAULT_ARCHIVE_DIR`): race-day snapshots (odds, oracle predictions, PCS specialty scores, pre-race predictions, post-race results) stored as Feather files at `{archive_dir}/{data_type}/{pcs_slug}/{year}.feather`. By default this points to `~/Dropbox/code/velogames/archive/`, so Dropbox provides backup and cross-machine sync automatically. You can point it anywhere by overriding the constant before loading the package.
+- **Permanent archive** (`archive_dir()`): race-day snapshots (odds, oracle predictions, PCS specialty scores, pre-race predictions, post-race results) stored as Feather files at `{archive_dir}/{data_type}/{pcs_slug}/{year}.feather`. By default this points to `~/Dropbox/code/velogames/archive/`, so Dropbox provides backup and cross-machine sync automatically. Set `VELOGAMES_ARCHIVE` to point it elsewhere; it is read per call, so it takes effect after the package is loaded.
 - **Disk cache** (`~/.velogames_cache/`): short-lived cache of scraped web data (PCS rankings, VG rider lists, race catalogues) with a 7-day TTL. This is purely a performance optimisation — it is expendable and regenerates automatically from the web if deleted.
 
 ## Testing
