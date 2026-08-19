@@ -707,7 +707,7 @@ function RenderConfig(cfg::AbstractDict; repo_root::String, fresh::Bool = false)
         mode,
         get(ta, "vg_race_number", 0),
         my_team,
-        joinpath(archive_dir(), "pcs_breakaways"),
+        joinpath(archive_dir(), "_inputs", "pcs_breakaways"),
         fresh,
     )
 end
@@ -995,6 +995,31 @@ struct StageProfile
     n_intermediate_sprints::Int
     is_summit_finish::Bool
 end
+
+"""
+    stage_profiles_frame(stages) -> DataFrame
+
+The archive frame for `pcs_stage_profiles`: one row per stage, one column per
+`StageProfile` field.
+
+One builder rather than two. The pre-race write (`race_solver.jl`) and the
+post-race one (`data_assembly.jl`) used to construct this by hand and differed
+only in dropping `gradient_final_km` and `n_intermediate_sprints`, which made
+the narrow result look like a second dataset — `stage_profiles` — rather than
+the same one at an older schema. Retired in WP3.
+"""
+stage_profiles_frame(stages::Vector{StageProfile}) = DataFrame(
+    stage_number = [s.stage_number for s in stages],
+    stage_type = [String(s.stage_type) for s in stages],
+    distance_km = [s.distance_km for s in stages],
+    profile_score = [s.profile_score for s in stages],
+    vertical_meters = [s.vertical_meters for s in stages],
+    gradient_final_km = [s.gradient_final_km for s in stages],
+    n_hc_climbs = [s.n_hc_climbs for s in stages],
+    n_cat1_climbs = [s.n_cat1_climbs for s in stages],
+    n_intermediate_sprints = [s.n_intermediate_sprints for s in stages],
+    is_summit_finish = [s.is_summit_finish for s in stages],
+)
 
 """
     StageSimConfig

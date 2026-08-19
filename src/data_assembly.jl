@@ -907,26 +907,21 @@ function archive_stage_race_results(
         end
     end
 
-    # Archive PCS stage profiles
+    # Archive PCS stage profiles. Since WP3 the pre-race solver writes this same
+    # type, so this guard now usually skips and a mis-scraped pre-race profile is
+    # never corrected afterwards. Acceptable: profiles are static facts.
     if load_race_snapshot("pcs_stage_profiles", pcs_slug, year) === nothing
         try
             profiles = suppress_output() do
                 getpcs_stage_profiles(pcs_slug, year; cache_config = cache_config)
             end
             if !isempty(profiles)
-                profiles_df = DataFrame(
-                    stage_number = [s.stage_number for s in profiles],
-                    stage_type = [string(s.stage_type) for s in profiles],
-                    distance_km = [s.distance_km for s in profiles],
-                    profile_score = [s.profile_score for s in profiles],
-                    vertical_meters = [s.vertical_meters for s in profiles],
-                    gradient_final_km = [s.gradient_final_km for s in profiles],
-                    n_hc_climbs = [s.n_hc_climbs for s in profiles],
-                    n_cat1_climbs = [s.n_cat1_climbs for s in profiles],
-                    n_intermediate_sprints = [s.n_intermediate_sprints for s in profiles],
-                    is_summit_finish = [s.is_summit_finish for s in profiles],
+                save_race_snapshot(
+                    stage_profiles_frame(profiles),
+                    "pcs_stage_profiles",
+                    pcs_slug,
+                    year,
                 )
-                save_race_snapshot(profiles_df, "pcs_stage_profiles", pcs_slug, year)
                 @info "Archived pcs_stage_profiles for $pcs_slug $year"
             end
         catch e

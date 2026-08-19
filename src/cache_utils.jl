@@ -5,7 +5,7 @@ Two layers:
 - **In-memory**: session-scoped `Dict` keyed by cache key. Avoids redundant disk
   reads when the same URL is requested multiple times (e.g. the same rider across
   88 backtest races). Cleared on Julia restart or via `clear_memory_cache!()`.
-- **On-disk**: Feather files with JSON metadata and TTL-based expiry.
+- **On-disk**: Arrow IPC files with JSON metadata and TTL-based expiry.
 """
 
 """
@@ -110,11 +110,11 @@ function save_to_cache(
     meta = CacheMetadata(url, now(), "1.0", params)
     write(meta_file, JSON3.write(meta))
 
-    # Save data (Feather can't serialise empty string columns, so skip
-    # the data file for empty results — the metadata alone marks the
-    # cache entry as valid so cached_fetch won't refetch)
+    # An empty result writes metadata only. That absence is the "not published
+    # yet" marker `EMPTY_CACHE_MAX_AGE_HOURS` keys off, so the entry expires in
+    # hours rather than sitting out the full TTL.
     if nrow(data) > 0
-        Feather.write(data_file, data)
+        Arrow.write(data_file, data)
     end
 end
 
@@ -122,14 +122,13 @@ end
 Load data from cache - handles both DataFrame and JSON data
 """
 function load_from_cache(key::String, cache_dir::String)::Union{DataFrame,Nothing}
-    data_file_feather, meta_file = cache_paths(key, cache_dir)
+    data_file, meta_file = cache_paths(key, cache_dir)
 
-    # Try Feather (DataFrame)
-    if isfile(data_file_feather)
+    if isfile(data_file)
         try
-            return Feather.read(data_file_feather)
+            return DataFrame(Arrow.Table(data_file); copycols = true)
         catch e
-            @warn "Failed to read cached data $data_file_feather" exception = e
+            @warn "Failed to read cached data $data_file" exception = e
             return nothing
         end
     end
@@ -140,7 +139,7 @@ end
 """
 Generic cached data fetcher.
 
-Lookup order: in-memory Dict → on-disk Feather → network fetch.
+Lookup order: in-memory Dict → on-disk Arrow → network fetch.
 Results are promoted into the in-memory cache on first access so that
 subsequent requests for the same URL are instant.
 """
@@ -215,7 +214,39 @@ archive_dir() = get(
 """
 Extension every archive file carries. The one place it is written down.
 """
-const ARCHIVE_EXT = ".feather"
+const ARCHIVE_EXT = ".arrow"
+
+"""
+Archive trees that are no longer data types, with where they went and why.
+
+Documentation, not machinery: the entries are here so the type manifest can
+account for every directory in the archive without anyone having to rediscover
+what these held. Retired trees keep their original Feather V1 encoding — a
+historical record does not need the current format — so the Arrow migration
+skips `_retired/` and `_inputs/` entirely.
+"""
+const RETIRED_ARCHIVE_TYPES = [
+    (
+        name = "pcs_form",
+        moved_to = "_retired/pcs_form",
+        reason = "PCS form score, dropped by the April 2026 ablation and deleted from the code in August. The only surviving record of what the signal contained, and roadmap.md cites its evidence.",
+    ),
+    (
+        name = "qualitative",
+        moved_to = "_retired/qualitative",
+        reason = "Hand-entered qualitative intelligence, dropped by the same ablation. Irreplaceable — nobody is going to re-type it.",
+    ),
+    (
+        name = "prediction",
+        moved_to = "_retired/prediction",
+        reason = "Singular typo of `predictions`, the drift WP5's guard exists to stop. Its one file (strade-bianche 2026) was a 38-column superset of the 13-column plural and was swapped in before the tree retired.",
+    ),
+    (
+        name = "pcs_breakaways",
+        moved_to = "_inputs/pcs_breakaways",
+        reason = "Four `.mhtml` pages and no tabular data — a raw input masquerading as a data type. At the top level it would force the manifest to carry an entry for a tree holding no archive files.",
+    ),
+]
 
 """
     league_winners_path(; archive_dir) -> String
@@ -291,7 +322,7 @@ end
     archive_path(data_type, pcs_slug, year; archive_dir) -> String
 
 Compute the archive file path for a given data type, race, and year.
-Returns a path like `<archive_dir>/odds/paris-roubaix/2025.feather`.
+Returns a path like `<archive_dir>/odds/paris-roubaix/2025.arrow`.
 """
 function archive_path(
     data_type::String,
@@ -366,7 +397,7 @@ function save_race_snapshot(
 )
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     mkpath(dirname(path))
-    Feather.write(path, df)
+    Arrow.write(path, df)
     @info "Archived $data_type for $pcs_slug $year → $path"
     return nothing
 end
@@ -385,7 +416,7 @@ function load_race_snapshot(
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     if isfile(path)
         try
-            return DataFrame(Feather.read(path))
+            return DataFrame(Arrow.Table(path); copycols = true)
         catch e
             @warn "Failed to load archive $path: $e"
             return nothing

@@ -66,10 +66,6 @@ compound surnames hyphenated in one source and spaced in the other
 ("Ferrand-Prévot" vs "Ferrand Prevot").
 """
 function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
-    # Materialise riderkey column so Arrow/Feather read-only backing doesn't block mutation
-    if !(external_df.riderkey isa Vector)
-        external_df.riderkey = Vector{String}(external_df.riderkey)
-    end
     ref_keys = Set(reference_df.riderkey)
     # Compound surnames get hyphenated in one source and spaced in the other
     # ("Ferrand-Prévot" on VG, "Ferrand Prevot" from the bookmaker). That shifts

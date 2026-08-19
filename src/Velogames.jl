@@ -1,6 +1,6 @@
 module Velogames
 
-using HTTP, DataFrames, Cascadia, Gumbo, Unicode, HiGHS, JuMP, Feather, Dates, JSON3, SHA
+using HTTP, DataFrames, Cascadia, Gumbo, Unicode, HiGHS, JuMP, Arrow, Feather, Dates, JSON3, SHA
 using Random, Statistics, PlotlyBase, TOML
 
 # Core data retrieval
@@ -40,6 +40,7 @@ export CacheConfig,
     archive_races,
     archive_years,
     has_race_snapshot,
+    RETIRED_ARCHIVE_TYPES,
     league_winners_path,
     load_league_winners,
     append_league_winner,
@@ -62,6 +63,7 @@ export setup_race,
     vg_classics_url,
     vg_classics_game_id,
     StageProfile,
+    stage_profiles_frame,
     StageSimConfig,
     DEFAULT_STAGE_SIM_CONFIG,
     flat_stage,

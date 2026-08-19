@@ -1155,17 +1155,12 @@ function solve_stage(
         # Archive stage profiles
         if !isempty(config.pcs_slug)
             try
-                stage_df = DataFrame(
-                    stage_number = [s.stage_number for s in stages],
-                    stage_type = [String(s.stage_type) for s in stages],
-                    distance_km = [s.distance_km for s in stages],
-                    profile_score = [s.profile_score for s in stages],
-                    vertical_meters = [s.vertical_meters for s in stages],
-                    n_hc_climbs = [s.n_hc_climbs for s in stages],
-                    n_cat1_climbs = [s.n_cat1_climbs for s in stages],
-                    is_summit_finish = [s.is_summit_finish for s in stages],
+                save_race_snapshot(
+                    stage_profiles_frame(stages),
+                    "pcs_stage_profiles",
+                    config.pcs_slug,
+                    config.year,
                 )
-                save_race_snapshot(stage_df, "stage_profiles", config.pcs_slug, config.year)
             catch e
                 @debug "Failed to archive stage profiles: $e"
             end

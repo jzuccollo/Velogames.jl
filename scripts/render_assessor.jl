@@ -139,23 +139,8 @@ function render_assessor(rc::RenderConfig)
             nothing
         elseif is_stage && :strength_flat in propertynames(predicted)
             # Per-stage simulation using archived per-dimension strengths
-            stage_profiles_df =
-                load_race_snapshot("stage_profiles", config.pcs_slug, config.year)
-            if stage_profiles_df !== nothing && nrow(stage_profiles_df) > 0
-                stages_from_archive = [
-                    StageProfile(
-                        row.stage_number,
-                        Symbol(row.stage_type),
-                        row.distance_km,
-                        row.profile_score,
-                        row.vertical_meters,
-                        0.0,
-                        row.n_hc_climbs,
-                        row.n_cat1_climbs,
-                        0,
-                        row.is_summit_finish,
-                    ) for row in eachrow(stage_profiles_df)
-                ]
+            stages_from_archive = load_stage_profiles(config.pcs_slug, config.year)
+            if !isempty(stages_from_archive)
                 stage_strengths = compute_stage_strengths(predicted)
                 gc_strengths_vec = Float64.(predicted.strength_gc)
                 stage_scoring = try

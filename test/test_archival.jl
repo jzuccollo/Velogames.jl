@@ -59,7 +59,7 @@
 
     # archive_path produces expected structure
     p = archive_path("oracle", "milano-sanremo", 2024; archive_dir = test_archive)
-    @test endswith(p, joinpath("oracle", "milano-sanremo", "2024.feather"))
+    @test endswith(p, joinpath("oracle", "milano-sanremo", "2024.arrow"))
 end
 
 @testset "Archive enumeration API (WP1a)" begin
@@ -84,7 +84,7 @@ end
     touch(joinpath(tree, "odds", "milano-sanremo", "notes.txt"))
     touch(joinpath(tree, "odds", "breakaways-2025.mhtml"))
     mkpath(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke"))
-    touch(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke", "2025.feather"))
+    touch(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke", "2025.arrow"))
 
     @test archive_races("odds"; archive_dir = tree) ==
           ["milano-sanremo", "paris-roubaix"]
@@ -107,6 +107,76 @@ end
         @test archive_dir() == tree
         @test archive_races("odds") == ["milano-sanremo", "paris-roubaix"]
     end
+end
+
+@testset "Arrow archive round-trip (WP1b)" begin
+    tree = mktempdir()
+
+    # Mixed types and `missing` both survive the write.
+    mixed = DataFrame(
+        riderkey = ["a", "b", "c"],
+        cost = [10, 14, 6],
+        points = [1.5, 2.25, 0.0],
+        chosen = [true, false, true],
+        team = ["T1", "T2", "T3"],
+        note = [missing, "x", missing],
+    )
+    save_race_snapshot(mixed, "odds", "mixed-race", 2026; archive_dir = tree)
+    loaded = load_race_snapshot("odds", "mixed-race", 2026; archive_dir = tree)
+
+    @test names(loaded) == names(mixed)
+    for c in names(mixed)
+        @test isequal(loaded[!, c], mixed[!, c])
+    end
+
+    # `copycols = true` materialises the mmapped columns. Without it a loaded
+    # frame is read-only backing: `sort!` and element assignment throw, which is
+    # what the `rematch_riderkeys!` workaround in utilities.jl existed to dodge.
+    @test loaded.riderkey isa Vector{String}
+    @test sort!(loaded, :cost) isa DataFrame
+    loaded.riderkey[1] = "z"
+    @test loaded.riderkey[1] == "z"
+
+    # Load, overwrite the same path, load again. A file left mmapped would keep
+    # a handle open and the second write would fail or read back stale.
+    save_race_snapshot(mixed, "odds", "mixed-race", 2026; archive_dir = tree)
+    again = load_race_snapshot("odds", "mixed-race", 2026; archive_dir = tree)
+    @test nrow(again) == nrow(mixed)
+
+    # A planted Feather V1 file is not an archive file any more.
+    planted = joinpath(tree, "odds", "mixed-race", "2019.feather")
+    touch(planted)
+    @test load_race_snapshot("odds", "mixed-race", 2019; archive_dir = tree) === nothing
+    @test 2019 ∉ archive_years("odds", "mixed-race"; archive_dir = tree)
+    @test 2026 ∈ archive_years("odds", "mixed-race"; archive_dir = tree)
+end
+
+@testset "Stage profile frame round-trip (WP3)" begin
+    tree = mktempdir()
+    stages = [
+        StageProfile(1, :flat, 182.5, 24, 850, 0.4, 0, 0, 2, false),
+        StageProfile(2, :mountain, 165.0, 310, 4200, 7.8, 2, 1, 1, true),
+        StageProfile(3, :itt, 33.0, 12, 180, 0.2, 0, 0, 0, false),
+    ]
+
+    save_race_snapshot(
+        stage_profiles_frame(stages),
+        "pcs_stage_profiles",
+        "test-tour",
+        2026;
+        archive_dir = tree,
+    )
+    loaded = load_stage_profiles("test-tour", 2026; archive_dir = tree)
+
+    @test length(loaded) == length(stages)
+    for (a, b) in zip(stages, loaded), f in fieldnames(StageProfile)
+        @test getfield(a, f) == getfield(b, f)
+    end
+
+    # The narrow `stage_profiles` type is gone, not merely unused: nothing
+    # writes it, so nothing should find it.
+    @test load_race_snapshot("stage_profiles", "test-tour", 2026; archive_dir = tree) ===
+          nothing
 end
 
 @testset "Prediction archive schema hardening (WP0.3)" begin
