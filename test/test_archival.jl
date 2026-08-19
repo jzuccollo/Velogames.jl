@@ -27,6 +27,7 @@
             "pcs_specialty",
             DataFrame(
                 riderkey = ["a", "b"],
+                rider = ["A", "B"],
                 oneday = [1000, 500],
                 gc = [800, 300],
                 tt = [600, 200],
@@ -68,7 +69,7 @@ end
     for (slug, years) in ("milano-sanremo" => [2024, 2025], "paris-roubaix" => [2025])
         for yr in years
             save_race_snapshot(
-                DataFrame(riderkey = ["a"], odds = [2.5]),
+                DataFrame(riderkey = ["a"], rider = ["A"], odds = [2.5]),
                 "odds",
                 slug,
                 yr;
@@ -151,6 +152,8 @@ end
     # Mixed types and `missing` both survive the write.
     mixed = DataFrame(
         riderkey = ["a", "b", "c"],
+        rider = ["A", "B", "C"],
+        odds = [2.5, 8.0, 21.0],
         cost = [10, 14, 6],
         points = [1.5, 2.25, 0.0],
         chosen = [true, false, true],
@@ -244,7 +247,8 @@ end
     )
     @test_throws ErrorException Velogames._archive_predictions(incomplete, config)
 
-    # Synthetic archive round-trip: all mandatory columns + schema_version survive
+    # Synthetic archive round-trip: every mandatory column survives, and the
+    # version rides in the file metadata rather than in a column of its own.
     test_archive = mktempdir()
     complete = DataFrame(
         riderkey = ["a", "b"],
@@ -254,7 +258,6 @@ end
         chosen = [true, false],
         selection_frequency = [0.5, 0.3],
         expected_vg_points = [100.0, 80.0],
-        schema_version = fill(Velogames.PREDICTION_ARCHIVE_SCHEMA_VERSION, 2),
     )
     save_race_snapshot(
         complete,
@@ -270,11 +273,15 @@ end
         archive_dir = test_archive,
     )
     @test loaded !== nothing
-    for col in Velogames.PREDICTION_MANDATORY_COLUMNS
-        @test col in propertynames(loaded)
-    end
-    @test :schema_version in propertynames(loaded)
-    @test all(loaded.schema_version .== Velogames.PREDICTION_ARCHIVE_SCHEMA_VERSION)
+    @test isempty(missing_mandatory_columns("predictions", loaded))
+    @test :schema_version ∉ propertynames(loaded)
+    prov = archive_provenance(
+        "predictions",
+        "test-archival-wp03",
+        2025;
+        archive_dir = test_archive,
+    )
+    @test prov["schema_version"] == string(ARCHIVE_TYPES["predictions"].version)
 
     # Legacy-shaped frame (missing chosen/cost/team/selection_frequency/
     # expected_vg_points — only riderkey/rider/strength survive) reads through
@@ -286,20 +293,15 @@ end
     )
     legacy_pcs_results =
         DataFrame(riderkey = ["a", "b", "c", "d", "e"], position = [1, 2, 3, 4, 5])
-    save_race_snapshot(
-        legacy_predictions,
-        "predictions",
-        "legacy-test-race",
-        2024;
-        archive_dir = test_archive,
-    )
-    save_race_snapshot(
-        legacy_pcs_results,
-        "pcs_results",
-        "legacy-test-race",
-        2024;
-        archive_dir = test_archive,
-    )
+    # Planted with Arrow directly: `save_race_snapshot` would refuse both frames
+    # now, which is the point — these are what the archive holds from before the
+    # guard, not what anything is allowed to write today.
+    for (df, data_type) in
+        ((legacy_predictions, "predictions"), (legacy_pcs_results, "pcs_results"))
+        path = archive_path(data_type, "legacy-test-race", 2024; archive_dir = test_archive)
+        mkpath(dirname(path))
+        Velogames.Arrow.write(path, df)
+    end
     result = evaluate_prospective("legacy-test-race", 2024; archive_dir = test_archive)
     @test result !== nothing
     @test result.n_matched == 5
@@ -350,4 +352,138 @@ end
     # A non-empty entry keeps the full TTL.
     @test nrow(Velogames.cached_fetch(fetch_func, url; cache_config = cache)) == 1
     @test n_fetches[] == 2
+end
+
+@testset "Archive type guard (WP5)" begin
+    tree = mktempdir()
+
+    # An unknown type errors, and — the property actually being bought — leaves
+    # no directory behind. An empty `prediction/` sitting beside `predictions/`
+    # is what made a typo look like a data type for four months.
+    @test_throws ErrorException save_race_snapshot(
+        DataFrame(riderkey = ["a"]),
+        "predicton",
+        "test-race",
+        2026;
+        archive_dir = tree,
+    )
+    @test !isdir(joinpath(tree, "predicton"))
+
+    # The narrow `stage_profiles` and every retired tree are unknown names now.
+    for name in ["stage_profiles"; [r.name for r in RETIRED_ARCHIVE_TYPES]]
+        @test_throws ErrorException save_race_snapshot(
+            DataFrame(riderkey = ["a"]),
+            name,
+            "test-race",
+            2026;
+            archive_dir = tree,
+        )
+        @test !isdir(joinpath(tree, name))
+    end
+
+    # Table-driven over every entry: a frame of exactly its mandatory columns
+    # writes, and dropping any one of them throws. The first half pins that
+    # every entry is satisfiable, so no type is impossible to archive.
+    for (data_type, spec) in ARCHIVE_TYPES
+        full = DataFrame([c => ["x"] for c in spec.mandatory])
+        save_race_snapshot(full, data_type, "guard-race", 2026; archive_dir = tree)
+        @test has_race_snapshot(data_type, "guard-race", 2026; archive_dir = tree)
+
+        for col in spec.mandatory
+            short = select(full, Not(col))
+            @test missing_mandatory_columns(data_type, short) == [col]
+            @test_throws ErrorException save_race_snapshot(
+                short,
+                data_type,
+                "guard-race",
+                2027;
+                archive_dir = tree,
+            )
+        end
+    end
+end
+
+@testset "Archive provenance metadata (WP5)" begin
+    tree = mktempdir()
+    df = DataFrame(riderkey = ["a"], rider = ["A"], odds = [3.5])
+    url = "https://www.velogames.com/sixes-classics/2026/riders.php"
+    save_race_snapshot(df, "odds", "prov-race", 2026; archive_dir = tree, source_url = url)
+
+    prov = archive_provenance("odds", "prov-race", 2026; archive_dir = tree)
+    @test prov !== nothing
+    @test issubset(Velogames.ARCHIVE_PROVENANCE_KEYS, collect(keys(prov)))
+    @test prov["data_type"] == "odds"
+    @test prov["source_url"] == url
+    @test prov["schema_version"] == "1"
+    @test !isempty(prov["machine"])
+
+    # Provenance is metadata, not columns: nothing joins against it, and the
+    # allowlist in `_archive_predictions` cannot drop it.
+    loaded = load_race_snapshot("odds", "prov-race", 2026; archive_dir = tree)
+    @test names(loaded) == names(df)
+
+    # A file written before WP5 has none, and that is not an error on read.
+    path = archive_path("odds", "legacy-race", 2026; archive_dir = tree)
+    mkpath(dirname(path))
+    Velogames.Arrow.write(path, df)
+    @test archive_provenance("odds", "legacy-race", 2026; archive_dir = tree) === nothing
+    @test nrow(load_race_snapshot("odds", "legacy-race", 2026; archive_dir = tree)) == 1
+end
+
+@testset "Archive manifest is derived, not maintained (WP5)" begin
+    tree = mktempdir()
+    @test !archive_manifest_matches(; archive_dir = tree)
+
+    path = write_archive_manifest(; archive_dir = tree)
+    @test archive_manifest_matches(; archive_dir = tree)
+
+    manifest = TOML.parsefile(path)
+    @test Set(keys(manifest["types"])) == Set(keys(ARCHIVE_TYPES))
+    @test Set(keys(manifest["retired"])) == Set(r.name for r in RETIRED_ARCHIVE_TYPES)
+    for (name, spec) in ARCHIVE_TYPES
+        entry = manifest["types"][name]
+        @test entry["version"] == spec.version
+        @test entry["mandatory"] == String.(spec.mandatory)
+        @test entry["refetchable"] == spec.refetchable
+    end
+
+    # Hand-edited, so it no longer describes the archive: `--check` says so.
+    write(path, replace(read(path, String), "[types.odds]" => "[types.oddz]"))
+    @test !archive_manifest_matches(; archive_dir = tree)
+end
+
+@testset "Archive audit finds the legacy defects (WP5)" begin
+    tree = mktempdir()
+    good = DataFrame(riderkey = ["a"], rider = ["A"], odds = [3.5])
+    save_race_snapshot(good, "odds", "clean-race", 2026; archive_dir = tree)
+
+    # One planted defect of each kind, all of them things the write guard would
+    # now refuse — which is exactly why the audit has to look for them on disk.
+    mkpath(joinpath(tree, "oddz", "typo-race"))
+    Velogames.Arrow.write(
+        joinpath(tree, "oddz", "typo-race", "2026.arrow"),
+        DataFrame(riderkey = ["a"]),
+    )
+    short_path = archive_path("odds", "short-race", 2026; archive_dir = tree)
+    mkpath(dirname(short_path))
+    Velogames.Arrow.write(short_path, DataFrame(riderkey = ["a"], rider = ["A"]))
+    touch(joinpath(tree, "odds", "clean-race", "notes.txt"))
+    mkpath(joinpath(tree, "odds", "hollow-race"))
+    mkpath(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke"))
+    touch(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke", "2025.arrow"))
+
+    a = audit_archive(; archive_dir = tree)
+
+    @test a.unknown_types == ["oddz"]
+    @test a.stray_files == [joinpath(tree, "odds", "clean-race", "notes.txt")]
+    @test a.empty_races == [joinpath("odds", "hollow-race")]
+    @test [x.path for x in a.missing_columns] == [short_path]
+    @test a.missing_columns[1].missing == [:odds]
+    # The clean file was stamped on write; the two planted ones were not.
+    @test Set(a.missing_provenance) ==
+          Set([short_path, joinpath(tree, "oddz", "typo-race", "2026.arrow")])
+    @test isempty(a.unreadable)
+    odds_count = only(c for c in a.counts if c.data_type == "odds")
+    @test odds_count.files == 2
+    @test odds_count.races == 3
 end

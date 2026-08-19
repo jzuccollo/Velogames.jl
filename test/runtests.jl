@@ -5,6 +5,7 @@ using JuMP
 using Dates
 using Random
 using Statistics
+using TOML
 using Gumbo
 using Cascadia
 

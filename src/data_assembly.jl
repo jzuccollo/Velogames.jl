@@ -654,9 +654,16 @@ function load_vg_classics_riders(
     archived = load_race_snapshot("vg_riders", slug, year; archive_dir = archive_dir)
     archived === nothing || return archived
 
-    riders = getvg_riders(vg_classics_url(year); cache_config = cache_config)
-    nrow(riders) > 0 &&
-        save_race_snapshot(riders, "vg_riders", slug, year; archive_dir = archive_dir)
+    url = vg_classics_url(year)
+    riders = getvg_riders(url; cache_config = cache_config)
+    nrow(riders) > 0 && save_race_snapshot(
+        riders,
+        "vg_riders",
+        slug,
+        year;
+        archive_dir = archive_dir,
+        source_url = url,
+    )
     return riders
 end
 
@@ -922,7 +929,13 @@ function archive_stage_race_results(
             riders = suppress_output() do
                 getvg_riders(riders_url; cache_config = cache_config)
             end
-            save_race_snapshot(riders, "vg_stage_riders", pcs_slug, year)
+            save_race_snapshot(
+                riders,
+                "vg_stage_riders",
+                pcs_slug,
+                year;
+                source_url = riders_url,
+            )
             @info "Archived vg_stage_riders for $pcs_slug $year"
         catch e
             @warn "Failed to archive VG riders for $pcs_slug $year: $e"

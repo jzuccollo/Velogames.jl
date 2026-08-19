@@ -66,29 +66,6 @@ function _race_has_happened(config::RaceConfig)
     return Dates.Date(info.date) < today
 end
 
-"""
-Prediction-archive schema (WP0.3, April 2026). These columns must always be
-present at archive time — they're what `league_eval.jl` and
-`prospective_eval.jl` need to score an archived team and diagnose signal
-value. `schema_version` lets readers distinguish this hardened schema from
-legacy (pre-April-2026) archives that predate it and cannot be re-created.
-"""
-const PREDICTION_ARCHIVE_SCHEMA_VERSION = 2
-const PREDICTION_MANDATORY_COLUMNS = [
-    :riderkey,
-    :rider,
-    :team,
-    :cost,
-    :chosen,
-    :selection_frequency,
-    :expected_vg_points,
-]
-
-# Single source of the mandatory-column check, shared by the write-time error
-# (`_archive_predictions`) and the read-time warning (`_check_prediction_schema`).
-_missing_prediction_columns(df::DataFrame) =
-    setdiff(PREDICTION_MANDATORY_COLUMNS, propertynames(df))
-
 """Archive the predicted DataFrame for prospective evaluation."""
 function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     isempty(config.pcs_slug) && return
@@ -103,7 +80,10 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
         end
     end
 
-    missing_cols = _missing_prediction_columns(predicted)
+    # `save_race_snapshot` checks the mandatory columns too, but it is reached
+    # through a `try` here, so the error would become a warning and the run would
+    # carry on having archived nothing. Check before the allowlist trims the frame.
+    missing_cols = missing_mandatory_columns("predictions", predicted)
     isempty(missing_cols) || error(
         "_archive_predictions: predicted DataFrame is missing mandatory columns $missing_cols — refusing to write an incomplete prediction archive",
     )
@@ -112,55 +92,57 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     # the check above yet be silently dropped by this allowlist.
     cols = intersect(
         propertynames(predicted),
-        union(PREDICTION_MANDATORY_COLUMNS, [
-            :riderkey,
-            :rider,
-            :team,
-            :cost,
-            :strength,
-            :uncertainty,
-            :shift_pcs,
-            :shift_vg,
-            :shift_history,
-            :shift_vg_history,
-            :shift_oracle,
-            :shift_oracle_points,
-            :shift_oracle_kom,
-            :shift_odds,
-            :info_share_pcs,
-            :info_share_vg,
-            :info_share_history,
-            :info_share_vg_history,
-            :info_share_points_history,
-            :info_share_kom_history,
-            :info_share_oracle,
-            :info_share_oracle_gc,
-            :info_share_oracle_points,
-            :info_share_oracle_kom,
-            :info_share_odds,
-            :info_share_odds_points,
-            :info_share_odds_kom,
-            :info_share_odds_stagewin,
-            :strength_flat,
-            :strength_hilly,
-            :strength_mountain,
-            :strength_itt,
-            :strength_gc,
-            :strength_kom,
-            :uncertainty_flat,
-            :uncertainty_hilly,
-            :uncertainty_mountain,
-            :uncertainty_itt,
-            :uncertainty_gc,
-            :uncertainty_kom,
-            :expected_vg_points,
-            :market_blend_points,
-            :selection_frequency,
-            :chosen,
-        ]),
+        union(
+            ARCHIVE_TYPES["predictions"].mandatory,
+            [
+                :riderkey,
+                :rider,
+                :team,
+                :cost,
+                :strength,
+                :uncertainty,
+                :shift_pcs,
+                :shift_vg,
+                :shift_history,
+                :shift_vg_history,
+                :shift_oracle,
+                :shift_oracle_points,
+                :shift_oracle_kom,
+                :shift_odds,
+                :info_share_pcs,
+                :info_share_vg,
+                :info_share_history,
+                :info_share_vg_history,
+                :info_share_points_history,
+                :info_share_kom_history,
+                :info_share_oracle,
+                :info_share_oracle_gc,
+                :info_share_oracle_points,
+                :info_share_oracle_kom,
+                :info_share_odds,
+                :info_share_odds_points,
+                :info_share_odds_kom,
+                :info_share_odds_stagewin,
+                :strength_flat,
+                :strength_hilly,
+                :strength_mountain,
+                :strength_itt,
+                :strength_gc,
+                :strength_kom,
+                :uncertainty_flat,
+                :uncertainty_hilly,
+                :uncertainty_mountain,
+                :uncertainty_itt,
+                :uncertainty_gc,
+                :uncertainty_kom,
+                :expected_vg_points,
+                :market_blend_points,
+                :selection_frequency,
+                :chosen,
+            ],
+        ),
     )
     out = predicted[:, cols]
-    out[!, :schema_version] .= PREDICTION_ARCHIVE_SCHEMA_VERSION
     try
         save_race_snapshot(out, "predictions", config.pcs_slug, config.year)
     catch e

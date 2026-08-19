@@ -10,15 +10,15 @@ backtesting framework (Spearman rho, top-N overlap, signal shifts).
     _check_prediction_schema(predictions, label) -> predictions
 
 Warn (once per legacy archive read) if an archived prediction DataFrame
-predates the WP0.3 schema hardening — i.e. is missing any of
-`PREDICTION_MANDATORY_COLUMNS`
-(`riderkey, rider, team, cost, chosen, selection_frequency, expected_vg_points`).
+predates the WP0.3 schema hardening — i.e. is missing any of the mandatory
+columns `ARCHIVE_TYPES["predictions"]` declares (`riderkey, rider, team, cost,
+chosen, selection_frequency, expected_vg_points`).
 Never throws: legacy (pre-April-2026) archives can't be re-created, so readers
 must tolerate them and degrade gracefully rather than crash. Returns
 `predictions` unchanged for chaining.
 """
 function _check_prediction_schema(predictions::DataFrame, label::AbstractString)
-    missing_cols = _missing_prediction_columns(predictions)
+    missing_cols = missing_mandatory_columns("predictions", predictions)
     if !isempty(missing_cols)
         @warn "Legacy prediction archive for $label is missing columns $missing_cols — pre-April-2026 archives predate the schema hardening and cannot be re-created; affected metrics may be skipped or degraded"
     end

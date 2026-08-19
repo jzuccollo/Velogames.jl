@@ -221,9 +221,11 @@ Archive trees that are no longer data types, with where they went and why.
 
 Documentation, not machinery: the entries are here so the type manifest can
 account for every directory in the archive without anyone having to rediscover
-what these held. Retired trees keep their original Feather V1 encoding — a
-historical record does not need the current format — so the Arrow migration
-skips `_retired/` and `_inputs/` entirely.
+what these held. These trees are Arrow like everything else: they were left as
+Feather V1 on the argument that a historical record does not need the current
+format, which lost to the simpler one that those 40 files were the only thing
+keeping an end-of-life dependency in the manifest. `_inputs/` holds `.mhtml`
+pages and no tabular data, so nothing there was converted.
 """
 const RETIRED_ARCHIVE_TYPES = [
     (
@@ -247,6 +249,254 @@ const RETIRED_ARCHIVE_TYPES = [
         reason = "Four `.mhtml` pages and no tabular data — a raw input masquerading as a data type. At the top level it would force the manifest to carry an entry for a tree holding no archive files.",
     ),
 ]
+
+
+"""
+Every live archive data type, with the columns a file of that type must carry.
+
+`save_race_snapshot` reads this table: an unknown type is an error and creates no
+directory, and a frame missing a mandatory column is an error rather than a
+snapshot nobody can use. The five archive drift modes this closes are set out in
+`docs/data-dictionary.md`; the short version is that the archive is a boundary
+crossing processes, languages and years, so it is the one place in this package
+that checks its inputs.
+
+The mandatory lists are a **census** of what is on disk — the intersection of the
+column sets across every live file of a type — cross-checked against what the
+writer provably emits, not a wish list. A list stricter than the writers emit
+turns an irreplaceable snapshot into a lost one: odds and oracle are written
+through `_try_archive`, which swallows the error into a warning, so an
+over-strict entry would silently drop a human-pasted odds sheet nobody can
+re-paste. Two census facts the lists respect: `vg_results` carries `year` on only
+some files, and `vg_stage_riders` carries `class`, `classraw` and `selected` on
+only some.
+
+`refetchable` is the column that says which trees need backing up: `false` means
+the file is the only copy — a market that has closed, a Velogames page that will
+retire, a model output from a particular afternoon.
+"""
+const ARCHIVE_TYPES = Dict(
+    "odds" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :odds],
+        refetchable = false,
+        note = "Bookmaker winner market, pasted by hand from Oddschecker on race eve. Decimal odds, median across bookmakers.",
+    ),
+    "odds_points" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :odds],
+        refetchable = false,
+        note = "As `odds`, for a stage race's points classification.",
+    ),
+    "odds_kom" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :odds],
+        refetchable = false,
+        note = "As `odds`, for a stage race's mountains classification.",
+    ),
+    "odds_stagewin" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :odds],
+        refetchable = false,
+        note = "As `odds`, for a single stage's winner market.",
+    ),
+    "oracle" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :win_prob],
+        refetchable = false,
+        note = "Cycling Oracle win probabilities, normalised to sum to 1. The blog post is edited and eventually disappears.",
+    ),
+    "oracle_points" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :win_prob],
+        refetchable = false,
+        note = "As `oracle`, for a stage race's points classification.",
+    ),
+    "oracle_kom" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :win_prob],
+        refetchable = false,
+        note = "As `oracle`, for a stage race's mountains classification.",
+    ),
+    "pcs_abandons" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :abandon_stage],
+        refetchable = true,
+        note = "Stage each non-finisher left a grand tour, derived from the per-stage results.",
+    ),
+    "pcs_gc_results" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :team, :position],
+        refetchable = true,
+        note = "Final general classification, scoped to the /gc page's active tab.",
+    ),
+    "pcs_results" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :team, :position, :in_breakaway, :breakaway_km],
+        refetchable = true,
+        note = "One-day finishing order. The breakaway columns come from JavaScript-rendered markup and are false/missing on an HTTP scrape.",
+    ),
+    "pcs_seasons" => (
+        version = 1,
+        mandatory = [:riderkey, :year, :pcs_points, :pcs_rank],
+        refetchable = false,
+        note = "Per-season PCS points and rank per rider. The current season's row moves as the year runs, so this is the as-of-race-day copy that keeps backtests honest.",
+    ),
+    "pcs_specialty" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :oneday, :gc, :tt, :sprint, :climber],
+        refetchable = false,
+        note = "PCS specialty ratings as of race day. Live ratings drift, so re-fetching would leak the future into a backtest.",
+    ),
+    "pcs_specialty_seasons" => (
+        version = 1,
+        mandatory = [:riderkey, :year, :specialty, :points],
+        refetchable = false,
+        note = "Long-format per-season specialty points, for recomputing recency weights as of a race date.",
+    ),
+    "pcs_stage_profiles" => (
+        version = 1,
+        mandatory = [
+            :stage_number,
+            :stage_type,
+            :distance_km,
+            :profile_score,
+            :vertical_meters,
+            :gradient_final_km,
+            :n_hc_climbs,
+            :n_cat1_climbs,
+            :n_intermediate_sprints,
+            :is_summit_finish,
+        ],
+        refetchable = true,
+        note = "One row per stage, one column per `StageProfile` field. Written by `stage_profiles_frame` from both the pre-race and post-race paths; PCS revises distance and ProfileScore between the two.",
+    ),
+    "pcs_stage_results" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :team, :position, :stage],
+        refetchable = true,
+        note = "Every rider's finishing position on every stage of a grand tour.",
+    ),
+    "predictions" => (
+        version = 2,
+        mandatory = [
+            :riderkey,
+            :rider,
+            :team,
+            :cost,
+            :chosen,
+            :selection_frequency,
+            :expected_vg_points,
+        ],
+        refetchable = false,
+        note = "The model's pre-race output, the input to prospective evaluation and league scoring. Eight 2026 files predate the hardened schema and are missing some of these; the audit lists them, and they cannot be re-created.",
+    ),
+    "vg_racelist" => (
+        version = 1,
+        mandatory = [:race_number, :deadline, :name, :category, :namekey],
+        refetchable = false,
+        note = "The season's classics calendar. Keyed by VG game slug, not `pcs_slug`. Velogames retires `races.php` for past seasons.",
+    ),
+    "vg_results" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :team, :score],
+        refetchable = false,
+        note = "Realised Velogames points per rider for one race. Carries `year` on some files only. Scores are revised for about 24 hours after a race.",
+    ),
+    "vg_riders" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :team, :cost, :points],
+        refetchable = false,
+        note = "The classics rider pool: the only surviving record of rider costs for a season, since `riders.php` retires and no other source carries cost. Keyed by VG game slug, not `pcs_slug`.",
+    ),
+    "vg_scoring" => (
+        version = 1,
+        mandatory = [:field, :position, :points],
+        refetchable = false,
+        note = "A stage race's published scoring table, scraped from its rules page.",
+    ),
+    "vg_stage_results" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :team, :score, :stage],
+        refetchable = false,
+        note = "Velogames points per rider per stage of a grand tour.",
+    ),
+    "vg_stage_riders" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :team, :cost, :points],
+        refetchable = false,
+        note = "A grand tour's rider pool. Carries `class`, `classraw` and `selected` on some files only.",
+    ),
+    "vg_stage_totals" => (
+        version = 1,
+        mandatory = [:riderkey, :rider, :team, :score],
+        refetchable = false,
+        note = "Velogames points per rider across a whole grand tour.",
+    ),
+)
+
+"""
+    missing_mandatory_columns(data_type, df) -> Vector{Symbol}
+
+Which of `data_type`'s mandatory columns `df` lacks. Empty for an unknown type —
+the unknown type is `save_race_snapshot`'s error to raise, and readers of legacy
+files have nothing to check against.
+
+The single source of the column check, shared by the write-time error and the
+read-time warning in `prospective_eval.jl`.
+"""
+function missing_mandatory_columns(data_type::AbstractString, df::DataFrame)
+    spec = get(ARCHIVE_TYPES, String(data_type), nothing)
+    spec === nothing && return Symbol[]
+    return setdiff(spec.mandatory, propertynames(df))
+end
+
+"""
+Provenance keys written into every archive file's Arrow schema metadata.
+
+Metadata rather than columns because the grain is the file: one file is one
+fetch, and the motivating question — which side of Velogames' 24-hour score
+revision a row came from — is a property of the fetch. Columns would also
+collide on the joins in `backtest.jl` and `prospective_eval.jl`, where both
+sides would carry `fetched_at`, and would be silently dropped by
+`_archive_predictions`' allowlist.
+
+`source_url` is filled in where the URL is already to hand and left empty
+elsewhere.
+"""
+const ARCHIVE_PROVENANCE_KEYS =
+    ["data_type", "schema_version", "fetched_at", "machine", "source_url"]
+
+_archive_provenance(data_type::AbstractString, version::Int, source_url::AbstractString) =
+    Dict(
+        "data_type" => String(data_type),
+        "schema_version" => string(version),
+        "fetched_at" => string(now()),
+        "machine" => gethostname(),
+        "source_url" => String(source_url),
+    )
+
+"""
+    archive_provenance(path) -> Union{Dict{String,String}, Nothing}
+    archive_provenance(data_type, pcs_slug, year; archive_dir) -> Union{Dict{String,String}, Nothing}
+
+The provenance stamped on an archive file, or `nothing` for a file written
+before WP5 (which is most of them — the audit is what reports those, not a
+warning on every read).
+"""
+function archive_provenance(path::AbstractString)
+    isfile(path) || return nothing
+    meta = Arrow.getmetadata(Arrow.Table(path))
+    (meta === nothing || isempty(meta)) && return nothing
+    return Dict(String(k) => String(v) for (k, v) in meta)
+end
+
+archive_provenance(
+    data_type::String,
+    pcs_slug::String,
+    year::Int;
+    archive_dir::String = archive_dir(),
+) = archive_provenance(archive_path(data_type, pcs_slug, year; archive_dir = archive_dir))
 
 """
     league_winners_path(; archive_dir) -> String
@@ -383,10 +633,19 @@ has_race_snapshot(
 ) = isfile(archive_path(data_type, pcs_slug, year; archive_dir = archive_dir))
 
 """
-    save_race_snapshot(df, data_type, pcs_slug, year; archive_dir) -> Nothing
+    save_race_snapshot(df, data_type, pcs_slug, year; archive_dir, source_url) -> Nothing
 
 Save a DataFrame to the permanent archive. Creates directories as needed.
-Overwrites any existing snapshot for the same race/year/type.
+Overwrites any existing snapshot for the same race/year/type, and stamps
+provenance into the file's Arrow schema metadata.
+
+Two things error rather than write: a `data_type` absent from `ARCHIVE_TYPES`,
+and a frame missing one of that type's mandatory columns. The first check runs
+before `mkpath`, so a typo'd type leaves no directory behind — that empty
+directory is what made `prediction` look like a real type beside `predictions`
+for four months.
+
+Pass `source_url` where the URL is already to hand.
 """
 function save_race_snapshot(
     df::DataFrame,
@@ -394,10 +653,29 @@ function save_race_snapshot(
     pcs_slug::String,
     year::Int;
     archive_dir::String = archive_dir(),
+    source_url::AbstractString = "",
 )
+    spec = get(ARCHIVE_TYPES, data_type, nothing)
+    spec === nothing && error(
+        "save_race_snapshot: unknown archive data type \"$data_type\". Add an entry to " *
+        "ARCHIVE_TYPES in cache_utils.jl — and check first whether it is one of the " *
+        "$(length(ARCHIVE_TYPES)) types we already have under a different name: " *
+        join(sort(collect(keys(ARCHIVE_TYPES))), ", "),
+    )
+
+    missing_cols = missing_mandatory_columns(data_type, df)
+    isempty(missing_cols) || error(
+        "save_race_snapshot: $data_type frame for $pcs_slug $year is missing mandatory " *
+        "columns $missing_cols — refusing to write a snapshot nothing can read",
+    )
+
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     mkpath(dirname(path))
-    Arrow.write(path, df)
+    Arrow.write(
+        path,
+        df;
+        metadata = _archive_provenance(data_type, spec.version, source_url),
+    )
     @info "Archived $data_type for $pcs_slug $year → $path"
     return nothing
 end
@@ -406,6 +684,11 @@ end
     load_race_snapshot(data_type, pcs_slug, year; archive_dir) -> Union{DataFrame, Nothing}
 
 Load a DataFrame from the permanent archive. Returns `nothing` if the file does not exist.
+
+Warns when a file was written at a different `schema_version` from the one
+`ARCHIVE_TYPES` now declares. A file with no provenance at all is silent: every
+file written before WP5 is in that state, and a backtest opens hundreds of them
+in a run. Finding those is `scripts/archive_audit.jl`'s job.
 """
 function load_race_snapshot(
     data_type::String,
@@ -416,13 +699,192 @@ function load_race_snapshot(
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     if isfile(path)
         try
-            return DataFrame(Arrow.Table(path); copycols = true)
+            tbl = Arrow.Table(path)
+            _warn_on_version_drift(tbl, data_type, pcs_slug, year)
+            return DataFrame(tbl; copycols = true)
         catch e
             @warn "Failed to load archive $path: $e"
             return nothing
         end
     end
     return nothing
+end
+
+function _warn_on_version_drift(tbl, data_type::String, pcs_slug::String, year::Int)
+    spec = get(ARCHIVE_TYPES, data_type, nothing)
+    spec === nothing && return nothing
+    meta = Arrow.getmetadata(tbl)
+    (meta === nothing || !haskey(meta, "schema_version")) && return nothing
+    written = tryparse(Int, meta["schema_version"])
+    if written !== nothing && written != spec.version
+        @warn "Archived $data_type for $pcs_slug $year was written at schema_version $written; ARCHIVE_TYPES declares $(spec.version)"
+    end
+    return nothing
+end
+
+"""
+    archive_manifest_path(; archive_dir) -> String
+
+`<archive_dir>/_manifest.toml`: the archive's self-description, for readers in
+other languages that cannot see the Julia const.
+"""
+archive_manifest_path(; archive_dir::String = archive_dir()) =
+    joinpath(archive_dir, "_manifest.toml")
+
+"""
+    archive_manifest_text() -> String
+
+The manifest as it should be on disk — a pure function of `ARCHIVE_TYPES` and
+`RETIRED_ARCHIVE_TYPES`, so `--check` is a string comparison and there is one
+source of truth rather than two hand-maintained lists.
+
+Written by a command rather than as a side effect of every save: rewriting a
+file in the archive root hundreds of times a run is how Dropbox produces a
+conflicted copy, and `serve.jl` and launchd would tear it concurrently.
+"""
+function archive_manifest_text()
+    esc(s) = replace(String(s), "\\" => "\\\\", "\"" => "\\\"")
+    io = IOBuffer()
+    write(
+        io,
+        """
+        # Velogames archive manifest — derived from `ARCHIVE_TYPES` and
+        # `RETIRED_ARCHIVE_TYPES` in src/cache_utils.jl, which are the source of truth.
+        # Write it with `julia --project scripts/archive_audit.jl --write-manifest`;
+        # `--check` compares it against the const and exits non-zero if they differ.
+        # Every file is `<data_type>/<race>/<year>.arrow`, Arrow IPC, with provenance
+        # (data_type, schema_version, fetched_at, machine, source_url) in its schema
+        # metadata. `vg_riders` and `vg_racelist` are keyed by Velogames game slug
+        # rather than by PCS race slug.
+        """,
+    )
+    for name in sort(collect(keys(ARCHIVE_TYPES)))
+        t = ARCHIVE_TYPES[name]
+        write(io, "\n[types.$name]\n")
+        write(io, "version = $(t.version)\n")
+        write(io, "refetchable = $(t.refetchable)\n")
+        write(io, "mandatory = [", join(("\"$(c)\"" for c in t.mandatory), ", "), "]\n")
+        write(io, "note = \"$(esc(t.note))\"\n")
+    end
+    for r in RETIRED_ARCHIVE_TYPES
+        write(io, "\n[retired.$(r.name)]\n")
+        write(io, "moved_to = \"$(esc(r.moved_to))\"\n")
+        write(io, "reason = \"$(esc(r.reason))\"\n")
+    end
+    return String(take!(io))
+end
+
+"""
+    write_archive_manifest(; archive_dir) -> String
+
+Write `_manifest.toml` and return its path.
+"""
+function write_archive_manifest(; archive_dir::String = archive_dir())
+    path = archive_manifest_path(; archive_dir = archive_dir)
+    mkpath(dirname(path))
+    write(path, archive_manifest_text())
+    return path
+end
+
+"""
+    archive_manifest_matches(; archive_dir) -> Bool
+
+Whether the manifest on disk is the one the consts describe.
+"""
+function archive_manifest_matches(; archive_dir::String = archive_dir())
+    path = archive_manifest_path(; archive_dir = archive_dir)
+    return isfile(path) && read(path, String) == archive_manifest_text()
+end
+
+"""
+    audit_archive(; archive_dir) -> NamedTuple
+
+Walk the archive and report what the write guard cannot: legacy files that
+predate it. Returns `unknown_types`, `stray_files`, `empty_races`,
+`missing_columns`, `missing_provenance`, `unreadable` and per-type `counts`.
+
+The guard stops new drift; this is how you find out about the old kind. It also
+serves as WP1b's verification tool (every file is Arrow and loads) and WP4's
+acceptance test (which prediction archives are still deficient).
+"""
+function audit_archive(; archive_dir::String = archive_dir())
+    root = archive_dir
+    unknown_types = String[]
+    stray_files = String[]
+    empty_races = String[]
+    missing_columns = NamedTuple{(:path, :missing),Tuple{String,Vector{Symbol}}}[]
+    missing_provenance = String[]
+    unreadable = String[]
+    counts = NamedTuple{(:data_type, :races, :files, :rows),Tuple{String,Int,Int,Int}}[]
+
+    isdir(root) || return (;
+        unknown_types,
+        stray_files,
+        empty_races,
+        missing_columns,
+        missing_provenance,
+        unreadable,
+        counts,
+    )
+
+    # `_retired` and `_inputs` are ordinary directories one level up, so they are
+    # excluded by name rather than by assuming every top-level directory is a type.
+    entries = sort([
+        e for e in readdir(root) if
+        isdir(joinpath(root, e)) && !startswith(e, ".") && !startswith(e, "_")
+    ])
+    year_file = Regex("^\\d{4}\\Q" * ARCHIVE_EXT * "\\E\$")
+
+    for data_type in entries
+        haskey(ARCHIVE_TYPES, data_type) || push!(unknown_types, data_type)
+        n_files = 0
+        n_rows = 0
+        races = archive_races(data_type; archive_dir = root)
+        for race in races
+            racedir = joinpath(root, data_type, race)
+            files = [f for f in readdir(racedir) if !startswith(f, ".")]
+            archived = filter(f -> occursin(year_file, f), files)
+            append!(stray_files, [joinpath(racedir, f) for f in setdiff(files, archived)])
+            # A race directory does not imply a data file: three in the live tree
+            # hold nothing, which is why file counts trail directory counts.
+            isempty(archived) && push!(empty_races, joinpath(data_type, race))
+            for f in archived
+                path = joinpath(racedir, f)
+                tbl = try
+                    Arrow.Table(path)
+                catch
+                    push!(unreadable, path)
+                    continue
+                end
+                n_files += 1
+                cols = propertynames(tbl)
+                n_rows += isempty(cols) ? 0 : length(getproperty(tbl, cols[1]))
+                gaps = setdiff(
+                    get(ARCHIVE_TYPES, data_type, (; mandatory = Symbol[])).mandatory,
+                    cols,
+                )
+                isempty(gaps) || push!(missing_columns, (path = path, missing = gaps))
+                meta = Arrow.getmetadata(tbl)
+                if meta === nothing || !haskey(meta, "schema_version")
+                    push!(missing_provenance, path)
+                end
+            end
+        end
+        push!(
+            counts,
+            (data_type = data_type, races = length(races), files = n_files, rows = n_rows),
+        )
+    end
+
+    return (;
+        unknown_types,
+        stray_files,
+        empty_races,
+        missing_columns,
+        missing_provenance,
+        unreadable,
+        counts,
+    )
 end
 
 """
