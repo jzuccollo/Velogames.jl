@@ -1056,7 +1056,48 @@ Two things worth carrying into WP5:
   pre-existing, but it means a single end-of-season capture is not provably
   complete for a live season.
 
-#### State at handover, 19 August 2026
+#### State at handover, 19 August 2026 (evening)
+
+Supersedes the morning entry below, which is kept because its reasoning still
+applies. WP5, WP4 and an archive-wide completeness sweep all shipped in between;
+their own sections carry the detail. What a cold session needs:
+
+**Nothing is committed.** Fifteen modified files, three new ones
+(`docs/data-dictionary.md`, `scripts/archive_audit.jl`,
+`scripts/backfill_archive.jl`), one deleted (`scripts/migrate_archive_arrow.jl`,
+spent). The full test suite passes.
+
+**The archive is at 673 files / 327k rows**, all Arrow, all types known to
+`ARCHIVE_TYPES`, `_manifest.toml` in step. `archive_audit.jl` reports exactly two
+classes of legacy finding and nothing else: eight 2026 prediction files short of
+model columns, and 521 files predating the provenance stamp. Both are the
+documented end state.
+
+**The site is 144 pages and still undeployed.** 2023 and 2024 were added once
+their rider pools came back from the Internet Archive. The live site is still the
+pre-migration build, at 71 pages of 2025–26.
+
+**Deploying is deliberately last.** The instruction is that nothing goes out
+until the whole migration is done and checked locally, so the order is Phase 1b →
+Phase 1c → a full `--force` re-render of all four years → merge → deploy →
+reload the launchd jobs.
+
+**Two loose ends:**
+
+- `super-8-classic` 2023 and 2024 have no `pcs_results`: PCS rate-limited the
+  sweep after ~100 fetches and was still returning 403 an hour later. Re-run
+  `julia --project scripts/backfill_archive.jl --run --years=2023,2024` once it
+  relents. It is idempotent and will find nothing else.
+- **The vgleague launchd jobs can be reloaded now, without deploying anything.**
+  `local_update.sh` calls the publish hook as
+  `"$POST_UPDATE_HOOK" || echo "post-update hook failed, continuing"`, so a
+  Velogames publish that fails — and it will, since `velogames-deploy` is on
+  `main` and reads Feather — cannot wedge the league scrape. Unset
+  `POST_UPDATE_HOOK` in `vgleague-deploy/.env` and reload, and league snapshots
+  keep accruing. Nothing has been captured since 18 August, and Bretagne Classic
+  is 30 August.
+
+#### State at handover, 19 August 2026 (morning)
 
 Written down because none of it is inferable from the code, and the next session
 starts cold.
@@ -1077,6 +1118,12 @@ starts cold.
 - `site/docs/reports/milan-san-remo-2025.html` exists **only** as a mirror pulled
   from the live site. The renderer never generates it, so a clean rebuild loses
   it and the index link breaks. Retiring the duplicate slug is the real fix.
+
+**Resolved, 19 August 2026: Feather is gone.** `_retired/` was converted to
+Arrow (40 files, value-verified by the same migration script, which was then
+deleted), and the dependency removed from `Project.toml`. The pre-flight copy
+stays Feather V1 as the untouched original. The paragraph below is the decision
+as it stood.
 
 **Outstanding decision: whether to drop Feather.** WP1b said to delete
 `scripts/migrate_archive_arrow.jl` and the Feather dependency once converted.
@@ -1119,6 +1166,34 @@ fetch path changes; it is the only check that catches a page retiring upstream
 before the data is gone.
 
 #### WP5 — close the drift class at the boundary
+
+**Shipped August 2026.** `ARCHIVE_TYPES` in `cache_utils.jl` holds all 23 live
+types with version, mandatory columns, `refetchable` and a note;
+`save_race_snapshot` errors on an unknown type *before* `mkpath` and on a frame
+short of a mandatory column; provenance is stamped into Arrow schema metadata;
+`scripts/archive_audit.jl` walks the tree and writes/checks `_manifest.toml`;
+`docs/data-dictionary.md` carries the arguments the const cannot.
+`PREDICTION_MANDATORY_COLUMNS`, `PREDICTION_ARCHIVE_SCHEMA_VERSION` and
+`_missing_prediction_columns` are gone from `race_solver.jl`, replaced by the
+table and `missing_mandatory_columns(data_type, df)`.
+
+Four things worth recording from the doing of it:
+
+- **The census validated itself.** Run against the live archive, the
+  census-derived mandatory lists flag exactly the 8 known-deficient prediction
+  files across 522 files and 306,364 rows, and nothing else. Had a list been
+  even slightly stricter than the writers emit, unrelated types would have lit
+  up here rather than in production.
+- **Absent provenance is silent on read, reported by the audit.** The design
+  said "stamped on write, warned on read"; a warning for *missing* metadata
+  would fire on all 522 legacy files, several hundred times in a single backtest
+  run, which is how a warning stops being read. `load_race_snapshot` warns only
+  when a file's `schema_version` differs from the one the table declares.
+- **`schema_version` left the predictions frame.** It was a column nothing read;
+  it is now file metadata like the rest, so the prediction archive is one column
+  narrower than before.
+- **WP4 is untouched.** The audit now names the 8 deficient files, which is the
+  acceptance test WP4 was waiting for.
 
 Every archive problem in this note is one of five drift modes, all of which happened
 because **`save_race_snapshot` accepts any string as a type and any frame as
@@ -1229,6 +1304,53 @@ you find out if it stops being.
 and deciding what its mandatory columns actually are. That is the work, not the check.
 
 #### WP4 — prediction archive repair
+
+**Shipped August 2026**, together with an archive-wide completeness sweep that
+was not in the plan and turned out to be the larger half of the work.
+
+`scripts/backfill_archive.jl --repair-predictions` restored `team` and `cost` to
+`omloop-het-nieuwsblad/2026` from the 2026 rider pool: all 175 riders matched on
+`riderkey` with no re-matching needed, so the note's `rematch_riderkeys!` step
+was unnecessary. Written with `Arrow.write` plus the provenance helper, as
+specified. The three model columns stay absent.
+
+**The end state is eight deficient files, not seven.** The acceptance line above
+undercounts because Omloop keeps its three missing model columns after the
+repair: six files short of `chosen`, `selection_frequency` and
+`expected_vg_points`, plus Kuurne and Trofeo Laigueglia short of
+`selection_frequency`.
+
+**The completeness sweep** filled every gap a source still serves, which is
+worth recording because two of them were closing:
+
+- **`pcs_results` for 2023–2025 was entirely absent** — 106 races with a
+  Velogames result and no finishing order. 104 archived; PCS rate-limited the
+  last two (`super-8-classic` 2023 and 2024), which need a retry after a
+  cool-off. The archive went from 522 files to 633.
+- **The 2023 and 2024 rider pools and calendars are gone from Velogames** —
+  `riders.php`, `races.php` and `ridescore.php` all 404 for those seasons — but
+  the Internet Archive has them, and `backfill_vg_pages.jl` now pins those
+  snapshots alongside 2025's. This is the WP1d argument arriving a year late for
+  two more seasons.
+- **Nine rows carried riderkeys from an older `createkey`** that kept
+  apostrophes, so O'Brien, O'Connor and D'Heygere were dropped by every join
+  against a pool keyed today. Fixed under a rule that requires the recomputed
+  key to match the season's pool while the stored one does not — which is why
+  the two `oracle` rows whose stored key is deliberately the fuller name
+  (`Juan Sebastián Molano` against a display name of `Sebastian Molano`) were
+  correctly left alone. Pool coverage for 2023–2025 is now 100%.
+- **The site doubled, from 71 pages to 144.** With the pools recovered, all 34
+  archived 2023 races and 33 archived 2024 races render, grand tours included.
+  Rendering them also surfaced six riders who scored Velogames points but sat in
+  neither the PCS general classification nor the abandons — five where PCS
+  writes a fuller name, one genuine spelling difference (`van den Broek` against
+  Velogames' `Van Den Broeck`) — now in `PCS_NAME_ALIASES`.
+- **A live scraper bug surfaced while capturing 2025 scoring tables.** The 2025
+  Vuelta labels its ordinary table `Stage Result (all stages, except for the
+  Stage 5 team time trial)`; `_vg_scoring_field` saw "team time trial" and filed
+  the stage-finish table as TTT points, first match won over the real TTT table,
+  and `stage_finish_points` came back empty. A heading that names the TTT only to
+  exclude it is now read as the ordinary table.
 
 With Strade Bianche handled in WP2, the repairable remainder is one race.
 `omloop-het-nieuwsblad/2026` is missing `team`, `cost`, `chosen`,
