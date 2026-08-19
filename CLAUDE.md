@@ -161,10 +161,9 @@ longer be re-rendered; its 43 pages are preserved only as already-published HTML
 Consequences to respect:
 
 - Never wipe the cache without checking what in it is still fetchable upstream.
-- `render_reports.jl --years=2026` is the only workable full-site rebuild. A
-  `--force` run over both years fails on the first 2025 race.
-- 2026 is on the same clock — its rider page will retire too. Archiving VG rider
-  costs per race is the durable fix and is what WP1c should cover.
+- The rebuild was restored by WP1d above, which archives the pool: a
+  `--force` run over both years now completes from a cold cache. Before WP1d it
+  failed on the first 2025 race.
 
 ### Site deployment (August 2026)
 

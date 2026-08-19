@@ -1056,6 +1056,68 @@ Two things worth carrying into WP5:
   pre-existing, but it means a single end-of-season capture is not provably
   complete for a live season.
 
+#### State at handover, 19 August 2026
+
+Written down because none of it is inferable from the code, and the next session
+starts cold.
+
+**Operational — needs action.**
+
+- **Both vgleague launchd jobs are unloaded** (`com.jzuccollo.vgleague-check`,
+  `com.jzuccollo.vgleague-update`), paused for the archive-mutating work.
+  Reload them once the deploy below is settled. **Bretagne Classic is 30 August**
+  and nothing publishes until they are back.
+- **The rebuilt site is on disk and undeployed.** `site/docs/` holds 72 pages
+  whose index matches the live site link-for-link. The live site is still the
+  pre-migration build. The 2026 pages carry the Phase 0.1/0.2 tie-break changes,
+  which alter the *displayed* optimal and cheapest-winning teams on 20 of 26
+  classics — that is the visible difference a deploy would ship.
+- **Pre-flight archive copy** at `~/Dropbox/code/velogames/archive-preflight-2026-08-19`
+  (558 Feather V1 files). Keep it for a season, then delete.
+- `site/docs/reports/milan-san-remo-2025.html` exists **only** as a mirror pulled
+  from the live site. The renderer never generates it, so a clean rebuild loses
+  it and the index link breaks. Retiring the duplicate slug is the real fix.
+
+**Outstanding decision: whether to drop Feather.** WP1b said to delete
+`scripts/migrate_archive_arrow.jl` and the Feather dependency once converted.
+Neither has been done, deliberately: `_retired/` and the pre-flight copy are
+Feather V1, so dropping the dependency makes them unreadable without adding it
+back. Either accept that (the record is meant to be cold storage) or convert
+`_retired/` too and then drop it. Not urgent; the dependency is inert.
+
+**Inputs WP5's manifest needs**, all measured on 19 August:
+
+- **23 live types**: `odds`, `odds_kom`, `odds_points`, `odds_stagewin`,
+  `oracle`, `oracle_kom`, `oracle_points`, `pcs_abandons`, `pcs_gc_results`,
+  `pcs_results`, `pcs_seasons`, `pcs_specialty`, `pcs_specialty_seasons`,
+  `pcs_stage_profiles`, `pcs_stage_results`, `predictions`, `vg_racelist`,
+  `vg_results`, `vg_riders`, `vg_scoring`, `vg_stage_results`, `vg_stage_riders`,
+  `vg_stage_totals`.
+- **`vg_riders` and `vg_racelist` are keyed by VG game slug, not `pcs_slug`** —
+  `vg_riders/sixes-superclasico/2025`, `vg_riders/sixes-classics/2026`. Any
+  census that assumes the middle path segment is a `pcs_slug` will mis-read them,
+  and a race-level guard does not apply: these are per-season, not per-race.
+- **`_retired` and `_inputs` are reachable through `archive_races`** — they are
+  ordinary directories one level up. The manifest must exclude them by name
+  rather than assume every top-level directory is a type.
+- **A race directory does not imply a data file.** Three are empty:
+  `oracle/ronde-van-vlaanderen`, `vg_results/giro-d-italia`,
+  `vg_results/quatre-jours-de-dunkerque`. This is why `oracle` shows 20 files
+  across 21 race directories.
+- **8 deficient prediction archives**, down from 9 after the Strade swap. All
+  2026: `brabantse-pijl`, `itzulia-basque-country`, `paris-roubaix`,
+  `ronde-van-vlaanderen`, `scheldeprijs` are missing `chosen`,
+  `selection_frequency`, `expected_vg_points`; `kuurne-brussel-kuurne` and
+  `trofeo-laigueglia` are missing `selection_frequency` alone;
+  `omloop-het-nieuwsblad` is missing those plus `team` and `cost`, and is WP4's
+  join. The guard must not reject these on write — they already exist.
+
+**The standing test** for the "we keep our own archives" rule is
+`julia --project scripts/render_reports.jl --years=2025,2026 --force` from a cold
+cache, which currently passes. Re-run it whenever a VG surface is added or a
+fetch path changes; it is the only check that catches a page retiring upstream
+before the data is gone.
+
 #### WP5 — close the drift class at the boundary
 
 Every archive problem in this note is one of five drift modes, all of which happened
