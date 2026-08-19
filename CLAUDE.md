@@ -122,6 +122,33 @@ archive.
   near-static facts, though the Tour and Giro show PCS revising distance and
   ProfileScore between the pre-race and post-race scrapes.
 
+### Velogames retires its pages — we keep them (WP1d, August 2026)
+
+Velogames takes a season's pages down. `sixes-classics/2025/riders.php` and its
+`sixes-superclasico` alias 404, and `races.php` 404s for both 2024 and 2025. Two
+archive types now hold them, both read archive-first and written on any live
+scrape: **`vg_riders`** (the classics rider pool: name, team, cost, points) and
+**`vg_racelist`** (race number, deadline, name, category), keyed by *VG game
+slug* and year rather than a `pcs_slug`. `scripts/backfill_vg_pages.jl` captures
+them, pinning Internet Archive snapshot timestamps for retired seasons.
+
+- **Grand tours were never exposed.** `vg_stage_riders` has archived their pools
+  since 2023 and `load_stage_race_report_data` already read it first. The one-day
+  `load_report_data` scraped unconditionally; that asymmetry between twins is
+  what cost the 2025 back-catalogue.
+- **No other source has the pool.** `vg_results` carries no cost; the published
+  reports show a display slice (71% of 2025 rider-rows); the vgleague snapshots
+  record only what entrants picked (62%, and they start at 2026).
+- **Costs are constant within a season** — verified across all 40 races of 2025 —
+  so an archived pool stays correct for reporting, which reads rider, team and
+  cost. The prediction path deliberately still scrapes: it needs live `points`.
+- **The test that matters** is that `render_reports.jl --years=2025,2026 --force`
+  completes without any retired VG page. It does, from a cold cache.
+- Known gap: Sergio Serrano scored in Classique Dunkerque 2026 but appears in no
+  pool snapshot, so that report omits him. Pre-existing — the previously-published
+  page omits him too. `backfill_vg_pages.jl` names uncovered riders rather than
+  printing a bare percentage, because the left join drops them silently.
+
 ### Wiping the cache is not free (August 2026)
 
 `~/.velogames_cache` is **not** purely a re-fetchable convenience. Velogames retires

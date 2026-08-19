@@ -646,6 +646,10 @@ programme finishes — read "Operating constraints while the branch is unmerged"
 before starting anything from WP2 onwards, because that is where the work stops
 being confined to the repo. **Next job: WP5.**
 
+WP1d (capturing the VG pages that retire) was inserted ahead of WP5 in August 2026 —
+see "WP1d" below. It had to precede WP5 so the manifest is written once, over the
+final type inventory including `vg_riders` and `vg_racelist`.
+
 | Phase | Work | State |
 | --- | --- | --- |
 | 0 | Two solver tie-breaks, a publish-path guard, one re-render | code shipped; re-render deferred to WP1b |
@@ -1018,6 +1022,39 @@ Three things this note had wrong:
   the only copy; `riders.json` and `stages.json` had their 2025 halves merged back
   the same way. **2026 is on the same clock.** Archiving VG rider costs per race is
   the durable fix — WP1c's remit, and now the reason to do it rather than a nicety.
+
+#### WP1d — capture the Velogames pages that retire
+
+**Shipped August 2026**, inserted after WP1b when the cache wipe revealed that
+Velogames does not keep its own back-catalogue: `sixes-classics/2025/riders.php`
+and the `sixes-superclasico` alias both 404, as does `races.php` for 2024 and
+2025.
+
+Two new archive types, `vg_riders` and `vg_racelist`, keyed by **VG game slug**
+and year rather than a `pcs_slug` — the classics pool is one page per season, not
+one per race. Both are read archive-first and written on any live scrape;
+`scripts/backfill_vg_pages.jl` does the backfill with Internet Archive snapshot
+timestamps pinned for retired seasons.
+
+Verification: the 2025 pool covers **2,016 of 2,016** rider-rows across all 40
+archived 2025 classics, and re-rendered 2025 pages have rider tables identical to
+the ones published before any of this work. `render_reports.jl --years=2025,2026
+--force` now completes from a cold cache with no retired page fetched — that
+offline rebuild is the standing test of whether "we keep them ourselves" holds,
+and is worth re-running whenever a VG surface is added.
+
+Two things worth carrying into WP5:
+
+- **`milan-san-remo` and `milano-sanremo` are the same race under two slugs.**
+  `vg_results/milan-san-remo/2025` and `vg_results/milano-sanremo/2025` hold
+  byte-identical data. The index links a `milan-san-remo-2025` page the renderer
+  never generates, so a clean rebuild in a fresh clone would leave a broken link.
+  This is drift mode 5 ("same dataset, two names") occurring in *race slugs*, not
+  type names — the guard as designed would not have caught it.
+- **A season's pool sheds riders.** Sergio Serrano scored in Classique Dunkerque
+  2026 but is in no snapshot of the pool, live or archived. One row in 1,294, and
+  pre-existing, but it means a single end-of-season capture is not provably
+  complete for a live season.
 
 #### WP5 — close the drift class at the boundary
 

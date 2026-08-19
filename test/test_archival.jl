@@ -109,6 +109,42 @@ end
     end
 end
 
+@testset "VG pages are read from the archive (WP1d)" begin
+    tree = mktempdir()
+    year = 2099              # no live page exists, so a scrape would fail loudly
+    slug = Velogames.vg_classics_slug(year)
+
+    pool = DataFrame(
+        rider = ["A Rider", "B Rider"],
+        team = ["T1", "T2"],
+        riderkey = ["aderri", "bderri"],
+        cost = [10, 6],
+        points = [500, 120],
+    )
+    save_race_snapshot(pool, "vg_riders", slug, year; archive_dir = tree)
+
+    # Archive-first: this must not touch the network. Velogames retires a
+    # season's riders.php, so a scrape here would 404 rather than fall back.
+    loaded = load_vg_classics_riders(year; archive_dir = tree)
+    @test nrow(loaded) == 2
+    @test Set(loaded.riderkey) == Set(pool.riderkey)
+    @test loaded.cost == pool.cost
+
+    # The race catalogue takes the same route.
+    racelist = DataFrame(
+        race_number = [1, 2],
+        deadline = ["2099-03-01 11:00:00", "2099-03-02 12:00:00"],
+        name = ["Race One", "Race Two"],
+        category = [2, 3],
+        namekey = ["raceone", "racetwo"],
+    )
+    save_race_snapshot(racelist, "vg_racelist", slug, year; archive_dir = tree)
+    back = getvg_race_list(year; archive_dir = tree)
+    @test nrow(back) == 2
+    @test back.race_number == [1, 2]
+    @test match_vg_race_number("Race Two", back) == 2
+end
+
 @testset "Arrow archive round-trip (WP1b)" begin
     tree = mktempdir()
 

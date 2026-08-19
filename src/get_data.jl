@@ -603,6 +603,65 @@ function normalise_race_name(name::String)
 end
 
 """
+    parse_vg_racelist(url) -> DataFrame
+
+Parse a Velogames `races.php` page into the race catalogue. Split out from
+`getvg_race_list` so an Internet Archive copy of a retired season can be parsed
+by exactly the same code as a live page.
+"""
+function parse_vg_racelist(url::AbstractString)
+    # Parse directly with Gumbo — VG races.php uses <TD> not <TH> for
+    # headers, which breaks TableScraper's column name detection.
+    response =
+        HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+    pagehtml = Gumbo.parsehtml(String(response.body))
+
+    rows = eachmatch(Selector("table tr"), pagehtml.root)
+
+    race_numbers = Int[]
+    deadlines = String[]
+    race_names = String[]
+    category_strs = String[]
+
+    for row in rows
+        cells = eachmatch(Selector("td"), row)
+        length(cells) < 4 && continue
+        texts = [strip(nodeText(c)) for c in cells]
+        num = tryparse(Int, texts[1])
+        num === nothing && continue  # skip header row
+        push!(race_numbers, num)
+        push!(deadlines, texts[2])
+        push!(race_names, texts[3])
+        push!(category_strs, texts[4])
+    end
+
+    if length(race_numbers) < 5
+        error("Race table has too few rows ($(length(race_numbers))) for $year")
+    end
+
+    df = DataFrame(
+        race_number = race_numbers,
+        deadline = deadlines,
+        name = race_names,
+        category_str = category_strs,
+    )
+
+    # Parse category from strings like "Cat 1", "Cat 2", "Cat 3"
+    df[!, :category] = [
+        begin
+            m = match(r"(\d)", cat)
+            m !== nothing ? parse(Int, m.captures[1]) : 0
+        end for cat in df.category_str
+    ]
+    select!(df, Not(:category_str))
+
+    # Add normalised name key for matching
+    df[!, :namekey] = normalise_race_name.(df.name)
+
+    return df
+end
+
+"""
     getvg_race_list(year::Int; cache_config, force_refresh) -> DataFrame
 
 Scrape the VG one-day classics races page for a given year. Returns a DataFrame
@@ -614,69 +673,31 @@ function getvg_race_list(
     year::Int;
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
+    archive_dir::String = archive_dir(),
 )
     slug = vg_classics_slug(year)
     url = "https://www.velogames.com/$slug/$year/races.php"
 
-    function fetch_racelist(url, params)
-        # Parse directly with Gumbo — VG races.php uses <TD> not <TH> for
-        # headers, which breaks TableScraper's column name detection.
-        response =
-            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
-        pagehtml = Gumbo.parsehtml(String(response.body))
-
-        rows = eachmatch(Selector("table tr"), pagehtml.root)
-
-        race_numbers = Int[]
-        deadlines = String[]
-        race_names = String[]
-        category_strs = String[]
-
-        for row in rows
-            cells = eachmatch(Selector("td"), row)
-            length(cells) < 4 && continue
-            texts = [strip(nodeText(c)) for c in cells]
-            num = tryparse(Int, texts[1])
-            num === nothing && continue  # skip header row
-            push!(race_numbers, num)
-            push!(deadlines, texts[2])
-            push!(race_names, texts[3])
-            push!(category_strs, texts[4])
-        end
-
-        if length(race_numbers) < 5
-            error("Race table has too few rows ($(length(race_numbers))) for $year")
-        end
-
-        df = DataFrame(
-            race_number = race_numbers,
-            deadline = deadlines,
-            name = race_names,
-            category_str = category_strs,
-        )
-
-        # Parse category from strings like "Cat 1", "Cat 2", "Cat 3"
-        df[!, :category] = [
-            begin
-                m = match(r"(\d)", cat)
-                m !== nothing ? parse(Int, m.captures[1]) : 0
-            end for cat in df.category_str
-        ]
-        select!(df, Not(:category_str))
-
-        # Add normalised name key for matching
-        df[!, :namekey] = normalise_race_name.(df.name)
-
-        return df
+    # `races.php` retires with its season — 2024 and 2025 both 404 as of August
+    # 2026 — and nothing else records a race's VG number, deadline or category.
+    # Archive first, and archive whatever a live scrape returns.
+    if !force_refresh
+        archived = load_race_snapshot("vg_racelist", slug, year; archive_dir = archive_dir)
+        archived === nothing || return archived
     end
 
-    return cached_fetch(
+    fetch_racelist(url, params) = parse_vg_racelist(url)
+
+    racelist = cached_fetch(
         fetch_racelist,
         url,
         Dict();
         cache_config = cache_config,
         force_refresh = force_refresh,
     )
+    nrow(racelist) > 0 &&
+        save_race_snapshot(racelist, "vg_racelist", slug, year; archive_dir = archive_dir)
+    return racelist
 end
 
 """

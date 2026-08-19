@@ -624,6 +624,43 @@ function list_completed_races(
 end
 
 """
+    load_vg_classics_riders(year; cache_config, archive_dir) -> DataFrame
+
+The Velogames classics rider pool for a season — name, team, cost, points —
+from the archive if it is there, otherwise scraped and archived on the way past.
+
+**Velogames retires a season's pages.** `sixes-classics/2025/riders.php` and its
+`sixes-superclasico` alias both 404 as of August 2026, and no other source has
+the full field: `vg_results` carries no cost, the published reports show a
+display slice (71% of rider-rows), and the vgleague snapshots record only what
+entrants picked (62%). So the pool has to be kept here or it is gone, and the
+2025 file was recovered from the Internet Archive.
+
+Reading the archive first is what `load_stage_race_report_data` has always done
+for grand tours via `vg_stage_riders`; the one-day path scraped unconditionally,
+which is the asymmetry that cost the 2025 back-catalogue.
+
+Costs are constant across a season — verified across all 40 races of 2025 — so a
+pool frozen at archive time stays correct for reporting, which reads only rider,
+team and cost. The prediction path deliberately does not come through here: it
+needs live `points`.
+"""
+function load_vg_classics_riders(
+    year::Int;
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    archive_dir::String = archive_dir(),
+)
+    slug = vg_classics_slug(year)
+    archived = load_race_snapshot("vg_riders", slug, year; archive_dir = archive_dir)
+    archived === nothing || return archived
+
+    riders = getvg_riders(vg_classics_url(year); cache_config = cache_config)
+    nrow(riders) > 0 &&
+        save_race_snapshot(riders, "vg_riders", slug, year; archive_dir = archive_dir)
+    return riders
+end
+
+"""
     load_report_data(pcs_slug, year) -> Union{DataFrame, Nothing}
 
 Load VG race results and rider costs, join them, and compute value.
@@ -639,9 +676,8 @@ function load_report_data(
     vg_results === nothing && return nothing
     pcs_results = load_race_snapshot("pcs_results", pcs_slug, year)
 
-    # Load rider costs from the classics riders page
-    riders_url = vg_classics_url(year)
-    riders = getvg_riders(riders_url; cache_config = cache_config)
+    # Rider costs from the season's pool: archive first, scrape only if absent.
+    riders = load_vg_classics_riders(year; cache_config = cache_config)
 
     # Start from VG riders list and left-join results to get all riders with costs
     df = leftjoin(
