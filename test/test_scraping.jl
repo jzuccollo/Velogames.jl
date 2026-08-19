@@ -100,3 +100,20 @@ end
         "Assists - Teammate General Classification positions after each stage",
     ) == :gc_assist_points
 end
+
+@testset "_vg_scoring_field stage-result headings" begin
+    # A plain stage-result heading, and the TTT bonus table beside it.
+    @test Velogames._vg_scoring_field("Stage Result") == :stage_finish_points
+    @test Velogames._vg_scoring_field("Stage Result (Stage 5 team time trial)") ==
+          :ttt_team_points
+
+    # The 2025 Vuelta names the TTT only to exclude it. Read as a TTT heading,
+    # this table was filed as TTT points and first-match-wins kept it there, so
+    # `stage_finish_points` came back empty and the whole scrape failed.
+    @test Velogames._vg_scoring_field(
+        "Stage Result (all stages, except for the Stage 5 team time trial)",
+    ) == :stage_finish_points
+
+    # A TTT heading that is not the stage-result table stays unmodelled.
+    @test Velogames._vg_scoring_field("Team time trial overall leader bonus") === nothing
+end

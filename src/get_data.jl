@@ -695,8 +695,14 @@ function getvg_race_list(
         cache_config = cache_config,
         force_refresh = force_refresh,
     )
-    nrow(racelist) > 0 &&
-        save_race_snapshot(racelist, "vg_racelist", slug, year; archive_dir = archive_dir)
+    nrow(racelist) > 0 && save_race_snapshot(
+        racelist,
+        "vg_racelist",
+        slug,
+        year;
+        archive_dir = archive_dir,
+        source_url = url,
+    )
     return racelist
 end
 
@@ -883,9 +889,15 @@ Archives the result if `pcs_slug` is provided. Loads from archive if available.
 function _vg_scoring_field(heading::AbstractString)
     l = lowercase(heading)
     # Team time trial: the stage-result table feeds ttt_team_points; the
-    # "overall leader" bonus table is not modelled.
-    occursin("team time trial", l) && occursin("stage result", l) && return :ttt_team_points
-    occursin("team time trial", l) && return nothing
+    # "overall leader" bonus table is not modelled. A heading that names the TTT
+    # only to *exclude* it — "Stage Result (all stages, except for the Stage 5
+    # team time trial)", the 2025 Vuelta — is the ordinary stage table, and must
+    # escape both tests. Without the guard it was filed as TTT points, first
+    # match won over the real TTT table below it, and `stage_finish_points` came
+    # back empty, which is the one thing the validation downstream refuses.
+    ttt = occursin("team time trial", l) && !occursin("except", l)
+    ttt && occursin("stage result", l) && return :ttt_team_points
+    ttt && return nothing
     occursin("stage result", l) && return :stage_finish_points
     if occursin("final", l)
         occursin("general classification", l) && return :final_gc_points
@@ -994,8 +1006,16 @@ function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
     end
 end
 
-function _scrape_vg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
-    url = "https://www.velogames.com/$vg_slug/$year/scores.php"
+# `url` is an override for the one caller that cannot use the live address:
+# `scores.php` retires with its season, so a backfill reads the page from an
+# Internet Archive snapshot instead. Same parser, same field mapping — a second
+# copy of the heading loop is how the two would drift.
+function _scrape_vg_scoring(
+    vg_slug::String,
+    year::Int;
+    pcs_slug::String = "",
+    url::String = "https://www.velogames.com/$vg_slug/$year/scores.php",
+)
     response = HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
     page = Gumbo.parsehtml(String(response.body))
 
@@ -1035,7 +1055,13 @@ function _scrape_vg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
 
     if !isempty(pcs_slug)
         try
-            save_race_snapshot(_scoring_to_df(scoring), "vg_scoring", pcs_slug, year)
+            save_race_snapshot(
+                _scoring_to_df(scoring),
+                "vg_scoring",
+                pcs_slug,
+                year;
+                source_url = url,
+            )
         catch e
             @debug "Failed to archive VG scoring: $e"
         end

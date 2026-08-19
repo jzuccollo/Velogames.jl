@@ -37,6 +37,35 @@ wayback(ts, url) = "https://web.archive.org/web/$(ts)id_/$url"
 # (data_type, vg_slug, year, source url). A Wayback URL means Velogames no
 # longer serves the page; the bare URL means it is still live.
 const SOURCES = [
+    # 2023 and 2024 are gone from Velogames entirely — riders.php, races.php and
+    # ridescore.php all 404 — so the Internet Archive is the only copy of that
+    # season's rider pool and calendar. The pinned snapshots are the latest of
+    # each, taken after the season closed, so costs are final and points are the
+    # season's end state.
+    (
+        "vg_riders",
+        "sixes-superclasico",
+        2023,
+        wayback(20251110102026, "https://www.velogames.com/sixes-superclasico/2023/riders.php"),
+    ),
+    (
+        "vg_racelist",
+        "sixes-superclasico",
+        2023,
+        wayback(20251206154130, "https://www.velogames.com/sixes-superclasico/2023/races.php"),
+    ),
+    (
+        "vg_riders",
+        "sixes-superclasico",
+        2024,
+        wayback(20260123195656, "https://www.velogames.com/sixes-superclasico/2024/riders.php"),
+    ),
+    (
+        "vg_racelist",
+        "sixes-superclasico",
+        2024,
+        wayback(20250613133916, "https://www.velogames.com/sixes-superclasico/2024/races.php"),
+    ),
     (
         "vg_riders",
         "sixes-superclasico",
@@ -51,6 +80,18 @@ const SOURCES = [
     ),
     ("vg_riders", "sixes-classics", 2026, "https://www.velogames.com/sixes-classics/2026/riders.php"),
     ("vg_racelist", "sixes-classics", 2026, "https://www.velogames.com/sixes-classics/2026/races.php"),
+]
+
+# `scores.php` retires with the season too. The Giro's 2025 table was recovered
+# from the Internet Archive; the Tour's and Vuelta's were still live in August
+# 2026 and came from Velogames directly. (pcs_slug, vg_slug, year, url).
+const SCORING_SOURCES = [
+    (
+        "giro-d-italia",
+        "italy",
+        2025,
+        wayback(20260123202431, "https://www.velogames.com/italy/2025/scores.php"),
+    ),
 ]
 
 """
@@ -97,6 +138,25 @@ function main()
         end
     end
 
+    for (pcs_slug, vg_slug, year, url) in SCORING_SOURCES
+        if !FORCE && has_race_snapshot("vg_scoring", pcs_slug, year)
+            @printf("%-13s %-22s %-6d already archived, skipped\n", "vg_scoring", pcs_slug, year)
+            continue
+        end
+        if DRY_RUN
+            @printf("%-13s %-22s %-6d would fetch %s\n", "vg_scoring", pcs_slug, year, url)
+            continue
+        end
+        try
+            # Archives as a side effect of the scrape, under pcs_slug.
+            Velogames._scrape_vg_scoring(vg_slug, year; pcs_slug = pcs_slug, url = url)
+            @printf("%-13s %-22s %-6d archived\n", "vg_scoring", pcs_slug, year)
+        catch e
+            @printf("%-13s %-22s %-6d FAILED: %s\n", "vg_scoring", pcs_slug, year, sprint(showerror, e))
+            failures += 1
+        end
+    end
+
     DRY_RUN && return 0
 
     # Coverage check: every rider in every archived one-day result for a season
@@ -104,7 +164,7 @@ function main()
     println()
     println("Coverage of archived vg_results by the archived pool:")
     worst = 0.0
-    for year in (2025, 2026)
+    for year in (2023, 2024, 2025, 2026)
         pool = load_vg_classics_riders(year)
         have = Set(pool.riderkey)
         tot = cov = 0
