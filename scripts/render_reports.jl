@@ -292,6 +292,17 @@ const PCS_NAME_ALIASES = Dict(
     "Koerdt Bjorn" => "Bjoern Koerdt",
     "Le Court-Pienaar Kim" => "Kimberley Le Court-Pienaar",
     "Berthet Juliette" => "Juliette Berthet (Labous)",
+    # Found by rendering the 2023 and 2024 back-catalogue, where each of these
+    # riders scored Velogames points but appeared in neither the PCS general
+    # classification nor the abandons, so their page showed them as neither
+    # finisher nor abandon. Five are PCS writing a fuller name than Velogames;
+    # van den Broek is a genuine difference of spelling.
+    "Rubio Einer" => "Einer Augusto Rubio",
+    "Hvideberg Jonas Hem" => "Jonas Iversby Hvideberg",
+    "Martínez Daniel Felipe" => "Daniel Martínez",
+    "Lecerf Junior" => "William Junior Lecerf",
+    "Berhe Welay Hagos" => "Welay Berhe",
+    "van den Broek Frank" => "Frank Van Den Broeck",
 )
 
 """Riderkey for a PCS row, resolved through `PCS_NAME_ALIASES` when it doesn't already
@@ -2321,7 +2332,11 @@ function index_html(; reports_dir)
 end
 
 function main()
-    years = [2025, 2026]
+    # Every season the site publishes. The build is incremental and the index is
+    # read off the reports directory, so a narrower run does not drop pages —
+    # but a `--force` rebuild after a template change would leave any year not
+    # listed here on the old template.
+    years = [2023, 2024, 2025, 2026]
     force = false
     for arg in ARGS
         if startswith(arg, "--years=")
