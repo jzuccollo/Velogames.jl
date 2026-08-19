@@ -644,12 +644,12 @@ detail.
 All of it lands on the `two-package-reconciliation` branch, unmerged until the
 programme finishes — read "Operating constraints while the branch is unmerged"
 before starting anything from WP2 onwards, because that is where the work stops
-being confined to the repo. **Next job: WP2.**
+being confined to the repo. **Next job: WP5.**
 
 | Phase | Work | State |
 | --- | --- | --- |
 | 0 | Two solver tie-breaks, a publish-path guard, one re-render | code shipped; re-render deferred to WP1b |
-| 1a | Archive hygiene: Arrow, retirements, the write-time guard | WP1a shipped; next WP2, then WP3, WP1b, WP5, WP4 |
+| 1a | Archive hygiene: Arrow, retirements, the write-time guard | WP1a, WP2, WP3, WP1b shipped; next WP5, then WP4 |
 | 1b | League data into the archive; retire `league_winners.toml` | after WP5 |
 | 1c | Python persists `riders.php` per race | after WP5 |
 | 2 | Ingest as a phase, with completeness markers | after 1b and 1c |
@@ -982,6 +982,42 @@ owns the cron, and never from two machines.
 **No external dependents**: nothing outside this repo reads the archive yet, because
 the Python reporting does not exist. This is the cheapest moment the migration will
 ever have.
+
+**WP2, WP3 and WP1b shipped, August 2026**, in one sitting with the vgleague
+launchd jobs paused, in the 11-day gap between Hamburg and Bretagne Classic. No
+Netlify banner was needed: with no race due, nothing on the live site went stale.
+
+WP2 moved `pcs_form` (27), `qualitative` (7), `prediction` (1) and — after WP3 —
+`stage_profiles` (5) into `_retired/`, and `pcs_breakaways` into `_inputs/`, all
+left in Feather V1. WP3 replaced two hand-built frame builders with
+`stage_profiles_frame`. WP1b converted the remaining **518 files**, verifying row
+count, column names in order, per-column eltype and full value equality per file:
+all 518 passed, 303,743 rows unchanged, no strays.
+
+Three things this note had wrong:
+
+- **The Strade Bianche swap is a repair, not a cosmetic superset swap.** The
+  *plural* file was the 13-column one and was missing five of the seven mandatory
+  prediction columns — one of the nine deficient archives, not a separate problem.
+  Deficient archives are now 8, and `league_eval.jl` scores Strade instead of
+  reporting "legacy preds (no cost)", growing its one-day sample from 17 races to
+  18 and mean capture from 0.49 to 0.50.
+- **The narrow and wide stage profiles are not identical.** Femmes matches; the
+  Tour differs on 8 stages and the Giro on 4, across `distance_km`,
+  `profile_score`, `vertical_meters` and `n_hc_climbs` — PCS revising the record
+  between the pre-race and post-race scrapes, including two Tour stages whose
+  distance moved by 31 km and 44 km. Of those columns only `profile_score` reaches
+  the model, on two hilly stages, so repointing the assessor shifts two stages'
+  dimension weights by a few percent rather than changing nothing. Itzulia and
+  Romandie re-derived with all 8 shared columns matching exactly.
+- **"Wipe `~/.velogames_cache` and it re-fetches" is false, and it cost the 2025
+  back-catalogue.** Velogames retires a season's rider page — `sixes-classics/2025`
+  and `sixes-superclasico/2025` both 404 — and `vg_results` has no `cost` column,
+  so `load_report_data` cannot rebuild a 2025 report once the cached rider list is
+  gone. The 43 published 2025 pages were recovered from the live site and are now
+  the only copy; `riders.json` and `stages.json` had their 2025 halves merged back
+  the same way. **2026 is on the same clock.** Archiving VG rider costs per race is
+  the durable fix — WP1c's remit, and now the reason to do it rather than a nicety.
 
 #### WP5 — close the drift class at the boundary
 

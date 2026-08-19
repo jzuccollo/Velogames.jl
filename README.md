@@ -31,7 +31,7 @@ All scripts accept `--fresh` to bypass the cache and fetch everything from the w
 - **Risk-adjusted optimisation**: `risk_aversion` parameter penalises high-variance riders; `domestique_discount` down-weights non-leaders relative to their strength gap
 - **Market blend (one-day)**: `market_blend_weight` mixes the bookmaker's implied win probabilities into the final team pick alongside the simulator's expected points. `race_config.toml` ships 0.5; `solve_oneday`'s own default is 1.0, which disables it. One-day races only, and inert without odds
 - **One-day and stage race support**: `solve_oneday()` for Sixes Classics, `solve_stage()` for grand tours with classification constraints
-- **Robust caching**: Feather-based caching (`CacheConfig`) with configurable TTL to avoid hammering external sites
+- **Robust caching**: Arrow IPC caching (`CacheConfig`) with configurable TTL to avoid hammering external sites
 - **Historical analysis**: Deterministic optimisation on actual results to find optimal and cheapest-winning teams
 
 ## Workflow
@@ -130,7 +130,7 @@ The render script scans `archive_dir()/vg_results/` for completed races and gene
 
 The package uses two storage layers:
 
-- **Permanent archive** (`archive_dir()`): race-day snapshots (odds, oracle predictions, PCS specialty scores, pre-race predictions, post-race results) stored as Feather files at `{archive_dir}/{data_type}/{pcs_slug}/{year}.feather`. By default this points to `~/Dropbox/code/velogames/archive/`, so Dropbox provides backup and cross-machine sync automatically. Set `VELOGAMES_ARCHIVE` to point it elsewhere; it is read per call, so it takes effect after the package is loaded.
+- **Permanent archive** (`archive_dir()`): race-day snapshots (odds, oracle predictions, PCS specialty scores, pre-race predictions, post-race results) stored as Arrow IPC files at `{archive_dir}/{data_type}/{pcs_slug}/{year}.arrow`. By default this points to `~/Dropbox/code/velogames/archive/`, so Dropbox provides backup and cross-machine sync automatically. Set `VELOGAMES_ARCHIVE` to point it elsewhere; it is read per call, so it takes effect after the package is loaded.
 - **Disk cache** (`~/.velogames_cache/`): short-lived cache of scraped web data (PCS rankings, VG rider lists, race catalogues) with a 7-day TTL. This is purely a performance optimisation — it is expendable and regenerates automatically from the web if deleted.
 
 ## Testing
