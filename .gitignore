@@ -57,3 +57,4 @@ REFACTOR_PLAN.md
 
 # Netlify CLI scratch state (contains an absolute publish path)
 .netlify/
+docs/two-package-reconciliation.md
