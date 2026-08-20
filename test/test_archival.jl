@@ -87,8 +87,7 @@ end
     mkpath(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke"))
     touch(joinpath(tree, "_retired", "pcs_form", "e3-harelbeke", "2025.arrow"))
 
-    @test archive_races("odds"; archive_dir = tree) ==
-          ["milano-sanremo", "paris-roubaix"]
+    @test archive_races("odds"; archive_dir = tree) == ["milano-sanremo", "paris-roubaix"]
     @test archive_races("oracle"; archive_dir = tree) == String[]
 
     @test archive_years("odds", "milano-sanremo"; archive_dir = tree) == [2024, 2025]
@@ -583,5 +582,133 @@ end
         @test sum(df.score) == 700
         @test nrow(df) == length(unique(df.riderkey))
         @test only(filter(:rider => ==("D Rider"), df).cost) == 6
+
+        # `vg_startlist` is written by the Python side, accumulates down the
+        # season, and carries no uniqueness constraint the column guard can see.
+        # A re-capture that appends rather than replaces would double the rider
+        # through the leftjoin — a plausible page with the wrong totals on it.
+        # The re-appended row is priced differently on purpose: the first
+        # occurrence has to win, because the startlist arm comes first and that
+        # is the price Velogames showed for the race.
+        save_race_snapshot(
+            DataFrame(
+                race_number = [7, 7, 7, 7],
+                race_name = fill("Milano-Sanremo", 4),
+                rider = ["A Rider", "B Rider", "C Rider", "A Rider"],
+                riderkey = createkey.(["A Rider", "B Rider", "C Rider", "A Rider"]),
+                team = ["T1", "T2", "T3", "T1"],
+                cost = [20, 10, 8, 22],
+                points = [900, 400, 120, 900],
+                class = ["", "", "", ""],
+                start_list = fill("#MilanoSanremo", 4),
+            ),
+            "vg_startlist",
+            slug,
+            year;
+            archive_dir = tree,
+        )
+        dup = load_report_data("milano-sanremo", year)
+        @test sum(dup.score) == 700          # 1200 when the duplicate survives
+        @test nrow(dup) == 4                 # 5 when the duplicate survives
+        @test nrow(dup) == length(unique(dup.riderkey))
+        @test only(filter(:rider => ==("A Rider"), dup).cost) == 20
     end
+end
+
+@testset "Archive writes are atomic (WP6)" begin
+    # The archive is written by launchd and by serve.jl, read by a Python
+    # package on its own schedule, and lives in Dropbox with no locking. A
+    # writer interrupted mid-`Arrow.write` leaves a truncated file; a rename
+    # cannot.
+    tree = mktempdir()
+    good = DataFrame(riderkey = ["a"], rider = ["A"], odds = [3.5])
+    save_race_snapshot(good, "odds", "atomic-race", 2026; archive_dir = tree)
+    path = Velogames.archive_path("odds", "atomic-race", 2026; archive_dir = tree)
+    racedir = joinpath(tree, "odds", "atomic-race")
+
+    # The sharp one: a rename replaces the inode, so a reader holding the old
+    # file keeps a whole file. An in-place truncate cannot do this.
+    ino = stat(path).inode
+    save_race_snapshot(
+        DataFrame(riderkey = ["a", "b"], rider = ["A", "B"], odds = [3.5, 9.0]),
+        "odds",
+        "atomic-race",
+        2026;
+        archive_dir = tree,
+    )
+    @test stat(path).inode != ino
+    @test nrow(load_race_snapshot("odds", "atomic-race", 2026; archive_dir = tree)) == 2
+
+    # A write that throws leaves the existing file alone and no temp behind.
+    before = read(path)
+    @test_throws ErrorException Velogames.atomic_write(path) do tmp
+        write(tmp, "half a file")
+        error("boom")
+    end
+    @test read(path) == before
+    @test readdir(racedir) == ["2026.arrow"]
+
+    # A temp orphaned by a kill is dot-prefixed, so it is neither a year nor a
+    # stray file — the audit and the enumeration both skip it.
+    touch(joinpath(racedir, ".2026.arrow.99999.tmp"))
+    @test archive_years("odds", "atomic-race"; archive_dir = tree) == [2026]
+    @test isempty(audit_archive(; archive_dir = tree).stray_files)
+    @test nrow(load_race_snapshot("odds", "atomic-race", 2026; archive_dir = tree)) == 2
+
+    # The manifest goes through it too, and leaves nothing behind.
+    write_archive_manifest(; archive_dir = tree)
+    @test Velogames.archive_manifest_matches(; archive_dir = tree)
+    @test !any(startswith(f, ".") for f in readdir(tree))
+
+    # And the raw league tier.
+    @test Velogames.save_league_snapshot(
+        "{\"x\": 1}",
+        "g",
+        2026,
+        "1";
+        date = Date(2026, 5, 1),
+        archive_dir = tree,
+    ) == Date(2026, 5, 1)
+    rawdir = Velogames.league_raw_dir("g", 2026, "1"; archive_dir = tree)
+    @test readdir(rawdir) == ["2026-05-01.json"]
+end
+
+@testset "Cache data lands before its metadata (WP6)" begin
+    # `is_cache_valid` turns on the metadata alone, and `cached_fetch` reads
+    # metadata-without-data as the deliberate "empty result" marker. Writing the
+    # metadata first therefore opens a window in which a crash, or a reader in
+    # another process, is served an empty frame nothing ever fetched.
+    cache_dir = mktempdir()
+    cache = Velogames.CacheConfig(cache_dir, 168)
+    url = "https://example.invalid/wp6-ordering"
+    key = Velogames.cache_key(url, Dict())
+    data_file, meta_file = Velogames.cache_paths(key, cache_dir)
+    df = DataFrame(rider = ["A"], score = [100], riderkey = ["a"])
+
+    Velogames.save_to_cache(df, key, url, cache_dir)
+    # The only assertion that tells the two orderings apart.
+    @test mtime(data_file) <= mtime(meta_file)
+
+    # The state a crash now leaves: data on disk, metadata not yet written. A
+    # reader must refetch rather than serve an empty result.
+    rm(meta_file)
+    n = Ref(0)
+    fetched = Velogames.cached_fetch(
+        (_, _) -> (n[] += 1; df),
+        url;
+        cache_config = cache,
+        verbose = false,
+    )
+    @test n[] == 1
+    @test nrow(fetched) == 1
+
+    # The deliberate marker is untouched: an empty fetch still writes metadata
+    # only, and still reads back as a valid empty entry.
+    url2 = "https://example.invalid/wp6-ordering-empty"
+    key2 = Velogames.cache_key(url2, Dict())
+    data_file2, meta_file2 = Velogames.cache_paths(key2, cache_dir)
+    Velogames.save_to_cache(DataFrame(), key2, url2, cache_dir)
+    @test !isfile(data_file2)
+    @test isfile(meta_file2)
+    @test Velogames.is_cache_valid(key2, 168, cache_dir)
 end

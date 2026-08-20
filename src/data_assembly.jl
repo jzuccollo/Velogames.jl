@@ -789,6 +789,19 @@ function load_report_data(
             filter(r -> r.riderkey in scored_but_unlisted, pool)[:, cols],
         )
     end
+    # `vg_startlist` accumulates down the season, is written by the Python side,
+    # and `ARCHIVE_TYPES` puts no uniqueness constraint on it. A rider listed
+    # twice survives the `leftjoin` below as two rows and is counted twice in
+    # `sum(df.score)` and in the cheapest-team stat — a plausible page with the
+    # wrong numbers on it, not an error.
+    #
+    # Keeping the first occurrence is a choice, not an accident of the `vcat`
+    # order: the startlist arm is first, so the price Velogames showed for that
+    # race beats the season pool's. Swapping the arms would silently swap which
+    # price survives. Applied to both arms because `load_vg_classics_riders`
+    # hands back the archived pool verbatim, and `backfill_archive.jl` already
+    # dedupes that same pool on riderkey.
+    unique!(field, :riderkey)
 
     df = leftjoin(field, vg_results[:, [:riderkey, :score]]; on = :riderkey)
     # Riders who didn't score are absent from the results, not zero in them.
@@ -1173,10 +1186,7 @@ function archive_stage_race_results(
                     # finish one sit at lf = 0, which would date them all to stage 1,
                     # so fall back to the first stage they are listed unclassified.
                     stage = lf > 0 ? lf + 1 : minimum(get(dnfstages, k, [1]))
-                    push!(
-                        rows,
-                        (riderkey = k, rider = namemap[k], abandon_stage = stage),
-                    )
+                    push!(rows, (riderkey = k, rider = namemap[k], abandon_stage = stage))
                 end
                 final_finishers = count(==(final_stage), values(lastfin))
                 if !isempty(rows) && final_finishers >= 30

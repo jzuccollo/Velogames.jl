@@ -48,8 +48,12 @@ end
             (game_slug = "velogame", year = 2026, league_id = "2"),
         ]
 
-        rosters =
-            load_race_snapshot("league/rosters", "sixes-classics_1", 2026; archive_dir = tree)
+        rosters = load_race_snapshot(
+            "league/rosters",
+            "sixes-classics_1",
+            2026;
+            archive_dir = tree,
+        )
         @test nrow(rosters) == 3
         @test sum(rosters.score) == 420
 
@@ -65,8 +69,11 @@ end
         # A race the entrant hasn't an archived roster for, an unknown entrant
         # and a missing league all fall back to empty rather than throwing — the
         # normal state before the entry deadline.
-        @test pull(game_slug = "sixes-classics", league_id = "1", pcs_slug = "il-lombardia") ==
-              String[]
+        @test pull(
+            game_slug = "sixes-classics",
+            league_id = "1",
+            pcs_slug = "il-lombardia",
+        ) == String[]
         @test load_league_team(;
             game_slug = "sixes-classics",
             year = 2026,
@@ -75,7 +82,8 @@ end
             pcs_slug = "classic-brugge-de-panne",
             archive_dir = tree,
         ) == String[]
-        @test pull(game_slug = "absent", league_id = "9", pcs_slug = "il-lombardia") == String[]
+        @test pull(game_slug = "absent", league_id = "9", pcs_slug = "il-lombardia") ==
+              String[]
 
         # Grand tour rosters are locked, so the slug is ignored and the latest
         # stage's roster is the entered team.
@@ -140,12 +148,8 @@ end
         append_league_winners(winners, "sixes-classics", 2026, "1"; archive_dir = tree)
         recorded = load_league_winners(; archive_dir = tree)
         @test length(recorded) == 1
-        @test recorded[1] == (
-            pcs_slug = "classic-brugge-de-panne",
-            year = 2026,
-            name = "T",
-            score = 300,
-        )
+        @test recorded[1] ==
+              (pcs_slug = "classic-brugge-de-panne", year = 2026, name = "T", score = 300)
         # Recorded once and never re-derived, so a later rename cannot move it.
         @test isempty(
             derive_league_winners(
@@ -159,9 +163,396 @@ end
 
         # A grand tour is one entry for the whole tour, and waits for every race
         # in its catalogue to be scored.
+        @test nrow(derive_league_winners("velogame", 2026, "2"; archive_dir = tree)) == 1
+    end
+end
+
+# The winner above is derived from the 2026-04-01 snapshot and `now` defaults to
+# today, which is far past any settling window. That is deliberately a
+# regression guard on the diagnostic pass in `_derive_classics_winners`: it must
+# report on races the dated pass could not settle and never settle one itself.
+# If it ever starts publishing, `snapshot_date` there stops being "2026-04-01".
+
+@testset "Grand tour waits for the whole catalogue (WP6)" begin
+    # A grand tour catalogue grows: End-of-Tour is added when the tour finishes.
+    # A snapshot taken in between lists every race it knows about as scored, so
+    # testing it against its own catalogue settles the tour on a partial total —
+    # on the 2026 Giro that is 20% of the winning score, on a 33-point margin.
+    partial = """
+    {"meta": {"game_slug": "velogame", "year": 2026, "league_id": "3",
+              "series_type": "grand_tour", "race_catalogue": {
+                "1": {"name": "Stage 1", "deadline": null, "category": "road"},
+                "2": {"name": "Stage 2", "deadline": null, "category": "road"}}},
+     "teams": {"X": {"username": "X", "teamname": "X", "teamid": "1", "races": {
+        "Stage 1": {"race_number": 1, "score": 60, "riders": ["A"],
+                    "rider_costs": {"A": 10}, "rider_scores": {"A": 60}},
+        "Stage 2": {"race_number": 2, "score": 40, "riders": ["A"],
+                    "rider_costs": {"A": 10}, "rider_scores": {"A": 40}}}},
+               "Y": {"username": "Y", "teamname": "Y", "teamid": "2", "races": {
+        "Stage 1": {"race_number": 1, "score": 50, "riders": ["B"],
+                    "rider_costs": {"B": 12}, "rider_scores": {"B": 50}},
+        "Stage 2": {"race_number": 2, "score": 40, "riders": ["B"],
+                    "rider_costs": {"B": 12}, "rider_scores": {"B": 40}}}}}}
+    """
+    # End-of-Tour lands, and it changes the order.
+    complete = replace(
+        partial,
+        """"2": {"name": "Stage 2", "deadline": null, "category": "road"}}}""" => """"2": {"name": "Stage 2", "deadline": null, "category": "road"},
+                                                                                      "3": {"name": "End-of-Tour", "deadline": null, "category": "road"}}}""",
+        """"rider_scores": {"A": 40}}}}""" => """"rider_scores": {"A": 40}},
+                                          "End-of-Tour": {"race_number": 3, "score": 0, "riders": ["A"],
+                                                          "rider_costs": {"A": 10}, "rider_scores": {"A": 0}}}}""",
+        """"rider_scores": {"B": 40}}}}}}""" => """"rider_scores": {"B": 40}},
+                                            "End-of-Tour": {"race_number": 3, "score": 50, "riders": ["B"],
+                                                            "rider_costs": {"B": 12}, "rider_scores": {"B": 50}}}}}}""",
+    )
+
+    mktempdir() do dir
+        tree = mktempdir()
+        path = joinpath(dir, "velogame_2026_3.json")
+
+        write(path, partial)
+        ingest_league_file(path; date = Date(2026, 6, 1), archive_dir = tree)
+
+        write(path, complete)
+        ingest_league_file(path; date = Date(2026, 6, 2), archive_dir = tree)
+
+        w = derive_league_winners(
+            "velogame",
+            2026,
+            "3";
+            now = DateTime(2026, 6, 5),
+            archive_dir = tree,
+        )
+        @test nrow(w) == 1
+        # All three flip on the bug: gating each snapshot against its own
+        # catalogue picks X, on 100, from the 06-01 snapshot.
+        @test w.teamname[1] == "Y"
+        @test w.score[1] == 140.0
+        @test w.snapshot_date[1] == "2026-06-02"
+
+        # F1b: the newest catalogue is only trustworthy once it has settled. A
+        # publish landing inside the window sees the partial catalogue as the
+        # current one, and gating on "newest" cannot help — this is what makes
+        # that window unreachable rather than merely unlikely.
+        @test isempty(
+            derive_league_winners(
+                "velogame",
+                2026,
+                "3";
+                now = DateTime(2026, 6, 2, 6),
+                archive_dir = tree,
+            ),
+        )
+    end
+
+    # A tour with a race still unscored holds back however long it has settled.
+    unscored = """
+    {"meta": {"game_slug": "velogame", "year": 2026, "league_id": "4",
+              "series_type": "grand_tour", "race_catalogue": {
+                "1": {"name": "Stage 1", "deadline": null, "category": "road"},
+                "2": {"name": "Stage 2", "deadline": null, "category": "road"},
+                "3": {"name": "End-of-Tour", "deadline": null, "category": "road"}}},
+     "teams": {"X": {"username": "X", "teamname": "X", "teamid": "1", "races": {
+        "Stage 1": {"race_number": 1, "score": 60, "riders": ["A"],
+                    "rider_costs": {"A": 10}, "rider_scores": {"A": 60}},
+        "Stage 2": {"race_number": 2, "score": 40, "riders": ["A"],
+                    "rider_costs": {"A": 10}, "rider_scores": {"A": 40}}}}}}
+    """
+    mktempdir() do dir
+        tree = mktempdir()
+        path = joinpath(dir, "velogame_2026_4.json")
+        write(path, unscored)
+        ingest_league_file(path; date = Date(2026, 6, 2), archive_dir = tree)
+        @test isempty(
+            derive_league_winners(
+                "velogame",
+                2026,
+                "4";
+                now = DateTime(2026, 7, 1),
+                archive_dir = tree,
+            ),
+        )
+    end
+end
+
+@testset "A classic the gate cannot settle says so (WP6)" begin
+    # `save_league_snapshot` dedupes on content, so once the season's final race
+    # settles nothing changes again and no snapshot dated a full window past its
+    # deadline is ever written. The gate then cannot be satisfied — which is
+    # correct, and used to be silent.
+    late = """
+    {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "9",
+              "series_type": "classics", "race_catalogue": {
+                "7": {"name": "Ronde van Brugge", "deadline": "2026-10-11 11:00:00", "category": 2}}},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "teamid": "9", "races": {
+        "Ronde van Brugge": {"race_number": 7, "score": 300, "riders": ["A"],
+                             "rider_costs": {"A": 20}, "rider_scores": {"A": 300}}}}}}
+    """
+    mktempdir() do dir
+        tree = mktempdir()
+        path = joinpath(dir, "sixes-classics_2026_9.json")
+        write(path, late)
+        ingest_league_file(path; date = Date(2026, 10, 11), archive_dir = tree)
+        write(path, replace(late, "\"score\": 300" => "\"score\": 320"))
+        ingest_league_file(path; date = Date(2026, 10, 12), archive_dir = tree)
+
+        # The newest snapshot is 13h past the deadline, short of the 24h window,
+        # so nothing publishes however long we wait.
+        call() = derive_league_winners(
+            "sixes-classics",
+            2026,
+            "9";
+            now = DateTime(2026, 11, 1),
+            archive_dir = tree,
+        )
+        @test isempty(call())
+        # The emptiness passes on the old code too — the log is the actual test.
+        @test_logs (:info, r"Settle it by hand") match_mode = :any call()
+
+        # And the remedy it names has to work.
+        w = derive_league_winners(
+            "sixes-classics",
+            2026,
+            "9";
+            min_age_hours = 13,
+            now = DateTime(2026, 11, 1),
+            archive_dir = tree,
+        )
+        @test nrow(w) == 1
+        @test w.snapshot_date[1] == "2026-10-12"
+    end
+end
+
+@testset "A scored race with no deadline says so (WP6)" begin
+    # The live classics catalogue has already shrunk from 44 entries to 43, so a
+    # scored race can be absent from every catalogue held.
+    orphan = """
+    {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "8",
+              "series_type": "classics", "race_catalogue": {}},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "teamid": "9", "races": {
+        "Ronde van Brugge": {"race_number": 7, "score": 300, "riders": ["A"],
+                             "rider_costs": {"A": 20}, "rider_scores": {"A": 300}}}}}}
+    """
+    mktempdir() do dir
+        tree = mktempdir()
+        path = joinpath(dir, "sixes-classics_2026_8.json")
+        write(path, orphan)
+        ingest_league_file(path; date = Date(2026, 4, 1), archive_dir = tree)
+
+        call() = derive_league_winners(
+            "sixes-classics",
+            2026,
+            "8";
+            now = DateTime(2026, 12, 1),
+            archive_dir = tree,
+        )
+        @test isempty(call())
+        @test_logs (:info, r"no deadline in any snapshot's race catalogue") match_mode =
+            :any call()
+    end
+end
+
+@testset "Forced rebuild of the derived tables (WP6)" begin
+    # The derived tables are a function of the newest snapshot AND of
+    # `league_rosters_frame`. Only the snapshot half is checked, so a finished
+    # season keeps whatever the old code wrote.
+    src = """
+    {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "7",
+              "series_type": "classics", "race_catalogue": {
+                "7": {"name": "Ronde van Brugge", "deadline": "2026-03-25 11:00:00", "category": 2}}},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "teamid": "9", "races": {
+        "Ronde van Brugge": {"race_number": 7, "score": 300,
+                             "riders": ["Jasper Philipsen", "Max Kanter"],
+                             "rider_costs": {"Jasper Philipsen": 20, "Max Kanter": 6},
+                             "rider_scores": {"Jasper Philipsen": 260, "Max Kanter": 40}}}}}}
+    """
+    mktempdir() do dir
+        tree = mktempdir()
+        path = joinpath(dir, "sixes-classics_2026_7.json")
+        write(path, src)
+        first_pass = ingest_league_file(path; date = Date(2026, 4, 1), archive_dir = tree)
+        @test first_pass.rebuilt
+        @test first_pass.rows == 2
+
+        again = ingest_league_file(path; date = Date(2026, 4, 2), archive_dir = tree)
+        @test again.snapshot_date === nothing
+        @test !again.rebuilt
+
+        # A stale derived table: present, readable, and no longer what
+        # `league_rosters_frame` produces.
+        save_race_snapshot(
+            DataFrame(
+                username = ["x"],
+                teamname = ["x"],
+                teamid = ["x"],
+                race_number = [1],
+                race_name = ["x"],
+                rider = ["x"],
+                cost = [1],
+                score = [1.0],
+                race_score = [1.0],
+            ),
+            "league/rosters",
+            "sixes-classics_7",
+            2026;
+            archive_dir = tree,
+        )
+        unforced = ingest_league_file(path; date = Date(2026, 4, 2), archive_dir = tree)
+        @test !unforced.rebuilt
         @test nrow(
-            derive_league_winners("velogame", 2026, "2"; archive_dir = tree),
+            load_race_snapshot(
+                "league/rosters",
+                "sixes-classics_7",
+                2026;
+                archive_dir = tree,
+            ),
         ) == 1
+
+        forced = ingest_league_file(
+            path;
+            date = Date(2026, 4, 2),
+            force = true,
+            archive_dir = tree,
+        )
+        @test forced.rebuilt
+        @test forced.source_date == Date(2026, 4, 1)
+        @test nrow(
+            load_race_snapshot(
+                "league/rosters",
+                "sixes-classics_7",
+                2026;
+                archive_dir = tree,
+            ),
+        ) == 2
+
+        # A dry run reports and writes nothing.
+        before = read(
+            Velogames.archive_path(
+                "league/rosters",
+                "sixes-classics_7",
+                2026;
+                archive_dir = tree,
+            ),
+        )
+        dry = ingest_league_file(
+            path;
+            date = Date(2026, 4, 5),
+            force = true,
+            dry_run = true,
+            archive_dir = tree,
+        )
+        @test dry.rows == 2
+        @test Velogames.league_snapshot_dates(
+            "sixes-classics",
+            2026,
+            "7";
+            archive_dir = tree,
+        ) == [Date(2026, 4, 1)]
+        @test read(
+            Velogames.archive_path(
+                "league/rosters",
+                "sixes-classics_7",
+                2026;
+                archive_dir = tree,
+            ),
+        ) == before
+    end
+end
+
+@testset "One winner per race across leagues (WP6)" begin
+    # `derive_league_winners`' contract is one league-season, so two leagues on
+    # the same game and year each derive the same race. The guard therefore has
+    # to live in the caller — and `load_league_winners` has to say when the
+    # archive holds two, because readers key on (pcs_slug, year) and silently
+    # keep whichever came last.
+    src = """
+    {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "LID",
+              "series_type": "classics", "race_catalogue": {
+                "7": {"name": "Ronde van Brugge", "deadline": "2026-03-25 11:00:00", "category": 2}}},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "teamid": "9", "races": {
+        "Ronde van Brugge": {"race_number": 7, "score": 300, "riders": ["A"],
+                             "rider_costs": {"A": 20}, "rider_scores": {"A": 300}}}}}}
+    """
+    mktempdir() do dir
+        tree = mktempdir()
+        for lid in ("a", "b")
+            path = joinpath(dir, "sixes-classics_2026_$lid.json")
+            write(path, replace(src, "LID" => lid))
+            ingest_league_file(path; date = Date(2026, 4, 1), archive_dir = tree)
+            w = derive_league_winners(
+                "sixes-classics",
+                2026,
+                lid;
+                now = DateTime(2026, 5, 1),
+                archive_dir = tree,
+            )
+            @test nrow(w) == 1
+            append_league_winners(w, "sixes-classics", 2026, lid; archive_dir = tree)
+        end
+
+        recorded =
+            @test_logs (:warn, r"more than one winner") match_mode = :any load_league_winners(;
+                archive_dir = tree,
+            )
+        @test length(recorded) == 2
+        @test length(unique(w -> (w.pcs_slug, w.year), recorded)) == 1
+    end
+end
+
+@testset "A recorded winner can be re-derived (WP6)" begin
+    src = """
+    {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "6",
+              "series_type": "classics", "race_catalogue": {
+                "7": {"name": "Ronde van Brugge", "deadline": "2026-03-25 11:00:00", "category": 2}}},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "teamid": "9", "races": {
+        "Ronde van Brugge": {"race_number": 7, "score": 300, "riders": ["A"],
+                             "rider_costs": {"A": 20}, "rider_scores": {"A": 300}}}}}}
+    """
+    mktempdir() do dir
+        tree = mktempdir()
+        path = joinpath(dir, "sixes-classics_2026_6.json")
+        write(path, src)
+        ingest_league_file(path; date = Date(2026, 4, 1), archive_dir = tree)
+        args = ("sixes-classics", 2026, "6")
+        derive() =
+            derive_league_winners(args...; now = DateTime(2026, 5, 1), archive_dir = tree)
+
+        w = derive()
+        append_league_winners(w, args...; archive_dir = tree)
+        @test isempty(derive())  # recorded once, never re-derived
+
+        @test remove_league_winner(
+            "classic-brugge-de-panne",
+            args...;
+            archive_dir = tree,
+        ) == 1
+        again = derive()
+        @test nrow(again) == 1
+        @test again.teamname[1] == w.teamname[1]
+        @test again.snapshot_date[1] == w.snapshot_date[1]
+
+        @test remove_league_winner("no-such-race", args...; archive_dir = tree) == 0
+
+        # A seeded row is the only copy there is, so it is refused.
+        append_league_winners(
+            DataFrame(
+                pcs_slug = ["milano-sanremo"],
+                year = [2026],
+                race_number = [1],
+                username = ["u"],
+                teamname = ["t"],
+                score = [1.0],
+                snapshot_date = [""],
+            ),
+            args...;
+            archive_dir = tree,
+        )
+        @test_throws ErrorException remove_league_winner(
+            "milano-sanremo",
+            args...;
+            archive_dir = tree,
+        )
     end
 end
 
@@ -476,4 +867,3 @@ end
     Velogames.rematch_riderkeys!(ext2, ref2)
     @test ext2.riderkey[1] == createkey("Thomas Pidcock")
 end
-

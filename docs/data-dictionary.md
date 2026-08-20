@@ -55,6 +55,15 @@ names across 2023–26, zero mismatches. A divergence would drop a rider from a
 join rather than raise anything, which is why it is checked rather than
 assumed.
 
+`vg_startlist` carries a uniqueness constraint the column guard cannot express:
+**one row per `(race_number, riderkey)`**. A re-capture of a race must replace
+that race's rows rather than append to them. `load_report_data` joins the frame
+and then sums, so a rider listed twice is counted twice in the page's points
+total and in the cheapest-team stat — a report with plausible wrong numbers on
+it, not an error. Julia dedupes on read as a backstop, keeping the first
+occurrence, but the constraint belongs to the writer: dropping the wrong
+duplicate keeps the wrong price.
+
 ## Provenance is metadata, not columns
 
 The grain of provenance is the file. One file is one fetch, and the question

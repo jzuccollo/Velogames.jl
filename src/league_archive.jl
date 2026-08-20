@@ -27,8 +27,10 @@
 `{game_slug}_{league_id}`: the slug position of a league's derived archive
 files. The year is the filename, as it is for every race type.
 """
-league_key(game_slug::AbstractString, league_id::AbstractString) =
-    "$(game_slug)_$(league_id)"
+league_key(
+    game_slug::AbstractString,
+    league_id::AbstractString,
+) = "$(game_slug)_$(league_id)"
 
 """
     league_raw_dir(game_slug, year, league_id; archive_dir) -> String
@@ -94,13 +96,16 @@ function archived_leagues(; archive_dir::String = archive_dir())
         isdir(joinpath(dir, e)) || continue
         m = match(r"^(.+)_(\d{4})_(.+)$", e)
         m === nothing && continue
-        push!(out, (game_slug = String(m[1]), year = parse(Int, m[2]), league_id = String(m[3])))
+        push!(
+            out,
+            (game_slug = String(m[1]), year = parse(Int, m[2]), league_id = String(m[3])),
+        )
     end
     return out
 end
 
 """
-    save_league_snapshot(json_text, game_slug, year, league_id; date, archive_dir) -> Union{Date, Nothing}
+    save_league_snapshot(json_text, game_slug, year, league_id; date, dry_run, archive_dir) -> Union{Date, Nothing}
 
 Write one raw league snapshot, dated, and return the date written — or
 `nothing` when the content matches the newest snapshot already held.
@@ -110,6 +115,8 @@ roughly one file per genuine state change (~40 a year) rather than one per
 scrape (~700), and means every file present marks something actually
 happening. A second write on the same day overwrites that day's file, so an
 intra-day revision replaces rather than accumulates.
+
+`dry_run` returns what a real call would return and writes nothing.
 """
 function save_league_snapshot(
     json_text::AbstractString,
@@ -117,6 +124,7 @@ function save_league_snapshot(
     year::Integer,
     league_id::AbstractString;
     date::Date = Dates.today(),
+    dry_run::Bool = false,
     archive_dir::String = archive_dir(),
 )
     dates = league_snapshot_dates(game_slug, year, league_id; archive_dir = archive_dir)
@@ -130,15 +138,13 @@ function save_league_snapshot(
         )
         bytes2hex(sha256(read(newest))) == bytes2hex(sha256(json_text)) && return nothing
     end
-    path = league_snapshot_path(
-        game_slug,
-        year,
-        league_id,
-        date;
-        archive_dir = archive_dir,
-    )
+    # `dry_run` forks here and nowhere else, so the date it reports is the date
+    # a real run would write: the dedupe decision above is the part that could
+    # drift, and it is shared.
+    dry_run && return date
+    path = league_snapshot_path(game_slug, year, league_id, date; archive_dir = archive_dir)
     mkpath(dirname(path))
-    write(path, json_text)
+    atomic_write(p -> write(p, json_text), path)
     return date
 end
 
@@ -160,13 +166,7 @@ function load_league_snapshot(
         isempty(dates) && return nothing
         date = dates[end]
     end
-    path = league_snapshot_path(
-        game_slug,
-        year,
-        league_id,
-        date;
-        archive_dir = archive_dir,
-    )
+    path = league_snapshot_path(game_slug, year, league_id, date; archive_dir = archive_dir)
     isfile(path) || return nothing
     return JSON3.read(read(path, String))
 end
@@ -208,7 +208,10 @@ function league_rosters_frame(snapshot)
                         cost = costs === nothing ? missing :
                                (haskey(costs, Symbol(r)) ? Int(costs[Symbol(r)]) : missing),
                         score = scores === nothing ? missing :
-                                (haskey(scores, Symbol(r)) ? Float64(scores[Symbol(r)]) : missing),
+                                (
+                            haskey(scores, Symbol(r)) ? Float64(scores[Symbol(r)]) :
+                            missing
+                        ),
                         race_score = Float64(race.score),
                     ),
                 )
@@ -281,15 +284,16 @@ function league_meta_frame(snapshot)
 end
 
 """
-    ingest_league_file(json_path; date, archive_dir) -> NamedTuple
+    ingest_league_file(json_path; date, force, dry_run, archive_dir) -> NamedTuple
 
 Take one vgleague JSON file into the archive: date and content-dedupe the raw
 snapshot, then rebuild the derived roster and meta tables from the newest
 snapshot held.
 
-Returns `(; game_slug, year, league_id, snapshot_date, rows)` — `snapshot_date`
-is `nothing` when the content was already held, which is the ordinary case on a
-tick where nothing changed.
+Returns `(; game_slug, year, league_id, snapshot_date, rebuilt, source_date,
+rows)` — `snapshot_date` is `nothing` when the content was already held, which
+is the ordinary case on a tick where nothing changed; `rebuilt` says whether the
+derived tables were written, and `source_date` which snapshot they came from.
 
 The derived tables are rebuilt from the **newest** snapshot rather than
 accumulated across snapshots: they are the current view (latest revised scores,
@@ -301,10 +305,19 @@ reads the raw tier directly — see `derive_league_winners`.
 function of the newest snapshot, so an unchanged snapshot cannot change them,
 and rewriting an identical file in a Dropbox folder several times a day is how
 you get a conflicted copy.
+
+`force` rebuilds them anyway. They are a function of the newest snapshot *and*
+of `league_rosters_frame`/`league_meta_frame`, and only the snapshot half is
+checked — so changing either function leaves a finished season's table stale for
+ever, still present, still readable, and no longer what the code says it is.
+
+`dry_run` reports what a real call would do and writes nothing.
 """
 function ingest_league_file(
     json_path::AbstractString;
     date::Date = Dates.today(),
+    force::Bool = false,
+    dry_run::Bool = false,
     archive_dir::String = archive_dir(),
 )
     text = read(json_path, String)
@@ -320,18 +333,30 @@ function ingest_league_file(
         year,
         league_id;
         date = date,
+        dry_run = dry_run,
         archive_dir = archive_dir,
     )
 
     key = league_key(game_slug, league_id)
     stale =
+        force ||
         written !== nothing ||
         !has_race_snapshot("league/rosters", key, year; archive_dir = archive_dir) ||
         !has_race_snapshot("league/meta", key, year; archive_dir = archive_dir)
 
-    newest = load_league_snapshot(game_slug, year, league_id; archive_dir = archive_dir)
+    # On a dry run the raw snapshot was not written, so the newest one on disk
+    # is the previous state; build the frames from the file in hand instead, or
+    # the row count reported would be the old one.
+    newest =
+        dry_run ? snapshot :
+        load_league_snapshot(game_slug, year, league_id; archive_dir = archive_dir)
+    # Named in the result because `--force` rebuilds from whatever the newest
+    # snapshot is: against a pruned raw tier that is a table which looks freshly
+    # built and is missing every race after it.
+    held = league_snapshot_dates(game_slug, year, league_id; archive_dir = archive_dir)
+    source_date = dry_run ? date : (isempty(held) ? nothing : held[end])
     rosters = league_rosters_frame(newest)
-    if stale
+    if stale && !dry_run
         save_race_snapshot(rosters, "league/rosters", key, year; archive_dir = archive_dir)
         save_race_snapshot(
             league_meta_frame(newest),
@@ -347,12 +372,14 @@ function ingest_league_file(
         year,
         league_id,
         snapshot_date = written,
+        rebuilt = stale,
+        source_date,
         rows = nrow(rosters),
     )
 end
 
 """
-    ingest_league_dir(data_dir; date, archive_dir) -> Vector{NamedTuple}
+    ingest_league_dir(data_dir; date, force, dry_run, archive_dir) -> Vector{NamedTuple}
 
 Ingest every `*.json` in a vgleague data directory. The one place in this
 package that reads the vgleague repo; everything else reads the archive.
@@ -360,13 +387,21 @@ package that reads the vgleague repo; everything else reads the archive.
 function ingest_league_dir(
     data_dir::AbstractString;
     date::Date = Dates.today(),
+    force::Bool = false,
+    dry_run::Bool = false,
     archive_dir::String = archive_dir(),
 )
     dir = expanduser(String(data_dir))
     isdir(dir) || error("No vgleague data directory at $dir (has the scrape run?)")
     files = sort(filter(p -> endswith(p, ".json"), readdir(dir; join = true)))
     return [
-        ingest_league_file(f; date = date, archive_dir = archive_dir) for f in files
+        ingest_league_file(
+            f;
+            date = date,
+            force = force,
+            dry_run = dry_run,
+            archive_dir = archive_dir,
+        ) for f in files
     ]
 end
 
@@ -430,7 +465,8 @@ function load_league_standings(;
     )
     username_of_team =
         Dict(String(t) => String(u) for (t, u) in zip(archived.teamname, archived.username))
-    toml_df.username = [get(username_of_team, String(t), String(t)) for t in toml_df.teamname]
+    toml_df.username =
+        [get(username_of_team, String(t), String(t)) for t in toml_df.teamname]
     return vcat(kept, toml_df; cols = :union)
 end
 
@@ -565,12 +601,7 @@ function load_league_winners(; archive_dir::String = archive_dir())
     out = NamedTuple[]
     for key in archive_races("league/winners"; archive_dir = archive_dir)
         for year in archive_years("league/winners", key; archive_dir = archive_dir)
-            df = load_race_snapshot(
-                "league/winners",
-                key,
-                year;
-                archive_dir = archive_dir,
-            )
+            df = load_race_snapshot("league/winners", key, year; archive_dir = archive_dir)
             df === nothing && continue
             for r in eachrow(df)
                 push!(
@@ -585,6 +616,19 @@ function load_league_winners(; archive_dir::String = archive_dir())
             end
         end
     end
+
+    # Readers key on `(pcs_slug, year)` — `render_reports.jl` builds a Dict
+    # comprehension off it — so a race recorded by two league-seasons does not
+    # collide, it silently keeps whichever was walked last. Nothing downstream
+    # can notice, so say it here.
+    counts = Dict{Tuple{String,Int},Int}()
+    for w in out
+        counts[(w.pcs_slug, w.year)] = get(counts, (w.pcs_slug, w.year), 0) + 1
+    end
+    dupes = sort([k for (k, n) in counts if n > 1])
+    isempty(dupes) ||
+        @warn "league/winners records more than one winner for $(length(dupes)) race-year(s); readers that key on (pcs_slug, year) will keep an arbitrary one" dupes
+
     return sort!(out; by = w -> (w.pcs_slug, w.year))
 end
 
@@ -626,7 +670,16 @@ Append-only, and the reason is the same one that made the raw tier dated: a
 winner is a fact about a particular Sunday, and entrants rename their teams.
 Re-deriving Paris-Roubaix 2026 today gives a name the winner adopted months
 later, and re-deriving it from the oldest snapshot still on disk gives a third
-name; only the entry written the week of the race is right.
+name; only the entry written the week of the race is right. Use
+`remove_league_winner` to unpick one that went in wrong.
+
+Read-modify-write, and `save_race_snapshot`'s atomic rename does not make it
+safe against a concurrent writer: two runs that each read the same table and
+append one row produce a file with whichever row was written last, and the
+other winner is gone for good — silently, because a winner is never re-derived
+and nothing will notice the gap. `.velogames-publish.lock` is what serialises
+that, and it is per-clone, so a second machine publishing into the same Dropbox
+archive is still unguarded.
 """
 function append_league_winners(
     df::DataFrame,
@@ -646,6 +699,58 @@ function append_league_winners(
         archive_dir = archive_dir,
     )
     return nothing
+end
+
+"""
+    remove_league_winner(pcs_slug, game_slug, year, league_id; archive_dir) -> Int
+
+Drop a race's recorded winner so it can be derived again. Returns how many rows
+went.
+
+A winner is recorded once and never re-derived, which is right — but it means
+one that went in wrong is wrong for ever, and the alternative repair is editing
+an Arrow file by hand, which no text editor does. Pair it with
+`auto_publish.jl --redrive=<slug>`, which removes the row and re-derives it in
+the same run.
+
+**Seeded rows are refused.** The 29 winners carried across when the league moved
+into the archive have an empty `snapshot_date` because no snapshot on disk
+predates them; four of them are reproducible from nothing else at all. Removing
+one destroys the only record there is, so the caller has to go and do that
+deliberately.
+"""
+function remove_league_winner(
+    pcs_slug::AbstractString,
+    game_slug::AbstractString,
+    year::Integer,
+    league_id::AbstractString;
+    archive_dir::String = archive_dir(),
+)
+    existing = league_winners_frame(game_slug, year, league_id; archive_dir = archive_dir)
+    isempty(existing) && return 0
+
+    matches = r -> String(r.pcs_slug) == String(pcs_slug)
+    hit = filter(matches, existing)
+    isempty(hit) && return 0
+
+    if any(isempty(String(d)) for d in hit.snapshot_date)
+        error(
+            "remove_league_winner: $pcs_slug $year in $game_slug/$league_id is a seeded row " *
+            "(no snapshot_date). It was carried across when the league moved into the archive " *
+            "and no raw snapshot on disk can re-derive it, so removing it would destroy the " *
+            "only record. Edit the winners table by hand if that is really what you want.",
+        )
+    end
+
+    kept = filter(!matches, existing)
+    save_race_snapshot(
+        kept,
+        "league/winners",
+        league_key(game_slug, league_id),
+        Int(year);
+        archive_dir = archive_dir,
+    )
+    return nrow(hit)
 end
 
 """Winner row of a standings frame, ties broken by name so a re-run agrees with itself."""
@@ -707,6 +812,9 @@ function derive_league_winners(
             league_id,
             dates,
             have,
+            newest,
+            min_age_hours,
+            now,
             archive_dir,
         )
     end
@@ -723,6 +831,30 @@ function _league_deadlines(snapshot)
     )
 end
 
+"""One winner row from a race group in a dated snapshot, or `nothing` when nobody has scored.
+
+A top score of 0 means the race has not been scored: `ridescore.php` serves the
+full roster at zero both before a race and after one nobody has been scored in.
+"""
+function _winner_row(g, slug, year, date)
+    top = _top_entrant(DataFrame(g), :score)
+    top.score <= 0 && return nothing
+    return (;
+        pcs_slug = slug,
+        year = Int(year),
+        race_number = Int(g.race_number[1]),
+        username = String(top.username),
+        teamname = String(top.teamname),
+        score = Float64(top.score),
+        snapshot_date = string(date),
+    )
+end
+
+"""Race groups of a standings frame, in race order."""
+_race_groups(standings) =
+    isempty(standings) ? [] :
+    sort(collect(groupby(standings, :race_name)); by = g -> g.race_number[1])
+
 function _derive_classics_winners(
     game_slug,
     year,
@@ -735,26 +867,28 @@ function _derive_classics_winners(
 )
     rows = NamedTuple[]
     seen = copy(have)
+    # Accumulated oldest-first so the diagnostic pass below can date a race the
+    # newest catalogue has since dropped — the live classics catalogue has
+    # already shrunk once, from 44 entries to 43.
+    all_deadlines = Dict{Int,DateTime}()
+    load(d) = load_league_snapshot(
+        game_slug,
+        year,
+        league_id;
+        date = d,
+        archive_dir = archive_dir,
+    )
+
     for date in dates
-        snapshot = load_league_snapshot(
-            game_slug,
-            year,
-            league_id;
-            date = date,
-            archive_dir = archive_dir,
-        )
+        snapshot = load(date)
         standings = _snapshot_standings(snapshot)
         isempty(standings) && continue
         deadlines = _league_deadlines(snapshot)
+        merge!(all_deadlines, deadlines)
 
-        for g in sort(collect(groupby(standings, :race_name)); by = g -> g.race_number[1])
-            race_name = String(g.race_name[1])
-            slug = league_race_slug(race_name)
-            if isempty(slug)
-                @info "skip $race_name: not a known classic (missing from CLASSICS_RACES_2026?)"
-                continue
-            end
-            slug in seen && continue
+        for g in _race_groups(standings)
+            slug = league_race_slug(String(g.race_name[1]))
+            (isempty(slug) || slug in seen) && continue
 
             deadline = get(deadlines, g.race_number[1], nothing)
             deadline === nothing && continue
@@ -767,25 +901,79 @@ function _derive_classics_winners(
             # erring the other way costs a wrong score.
             (DateTime(date) - deadline) / Hour(1) < min_age_hours && continue
 
-            top = _top_entrant(DataFrame(g), :score)
-            top.score <= 0 && continue
-            push!(
-                rows,
-                (;
-                    pcs_slug = slug,
-                    year = Int(year),
-                    race_number = Int(g.race_number[1]),
-                    username = String(top.username),
-                    teamname = String(top.teamname),
-                    score = Float64(top.score),
-                    snapshot_date = string(date),
-                ),
-            )
+            row = _winner_row(g, slug, year, date)
+            row === nothing && continue
+            push!(rows, row)
             push!(seen, slug)
         end
     end
+
+    _report_unsettled_classics(
+        load(dates[end]),
+        dates[end],
+        seen,
+        all_deadlines,
+        min_age_hours,
+        now,
+    )
+
     isempty(rows) && return DataFrame()
     return DataFrame(rows)
+end
+
+"""Say, once per race, why a scored classic has no winner recorded.
+
+Nothing here publishes anything — the gates above are deliberately strict, and a
+race they hold back stays held back. What this closes is that they held it back
+in silence.
+
+The reporting lives outside the loop above because that loop runs once per
+snapshot date: an `@info` in there prints one line per snapshot per race, which
+for a permanent defect is forty identical lines a run and is how a real warning
+stops being read.
+
+The case worth knowing about is the season's last classic. `save_league_snapshot`
+dedupes on content, so a snapshot exists only where something changed; once the
+final race's scores settle nothing changes again, and no snapshot dated a full
+settling window past its deadline is ever written. The gate can then never be
+satisfied and `render_reports.jl` renders only a race that has a winner, so that
+report would never appear. The remedy is a one-off run at a lower threshold, and
+the message works out which threshold, because the obvious guess is wrong: a
+snapshot dated the race day is *negative* hours from an 11:00 deadline, so
+`--min-age-hours=0` does not rescue it.
+"""
+function _report_unsettled_classics(
+    newest,
+    newest_date,
+    seen,
+    all_deadlines,
+    min_age_hours,
+    now,
+)
+    for g in _race_groups(_snapshot_standings(newest))
+        race_name = String(g.race_name[1])
+        slug = league_race_slug(race_name)
+        if isempty(slug)
+            @info "skip $race_name: not a known classic (missing from CLASSICS_RACES_2026?)"
+            continue
+        end
+        slug in seen && continue
+        # An unscored race is not a blocked one.
+        maximum(g.score) <= 0 && continue
+
+        deadline = get(all_deadlines, g.race_number[1], nothing)
+        if deadline === nothing
+            @info "skip $slug: no deadline in any snapshot's race catalogue, so its age can't be checked"
+            continue
+        end
+        (now - deadline) / Hour(1) < min_age_hours && continue
+
+        gap = (DateTime(newest_date) - deadline) / Hour(1)
+        if gap < min_age_hours
+            @info "skip $slug: no snapshot postdates its deadline by $(min_age_hours)h — the newest ($newest_date) is $(round(Int, gap))h past it, and content dedupe means no later one is coming. Settle it by hand with: julia --project scripts/auto_publish.jl --min-age-hours=$(floor(Int, gap))"
+        end
+    end
+    return nothing
 end
 
 """Velogames games have their own slugs, unrelated to PCS's.
@@ -802,13 +990,50 @@ const GT_PCS_SLUG = Dict(
     "spain" => "vuelta-a-espana",
 )
 
-function _derive_grand_tour_winner(game_slug, year, league_id, dates, have, archive_dir)
+"""Race numbers in a snapshot's own catalogue."""
+_catalogue_numbers(snapshot) =
+    Set(parse(Int, String(k)) for k in keys(get(snapshot.meta, :race_catalogue, Dict())))
+
+function _derive_grand_tour_winner(
+    game_slug,
+    year,
+    league_id,
+    dates,
+    have,
+    newest,
+    min_age_hours,
+    now,
+    archive_dir,
+)
     slug = get(GT_PCS_SLUG, String(game_slug), "")
     if isempty(slug)
         @info "skip $game_slug $year: no PCS slug mapped for that Velogames game (add it to GT_PCS_SLUG)"
         return DataFrame()
     end
     slug in have && return DataFrame()
+
+    # A tour is settled from a catalogue that has stopped growing, and neither
+    # half of that is optional.
+    #
+    # The catalogue itself grows: End-of-Tour is added when the tour finishes,
+    # so a snapshot taken between the last stage being scored and that entry
+    # appearing lists every race it knows about as scored. Testing each snapshot
+    # against its own catalogue therefore passes on a partial total. On the 2026
+    # Giro that is 1,680 points, 20% of the winning total, on a race decided by
+    # 33 — and it reorders second through fifth. So gate on the newest
+    # catalogue. Newest rather than the union of every catalogue: a cancelled
+    # stage dropped from the list would otherwise be required for ever and the
+    # tour would never publish at all.
+    #
+    # And the newest catalogue is only trustworthy once it has settled. Publish
+    # runs on every vgleague tick, so a run landing inside that window sees the
+    # partial catalogue as the newest one and the first test cannot help. Content
+    # dedupe means the newest snapshot's date is the last day anything moved, so
+    # requiring a full settling window since then is what makes the window
+    # unreachable rather than merely unlikely. Wall-clock age always grows, so
+    # unlike the classics gate this one cannot deadlock.
+    (now - DateTime(dates[end])) / Hour(1) < min_age_hours && return DataFrame()
+    catalogue = _catalogue_numbers(newest)
 
     for date in dates
         snapshot = load_league_snapshot(
@@ -821,11 +1046,10 @@ function _derive_grand_tour_winner(game_slug, year, league_id, dates, have, arch
         standings = _snapshot_standings(snapshot)
         isempty(standings) && continue
 
-        catalogue =
-            Set(parse(Int, String(k)) for k in keys(get(snapshot.meta, :race_catalogue, Dict())))
         isempty(setdiff(catalogue, Set(Int.(standings.race_number)))) || continue
 
-        totals = combine(groupby(standings, [:username, :teamname]), :score => sum => :score)
+        totals =
+            combine(groupby(standings, [:username, :teamname]), :score => sum => :score)
         top = _top_entrant(totals, :score)
         top.score <= 0 && continue
         return DataFrame([(;
@@ -838,6 +1062,7 @@ function _derive_grand_tour_winner(game_slug, year, league_id, dates, have, arch
             snapshot_date = string(date),
         )])
     end
+    @info "skip $slug $year: no snapshot has all $(length(catalogue)) races of the current catalogue scored"
     return DataFrame()
 end
 

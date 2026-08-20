@@ -58,3 +58,6 @@ REFACTOR_PLAN.md
 # Netlify CLI scratch state (contains an absolute publish path)
 .netlify/
 docs/two-package-reconciliation.md
+
+# Publish lock: scripts/auto_publish.sh takes an mkdir lock in the repo root
+.velogames-publish.lock/

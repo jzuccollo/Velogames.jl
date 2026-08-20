@@ -4,6 +4,7 @@ Record the league winner for any race the archive can now settle but hasn't.
 
 Usage:
     julia --project scripts/auto_publish.jl [--dry-run] [--min-age-hours=24]
+                                            [--redrive=PCS_SLUG]
 
 Walks **every** league-season in `archive_dir()/league/raw/`, so the classics
 league and each grand tour are covered and a league added later is picked up
@@ -23,17 +24,34 @@ The gates live in `derive_league_winners`; the one that matters here is that a
 classic waits `--min-age-hours` (default 24) past its pick deadline, because
 Velogames revises scores after a race and the record is not re-derived once
 written.
+
+`--redrive=PCS_SLUG` drops that race's recorded winner and lets the same run
+derive it again — the escape hatch for one that went in wrong, since a recorded
+winner is otherwise permanent. Seeded rows are refused; see
+`remove_league_winner`.
 """
 
 using Velogames
 using DataFrames, Dates
 
 function main(args)
-    dry_run = "--dry-run" in args
+    dry_run = false
     min_age_hours = 24.0
+    redrive = ""
     for arg in args
-        if startswith(arg, "--min-age-hours=")
+        if arg == "--dry-run"
+            dry_run = true
+        elseif startswith(arg, "--min-age-hours=")
             min_age_hours = parse(Float64, split(arg, "="; limit = 2)[2])
+        elseif startswith(arg, "--redrive=")
+            redrive = String(split(arg, "="; limit = 2)[2])
+        else
+            # `auto_publish.sh` used to forward every argument here, so
+            # `--config=` was accepted, ignored, and never reached the step that
+            # reads it — a flag that looked like it worked.
+            error(
+                "auto_publish.jl: unrecognised argument $(repr(arg)); known arguments are --dry-run, --min-age-hours=N and --redrive=PCS_SLUG",
+            )
         end
     end
 
@@ -42,15 +60,48 @@ function main(args)
         "No league snapshots in $(joinpath(archive_dir(), "league", "raw")) — run scripts/ingest_league.jl first.",
     )
 
+    if !isempty(redrive)
+        gone = 0
+        for l in leagues
+            n = if dry_run
+                nrow(
+                    filter(
+                        r -> String(r.pcs_slug) == redrive,
+                        Velogames.league_winners_frame(l.game_slug, l.year, l.league_id),
+                    ),
+                )
+            else
+                remove_league_winner(redrive, l.game_slug, l.year, l.league_id)
+            end
+            n > 0 &&
+                @info "redrive: dropped $n recorded winner(s) for $redrive from $(l.game_slug) $(l.year)/$(l.league_id)"
+            gone += n
+        end
+        gone == 0 && @info "redrive: nothing recorded for $redrive; deriving as usual"
+    end
+
+    # `derive_league_winners` only sees its own league-season's record, so two
+    # archived leagues on the same game and year would each record every race.
+    # This is the global guard the pre-archive script held and the move to a
+    # per-league function dropped.
+    published = Set((w.pcs_slug, w.year) for w in load_league_winners())
     appended = String[]
     for l in leagues
-        new = derive_league_winners(
+        derived = derive_league_winners(
             l.game_slug,
             l.year,
             l.league_id;
             min_age_hours = min_age_hours,
         )
+        isempty(derived) && continue
+
+        new = filter(r -> !((String(r.pcs_slug), Int(r.year)) in published), derived)
+        for r in eachrow(derived)
+            (String(r.pcs_slug), Int(r.year)) in published &&
+                @info "skip $(r.pcs_slug) $(r.year) for $(l.game_slug)/$(l.league_id): another league-season has already recorded it, and the site can only show one winner per race"
+        end
         isempty(new) && continue
+
         if dry_run
             for r in eachrow(new)
                 @info "would record $(r.pcs_slug) $(r.year): $(r.teamname) ($(Int(round(r.score)))) from the $(r.snapshot_date) snapshot"
@@ -58,7 +109,10 @@ function main(args)
         else
             append_league_winners(new, l.game_slug, l.year, l.league_id)
         end
+        # Outside the dry-run branch on purpose: auto_publish.sh keys `[ -z
+        # "$NEW" ]` off this stdout to decide whether to re-render.
         for r in eachrow(new)
+            push!(published, (String(r.pcs_slug), Int(r.year)))
             push!(appended, r.pcs_slug)
             println("$(r.pcs_slug) $(r.year) $(Int(round(r.score))) $(r.teamname)")
         end

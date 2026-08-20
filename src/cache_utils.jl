@@ -106,16 +106,21 @@ function save_to_cache(
 )
     data_file, meta_file = cache_paths(key, cache_dir)
 
-    # Save metadata first (marks this URL as attempted, even if data is empty)
-    meta = CacheMetadata(url, now(), "1.0", params)
-    write(meta_file, JSON3.write(meta))
-
-    # An empty result writes metadata only. That absence is the "not published
-    # yet" marker `EMPTY_CACHE_MAX_AGE_HOURS` keys off, so the entry expires in
-    # hours rather than sitting out the full TTL.
+    # Data first, metadata last. `is_cache_valid` turns on the metadata alone,
+    # and `cached_fetch` reads metadata-without-data as a cached empty result —
+    # so writing the metadata first opens a window in which a crash, or a reader
+    # in another process, is served an empty DataFrame nothing ever fetched.
+    # This ordering makes the interrupted state "not yet valid", so a reader
+    # refetches instead.
+    #
+    # An empty result still writes metadata only. That absence is the "not
+    # published yet" marker `EMPTY_CACHE_MAX_AGE_HOURS` keys off, so the entry
+    # expires in hours rather than sitting out the full TTL — and with no data
+    # to write there is no window here to open.
     if nrow(data) > 0
         Arrow.write(data_file, data)
     end
+    write(meta_file, JSON3.write(CacheMetadata(url, now(), "1.0", params)))
 end
 
 """
@@ -173,9 +178,16 @@ function cached_fetch(
             _MEMORY_CACHE[key] = cached_data
             return cached_data
         end
-        # Metadata exists but no data file → cached empty result
-        verbose && @info "Loading cached empty result: $url"
-        return DataFrame()
+        if !isfile(data_file)
+            # Metadata with no data file at all is the deliberate empty marker.
+            verbose && @info "Loading cached empty result: $url"
+            return DataFrame()
+        end
+        # A data file that exists and will not read is a corrupt entry, not an
+        # empty one — `load_from_cache` returns `nothing` for both. Treating it
+        # as empty would serve a blank frame for the rest of the TTL, so fall
+        # through and fetch it again.
+        @warn "Corrupt cache entry, refetching: $url"
     end
 
     # 3. Fetch from network
@@ -264,14 +276,12 @@ whose entries mean "a frame with these mandatory columns" and are what
 `save_race_snapshot` validates against. The audit and the manifest read both
 consts; nothing else needs to know the difference.
 """
-const RAW_ARCHIVE_TREES = [
-    (
-        name = "league/raw",
-        pattern = "{game_slug}_{year}_{league_id}/{YYYY-MM-DD}.json",
-        refetchable = false,
-        note = "Dated, content-deduped copies of the vgleague scrape: every entrant's roster, cost and score for every race. Never overwritten, because entrants rename their teams and the only honest record is what the site said on a given date. Velogames publishes no history, so a league's rosters exist only while the league does.",
-    ),
-]
+const RAW_ARCHIVE_TREES = [(
+    name = "league/raw",
+    pattern = "{game_slug}_{year}_{league_id}/{YYYY-MM-DD}.json",
+    refetchable = false,
+    note = "Dated, content-deduped copies of the vgleague scrape: every entrant's roster, cost and score for every race. Never overwritten, because entrants rename their teams and the only honest record is what the site said on a given date. Velogames publishes no history, so a league's rosters exist only while the league does.",
+),]
 
 
 """
@@ -436,7 +446,7 @@ const ARCHIVE_TYPES = Dict(
         version = 1,
         mandatory = [:race_number, :rider, :riderkey, :team, :cost],
         refetchable = false,
-        note = "Who actually started one race, with that race's prices and (grand tours) classes, from `riders.php`'s Start List column. One row per starter per race, accumulating down the season; keyed by VG game slug, not `pcs_slug`. **Written by vgleague, in Python** — the page shows only the race in progress, so it has to be captured while that race is on. Reporting joins it instead of filtering the season pool through PCS results.",
+        note = "Who actually started one race, with that race's prices and (grand tours) classes, from `riders.php`'s Start List column. **Exactly one row per `(race_number, riderkey)`**, accumulating down the season; keyed by VG game slug, not `pcs_slug`. A re-capture must replace that race's rows, not append to them: `load_report_data` joins this frame, so a duplicated rider is counted twice in the page's points total and in the cheapest-team stat. **Written by vgleague, in Python** — the page shows only the race in progress, so it has to be captured while that race is on. Reporting joins it instead of filtering the season pool through PCS results.",
     ),
     "vg_scoring" => (
         version = 1,
@@ -619,6 +629,45 @@ has_race_snapshot(
 ) = isfile(archive_path(data_type, pcs_slug, year; archive_dir = archive_dir))
 
 """
+    atomic_write(f, path) -> String
+
+Write `path` by handing `f` a temporary path in the same directory and renaming
+it into place. The temporary file is removed if `f` throws.
+
+The archive sits in Dropbox, is written by launchd and by `serve.jl`, and is due
+to be read by a Python package on its own schedule — with no locking anywhere.
+A writer interrupted part-way through `Arrow.write` leaves a truncated file that
+`load_race_snapshot` reports as unreadable, or a short one that reads cleanly
+and is wrong. `rename` is atomic within a filesystem, so a reader sees either
+the old file or the new one and never half of either.
+
+Three things the implementation depends on:
+
+  * the temporary file lives in the **target directory**, because that is what
+    keeps the rename inside one filesystem;
+  * it is **dot-prefixed**, because that is what `audit_archive` and
+    `archive_years` skip — so a write in flight is not a stray file and not a
+    year, and neither is one leaked by a kill;
+  * `mv(...; force = true)` tries `rename` first and only falls back to
+    unlink-and-copy if that raises, so this is a genuine atomic replace.
+
+The pid is in the name so two writers racing on one path cannot corrupt each
+other's temporary file. That makes the *file* safe, not the write: the last
+rename still wins.
+"""
+function atomic_write(f::Function, path::AbstractString)
+    tmp = joinpath(dirname(path), ".$(basename(path)).$(getpid()).tmp")
+    try
+        f(tmp)
+        mv(tmp, path; force = true)
+    catch
+        rm(tmp; force = true)
+        rethrow()
+    end
+    return String(path)
+end
+
+"""
     save_race_snapshot(df, data_type, pcs_slug, year; archive_dir, source_url) -> Nothing
 
 Save a DataFrame to the permanent archive. Creates directories as needed.
@@ -655,13 +704,17 @@ function save_race_snapshot(
         "columns $missing_cols — refusing to write a snapshot nothing can read",
     )
 
+    # Both of these stay below the checks above: a typo'd type must leave no
+    # directory behind, which is the whole point of checking before `mkpath`.
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     mkpath(dirname(path))
-    Arrow.write(
-        path,
-        df;
-        metadata = _archive_provenance(data_type, spec.version, source_url),
-    )
+    atomic_write(path) do tmp
+        Arrow.write(
+            tmp,
+            df;
+            metadata = _archive_provenance(data_type, spec.version, source_url),
+        )
+    end
     @info "Archived $data_type for $pcs_slug $year → $path"
     return nothing
 end
@@ -776,8 +829,7 @@ Write `_manifest.toml` and return its path.
 function write_archive_manifest(; archive_dir::String = archive_dir())
     path = archive_manifest_path(; archive_dir = archive_dir)
     mkpath(dirname(path))
-    write(path, archive_manifest_text())
-    return path
+    return atomic_write(p -> write(p, archive_manifest_text()), path)
 end
 
 """
@@ -803,9 +855,9 @@ function _archive_type_dirs(root::String)
         isdir(joinpath(dir, e)) && !startswith(e, ".") && !startswith(e, "_")
     ])
     namespaces = Set(
-        first(split(n, '/')) for
-        n in Iterators.flatten((keys(ARCHIVE_TYPES), (t.name for t in RAW_ARCHIVE_TREES)))
-        if occursin('/', n)
+        first(split(n, '/')) for n in
+        Iterators.flatten((keys(ARCHIVE_TYPES), (t.name for t in RAW_ARCHIVE_TREES))) if
+        occursin('/', n)
     )
     raw_trees = Set(t.name for t in RAW_ARCHIVE_TREES)
 
