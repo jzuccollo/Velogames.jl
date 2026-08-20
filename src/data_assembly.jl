@@ -668,11 +668,64 @@ function load_vg_classics_riders(
 end
 
 """
+    load_vg_startlist(pcs_slug, year; cache_config, archive_dir) -> Union{DataFrame, Nothing}
+
+The field that actually started one classic — rider, team, cost, points and
+class — from the `vg_startlist` archive vgleague writes (Phase 1c). `nothing`
+when that race has no archived startlist, which is every race before August
+2026 and any race the scrape missed.
+
+`riders.php` shows the Start List column only for the race in progress, so this
+cannot be backfilled: whoever holds the page while the race is on is the only
+one who can record it. That is why the writer is on the Python side, which is
+the thing already sitting on that page every hour.
+"""
+function load_vg_startlist(
+    pcs_slug::String,
+    year::Int;
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    archive_dir::String = archive_dir(),
+)
+    season = load_race_snapshot(
+        "vg_startlist",
+        vg_classics_slug(year),
+        year;
+        archive_dir = archive_dir,
+    )
+    season === nothing && return nothing
+
+    race_info = find_race(pcs_slug)
+    name = race_info !== nothing ? race_info.name : replace(pcs_slug, "-" => " ")
+    number = match_vg_race_number(
+        name,
+        getvg_race_list(year; cache_config = cache_config, archive_dir = archive_dir),
+    )
+    number === nothing && return nothing
+
+    race = filter(:race_number => ==(number), season)
+    return isempty(race) ? nothing : race
+end
+
+"""
     load_report_data(pcs_slug, year) -> Union{DataFrame, Nothing}
 
 Load VG race results and rider costs, join them, and compute value.
 Returns a DataFrame with columns: rider, team, cost, score, value, riderkey.
 Returns `nothing` if no archived results exist.
+
+The field comes from the archived `vg_startlist` for that race where there is
+one, and otherwise from the season pool filtered through PCS finishers. The
+startlist is Velogames' own record of who was in the game that Sunday, so it
+keeps non-finishers and riders PCS never listed, both of which the PCS filter
+drops without saying so. Reporting is archive-only either way — the season pool
+is `load_vg_classics_riders`, which reads the archive first.
+
+**Anyone in `vg_results` is in the field whatever the startlist says.** A
+startlist captured after the race is not a superset of it: Velogames revises
+the Start List column, and the copy taken three days after Cyclassics Hamburg
+2026 had lost two riders who scored, one of them an 8-credit rider on 228
+points. Dropping a scorer would understate every points total on the page and
+quietly break the cheapest-team stat, which lives on exactly those riders.
 """
 function load_report_data(
     pcs_slug::String,
@@ -681,24 +734,32 @@ function load_report_data(
 )
     vg_results = load_race_snapshot("vg_results", pcs_slug, year)
     vg_results === nothing && return nothing
-    pcs_results = load_race_snapshot("pcs_results", pcs_slug, year)
 
-    # Rider costs from the season's pool: archive first, scrape only if absent.
-    riders = load_vg_classics_riders(year; cache_config = cache_config)
+    cols = [:rider, :team, :riderkey, :cost]
+    pool = load_vg_classics_riders(year; cache_config = cache_config)
+    startlist = load_vg_startlist(pcs_slug, year; cache_config = cache_config)
 
-    # Start from VG riders list and left-join results to get all riders with costs
-    df = leftjoin(
-        riders[:, [:rider, :team, :riderkey, :cost]],
-        vg_results[:, [:riderkey, :score]];
-        on = :riderkey,
-    )
-    # Fill missing scores (riders who didn't score) with 0
+    field = if startlist === nothing
+        pool[:, cols]
+    else
+        listed = Set(startlist.riderkey)
+        scored_but_unlisted = Set(k for k in vg_results.riderkey if !(k in listed))
+        vcat(
+            startlist[:, cols],
+            filter(r -> r.riderkey in scored_but_unlisted, pool)[:, cols],
+        )
+    end
+
+    df = leftjoin(field, vg_results[:, [:riderkey, :score]]; on = :riderkey)
+    # Riders who didn't score are absent from the results, not zero in them.
     df[!, :score] = coalesce.(df.score, 0)
 
-    # Filter to race starters using PCS results if available
-    if pcs_results !== nothing && :riderkey in propertynames(pcs_results)
-        starter_keys = Set(pcs_results.riderkey)
-        filter!(row -> row.riderkey in starter_keys, df)
+    if startlist === nothing
+        pcs_results = load_race_snapshot("pcs_results", pcs_slug, year)
+        if pcs_results !== nothing && :riderkey in propertynames(pcs_results)
+            starter_keys = Set(pcs_results.riderkey)
+            filter!(row -> row.riderkey in starter_keys, df)
+        end
     end
 
     df[!, :value] = round.(df.score ./ max.(df.cost, 1), digits = 1)

@@ -432,6 +432,12 @@ const ARCHIVE_TYPES = Dict(
         refetchable = false,
         note = "The classics rider pool: the only surviving record of rider costs for a season, since `riders.php` retires and no other source carries cost. Keyed by VG game slug, not `pcs_slug`.",
     ),
+    "vg_startlist" => (
+        version = 1,
+        mandatory = [:race_number, :rider, :riderkey, :team, :cost],
+        refetchable = false,
+        note = "Who actually started one race, with that race's prices and (grand tours) classes, from `riders.php`'s Start List column. One row per starter per race, accumulating down the season; keyed by VG game slug, not `pcs_slug`. **Written by vgleague, in Python** — the page shows only the race in progress, so it has to be captured while that race is on. Reporting joins it instead of filtering the season pool through PCS results.",
+    ),
     "vg_scoring" => (
         version = 1,
         mandatory = [:field, :position, :points],

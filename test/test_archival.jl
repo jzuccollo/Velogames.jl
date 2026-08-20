@@ -488,3 +488,100 @@ end
     @test odds_count.files == 2
     @test odds_count.races == 3
 end
+
+@testset "Per-race startlist is the field (Phase 1c)" begin
+    tree = mktempdir()
+    year = 2099              # no live page exists, so a scrape would fail loudly
+    slug = Velogames.vg_classics_slug(year)
+
+    save_race_snapshot(
+        DataFrame(
+            rider = ["A Rider", "B Rider", "C Rider", "D Rider"],
+            team = ["T1", "T2", "T3", "T4"],
+            riderkey = createkey.(["A Rider", "B Rider", "C Rider", "D Rider"]),
+            cost = [20, 10, 8, 6],
+            points = [900, 400, 120, 60],
+        ),
+        "vg_riders",
+        slug,
+        year;
+        archive_dir = tree,
+    )
+    save_race_snapshot(
+        DataFrame(
+            race_number = [7],
+            deadline = ["2099-03-21 11:00:00"],
+            name = ["Milano-Sanremo"],
+            category = [1],
+            namekey = ["milanosanremo"],
+        ),
+        "vg_racelist",
+        slug,
+        year;
+        archive_dir = tree,
+    )
+    # A and D scored; C started and didn't.
+    save_race_snapshot(
+        DataFrame(
+            rider = ["A Rider", "D Rider"],
+            team = ["T1", "T4"],
+            riderkey = createkey.(["A Rider", "D Rider"]),
+            score = [500, 200],
+        ),
+        "vg_results",
+        "milano-sanremo",
+        year;
+        archive_dir = tree,
+    )
+    # PCS saw only the two finishers, so the old filter would lose C entirely.
+    save_race_snapshot(
+        DataFrame(
+            riderkey = createkey.(["A Rider", "C Rider"]),
+            rider = ["A Rider", "C Rider"],
+            team = ["T1", "T3"],
+            position = [1, 40],
+            in_breakaway = [false, false],
+            breakaway_km = [0.0, 0.0],
+        ),
+        "pcs_results",
+        "milano-sanremo",
+        year;
+        archive_dir = tree,
+    )
+
+    withenv("VELOGAMES_ARCHIVE" => tree) do
+        # No startlist yet: the field is the season pool filtered through PCS.
+        @test load_vg_startlist("milano-sanremo", year) === nothing
+        pcs_filtered = load_report_data("milano-sanremo", year)
+        @test Set(pcs_filtered.rider) == Set(["A Rider", "C Rider"])
+
+        # With one, the field is Velogames' own — D, who scored but never
+        # reached PCS, comes back, and the whole race's points are on the page.
+        save_race_snapshot(
+            DataFrame(
+                race_number = [7, 7, 7],
+                race_name = ["Milano-Sanremo", "Milano-Sanremo", "Milano-Sanremo"],
+                rider = ["A Rider", "B Rider", "C Rider"],
+                riderkey = createkey.(["A Rider", "B Rider", "C Rider"]),
+                team = ["T1", "T2", "T3"],
+                cost = [20, 10, 8],
+                points = [900, 400, 120],
+                class = ["", "", ""],
+                start_list = ["#MilanoSanremo", "#MilanoSanremo", "#MilanoSanremo"],
+            ),
+            "vg_startlist",
+            slug,
+            year;
+            archive_dir = tree,
+        )
+        @test nrow(load_vg_startlist("milano-sanremo", year)) == 3
+
+        df = load_report_data("milano-sanremo", year)
+        # A startlist captured after the race is not a superset of the results:
+        # anyone in vg_results is in the field whatever the startlist says.
+        @test Set(df.rider) == Set(["A Rider", "B Rider", "C Rider", "D Rider"])
+        @test sum(df.score) == 700
+        @test nrow(df) == length(unique(df.riderkey))
+        @test only(filter(:rider => ==("D Rider"), df).cost) == 6
+    end
+end
