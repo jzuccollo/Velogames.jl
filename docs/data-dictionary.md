@@ -11,21 +11,49 @@ table, and the history of what used to be in it.
 
 ## What the archive is
 
-Every file is `<archive_dir>/<data_type>/<race>/<year>.arrow` — Arrow IPC, one
-frame per race-year, with `data_type`, `schema_version`, `fetched_at`, `machine`
+Every file is `<archive_dir>/<data_type>/<key>/<year>.arrow` — Arrow IPC, one
+frame per key-year, with `data_type`, `schema_version`, `fetched_at`, `machine`
 and `source_url` in the file's schema metadata. `archive_dir()` reads
 `VELOGAMES_ARCHIVE`, defaulting to `~/Dropbox/code/velogames/archive`.
 
-Two types break the race-slug convention: `vg_riders` and `vg_racelist` are
-per-season, not per-race, and their middle path segment is the **Velogames game
-slug** (`sixes-superclasico/2025`, `sixes-classics/2026`). Anything that treats
-the middle segment as a PCS race slug will mis-read them.
+`<key>` is a PCS race slug for most types, but not for all, and anything that
+assumes the middle segment is a race will mis-read three families:
+
+- `vg_riders`, `vg_racelist` and `vg_startlist` are per-season and keyed by the
+  **Velogames game slug** (`sixes-superclasico/2025`, `sixes-classics/2026`).
+- The `league/*` types are per league-season and keyed by
+  **`{game_slug}_{league_id}`** (`league/rosters/sixes-classics_100737112/2026`).
+
+`league/` is also the one namespace: `league/rosters`, `league/meta` and
+`league/winners` are ordinary types one level down, so an audit descends into it
+off the type table rather than assuming every top-level directory is a type.
+`league/raw` sits beside them holding dated JSON documents rather than frames,
+which is why it is in `RAW_ARCHIVE_TREES` instead of `ARCHIVE_TYPES` — that
+const means "a frame with these mandatory columns", and `save_race_snapshot`
+validates against it.
 
 `_retired/` and `_inputs/` are ordinary directories one level up from the types,
-so any census has to exclude them by name rather than assume every top-level
-directory is a data type. A race directory does not imply a data file either:
-three in the live tree hold nothing, which is why file counts trail directory
-counts.
+so any census has to exclude them by name too. A race directory does not imply a
+data file either: three in the live tree hold nothing, which is why file counts
+trail directory counts.
+
+## Two languages write here
+
+Julia owns PCS, Cycling Oracle and the odds paste. Python (vgleague) owns the
+Velogames league pages and, since Phase 1c, `vg_startlist` — the field that
+started one race, which `riders.php` exposes only while that race is on.
+`src/vgleague/archive.py` is the Python half of the boundary and enforces the
+same two rules from `_manifest.toml`: an unknown `data_type` and a frame short
+of a mandatory column both raise before anything is written, and the same five
+provenance keys are stamped into the schema metadata. The manifest exists
+precisely so the second writer needs no copy of the type table.
+
+`riderkey` is the join key across every source and is therefore implemented
+twice. `vgleague verify-keys <league>` recomputes it from the rider names in an
+archived `vg_riders` pool and compares against the keys Julia wrote — 5,144
+names across 2023–26, zero mismatches. A divergence would drop a rider from a
+join rather than raise anything, which is why it is checked rather than
+assumed.
 
 ## Provenance is metadata, not columns
 
@@ -52,7 +80,8 @@ Read it with `archive_provenance(data_type, pcs_slug, year)`; from Python, it is
 ## Re-fetchable or irreplaceable
 
 `refetchable` in the manifest is the column that says which trees need backing
-up. Eighteen of the twenty-three types are `false`, for three different reasons.
+up. Twenty-two of the twenty-seven types are `false`, and so is `league/raw`,
+for four different reasons.
 
 **The source closes.** Bookmaker markets (`odds`, `odds_points`, `odds_kom`,
 `odds_stagewin`) are pasted by hand from Oddschecker the evening before a race
@@ -74,6 +103,17 @@ way for that reason.
 of race day. Fetching them again returns today's values, which would let a
 backtest see results the model could not have seen.
 
+**The league exists only while it does.** `league/raw` holds the only copy of
+every entrant's roster, cost and score for every race, and Velogames publishes no
+history of it. It is dated and never overwritten because names mutate at source:
+the 2026 Paris-Roubaix winner is called three different things across the three
+copies of the league that survive, so only a dated snapshot can say who won.
+`league/rosters`, `league/meta` and `league/winners` are derived from it, but
+`league/winners` is derived **once** — the recorded winner of a race is a fact
+about that Sunday and is never recomputed, and the 29 rows that predate the
+archive came across from `league_winners.toml` rather than being re-derived,
+because no snapshot on disk predates April 2026.
+
 The five `true` types are settled facts on PCS — finishing orders, GC standings,
 abandons, stage profiles — which that site keeps indefinitely.
 
@@ -88,8 +128,10 @@ functional gain. Documented here rather than acted on.
 
 ## What used to be here
 
-`RETIRED_ARCHIVE_TYPES` in `cache_utils.jl` records four trees and where they
-went; the manifest exports them. Two were signals the April 2026 ablation
+`RETIRED_ARCHIVE_TYPES` in `cache_utils.jl` records five trees and where they
+went; the manifest exports them. The fifth is `league_winners.toml`, absorbed
+into `league/winners` by Phase 1b and kept under `_retired/` as the pre-archive
+record. Two were signals the April 2026 ablation
 dropped (`pcs_form`, `qualitative`), one was a typo that lived long enough to
 accumulate a file (`prediction`, singular), and one was never tabular at all
 (`pcs_breakaways`, four `.mhtml` pages). The first three are Arrow like
