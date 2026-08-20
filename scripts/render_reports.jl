@@ -25,7 +25,7 @@ const FRESH = "--fresh" in ARGS
 const _RIDER_LINK = "../riders.html#"
 rider_html_table(df; kwargs...) = html_table(df; rider_link_base = _RIDER_LINK, kwargs...)
 
-"""League winners keyed by `(pcs_slug, year)`, from the archive record."""
+"""League winners keyed by `(pcs_slug, year)`, from the archive's `league/winners` tables."""
 function league_winners_by_race()
     return Dict(
         (w.pcs_slug, w.year) => (name = w.name, score = w.score) for

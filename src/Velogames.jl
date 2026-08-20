@@ -49,9 +49,7 @@ export CacheConfig,
     write_archive_manifest,
     archive_manifest_matches,
     audit_archive,
-    league_winners_path,
-    load_league_winners,
-    append_league_winner,
+    RAW_ARCHIVE_TREES,
     archive_dir
 
 # Race setup and metadata
@@ -219,6 +217,13 @@ export html_page,
     load_league_standings,
     load_league_team,
     league_race_slug,
+    league_snapshot_dates,
+    archived_leagues,
+    ingest_league_file,
+    ingest_league_dir,
+    load_league_winners,
+    append_league_winners,
+    derive_league_winners,
     plotly_html,
     precision_budget,
     sim_distribution_chart,
@@ -244,6 +249,7 @@ include("pcs_scraper.jl")
 include("get_data.jl")
 include("pcs_extended.jl")
 include("data_assembly.jl")
+include("league_archive.jl")
 include("bayesian_core.jl")
 include("simulate_oneday.jl")
 include("simulate_stage.jl")

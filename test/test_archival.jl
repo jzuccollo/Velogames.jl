@@ -440,6 +440,7 @@ end
     manifest = TOML.parsefile(path)
     @test Set(keys(manifest["types"])) == Set(keys(ARCHIVE_TYPES))
     @test Set(keys(manifest["retired"])) == Set(r.name for r in RETIRED_ARCHIVE_TYPES)
+    @test Set(keys(manifest["raw"])) == Set(t.name for t in RAW_ARCHIVE_TREES)
     for (name, spec) in ARCHIVE_TYPES
         entry = manifest["types"][name]
         @test entry["version"] == spec.version
@@ -448,7 +449,7 @@ end
     end
 
     # Hand-edited, so it no longer describes the archive: `--check` says so.
-    write(path, replace(read(path, String), "[types.odds]" => "[types.oddz]"))
+    write(path, replace(read(path, String), "[types.\"odds\"]" => "[types.\"oddz\"]"))
     @test !archive_manifest_matches(; archive_dir = tree)
 end
 

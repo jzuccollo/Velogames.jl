@@ -248,6 +248,29 @@ const RETIRED_ARCHIVE_TYPES = [
         moved_to = "_inputs/pcs_breakaways",
         reason = "Four `.mhtml` pages and no tabular data — a raw input masquerading as a data type. At the top level it would force the manifest to carry an entry for a tree holding no archive files.",
     ),
+    (
+        name = "league_winners",
+        moved_to = "_retired/league_winners.toml",
+        reason = "A hand-maintained, append-only five-field summary of the league snapshots, which lived here only because the snapshots themselves lived somewhere nothing backed up. Phase 1b moved the snapshots into `league/raw` and the winners into `league/winners`; the file was migrated once and kept as the pre-archive record, since it is the only contemporaneous evidence for the four 2026 races no surviving snapshot predates.",
+    ),
+]
+
+"""
+Archive trees that hold raw documents rather than tables.
+
+They are part of the contract — `league/raw` is the most irreplaceable thing in
+the archive — but they carry no columns, so they cannot go in `ARCHIVE_TYPES`,
+whose entries mean "a frame with these mandatory columns" and are what
+`save_race_snapshot` validates against. The audit and the manifest read both
+consts; nothing else needs to know the difference.
+"""
+const RAW_ARCHIVE_TREES = [
+    (
+        name = "league/raw",
+        pattern = "{game_slug}_{year}_{league_id}/{YYYY-MM-DD}.json",
+        refetchable = false,
+        note = "Dated, content-deduped copies of the vgleague scrape: every entrant's roster, cost and score for every race. Never overwritten, because entrants rename their teams and the only honest record is what the site said on a given date. Velogames publishes no history, so a league's rosters exist only while the league does.",
+    ),
 ]
 
 
@@ -433,6 +456,33 @@ const ARCHIVE_TYPES = Dict(
         refetchable = false,
         note = "Velogames points per rider across a whole grand tour.",
     ),
+    "league/rosters" => (
+        version = 1,
+        mandatory = [
+            :username,
+            :teamname,
+            :race_number,
+            :race_name,
+            :rider,
+            :cost,
+            :score,
+            :race_score,
+        ],
+        refetchable = false,
+        note = "Entrant × race × rider panel for one league-season: who picked whom, at what price, for how many points. Derived from the newest `league/raw` snapshot. Keyed by `{game_slug}_{league_id}`, not `pcs_slug`.",
+    ),
+    "league/meta" => (
+        version = 1,
+        mandatory = [:race_number, :race_name, :deadline, :category, :series_type],
+        refetchable = false,
+        note = "One league-season's race catalogue, with the league-level fields repeated down the rows so a reader that has the table has the league. Keyed by `{game_slug}_{league_id}`.",
+    ),
+    "league/winners" => (
+        version = 1,
+        mandatory = [:pcs_slug, :year, :username, :teamname, :score, :snapshot_date],
+        refetchable = false,
+        note = "Who won each race in the league, derived once from the raw snapshot contemporaneous with the race and never re-derived: entrants rename their teams, so a later derivation gives a different answer. Replaces `league_winners.toml`. Keyed by `{game_slug}_{league_id}`.",
+    ),
 )
 
 """
@@ -497,76 +547,6 @@ archive_provenance(
     year::Int;
     archive_dir::String = archive_dir(),
 ) = archive_provenance(archive_path(data_type, pcs_slug, year; archive_dir = archive_dir))
-
-"""
-    league_winners_path(; archive_dir) -> String
-
-The league winners record, `<archive_dir>/league_winners.toml`.
-
-It lives in the archive rather than the repo because it is race data, like
-everything else here, and because that keeps git out of the unattended publish
-path entirely — `auto_publish.sh` pulls code, renders and deploys, and writes
-nothing back. Every entry is derivable in principle from the vgleague
-snapshots, but those sit in a gitignored, machine-local directory that nothing
-backs up, so this file is the durable record.
-"""
-league_winners_path(; archive_dir::String = archive_dir()) =
-    joinpath(archive_dir, "league_winners.toml")
-
-"""
-    load_league_winners(; archive_dir) -> Vector{@NamedTuple{pcs_slug::String, year::Int, name::String, score::Int}}
-
-Every recorded league winner, in file order. Empty when the file is absent.
-"""
-function load_league_winners(; archive_dir::String = archive_dir())
-    path = league_winners_path(; archive_dir)
-    isfile(path) || return NamedTuple[]
-    return [
-        (
-            pcs_slug = String(w["pcs_slug"]),
-            year = Int(w["year"]),
-            name = String(w["name"]),
-            score = Int(w["score"]),
-        ) for w in get(TOML.parsefile(path), "winners", [])
-    ]
-end
-
-"""
-    append_league_winner(pcs_slug, year, name, score; archive_dir) -> Nothing
-
-Append one `[[winners]]` entry. The file is append-only: correcting a winner
-means editing it by hand and deleting that race's rendered HTML so the next
-render rebuilds it.
-"""
-function append_league_winner(
-    pcs_slug::AbstractString,
-    year::Integer,
-    name::AbstractString,
-    score::Integer;
-    archive_dir::String = archive_dir(),
-)
-    path = league_winners_path(; archive_dir)
-    mkpath(dirname(path))
-    escaped = replace(String(name), "\\" => "\\\\", "\"" => "\\\"")
-    open(path, "a+") do io
-        # A file that doesn't end in a newline would swallow the blank line
-        # separating this entry from the last.
-        seekend(io)
-        if position(io) > 0
-            seek(io, position(io) - 1)
-            read(io, Char) == '\n' || write(io, "\n")
-        end
-        write(io, """
-
-        [[winners]]
-        pcs_slug = "$pcs_slug"
-        year = $year
-        name = "$escaped"
-        score = $score
-        """)
-    end
-    return nothing
-end
 
 """
     archive_path(data_type, pcs_slug, year; archive_dir) -> String
@@ -748,26 +728,34 @@ function archive_manifest_text()
     write(
         io,
         """
-        # Velogames archive manifest — derived from `ARCHIVE_TYPES` and
-        # `RETIRED_ARCHIVE_TYPES` in src/cache_utils.jl, which are the source of truth.
+        # Velogames archive manifest — derived from `ARCHIVE_TYPES`,
+        # `RAW_ARCHIVE_TREES` and `RETIRED_ARCHIVE_TYPES` in src/cache_utils.jl, which
+        # are the source of truth.
         # Write it with `julia --project scripts/archive_audit.jl --write-manifest`;
         # `--check` compares it against the const and exits non-zero if they differ.
-        # Every file is `<data_type>/<race>/<year>.arrow`, Arrow IPC, with provenance
-        # (data_type, schema_version, fetched_at, machine, source_url) in its schema
-        # metadata. `vg_riders` and `vg_racelist` are keyed by Velogames game slug
-        # rather than by PCS race slug.
+        # Every typed file is `<data_type>/<key>/<year>.arrow`, Arrow IPC, with
+        # provenance (data_type, schema_version, fetched_at, machine, source_url) in its
+        # schema metadata. `<key>` is a PCS race slug for race types, a Velogames game
+        # slug for `vg_riders` and `vg_racelist`, and `{game_slug}_{league_id}` for the
+        # `league/*` types. Trees under [raw] hold documents rather than tables.
         """,
     )
     for name in sort(collect(keys(ARCHIVE_TYPES)))
         t = ARCHIVE_TYPES[name]
-        write(io, "\n[types.$name]\n")
+        write(io, "\n[types.\"$name\"]\n")
         write(io, "version = $(t.version)\n")
         write(io, "refetchable = $(t.refetchable)\n")
         write(io, "mandatory = [", join(("\"$(c)\"" for c in t.mandatory), ", "), "]\n")
         write(io, "note = \"$(esc(t.note))\"\n")
     end
+    for r in RAW_ARCHIVE_TREES
+        write(io, "\n[raw.\"$(r.name)\"]\n")
+        write(io, "pattern = \"$(esc(r.pattern))\"\n")
+        write(io, "refetchable = $(r.refetchable)\n")
+        write(io, "note = \"$(esc(r.note))\"\n")
+    end
     for r in RETIRED_ARCHIVE_TYPES
-        write(io, "\n[retired.$(r.name)]\n")
+        write(io, "\n[retired.\"$(r.name)\"]\n")
         write(io, "moved_to = \"$(esc(r.moved_to))\"\n")
         write(io, "reason = \"$(esc(r.reason))\"\n")
     end
@@ -794,6 +782,39 @@ Whether the manifest on disk is the one the consts describe.
 function archive_manifest_matches(; archive_dir::String = archive_dir())
     path = archive_manifest_path(; archive_dir = archive_dir)
     return isfile(path) && read(path, String) == archive_manifest_text()
+end
+
+"""Type directories present on disk, `league/rosters` and the like included."""
+function _archive_type_dirs(root::String)
+    # `_retired` and `_inputs` are ordinary directories one level up, so they are
+    # excluded by name rather than by assuming every top-level directory is a type.
+    # A directory that some type is *namespaced under* (`league/`) is descended
+    # into one level instead, so `league/rosters` is audited as the type it is
+    # and `league/raw`, which holds documents rather than tables, is left to the
+    # manifest.
+    listing(dir) = sort([
+        e for e in readdir(dir) if
+        isdir(joinpath(dir, e)) && !startswith(e, ".") && !startswith(e, "_")
+    ])
+    namespaces = Set(
+        first(split(n, '/')) for
+        n in Iterators.flatten((keys(ARCHIVE_TYPES), (t.name for t in RAW_ARCHIVE_TREES)))
+        if occursin('/', n)
+    )
+    raw_trees = Set(t.name for t in RAW_ARCHIVE_TREES)
+
+    types = String[]
+    for e in listing(root)
+        if e in namespaces
+            for sub in listing(joinpath(root, e))
+                name = "$e/$sub"
+                name in raw_trees || push!(types, name)
+            end
+        else
+            push!(types, e)
+        end
+    end
+    return types
 end
 
 """
@@ -827,15 +848,9 @@ function audit_archive(; archive_dir::String = archive_dir())
         counts,
     )
 
-    # `_retired` and `_inputs` are ordinary directories one level up, so they are
-    # excluded by name rather than by assuming every top-level directory is a type.
-    entries = sort([
-        e for e in readdir(root) if
-        isdir(joinpath(root, e)) && !startswith(e, ".") && !startswith(e, "_")
-    ])
     year_file = Regex("^\\d{4}\\Q" * ARCHIVE_EXT * "\\E\$")
 
-    for data_type in entries
+    for data_type in _archive_type_dirs(root)
         haskey(ARCHIVE_TYPES, data_type) || push!(unknown_types, data_type)
         n_files = 0
         n_rows = 0

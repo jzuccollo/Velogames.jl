@@ -7,30 +7,54 @@
     @test league_race_slug("Stage 4: Pau - Luchon") == ""
 end
 
-@testset "load_league_team" begin
+@testset "League archive round-trip (Phase 1b)" begin
     # The league scrape spells races the Velogames way ("Ronde van Brugge"),
     # which has to resolve to the PCS slug the renderers work in.
     classics = """
-    {"meta": {"game_slug": "sixes-classics", "year": 2026, "series_type": "classics"},
-     "teams": {"JZ": {"username": "JZ", "teamname": "T", "races": {
+    {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "1",
+              "series_type": "classics", "race_catalogue": {
+                "7": {"name": "Ronde van Brugge", "deadline": "2026-03-25 11:00:00", "category": 2}}},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "teamid": "9", "races": {
         "Ronde van Brugge": {"race_number": 7, "score": 300,
-                             "riders": ["Jasper Philipsen", "Max Kanter"]}}}}}
+                             "riders": ["Jasper Philipsen", "Max Kanter"],
+                             "rider_costs": {"Jasper Philipsen": 20, "Max Kanter": 6},
+                             "rider_scores": {"Jasper Philipsen": 260, "Max Kanter": 40}}}},
+               "AN": {"username": "AN", "teamname": "Other", "teamid": "8", "races": {
+        "Ronde van Brugge": {"race_number": 7, "score": 120,
+                             "riders": ["Max Kanter"],
+                             "rider_costs": {"Max Kanter": 6},
+                             "rider_scores": {"Max Kanter": 120}}}}}}
     """
     gt = """
-    {"meta": {"game_slug": "velogame", "year": 2026, "series_type": "grand_tour"},
-     "teams": {"JZ": {"username": "JZ", "teamname": "T", "races": {
-        "Stage 1: A-B": {"race_number": 1, "score": 10, "riders": ["Old Pick"]},
-        "Stage 2: B-C": {"race_number": 2, "score": 20, "riders": ["Tadej Pogačar"]}}}}}
+    {"meta": {"game_slug": "velogame", "year": 2026, "league_id": "2",
+              "series_type": "grand_tour", "race_catalogue": {
+                "1": {"name": "Stage 1: A-B", "deadline": null, "category": "road"},
+                "2": {"name": "Stage 2: B-C", "deadline": null, "category": "road"}}},
+     "teams": {"JZ": {"username": "JZ", "teamname": "T", "teamid": "9", "races": {
+        "Stage 1: A-B": {"race_number": 1, "score": 10, "riders": ["Old Pick"],
+                         "rider_costs": {"Old Pick": 4}, "rider_scores": {"Old Pick": 10}},
+        "Stage 2: B-C": {"race_number": 2, "score": 20, "riders": ["Tadej Pogačar"],
+                         "rider_costs": {"Tadej Pogačar": 30},
+                         "rider_scores": {"Tadej Pogačar": 20}}}}}}
     """
     mktempdir() do dir
+        tree = mktempdir()
         write(joinpath(dir, "sixes-classics_2026_1.json"), classics)
         write(joinpath(dir, "velogame_2026_2.json"), gt)
-        pull(; kwargs...) = load_league_team(;
-            data_dir = dir,
-            year = 2026,
-            username = "JZ",
-            kwargs...,
-        )
+        ingest_league_dir(dir; date = Date(2026, 4, 1), archive_dir = tree)
+
+        @test archived_leagues(; archive_dir = tree) == [
+            (game_slug = "sixes-classics", year = 2026, league_id = "1"),
+            (game_slug = "velogame", year = 2026, league_id = "2"),
+        ]
+
+        rosters =
+            load_race_snapshot("league/rosters", "sixes-classics_1", 2026; archive_dir = tree)
+        @test nrow(rosters) == 3
+        @test sum(rosters.score) == 420
+
+        pull(; kwargs...) =
+            load_league_team(; year = 2026, username = "JZ", archive_dir = tree, kwargs...)
 
         @test pull(
             game_slug = "sixes-classics",
@@ -38,15 +62,18 @@ end
             pcs_slug = "classic-brugge-de-panne",
         ) == ["Jasper Philipsen", "Max Kanter"]
 
-        # A race the entrant hasn't a scraped roster for, an unknown entrant and
-        # a missing snapshot all fall back to empty rather than throwing — the
+        # A race the entrant hasn't an archived roster for, an unknown entrant
+        # and a missing league all fall back to empty rather than throwing — the
         # normal state before the entry deadline.
         @test pull(game_slug = "sixes-classics", league_id = "1", pcs_slug = "il-lombardia") ==
               String[]
-        @test load_league_team(
-            joinpath(dir, "sixes-classics_2026_1.json");
+        @test load_league_team(;
+            game_slug = "sixes-classics",
+            year = 2026,
+            league_id = "1",
             username = "Nobody",
             pcs_slug = "classic-brugge-de-panne",
+            archive_dir = tree,
         ) == String[]
         @test pull(game_slug = "absent", league_id = "9", pcs_slug = "il-lombardia") == String[]
 
@@ -54,6 +81,87 @@ end
         # stage's roster is the entered team.
         @test pull(game_slug = "velogame", league_id = "2", pcs_slug = "tour-de-france") ==
               ["Tadej Pogačar"]
+
+        standings = load_league_standings(;
+            game_slug = "sixes-classics",
+            year = 2026,
+            league_id = "1",
+            archive_dir = tree,
+        )
+        @test nrow(standings) == 2
+        @test sort(standings.score; rev = true) == [300.0, 120.0]
+
+        # Re-ingesting identical content adds no snapshot; changed content does.
+        again = ingest_league_file(
+            joinpath(dir, "sixes-classics_2026_1.json");
+            date = Date(2026, 4, 2),
+            archive_dir = tree,
+        )
+        @test again.snapshot_date === nothing
+        @test league_snapshot_dates("sixes-classics", 2026, "1"; archive_dir = tree) ==
+              [Date(2026, 4, 1)]
+
+        renamed = replace(classics, "\"teamname\": \"T\"" => "\"teamname\": \"T2\"")
+        write(joinpath(dir, "sixes-classics_2026_1.json"), renamed)
+        moved = ingest_league_file(
+            joinpath(dir, "sixes-classics_2026_1.json");
+            date = Date(2026, 4, 3),
+            archive_dir = tree,
+        )
+        @test moved.snapshot_date == Date(2026, 4, 3)
+
+        # The winner is derived from the snapshot contemporaneous with the race,
+        # not the newest — which is the whole reason the raw tier is dated. Both
+        # snapshots postdate the deadline by more than the settling window, so
+        # the earliest one wins and the rename does not rewrite history.
+        winners = derive_league_winners(
+            "sixes-classics",
+            2026,
+            "1";
+            now = DateTime(2026, 5, 1),
+            archive_dir = tree,
+        )
+        @test nrow(winners) == 1
+        @test winners.pcs_slug[1] == "classic-brugge-de-panne"
+        @test winners.teamname[1] == "T"
+        @test winners.snapshot_date[1] == "2026-04-01"
+
+        # Held back until the scores have had time to settle.
+        @test isempty(
+            derive_league_winners(
+                "sixes-classics",
+                2026,
+                "1";
+                now = DateTime(2026, 3, 25, 12),
+                archive_dir = tree,
+            ),
+        )
+
+        append_league_winners(winners, "sixes-classics", 2026, "1"; archive_dir = tree)
+        recorded = load_league_winners(; archive_dir = tree)
+        @test length(recorded) == 1
+        @test recorded[1] == (
+            pcs_slug = "classic-brugge-de-panne",
+            year = 2026,
+            name = "T",
+            score = 300,
+        )
+        # Recorded once and never re-derived, so a later rename cannot move it.
+        @test isempty(
+            derive_league_winners(
+                "sixes-classics",
+                2026,
+                "1";
+                now = DateTime(2026, 5, 1),
+                archive_dir = tree,
+            ),
+        )
+
+        # A grand tour is one entry for the whole tour, and waits for every race
+        # in its catalogue to be scored.
+        @test nrow(
+            derive_league_winners("velogame", 2026, "2"; archive_dir = tree),
+        ) == 1
     end
 end
 

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Publish the report for any league race that has been scored in the vgleague
-# scrape but has no entry in the archive's league_winners.toml yet.
+# scrape but has no winner recorded in the archive yet.
 #
-# This is the whole publishing path for one-day races: scripts/auto_publish.jl
-# derives the winner from the league snapshot, records it in the archive, and
-# this renders and deploys. Safe to run on every tick — it exits without
-# touching anything when there is nothing new.
+# This is the whole publishing path for one-day races: scripts/ingest_league.jl
+# takes the scrape into the archive, scripts/auto_publish.jl derives the winner
+# from the snapshot contemporaneous with the race and records it, and this
+# renders and deploys. Safe to run on every tick — it exits without touching
+# anything when there is nothing new.
 #
 # Intended to run from the vgleague update job's POST_UPDATE_HOOK against a
 # dedicated deploy clone (not a dev working directory), so it only ever
@@ -51,6 +52,14 @@ main() {
         fi
     fi
 
+    # ETL first, then publish. The ingest is the only step that reads the
+    # vgleague repo; everything after it reads the archive.
+    echo "--- ingesting league snapshots ---"
+    if ! julia --project="$REPO_ROOT" "$REPO_ROOT/scripts/ingest_league.jl"; then
+        echo "ingest_league.jl failed; aborting before anything is published." >&2
+        exit 1
+    fi
+
     echo "--- checking for unpublished races ---"
     NEW="$(julia --project="$REPO_ROOT" "$REPO_ROOT/scripts/auto_publish.jl" "$@")"
     status=$?
@@ -83,7 +92,7 @@ main() {
     # then renders only the reports that don't exist yet.
     echo "--- rendering reports ---"
     if ! julia --project="$REPO_ROOT" "$REPO_ROOT/scripts/render_reports.jl"; then
-        echo "render_reports.jl failed; league_winners.toml keeps the new entries so a re-run retries the render." >&2
+        echo "render_reports.jl failed; the archive keeps the new winners so a re-run retries the render." >&2
         exit 1
     fi
 

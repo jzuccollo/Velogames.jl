@@ -2,14 +2,14 @@
 # ---------------------------------------------------------------------------
 # league_eval.jl — score archived pre-race model teams against league winners
 #
-# For every race in the archive's league_winners.toml with an archived prediction and
+# For every race with a recorded league winner in the archive, an archived prediction and
 # archived VG results, computes:
 #   - the model's chosen team's realised VG points
 #   - the hindsight-optimal team over the prediction universe
 #   - two naive baselines: max-cost ("buy stars") and odds-implied (maximise
 #     summed implied win probability), both under the same budget/size rules
 #
-# Fully offline: reads only the Dropbox archive and league_winners.toml.
+# Fully offline: reads only the Dropbox archive.
 # Evidence base for docs/architecture-review.md (July 2026).
 #
 # Run:  julia --project scripts/league_eval.jl
@@ -114,11 +114,11 @@ end
 # ---------------------------------------------------------------------------
 # League standings — cumulative placement (WP0.1) + entered-vs-advised (WP0.2)
 #
-# Reads the vgleague package's scraped standings (../vgleague/data/...; see
-# the July 2026 remediation plan, decision D1 — no scraper duplicated here) via
-# `load_league_standings`, plus the optional manual data/league_standings.toml
-# fallback. Requires data/race_config.toml's [league] section (see
-# race_config.toml.example); skips gracefully if either is absent.
+# Reads the archived league rosters (`league/rosters`, written by
+# scripts/ingest_league.jl from the vgleague scrape) via `load_league_standings`,
+# plus the optional manual data/league_standings.toml fallback. Requires
+# data/race_config.toml's [league] section (see race_config.toml.example) to say
+# which league; skips gracefully if either is absent.
 # ---------------------------------------------------------------------------
 
 const MODEL_LABEL = "Model (this repo)"
@@ -138,7 +138,6 @@ else
         )
     else
         standings = load_league_standings(;
-            data_dir = league_cfg["vgleague_data_dir"],
             game_slug = league_cfg["game_slug"],
             year = league_cfg["year"],
             league_id = string(league_cfg["league_id"]),
@@ -147,7 +146,7 @@ else
 
         if nrow(standings) == 0
             println(
-                "\nNo league standings found for $(league_cfg["game_slug"]) $(league_cfg["year"]) $(league_cfg["league_id"]) at $(league_cfg["vgleague_data_dir"]) — skipping.",
+                "\nNo archived league standings for $(league_cfg["game_slug"]) $(league_cfg["year"]) $(league_cfg["league_id"]) — has scripts/ingest_league.jl run? Skipping.",
             )
         else
             user_name = get(league_cfg, "user_name", "")

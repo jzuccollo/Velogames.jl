@@ -66,7 +66,7 @@ gt_vg_propensity_mode = "posthoc"  # Option B injection point: "posthoc" (scale 
 
 [team_assessor]
 vg_race_number = 0           # 0 = auto-detect, -1 = skip, or set manually (e.g. 3)
-# Pull the entered team from the [league] scrape below rather than my_team.
+# Pull the entered team from the archived [league] rosters rather than my_team.
 # Velogames only publishes rosters after the entry deadline, so this finds
 # nothing before the race and my_team is used instead (with a warning).
 use_league_team = false
@@ -76,12 +76,13 @@ my_team = [
 ]
 
 [league]
-# Used by scripts/league_eval.jl for the cumulative-placement and
-# entered-vs-advised sections (WP0.1/WP0.2). Reads the vgleague package's
-# scraped JSON cache ({vgleague_data_dir}/{game_slug}_{year}_{league_id}.json)
-# rather than duplicating a scraper here — see docs/remediation-plan.md D1.
+# Which league you play in. Read from the archive (league/rosters, league/meta,
+# league/winners) by league_eval.jl and the team assessor — no scraper is
+# duplicated here.
 #
-# Point this at the *deploy* clone: since July 2026 scraping runs from a
+# vgleague_data_dir is used by scripts/ingest_league.jl alone, which is the one
+# thing in this package that reads the vgleague repo; everything else reads the
+# archive. Point it at the *deploy* clone: since July 2026 scraping runs from a
 # launchd job against ~/code/vgleague-deploy (Velogames' Cloudflare blocks
 # GitHub Actions runner IPs), so ~/code/vgleague is a dev clone whose data
 # directory is stale and will silently yield mid-season standings.
@@ -93,7 +94,7 @@ user_name = "JZ"             # vgleague username whose entered team is scored (n
 
 [entered_team]
 # Manual override for the team actually entered in the CURRENT race
-# ([race] above), only needed if it isn't in the vgleague JSON cache yet.
-# league_eval.jl prefers this over the JSON when both are present.
+# ([race] above), only needed if it isn't in the archived rosters yet.
+# league_eval.jl prefers this over the archive when both are present.
 riders = []
 score = 0                    # 0 = compute from riders + archived VG results when the race is scored

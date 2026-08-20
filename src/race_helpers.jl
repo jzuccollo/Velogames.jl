@@ -615,7 +615,7 @@ end
 """
 The team the assessor treats as "yours". Normally the hand-entered
 `[team_assessor] my_team`, but with `use_league_team` set it is pulled from the
-`vgleague` scrape of the `[league]` you play in, so the roster does not have to
+archived roster of the `[league]` you play in, so the roster does not have to
 be retyped after entry. Velogames publishes team rosters only once the entry
 deadline has passed, so the pull comes back empty before the race — the
 hand-entered list stands in, with a warning saying why.
@@ -631,7 +631,6 @@ function _resolve_my_team(cfg::AbstractDict, ta::AbstractDict, race::RaceConfig)
     end
 
     league_team = load_league_team(;
-        data_dir = league["vgleague_data_dir"],
         game_slug = league["game_slug"],
         year = league["year"],
         league_id = string(league["league_id"]),
@@ -639,10 +638,10 @@ function _resolve_my_team(cfg::AbstractDict, ta::AbstractDict, race::RaceConfig)
         pcs_slug = race.pcs_slug,
     )
     if isempty(league_team)
-        @warn "No scraped roster for $(league["user_name"]) in $(race.name) — using [team_assessor] my_team. Velogames hides teams until the entry deadline, so this is expected before the race."
+        @warn "No archived roster for $(league["user_name"]) in $(race.name) — using [team_assessor] my_team. Velogames hides teams until the entry deadline, so this is expected before the race (and scripts/ingest_league.jl has to have run since it passed)."
         return my_team
     end
-    @info "Entered team pulled from the league scrape" user = league["user_name"] riders =
+    @info "Entered team pulled from the league archive" user = league["user_name"] riders =
         length(league_team)
     return league_team
 end

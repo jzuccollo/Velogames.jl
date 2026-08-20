@@ -247,11 +247,11 @@ const FIELDS = [
     (
         sec = "team_assessor",
         key = "use_league_team",
-        label = "Pull my team from the league scrape",
+        label = "Pull my team from the league archive",
         kind = :bool,
         scope = :assessor,
         step = "",
-        help = "Read the team you entered straight from the vgleague scrape of your league, instead of the list below. Velogames only publishes rosters once the entry deadline has passed, so before the race this finds nothing and the typed list is used instead.",
+        help = "Read the team you entered straight from the archived rosters of your league, instead of the list below. Velogames only publishes rosters once the entry deadline has passed, so before the race this finds nothing and the typed list is used instead — as it does until scripts/ingest_league.jl has run since the deadline.",
     ),
     (
         sec = "team_assessor",
