@@ -448,9 +448,39 @@ end
 # Grand-tour VG-history assembly (Option A prototype, July 2026)
 # ---------------------------------------------------------------------------
 
+"""One edition's full-field GT totals: archive first, live page second, archived on the way past.
+
+The same shape as `load_vg_classics_riders`. The archive is keyed by `pcs_slug`
+and the page by `vg_slug`, which is why both are needed here.
+"""
+function _gt_vg_totals(
+    pcs_slug::String,
+    vg_slug::String,
+    year::Int;
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    archive_dir::String = archive_dir(),
+)
+    if !force_refresh && !isempty(pcs_slug)
+        archived =
+            load_race_snapshot("vg_stage_totals", pcs_slug, year; archive_dir = archive_dir)
+        archived === nothing || return archived
+    end
+    df = getvg_stage_race_totals(
+        year,
+        vg_slug;
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
+    if df !== nothing && nrow(df) > 0 && !isempty(pcs_slug)
+        save_race_snapshot(df, "vg_stage_totals", pcs_slug, year; archive_dir = archive_dir)
+    end
+    return df
+end
+
 """
     assemble_gt_vg_history(vg_slug, race_year, history_years;
-        cache_config, force_refresh) -> Union{DataFrame, Nothing}
+        pcs_slug, cache_config, force_refresh) -> Union{DataFrame, Nothing}
 
 Fetch each prior edition's full-field VG overall totals for THIS grand tour
 (same `vg_slug`), across `[race_year - history_years, race_year - 1]`, and stack
@@ -462,23 +492,33 @@ Deliberately same-race (Tour→Tour), not cross-grand-tour: the flagged
 break-hunter failures are all Tour-history cases, same-race is the lowest-bias
 option (identical scoring/competition), and the memory note records that
 cross-GT jersey history transfers poorly. Cross-GT is a possible extension.
+
+Pass `pcs_slug` to read each edition from the `vg_stage_totals` archive before
+reaching for the live page. Without it this silently loses editions Velogames
+has retired — `spain/2024/ridescore.php` 404s while 2023 and 2025 still serve,
+so the 2026 Vuelta was running this signal on two prior editions out of three
+with the third sitting in the archive unread.
 """
 function assemble_gt_vg_history(
     vg_slug::String,
     race_year::Int,
     history_years::Int;
+    pcs_slug::String = "",
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
+    archive_dir::String = archive_dir(),
 )
     isempty(vg_slug) && return nothing
     out = nothing
     for hist_year = (race_year-history_years):(race_year-1)
         try
-            df = getvg_stage_race_totals(
-                hist_year,
-                vg_slug;
+            df = _gt_vg_totals(
+                pcs_slug,
+                vg_slug,
+                hist_year;
                 cache_config = cache_config,
                 force_refresh = force_refresh,
+                archive_dir = archive_dir,
             )
             (df === nothing || nrow(df) == 0) && continue
             keep = select(df, :riderkey, :score)

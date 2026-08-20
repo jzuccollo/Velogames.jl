@@ -791,13 +791,15 @@ end
 """Velogames games have their own slugs, unrelated to PCS's.
 
 Only the games that exist are listed: an unmapped one warns and is skipped
-rather than being guessed at, so the Vuelta (whose slug nobody here has seen
-yet) will announce itself in the log instead of publishing under a wrong race.
+rather than being guessed at, so a game nobody here has seen yet announces
+itself in the log instead of publishing under a wrong race. The slugs are
+Velogames' own and are not guessable — the Vuelta's is `spain`.
 """
 const GT_PCS_SLUG = Dict(
     "velogame" => "tour-de-france",
     "italy" => "giro-d-italia",
     "velogame-femmes" => "tour-de-france-femmes",
+    "spain" => "vuelta-a-espana",
 )
 
 function _derive_grand_tour_winner(game_slug, year, league_id, dates, have, archive_dir)

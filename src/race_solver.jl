@@ -590,6 +590,7 @@ function _prepare_rider_data(
             vg_slug,
             config.year,
             history_years;
+            pcs_slug = config.pcs_slug,
             cache_config = cache_config,
             force_refresh = force_refresh,
         )
