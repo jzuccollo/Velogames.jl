@@ -331,6 +331,76 @@ end
     end
 end
 
+@testset "simulate_stage_race daily team classification assists" begin
+    # VG: "awarded to riders whose team is in the Top 3 of the Teams
+    # Classification at the end of each day ... not given out for the Individual
+    # Time Trial Stages." Scored per stage, so the award must scale with stage
+    # count — it was previously not scored at all, and only the one-off
+    # final_team_class bonus reached the riders.
+    scoring = SCORING_GRAND_TOUR
+    off = StageRaceScoringTable(
+        scoring.stage_finish_points,
+        scoring.daily_gc_points,
+        scoring.daily_points_class,
+        scoring.daily_mountains_class,
+        scoring.intermediate_sprint_points,
+        scoring.hc_climb_points,
+        scoring.cat1_climb_points,
+        scoring.breakaway_points,
+        scoring.stage_assist_points,
+        scoring.gc_assist_points,
+        Int[],
+        scoring.final_gc_points,
+        scoring.final_points_class,
+        scoring.final_mountains_class,
+        scoring.final_team_class,
+        scoring.ttt_team_points,
+    )
+
+    n_riders = 9
+    teams = ["A", "A", "A", "B", "B", "B", "C", "C", "C"]
+    vals = Float64[3, 3, 3, 1, 1, 1, -1, -1, -1]
+    stage_strengths = Dict{Symbol,Vector{Float64}}(
+        :flat => copy(vals),
+        :hilly => copy(vals),
+        :mountain => copy(vals),
+        :itt => copy(vals),
+    )
+    uncertainties = fill(1e-6, n_riders)
+
+    delta(stages) = begin
+        on, _ = simulate_stage_race(
+            stages,
+            stage_strengths,
+            uncertainties,
+            teams,
+            scoring;
+            n_sims = 40,
+            rng = Random.MersenneTwister(7),
+        )
+        no, _ = simulate_stage_race(
+            stages,
+            stage_strengths,
+            uncertainties,
+            teams,
+            off;
+            n_sims = 40,
+            rng = Random.MersenneTwister(7),
+        )
+        vec(mean(on, dims = 2)) .- vec(mean(no, dims = 2))
+    end
+
+    # Three road stages: 8/4/2 per day to the top three teams.
+    d = delta([flat_stage(i) for i = 1:3])
+    @test d[1] ≈ 24.0
+    @test d[4] ≈ 12.0
+    @test d[7] ≈ 6.0
+
+    # ITT stages are excluded from the award.
+    d_itt = delta([itt_stage(i) for i = 1:3])
+    @test all(≈(0.0), d_itt)
+end
+
 @testset "simulate_stage_race ITT skips assists" begin
     # On ITT stages, no stage assist or GC assist points should be awarded
     rng = Random.MersenneTwister(42)

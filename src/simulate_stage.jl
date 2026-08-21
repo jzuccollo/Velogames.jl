@@ -74,6 +74,66 @@ end
     return nothing
 end
 
+# VG teams classification: the sum of a team's best three riders' cumulative GC
+# scores. Shared by the daily assist award and the final classification bonus so
+# the two cannot rank teams differently.
+@inline function _team_class_scores!(
+    team_scores::Vector{Float64},
+    cumulative_gc_score::Vector{Float64},
+    team_indices::Vector{Vector{Int}},
+)
+    for (t, idx) in enumerate(team_indices)
+        b1 = -Inf
+        b2 = -Inf
+        b3 = -Inf
+        for i in idx
+            v = cumulative_gc_score[i]
+            if v > b1
+                b3, b2, b1 = b2, b1, v
+            elseif v > b2
+                b3, b2 = b2, v
+            elseif v > b3
+                b3 = v
+            end
+        end
+        s = b1
+        isfinite(b2) && (s += b2)
+        isfinite(b3) && (s += b3)
+        team_scores[t] = s
+    end
+    return nothing
+end
+
+# "These points are awarded to riders whose team is in the Top 3 of the Teams
+# Classification at the end of each day. Riders must start the stage to score
+# points. These points are not given out for the Individual Time Trial Stages."
+# — velogames.com/spain/2026/scores.php. Unlike the stage-assist table, the TTT
+# is not excluded.
+@inline function _score_daily_team_class_assists!(
+    stage_pts::Vector{Float64},
+    cumulative_gc_score::Vector{Float64},
+    team_indices::Vector{Vector{Int}},
+    team_scores::Vector{Float64},
+    team_order::Vector{Int},
+    scoring::StageRaceScoringTable,
+    stype::Symbol,
+)
+    assist_depth = length(scoring.team_class_assist_points)
+    (stype == :itt || assist_depth == 0) && return nothing
+    _team_class_scores!(team_scores, cumulative_gc_score, team_indices)
+    for t in eachindex(team_order)
+        team_order[t] = t
+    end
+    sort!(team_order, by = t -> team_scores[t], rev = true)
+    for rank = 1:min(assist_depth, length(team_order))
+        pts = scoring.team_class_assist_points[rank]
+        for i in team_indices[team_order[rank]]
+            stage_pts[i] += pts
+        end
+    end
+    return nothing
+end
+
 @inline function _score_daily_gc_and_assists!(
     stage_pts::Vector{Float64},
     gc_positions::Vector{Int},
@@ -389,6 +449,14 @@ function simulate_stage_race(
         diag_team_pos[t] = zeros(Int, diag_team_top)
     end
 
+    # Team membership, resolved once: the daily team-class assist award ranks
+    # teams on every stage of every sim, so `findall` per team per stage is not
+    # affordable here.
+    team_names = unique(teams)
+    team_indices = [findall(==(t), teams) for t in team_names]
+    team_scores = Vector{Float64}(undef, length(team_names))
+    team_order = Vector{Int}(undef, length(team_names))
+
     # Pre-allocate working arrays
     noisy = Vector{Float64}(undef, n_riders)
     strengths_blend = Vector{Float64}(undef, n_riders)
@@ -522,6 +590,15 @@ function simulate_stage_race(
                 stype,
                 n_riders,
             )
+            _score_daily_team_class_assists!(
+                stage_pts,
+                cumulative_gc_score,
+                team_indices,
+                team_scores,
+                team_order,
+                scoring,
+                stype,
+            )
             _score_points_jersey_stage!(
                 points_jersey_total,
                 noisy,
@@ -600,24 +677,19 @@ function simulate_stage_race(
             end
         end
 
-        # Final team classification (sum of top-3 cumulative GC scores per team)
-        team_set = unique(teams)
-        team_cum_scores = Dict{String,Float64}()
-        for t in team_set
-            team_idx = findall(==(t), teams)
-            sorted_cum = sort(cumulative_gc_score[team_idx], rev = true)
-            team_cum_scores[t] = sum(sorted_cum[1:min(3, length(sorted_cum))])
+        # Final team classification, ranked by the same rule as the daily award.
+        _team_class_scores!(team_scores, cumulative_gc_score, team_indices)
+        for t in eachindex(team_order)
+            team_order[t] = t
         end
-        team_ranking = sort(collect(team_cum_scores), by = x -> x.second, rev = true)
-        for rank = 1:min(length(scoring.final_team_class), length(team_ranking))
-            t = team_ranking[rank].first
-            for i = 1:n_riders
-                if teams[i] == t
-                    rider_total_pts[i] += scoring.final_team_class[rank]
-                end
+        sort!(team_order, by = t -> team_scores[t], rev = true)
+        for rank = 1:min(length(scoring.final_team_class), length(team_order))
+            t = team_order[rank]
+            for i in team_indices[t]
+                rider_total_pts[i] += scoring.final_team_class[rank]
             end
             if rank <= diag_team_top
-                diag_team_pos[t][rank] += 1
+                diag_team_pos[team_names[t]][rank] += 1
             end
         end
 
