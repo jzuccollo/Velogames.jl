@@ -143,6 +143,9 @@ function render_stagerace(rc::RenderConfig)
     n_kom_oracle =
         :has_kom_oracle in propertynames(predicted) ? count(predicted.has_kom_oracle) : 0
     n_vg_hist = count(predicted.has_vg_history)
+    n_gt_vg_hist =
+        :has_gt_vg_history in propertynames(predicted) ?
+        count(predicted.has_gt_vg_history) : 0
     pct(n) = round(Int, 100 * n / n_total)
 
     similar_races = get(SIMILAR_RACES, config.pcs_slug, String[])
@@ -155,6 +158,7 @@ function render_stagerace(rc::RenderConfig)
             "PCS race history ($(history_years) yrs)",
             "Similar races",
             "VG race history",
+            "GT VG history (prior editions)",
             "Oracle GC",
             "Oracle Points",
             "Oracle KOM",
@@ -166,6 +170,7 @@ function render_stagerace(rc::RenderConfig)
             "$(n_history)/$(n_total) ($(pct(n_history))%)",
             similar_str,
             "$(n_vg_hist)/$(n_total) ($(pct(n_vg_hist))%)",
+            "$(n_gt_vg_hist)/$(n_total) ($(pct(n_gt_vg_hist))%)",
             "$(n_oracle)/$(n_total) ($(pct(n_oracle))%)",
             "$(n_points_oracle)/$(n_total) ($(pct(n_points_oracle))%)",
             "$(n_kom_oracle)/$(n_total) ($(pct(n_kom_oracle))%)",
@@ -174,7 +179,7 @@ function render_stagerace(rc::RenderConfig)
     )
 
     sources_html = html_table(sources_df)
-    sources_html *= "<p>PCS specialty (sprint, oneday, climber, tt, gc) is routed per-source to the strength dimensions it informs. GC-flavoured market signals (Oracle GC + odds) only update the <code>:gc</code> dimension; points-jersey oracle updates <code>:flat</code>/<code>:hilly</code>; KOM oracle updates <code>:mountain</code>.</p>\n"
+    sources_html *= "<p>&ldquo;VG race history&rdquo; is the one-day classics signal and is always 0% here &mdash; a stage race's own VG competition is a separate game. The stage-race equivalent is &ldquo;GT VG history&rdquo;, this race's own prior editions. PCS specialty (sprint, oneday, climber, tt, gc) is routed per-source to the strength dimensions it informs. GC-flavoured market signals (Oracle GC + odds) only update the <code>:gc</code> dimension; points-jersey oracle updates <code>:flat</code>/<code>:hilly</code>; KOM oracle updates <code>:mountain</code>.</p>\n"
     write(io, html_callout(sources_html; title = "Data sources", collapsed = false))
 
     # --- Signal impact (per-dimension) ---

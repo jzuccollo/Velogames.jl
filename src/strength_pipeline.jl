@@ -1568,6 +1568,8 @@ function _estimate_strengths_multidim(
         [haskey(sig.history_lookup, df.riderkey[i]) for i = 1:n_riders]
     df[!, :has_vg_history] =
         [haskey(sig.vg_history_lookup, df.riderkey[i]) for i = 1:n_riders]
+    df[!, :has_gt_vg_history] =
+        [haskey(sig.gt_vg_history_lookup, df.riderkey[i]) for i = 1:n_riders]
     df[!, :has_odds] = [haskey(sig.odds_lookup, df.riderkey[i]) for i = 1:n_riders]
     df[!, :has_oracle] = [haskey(sig.oracle_lookup, df.riderkey[i]) for i = 1:n_riders]
     df[!, :has_points_oracle] =
