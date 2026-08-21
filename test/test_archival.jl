@@ -217,6 +217,56 @@ end
           nothing
 end
 
+@testset "Grand tours are dated like classics" begin
+    # _race_has_happened used find_race, which searches CLASSICS_RACES_2026
+    # alone, so every stage race fell to its "unknown date — protect by
+    # default" branch and read as already run. That made a grand tour's
+    # prediction archive write-once: the season's first render kept its
+    # snapshot and every later pre-race re-run was declined.
+    stage_cfg(name, year) =
+        suppress_output(() -> setup_race(name, year, :stage))
+    oneday_cfg(name, year) =
+        suppress_output(() -> setup_race(name, year, :oneday))
+
+    this_year = Dates.year(Dates.today())
+
+    # Every grand tour resolves to a date rather than to nothing.
+    for name in ("giro", "tdf", "vuelta")
+        cfg = stage_cfg(name, this_year)
+        @test Velogames.resolve_race_date(cfg.pcs_slug, this_year) !== nothing
+    end
+
+    # A past year is protected and a future year is not, for both formats.
+    @test Velogames._race_has_happened(stage_cfg("vuelta", this_year - 1))
+    @test !Velogames._race_has_happened(stage_cfg("vuelta", this_year + 1))
+    @test Velogames._race_has_happened(oneday_cfg("roubaix", this_year - 1))
+    @test !Velogames._race_has_happened(oneday_cfg("roubaix", this_year + 1))
+
+    # Within the current year the answer tracks the resolved date, so a stage
+    # race is no longer protected simply for being a stage race.
+    for name in ("giro", "tdf", "vuelta")
+        cfg = stage_cfg(name, this_year)
+        date = Velogames.resolve_race_date(cfg.pcs_slug, this_year)
+        @test Velogames._race_has_happened(cfg) == (date < Dates.today())
+    end
+
+    # An unknown slug keeps the protective default.
+    unknown = RaceConfig(
+        "no-such-race",
+        this_year,
+        :oneday,
+        "",
+        "",
+        6,
+        DEFAULT_CACHE,
+        2,
+        "no-such-race",
+        0.0,
+    )
+    @test Velogames.resolve_race_date(unknown.pcs_slug, this_year) === nothing
+    @test Velogames._race_has_happened(unknown)
+end
+
 @testset "Prediction archive schema hardening (WP0.3)" begin
     # Future year so `_race_has_happened` short-circuits false and no I/O
     # against the real archive happens before the mandatory-column check.

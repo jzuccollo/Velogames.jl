@@ -56,14 +56,24 @@ function _extract_chosen_team!(predicted::DataFrame, top_teams::Vector{DataFrame
     return predicted, chosenteam
 end
 
-"""Return true if the race has already happened (so its archive should be protected)."""
+"""Return true if the race has already happened (so its archive should be protected).
+
+Dates come from `resolve_race_date`, which covers the classics schedule and the
+grand tours. The previous lookup was `find_race(config.name)`, which searches
+`CLASSICS_RACES_2026` alone: every stage race resolved to `nothing`, fell to the
+"unknown date — protect by default" branch, and was treated as already run. So a
+grand tour's prediction archive was write-once — the first render of a season
+kept its snapshot for ever, and every later pre-race re-run (fresh odds, a model
+fix, a corrected startlist) was declined with a warning. Prospective evaluation
+then scored a prediction the model no longer makes.
+"""
 function _race_has_happened(config::RaceConfig)
     today = Dates.today()
     config.year < Dates.year(today) && return true
     config.year > Dates.year(today) && return false
-    info = find_race(config.name)
-    info === nothing && return true  # unknown date — protect by default
-    return Dates.Date(info.date) < today
+    date = resolve_race_date(config.pcs_slug, config.year)
+    date === nothing && return true  # unknown date — protect by default
+    return date < today
 end
 
 """Archive the predicted DataFrame for prospective evaluation."""
