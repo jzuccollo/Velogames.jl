@@ -1345,6 +1345,20 @@ function stage_race_report_html(;
             round.(type_summary.total_points ./ max.(type_summary.n_stages, 1), digits = 0)
         sort!(type_summary, :total_points, rev = true)
 
+        # The raw symbol, given the name it has everywhere else. It was written
+        # out as `mountain` here and as "Mountain" in every other table on the
+        # same page.
+        display_names = Dict(
+            :flat => "Flat",
+            :hilly => "Hilly",
+            :mountain => "Mountain",
+            :itt => "ITT",
+            :ttt => "TTT",
+        )
+        type_summary[!, :stage_type] = [
+            get(display_names, Symbol(t), titlecase(String(t))) for
+            t in type_summary.stage_type
+        ]
         rename!(
             type_summary,
             :stage_type => Symbol("Stage type"),
@@ -1379,7 +1393,7 @@ function stage_race_report_html(;
                 best = stage_type_scores[best_idx, :]
                 push!(
                     rows_html,
-                    "<tr><td>$label</td><td>$(best.rider)</td><td>$(best[col])</td></tr>",
+                    "<tr><td>$label</td><td>$(best.rider)</td><td>$(commafmt(best[col]))</td></tr>",
                 )
             end
         end
