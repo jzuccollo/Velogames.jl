@@ -8,7 +8,10 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `src/get_data.jl` - Data scraping: VG riders, PCS rankings/specialty ratings, Oddschecker odds parsing, Cycling Oracle predictions, VG race results, VG race catalogue and per-race results
 - `src/pcs_scraper.jl` - PCS table scraping infrastructure and column aliases
 - `src/pcs_extended.jl` - Extended PCS scraping: race history results, startlists across multiple years
-- `src/data_assembly.jl` - Shared data assembly: `RaceData` struct, `join_pcs_specialty`, `assemble_pcs_race_history`, `assemble_vg_race_history`, `assemble_season_vg_points` (mean VG points per round across other rounds of a season-long series — see "Season-round VG points" below), `prefetch_vg_racelists` (used by both production and backtesting pipelines). Also report data loading and post-race archival: `load_report_data`, `load_stage_race_report_data`, `load_stage_race_per_stage_data`, `list_completed_races`, `compute_cumulative_scores`, `compute_stage_type_scores`, `archive_stage_race_results`, `load_stage_profiles`, `load_vg_startlist` (the field that actually started one classic, from the `vg_startlist` archive vgleague writes — see "Phase 1c" below)
+- `src/data_assembly.jl` - Shared data assembly: `RaceData` struct, `join_pcs_specialty`, `assemble_pcs_race_history`, `assemble_vg_race_history`, `assemble_season_vg_points` (mean VG points per round across other rounds of a season-long series — see "Season-round VG points" below), `prefetch_vg_racelists` (used by both production and backtesting pipelines). Also report data loading (all **archive-only** since Phase 2 — the live-scrape fallbacks are gone) and post-race archival: `load_report_data`, `load_stage_race_report_data`, `load_stage_race_per_stage_data` (and `fetch_stage_race_per_stage_data`, its fetching twin, called only by the ingest phase), `list_completed_races`, `compute_cumulative_scores`, `compute_stage_type_scores`, `archive_stage_race_results`, `load_stage_profiles`, `load_vg_startlist` (the field that actually started one classic, from the `vg_startlist` archive vgleague writes — see "Phase 1c" below)
+- `src/completeness.jl` - `race_completeness` (what the archive holds for one race, computed not written — see "Ingest is a phase" below), `RaceCompleteness`, `has_required_data`, `field_prices_every_scorer`, `unpriced_share`, `field_basis_note`, `COMPLETENESS_TYPES`. Archive-only: it must not fetch, or asking the question would change the answer
+- `src/ingest.jl` - `ingest_race` (fetch-and-store for one completed race, reporting the before/after difference in the archive rather than the writers' own account of it), `IngestResult`, `pending_races`
+- `src/run_log.jl` - `_runs/{YYYY-MM}/{run_id}-{phase}.json`: `RunRecord`, `record_run`, `new_run_id` (honours `VELOGAMES_RUN_ID`), `read_run_log`. One file per run, because the writers are two processes in two clones with no shared lock
 - `src/league_archive.jl` - The league tier of the archive: dated raw snapshots (`league/raw`), the derived entrant × race × rider panel and race catalogue (`league/rosters`, `league/meta`), the winners record (`league/winners`), `ingest_league_dir`/`ingest_league_file`, `load_league_standings`, `load_league_team`, `league_race_slug`, `load_league_winners`, `derive_league_winners`, `remove_league_winner` — see "The league lives in the archive" below
 - `src/scoring.jl` - VG scoring tables by category (one-day Cat 1/2/3, stage race aggregate) and expected points functions
 - `src/bayesian_core.jl` - `BayesianConfig` (3 precision scale factors — market, history, ability — with fixed within-group ratios) and variance accessors, `BayesianPosterior`/`StrengthEstimate`/`MultiDimPosterior`, `bayesian_update`, `bayesian_update_multidim_dim`, `multidim_prior`, and dimension tables (`STRENGTH_DIMENSIONS`, `SIGNAL_DIMENSION_WEIGHTS`, `RACE_HISTORY_CLASS_PROJECTION`). Block-correlation discount groups signals into the same 3 clusters.
@@ -30,9 +33,10 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `scripts/render_assessor.jl` - Team assessor report: compares custom team vs optimal, retrospective analysis, writes `prediction_docs/assessor.html` (`[output] dir` overrides)
 - `scripts/render_stagerace.jl` - Stage race prediction report: reads `race_config.toml`, runs stage race pipeline, writes `prediction_docs/stagerace.html` (`[output] dir` overrides)
 - `scripts/render_backtesting.jl` - Backtesting and calibration report: prior checks, historical backtest, prospective evaluation, writes `prediction_docs/backtesting.html` (`[output] dir` overrides)
-- `scripts/render_reports.jl` - Public race reports site: generates per-race HTML retrospectives to `site/docs/`, incremental build (skips existing)
+- `scripts/render_reports.jl` - Public race reports site: generates per-race HTML retrospectives to `site/docs/`, incremental build (skips existing). **Reads the archive and fetches nothing**; a race the league has settled but whose results are not archived stops the run rather than producing a page-shaped hole
 - `scripts/league_eval.jl` - Offline league evaluation: scores archived model teams against realised VG points, the hindsight-optimal team, and max-cost / odds-implied baselines, then reports cumulative league placement and the entered-vs-advised delta from the `[league]` config. Its placement section matches standings race names against `CLASSICS_RACES_2026`, so it is classics-shaped — a grand tour league's per-stage race names will not resolve.
-- `scripts/archive_audit.jl` - Archive integrity: per-type counts, unknown types, files short of mandatory columns, files with no provenance, stray files. `--write-manifest` / `--check` keep `_manifest.toml` in step with `ARCHIVE_TYPES`
+- `scripts/ingest.jl` - **The** fetch-and-store phase. `--race=SLUG --year=N`, `--pending` (every race the league has settled a winner for whose archive is short of a required type), `--status`. Exits non-zero on a race it was asked for and could not complete, so `auto_publish.sh` stops before rendering
+- `scripts/archive_audit.jl` - Archive integrity: per-type counts, unknown types, files short of mandatory columns, files with no provenance, stray files. `--write-manifest` / `--write-races` / `--check` keep `_manifest.toml` in step with `ARCHIVE_TYPES` and `_races.toml` with the race catalogue
 - `scripts/backfill_archive.jl` - Archive completeness: reports what is missing and fetches back what the sources still serve (`--run`), plus two narrow repairs — `--rekey` for legacy riderkeys and `--repair-predictions` for prediction archives short of `team`/`cost`
 - `scripts/baseline_compare.jl` - Naive-persistence yardstick for grand tours: mean VG points across the two prior Tours, fed through `build_model_stage`, set beside the model's archived optimal team
 - `scripts/ingest_league.jl` - The one thing in this package that reads the vgleague repo: takes each league snapshot into `league/raw` (dated, content-deduped) and rebuilds `league/rosters` and `league/meta`. Idempotent; `auto_publish.sh` runs it first. `--force` rebuilds the derived tables when only the frame builders changed; `--dry-run` writes nothing
@@ -144,6 +148,84 @@ accumulating down the season. It is the first archive type written from Python.
 - Where a race has no archived startlist — every race before August 2026 — the
   field is still the season pool filtered through PCS finishers, which drops
   non-finishers and anyone PCS never listed.
+
+### Velogames is behind Cloudflare; Julia cannot fetch it (22 August 2026)
+
+Every `velogames.com` page — `riders.php`, `races.php`, `ridescore.php`, the
+homepage — returns **403 with `cf-mitigated: challenge`** to this package's HTTP
+client and to curl with a full browser header set. ProCyclingStats is unaffected
+and answers normally.
+
+- **A Playwright browser *context* passes; a bare `browser.new_page()` does
+  not.** vgleague's `_new_browser_context` builds one with a realistic UA and
+  header set, which is why its scrape never stopped. This is the trap: a
+  Playwright test that 403s has probably skipped the context, not hit a block.
+- **So `vgleague ingest` is the only route to Velogames data**, and the decided
+  "Python owns every Velogames page" split is now enforced by the site rather
+  than chosen. `getvg_riders`, `getvg_race_list`, `getvg_race_results`,
+  `getvg_stage_*` all fail from here. **Never diagnose one of those as a code bug
+  without checking for a 403 first.**
+- The `getvg_riders` smoke test in `test_utilities.jl` fails for this reason and
+  will until either the block lifts or the test moves off the live page.
+- `docs/two-package-reconciliation.md` records the falsified "Playwright looks
+  unnecessary" finding and what replaced it. Phase 4's "drop Playwright" is dead.
+
+### Ingest is a phase (Phase 2, August 2026)
+
+Nothing scrapes during a render. `_ensure_results_archived` and the
+`archive_stage_race_results` call inside `stage_race_report_html` are gone, as is
+the grand-tour probe that fetched a tour's totals and its final stage live to
+decide whether the race had finished. The chain is:
+
+```text
+ingest-vg (vgleague, Python)   vg_results, vg_stage_totals/results/riders
+  → ingest-league   scripts/ingest_league.jl
+  → derive-winners  scripts/auto_publish.jl
+  → ingest-race     scripts/ingest.jl --pending      (PCS; VG only if absent)
+  → render          scripts/render_reports.jl        (archive-only)
+  → deploy          scripts/deploy_site.sh
+```
+
+`ingest-vg` runs in the vgleague launchd job, before the hook fires. `ingest.jl
+--pending` runs **before** `auto_publish.sh` deletes a race's existing HTML, so a
+failure leaves the winner recorded and the old page on disk for the retry.
+
+- **Completeness is computed, not written.** `race_completeness(pcs_slug, year)`
+  reads the archive: which types are present, row counts, `fetched_at`,
+  `field_basis` and `unpriced_scorers`. The design note asked for a marker file;
+  a function is better because a half-synced Dropbox file fails the check by
+  being opened, there is no second writer, and nothing goes stale. It is
+  **archive-only on purpose** — `load_vg_classics_riders` and `load_vg_startlist`
+  scrape and archive on a miss, so using them would make the question change the
+  answer and make `ingest_race`'s before/after reading meaningless.
+- **`field_basis` is what the page says about its field.** `:startlist` (VG's own
+  list), `:vg_rider_list` (a grand tour, whose pool *is* its field),
+  `:pool_pcs_filtered` (every race before August 2026 — drops abandoners and
+  anyone PCS never listed), `:pool` (no PCS results either). On `:pool` the
+  starter count and the average-value line are **withheld**, because "43 riders
+  scored out of 1,248 starters" is not true.
+- **`unpriced_scorers` is annotated, not withheld.** A rider in `vg_results` that
+  neither the startlist nor the pool can price is dropped by
+  `load_report_data`'s `leftjoin`. One live case in 132 races (Sergio Serrano,
+  Classique Dunkerque 2026, 60 pts, 1.5%), so a withholding threshold would be a
+  rule nothing crosses.
+- **`archive_race_results` skips what is already archived** unless
+  `force_refresh`. It used to re-fetch and overwrite every call, which in a
+  Dropbox archive with no locking means a rate-limited PCS page replaces a good
+  snapshot with a worse one.
+- **Velogames revises results months after the race**, not the ~24 hours assumed
+  elsewhere: Flèche Wallonne (April) was still changing in August. The skip-if-
+  present guard means a revision is never picked up on its own.
+- **`_races.toml`** maps a Velogames race name to a PCS slug, exported from
+  `CLASSICS_RACES_2026` by `archive_audit.jl --write-races`. Python needs it to
+  key a `vg_results` file at all. `race_squash` is duplicated across the two
+  languages and checked by `vgleague verify-races`.
+- **`vgleague verify-results`** diffs Python's fetch against the archived files.
+  A mismatch that **conserves the race total** is a Velogames revision; one that
+  does not is a parser fault. That test is what tells them apart.
+- **Still archiving during a render, on purpose**: `_prepare_rider_data`'s odds,
+  oracle and PCS specialty capture. Those are human inputs that exist only at
+  that moment, and the prediction renderers are the lab, which Phase 4 separates.
 
 ### Unattended publishing (August 2026)
 
@@ -609,7 +691,7 @@ comparison. See `roadmap.md` "SHIPPED: one-day market blend".
 - PCS URLs: `https://www.procyclingstats.com/race/{slug}/{year}`
 - VG URLs: `https://www.velogames.com/{race-slug}/{year}/riders.php`
 - One-day classics races share one VG URL per year: `sixes-classics/{year}/riders.php` (2026+) or `sixes-superclasico/{year}/riders.php` (≤2025), with startlist hash filtering
-- Archival storage: `_prepare_rider_data` automatically archives odds/oracle/PCS specialty data on successful fetch; solvers archive predictions after `estimate_strengths`; `archive_race_results` archives post-race PCS and VG results; `prefetch_race_data` loads archived data for backtesting
+- Archival storage: `_prepare_rider_data` automatically archives odds/oracle/PCS specialty data on successful fetch (the one archival side effect Phase 2 deliberately kept — see "Ingest is a phase"); solvers archive predictions after `estimate_strengths`; `archive_race_results` archives post-race PCS and VG results, **skipping whatever is already archived** unless `force_refresh`; `prefetch_race_data` loads archived data for backtesting. The publication path archives nothing: `scripts/ingest.jl` does it as its own phase
 - Archival paths: `{archive_dir()}/{data_type}/{key}/{year}.arrow` (`archive_dir()` = ~/Dropbox/code/velogames/archive, overridable with `VELOGAMES_ARCHIVE`) — the 27 data types and their mandatory columns are `ARCHIVE_TYPES`, exported to `_manifest.toml`. `key` is a `pcs_slug` for race types, a **VG game slug** for `vg_riders`, `vg_racelist` and `vg_startlist`, and `{game_slug}_{league_id}` for the `league/*` types. Prediction archives always write `riderkey, rider, team, cost, chosen, selection_frequency, expected_vg_points`; readers warn on legacy pre-April-2026 archives, which cannot be re-created
 - VG race URLs: `ridescore.php?ga={game_id}&st={race_number}` where game_id is from `vg_classics_game_id(year)`, `st` is race number 1-44 from races.php
 - Backtesting temporal integrity: `estimate_strengths`/`predict_expected_points` accept `race_year`/`race_date` for correct recency weighting; cumulative VG season points prevent end-of-year leakage; archived PCS specialty scores prevent current-day leakage
@@ -624,6 +706,9 @@ comparison. See `roadmap.md` "SHIPPED: one-day market blend".
 - Run backtesting: `julia --project scripts/render_backtesting.jl`
 - Local web frontend: `julia --project scripts/serve.jl [--port 8080]`, then open `http://localhost:8080`. Serves a format-adaptive config form, writes `data/race_config.toml`, runs the chosen renderer in-process and serves the report. Long-lived, so it pays the package load and JIT once — but nothing caches the resampled optimisation, so each render is a full solve. Every control carries hover help. Served reports get a back-to-form / re-run bar injected on the way out (never written to the report file, so published reports are unaffected). **`TOML.print` strips comments**: the first save copies the hand-written file to `data/race_config.toml.backup`. A `/render` POST rewrites the config only when it carries the form's hidden `form=1` marker — the bar's Re-run button omits it and so re-runs the config as it stands, rather than reading its absent fields as cleared ones.
 - Generate race reports: `julia --project scripts/render_reports.jl` (add `--force` to regenerate all)
+- Ingest one race's results: `julia --project scripts/ingest.jl --race=<pcs_slug> --year=<yyyy>`; every race the league has settled but not archived: `--pending`; what the archive already holds: `--status --race=... --year=...` (fetches nothing)
+- Ingest Velogames results (the only client that can reach them): `vgleague ingest <league>` or `ingest-all`, from the vgleague clone
+- Check the two languages agree: `vgleague verify-keys <league>` (riderkeys), `vgleague verify-races` (race name squashing), `vgleague verify-results <league>` (archived results vs the live pages)
 - Publish every race the league has scored: `./scripts/auto_publish.sh` (add `--dry-run` to see what it would do — read-only end to end, so it skips the pull and tells the ingest to write nothing). Normally runs itself from the vgleague hook; see "Unattended publishing" above. There is no manual publishing script — this is the only path
 - Take the league scrape into the archive on its own: `julia --project scripts/ingest_league.jl` (`--force` to rebuild `league/rosters`/`league/meta` after changing their frame builders, `--dry-run` to write nothing). Idempotent, and `auto_publish.sh` runs it first
 - Correct a published winner: `./scripts/auto_publish.sh --redrive=<pcs_slug>`. Drops the recorded row, derives it again and re-renders in one run — a recorded winner is never re-derived otherwise, and the build skips existing HTML. Seeded rows (empty `snapshot_date`) are refused: no snapshot on disk can re-derive them, so removing one destroys the only record
