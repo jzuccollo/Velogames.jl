@@ -834,33 +834,14 @@ function load_stage_race_report_data(
     vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
     isempty(vg_slug) && return nothing
 
-    # Try archived data first, then fetch live
+    # Archive-only, as the one-day twin has been since WP1d. Reporting that can
+    # scrape is reporting whose output depends on whether Velogames was up when
+    # somebody pressed render, and Velogames retires a season's pages — so the
+    # fallback was not a safety net, it was the thing that stopped the 2025
+    # back-catalogue rebuilding. `scripts/ingest.jl` fills these.
     totals = load_race_snapshot("vg_stage_totals", pcs_slug, year)
     riders_df = load_race_snapshot("vg_stage_riders", pcs_slug, year)
-
-    if totals === nothing
-        try
-            totals = suppress_output() do
-                getvg_stage_race_totals(year, vg_slug; cache_config = cache_config)
-            end
-        catch e
-            @warn "Failed to fetch VG stage race totals for $pcs_slug $year: $e"
-            return nothing
-        end
-    end
     totals === nothing && return nothing
-
-    if riders_df === nothing
-        try
-            riders_url = "https://www.velogames.com/$vg_slug/$year/riders.php"
-            riders_df = suppress_output() do
-                getvg_riders(riders_url; cache_config = cache_config)
-            end
-        catch e
-            @warn "Failed to fetch VG riders for $pcs_slug $year: $e"
-            return nothing
-        end
-    end
     riders_df === nothing && return nothing
 
     # Select columns from riders (cost, class, team info)
@@ -891,12 +872,26 @@ function load_stage_race_per_stage_data(
     n_stages::Int;
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
-    # Try archived data first
-    archived = load_race_snapshot("vg_stage_results", pcs_slug, year)
-    if archived !== nothing
-        return archived
-    end
+    # Archive-only; `fetch_stage_race_per_stage_data` is the fetching twin, and
+    # `scripts/ingest.jl` is what calls it.
+    return load_race_snapshot("vg_stage_results", pcs_slug, year)
+end
 
+"""
+    fetch_stage_race_per_stage_data(pcs_slug, year, n_stages; cache_config) -> Union{DataFrame, Nothing}
+
+Fetch every stage's Velogames scores for a grand tour, one request per stage.
+The ingest half of `load_stage_race_per_stage_data`, which reads only the
+archive. A stage that fails is warned about and left out rather than aborting the
+tour — a tour missing one stage is still worth archiving, and the next ingest
+retries it because the snapshot is only written once all of them are in.
+"""
+function fetch_stage_race_per_stage_data(
+    pcs_slug::String,
+    year::Int,
+    n_stages::Int;
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
     vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
     isempty(vg_slug) && return nothing
 
@@ -1058,7 +1053,7 @@ function archive_stage_race_results(
 
     # Archive per-stage VG results
     if load_race_snapshot("vg_stage_results", pcs_slug, year) === nothing
-        per_stage = load_stage_race_per_stage_data(
+        per_stage = fetch_stage_race_per_stage_data(
             pcs_slug,
             year,
             n_stages;

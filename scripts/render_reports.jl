@@ -547,48 +547,6 @@ function _write_classification_performance!(
     write(io, html_table(class_stats))
 end
 
-"""Ensure VG and PCS results are archived for a race, fetching if needed."""
-function _ensure_results_archived(pcs_slug::String, year::Int)
-    # Already archived?
-    load_race_snapshot("vg_results", pcs_slug, year) !== nothing && return
-
-    # Auto-detect VG race number
-    vg_race_number = 0
-    try
-        vg_racelist = suppress_output() do
-            getvg_race_list(year; cache_config = _report_cache)
-        end
-        race_info = find_race(pcs_slug)
-        detected = match_vg_race_number(
-            race_info !== nothing ? race_info.name : replace(pcs_slug, "-" => " "),
-            vg_racelist,
-        )
-        if detected !== nothing
-            vg_race_number = detected
-        end
-    catch e
-        @warn "Failed to auto-detect VG race number for $pcs_slug $year: $e"
-    end
-
-    if vg_race_number > 0
-        try
-            suppress_output() do
-                archive_race_results(
-                    pcs_slug,
-                    year;
-                    vg_race_number = vg_race_number,
-                    cache_config = _report_cache,
-                )
-            end
-            @info "Auto-archived results for $pcs_slug $year (VG race #$vg_race_number)"
-        catch e
-            @warn "Failed to auto-archive results for $pcs_slug $year: $e"
-        end
-    else
-        @warn "Could not auto-detect VG race number for $pcs_slug $year — skipping archival"
-    end
-end
-
 function report_html(;
     pcs_slug,
     year,
@@ -597,7 +555,14 @@ function report_html(;
     winner_name = "",
     winner_score = 0,
 )
-    _ensure_results_archived(pcs_slug, year)
+    completeness = race_completeness(pcs_slug, year)
+    if !has_required_data(completeness)
+        missing_types = [
+            r.data_type for r in eachrow(completeness.types) if r.required && !r.present
+        ]
+        @warn "Not rendering $pcs_slug $year: the archive is missing $(join(missing_types, ", ")). Run scripts/ingest.jl --race=$pcs_slug --year=$year."
+        return nothing
+    end
 
     allriders = load_report_data(pcs_slug, year; cache_config = _report_cache)
     if allriders === nothing
@@ -632,10 +597,20 @@ function report_html(;
     # How the race played out
     write(io, html_heading("How the race played out", 2))
     write(io, "<ul>\n")
-    write(
-        io,
-        "<li><strong>Riders who scored</strong>: $(nrow(scorers)) out of $(nrow(allriders)) starters</li>\n",
-    )
+    # Both the starter count and the average-value line read the field as the
+    # riders who started. That only holds when the field came from Velogames'
+    # own list or the PCS finishers; on the `:pool` basis it is the whole
+    # season's rider pool, which turns "43 out of 1,248 starters" into a
+    # sentence that is simply untrue.
+    field_is_starters = completeness.field_basis != :pool
+    if field_is_starters
+        write(
+            io,
+            "<li><strong>Riders who scored</strong>: $(nrow(scorers)) out of $(nrow(allriders)) starters</li>\n",
+        )
+    else
+        write(io, "<li><strong>Riders who scored</strong>: $(nrow(scorers))</li>\n")
+    end
     if nrow(scorers) > 0
         write(
             io,
@@ -646,10 +621,12 @@ function report_html(;
             io,
             "<li><strong>Best value</strong>: $(best_val.rider) at $(round(Int, best_val.value)) pts/credit</li>\n",
         )
-        write(
-            io,
-            "<li><strong>Average value</strong> (all starters): $(round(Int, sum(allriders.score) / sum(allriders.cost))) points per credit</li>\n",
-        )
+        if field_is_starters
+            write(
+                io,
+                "<li><strong>Average value</strong> (all starters): $(round(Int, sum(allriders.score) / sum(allriders.cost))) points per credit</li>\n",
+            )
+        end
     end
     if optimal_team !== nothing
         write(
@@ -664,6 +641,24 @@ function report_html(;
         )
     end
     write(io, "</ul>\n")
+
+    # Where the field came from, and what it is missing. The hindsight teams
+    # below are a knapsack over exactly these riders, so a field reconstructed
+    # from the season pool — or one that cannot price somebody who scored —
+    # makes them bounds rather than answers. Said once, here, rather than
+    # hedging each stat.
+    basis_note = field_basis_note(completeness)
+    if !isempty(basis_note)
+        write(
+            io,
+            html_callout(
+                "<p>$basis_note</p>",
+                type = "note",
+                title = "About this field",
+                collapsed = true,
+            ),
+        )
+    end
 
     # The perfect team
     write(io, html_heading("The perfect team", 2))
@@ -858,18 +853,6 @@ report_hoverlabel() = attr(
 const LINE_PALETTE =
     ["#3d6b99", "#c75b53", "#5c8a4a", "#d29a3c", "#3f938c", "#9b6a93", "#df8a3c", "#8c6f5e"]
 
-const GRAND_TOUR_RACES = [
-    (pcs_slug = "giro-d-italia", name = "Giro d'Italia", month = 5, n_stages = 21),
-    (pcs_slug = "tour-de-france", name = "Tour de France", month = 7, n_stages = 21),
-    (pcs_slug = "vuelta-a-espana", name = "Vuelta a España", month = 9, n_stages = 21),
-    (
-        pcs_slug = "tour-de-france-femmes",
-        name = "Tour de France Femmes",
-        month = 7,
-        n_stages = 9,
-    ),
-]
-
 # Per-race accent colour (leader's jersey); classics fall back to the default gold.
 const _RACE_ACCENT = Dict(
     "giro-d-italia" => "#d6336c",         # maglia rosa
@@ -888,12 +871,14 @@ function stage_race_report_html(;
     winner_name = "",
     winner_score = 0,
 )
-    archive_stage_race_results(
-        pcs_slug,
-        year;
-        n_stages = n_stages,
-        cache_config = _report_cache,
-    )
+    completeness = race_completeness(pcs_slug, year)
+    if !has_required_data(completeness)
+        missing_types = [
+            r.data_type for r in eachrow(completeness.types) if r.required && !r.present
+        ]
+        @warn "Not rendering $pcs_slug $year: the archive is missing $(join(missing_types, ", ")). Run scripts/ingest.jl --race=$pcs_slug --year=$year."
+        return nothing
+    end
 
     allriders = load_stage_race_report_data(pcs_slug, year; cache_config = _report_cache)
     if allriders === nothing
@@ -2349,21 +2334,22 @@ function main()
 
     league_winners = league_winners_by_race()
 
-    # Archive results for any league winners not yet in the archive.
-    # Grand tours are excluded: `_ensure_results_archived` auto-detects the VG
-    # race number against the one-day classics race list, which a stage race
-    # (with no entry in that list) would fuzzy-match to the wrong race. Grand
-    # tour results are archived separately below via `stage_race_report_html`
-    # → `archive_stage_race_results` (data type `vg_stage_totals`, fetched from
-    # the correct stage-race VG competition).
-    gt_pcs_slugs = Set(gt.pcs_slug for gt in GRAND_TOUR_RACES)
-    for ((pcs_slug, year), _) in league_winners
-        year in years || continue
-        pcs_slug in gt_pcs_slugs && continue
-        if load_race_snapshot("vg_results", pcs_slug, year) === nothing
-            println("  Archiving results for $pcs_slug $year...")
-            _ensure_results_archived(pcs_slug, year)
+    # Rendering no longer fetches anything. `scripts/ingest.jl --pending` is the
+    # phase that fills the archive, and `auto_publish.sh` runs it before this —
+    # so a race short of its data stops the publish there, with the winner still
+    # recorded for the retry, instead of being discovered here after the
+    # existing HTML has already been deleted.
+    pending = pending_races(years)
+    if !isempty(pending)
+        println(stderr, "\nERROR: $(length(pending)) race(s) with a recorded league winner have no archived results:")
+        for (slug, yr) in pending
+            println(stderr, "  $slug $yr")
         end
+        println(
+            stderr,
+            "Run `julia --project scripts/ingest.jl --pending` first. Rendering does not fetch.",
+        )
+        exit(1)
     end
 
     races = list_completed_races(years)
@@ -2420,39 +2406,14 @@ function main()
                 continue
             end
 
-            # Check if data is available (archived or live)
-            has_data = load_race_snapshot("vg_stage_totals", gt.pcs_slug, year) !== nothing
-            if !has_data
-                # Try fetching live to see if the race has finished
-                vg_slug = get(Velogames._STAGE_RACE_VG_SLUGS, gt.pcs_slug, "")
-                if !isempty(vg_slug)
-                    try
-                        totals = suppress_output() do
-                            getvg_stage_race_totals(year, vg_slug; cache_config = _report_cache)
-                        end
-                        if totals !== nothing &&
-                           nrow(totals) > 0 &&
-                           maximum(totals.score) > 0
-                            # Verify the race is complete by checking the last stage has data
-                            last_stage = suppress_output() do
-                                getvg_stage_results(
-                                    year,
-                                    vg_slug,
-                                    gt.n_stages;
-                                    cache_config = _report_cache,
-                                )
-                            end
-                            has_data =
-                                last_stage !== nothing &&
-                                nrow(last_stage) > 0 &&
-                                maximum(last_stage.score) > 0
-                        end
-                    catch
-                    end
-                end
-            end
-
-            has_data || continue
+            # Archive-only. This used to fetch the tour's totals and its final
+            # stage live to decide whether the race had finished, which made a
+            # render of four years of reports do up to eight Velogames fetches
+            # before drawing anything — and made "has this tour finished?" a
+            # question answered by the network rather than by the ingest phase.
+            # A tour with archived totals is a tour `ingest.jl` has been run for,
+            # and it only runs once the league has settled the whole catalogue.
+            has_required_data(race_completeness(gt.pcs_slug, year)) || continue
 
             race_date = Dates.format(Date(year, gt.month, 1), "U yyyy")
             winner = get(league_winners, (gt.pcs_slug, year), nothing)

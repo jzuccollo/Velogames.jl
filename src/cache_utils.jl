@@ -276,12 +276,20 @@ whose entries mean "a frame with these mandatory columns" and are what
 `save_race_snapshot` validates against. The audit and the manifest read both
 consts; nothing else needs to know the difference.
 """
-const RAW_ARCHIVE_TREES = [(
-    name = "league/raw",
-    pattern = "{game_slug}_{year}_{league_id}/{YYYY-MM-DD}.json",
-    refetchable = false,
-    note = "Dated, content-deduped copies of the vgleague scrape: every entrant's roster, cost and score for every race. Never overwritten, because entrants rename their teams and the only honest record is what the site said on a given date. Velogames publishes no history, so a league's rosters exist only while the league does.",
-),]
+const RAW_ARCHIVE_TREES = [
+    (
+        name = "league/raw",
+        pattern = "{game_slug}_{year}_{league_id}/{YYYY-MM-DD}.json",
+        refetchable = false,
+        note = "Dated, content-deduped copies of the vgleague scrape: every entrant's roster, cost and score for every race. Never overwritten, because entrants rename their teams and the only honest record is what the site said on a given date. Velogames publishes no history, so a league's rosters exist only while the league does.",
+    ),
+    (
+        name = "_runs",
+        pattern = "{YYYY-MM}/{run_id}-{phase}.json",
+        refetchable = false,
+        note = "One record per pipeline phase run: run_id, phase, start and finish, status, host, the races touched and a one-line detail. Written by both languages. One file per run rather than one appended file per month, because the writers are separate processes in separate clones holding different locks and Dropbox has none — a monthly file would be read-modify-write across machines. A reader that wants a month concatenates the directory.",
+    ),
+]
 
 
 """

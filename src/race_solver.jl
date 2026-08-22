@@ -180,8 +180,14 @@ end
     archive_race_results(race_name, year; cache_config, force_refresh)
 
 Fetch and archive actual PCS results and VG results for a completed race.
-Idempotent: safe to re-run. Intended to be called from team_assessor.qmd
-after each race to build the prospective validation dataset.
+
+**Skips whatever is already archived** unless `force_refresh` is set. It used to
+re-fetch and overwrite on every call, which is the wrong default for a file in a
+shared, Dropbox-synced archive with no locking: a transient scrape failure or a
+rate-limited PCS page would replace a good snapshot with a worse one, and a
+re-run during a live race would race whoever else is writing. Velogames does
+revise scores for about 24 hours after a race, which is the case for overwriting
+— `force_refresh` is how to ask for it, deliberately.
 """
 function archive_race_results(
     pcs_slug::String,
@@ -191,18 +197,20 @@ function archive_race_results(
     force_refresh::Bool = false,
 )
     # Archive PCS race results
-    try
-        pcs_results = getpcs_race_results(
-            pcs_slug,
-            year;
-            cache_config = cache_config,
-            force_refresh = force_refresh,
-        )
-        if nrow(pcs_results) > 0
-            save_race_snapshot(pcs_results, "pcs_results", pcs_slug, year)
+    if force_refresh || load_race_snapshot("pcs_results", pcs_slug, year) === nothing
+        try
+            pcs_results = getpcs_race_results(
+                pcs_slug,
+                year;
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            if nrow(pcs_results) > 0
+                save_race_snapshot(pcs_results, "pcs_results", pcs_slug, year)
+            end
+        catch e
+            @warn "Failed to archive PCS results for $pcs_slug $year: $e"
         end
-    catch e
-        @warn "Failed to archive PCS results for $pcs_slug $year: $e"
     end
 
     # Archive VG race results. Stage races (grand tours / week-long races) run
@@ -213,29 +221,26 @@ function archive_race_results(
     # with the correct VG slug instead; `vg_race_number` is a one-day-only
     # concept (the classics `st` parameter) and is ignored for stage races.
     vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
-    if !isempty(vg_slug)
+    if force_refresh || load_race_snapshot("vg_results", pcs_slug, year) === nothing
         try
-            vg_results = getvg_stage_race_totals(
-                year,
-                vg_slug;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
-            )
-            if nrow(vg_results) > 0
-                save_race_snapshot(vg_results, "vg_results", pcs_slug, year)
+            vg_results = if !isempty(vg_slug)
+                getvg_stage_race_totals(
+                    year,
+                    vg_slug;
+                    cache_config = cache_config,
+                    force_refresh = force_refresh,
+                )
+            elseif vg_race_number > 0
+                getvg_race_results(
+                    year,
+                    vg_race_number;
+                    cache_config = cache_config,
+                    force_refresh = force_refresh,
+                )
+            else
+                nothing
             end
-        catch e
-            @warn "Failed to archive VG stage totals for $pcs_slug $year: $e"
-        end
-    elseif vg_race_number > 0
-        try
-            vg_results = getvg_race_results(
-                year,
-                vg_race_number;
-                cache_config = cache_config,
-                force_refresh = force_refresh,
-            )
-            if nrow(vg_results) > 0
+            if vg_results !== nothing && nrow(vg_results) > 0
                 save_race_snapshot(vg_results, "vg_results", pcs_slug, year)
             end
         catch e

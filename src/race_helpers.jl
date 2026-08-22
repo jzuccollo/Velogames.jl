@@ -1217,6 +1217,37 @@ const GT_SIMILAR_RACES = Dict{String,Vector{String}}(
 )
 
 """
+The grand tours the public site reports on, with the stage count the ingest and
+report paths both need.
+
+Lived in `scripts/render_reports.jl` until Phase 2, where it was reachable only
+by rendering. `scripts/ingest.jl` needs the same stage counts to fetch a tour's
+per-stage results, and race metadata belongs beside the rest of the catalogue.
+
+`month` is the display month for the report subtitle, and is *not* the same fact
+as `_GT_APPROX_DATE` below, which is the approximate start date the similar-race
+gate orders races by. The Vuelta starts in August and finishes in September; the
+two tables disagree by design.
+"""
+const GRAND_TOUR_RACES = [
+    (pcs_slug = "giro-d-italia", name = "Giro d'Italia", month = 5, n_stages = 21),
+    (pcs_slug = "tour-de-france", name = "Tour de France", month = 7, n_stages = 21),
+    (pcs_slug = "vuelta-a-espana", name = "Vuelta a España", month = 9, n_stages = 21),
+    (
+        pcs_slug = "tour-de-france-femmes",
+        name = "Tour de France Femmes",
+        month = 7,
+        n_stages = 9,
+    ),
+]
+
+"""Stages in a grand tour, defaulting to 21 for a stage race that is not one."""
+function grand_tour_stages(pcs_slug::AbstractString)
+    i = findfirst(gt -> gt.pcs_slug == String(pcs_slug), GRAND_TOUR_RACES)
+    return i === nothing ? 21 : GRAND_TOUR_RACES[i].n_stages
+end
+
+"""
 Approximate grand-tour start dates `(month, day)`. Exact dates shift a little
 year to year, but only the ordering relative to the target race matters for the
 within-year similar-race gate (a May Giro precedes a July Tour; a late-August

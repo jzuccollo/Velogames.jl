@@ -204,6 +204,7 @@ export html_page,
     compute_cheapest_winning_team,
     load_stage_race_report_data,
     load_stage_race_per_stage_data,
+    fetch_stage_race_per_stage_data,
     compute_optimal_stage_team,
     compute_cheapest_winning_stage_team,
     compute_filler_pool,
@@ -215,6 +216,25 @@ export html_page,
     load_stage_profiles,
     load_vg_classics_riders,
     load_vg_startlist,
+    RaceCompleteness,
+    race_completeness,
+    race_format,
+    has_required_data,
+    field_prices_every_scorer,
+    unpriced_share,
+    field_basis_note,
+    COMPLETENESS_TYPES,
+    GRAND_TOUR_RACES,
+    grand_tour_stages,
+    RunRecord,
+    record_run,
+    new_run_id,
+    read_run_log,
+    write_run_record,
+    run_log_dir,
+    IngestResult,
+    ingest_race,
+    pending_races,
     load_league_standings,
     load_league_team,
     league_race_slug,
@@ -251,7 +271,10 @@ include("pcs_scraper.jl")
 include("get_data.jl")
 include("pcs_extended.jl")
 include("data_assembly.jl")
+include("completeness.jl")
+include("run_log.jl")
 include("league_archive.jl")
+include("ingest.jl")
 include("bayesian_core.jl")
 include("simulate_oneday.jl")
 include("simulate_stage.jl")
