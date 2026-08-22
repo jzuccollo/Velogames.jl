@@ -2,6 +2,18 @@
 """
 Render all race report pages for the Velogames retrospective site.
 
+**Out of the publish path since Phase 3b.** The site is built and deployed by
+`vgleague build`, in Python, from the same archive. This file is kept as the
+**reference implementation** the three cross-language checks diff against —
+`vgleague verify-field`, `verify-report` and `verify-dossier`, via
+`scripts/report_dump.jl` — which is the only thing that can catch a regression
+in the port. Deleting it would not simplify anything much (its readers in
+`data_assembly.jl` are shared with `ingest.jl`) and would leave the published
+pages with nothing to be checked against. Delete it once the Python site has
+run a season.
+
+Running it writes to `site/docs/`, which nothing deploys any more.
+
 Usage:
     julia --project scripts/render_reports.jl [--years=2025,2026] [--force] [--fresh]
 

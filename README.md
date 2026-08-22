@@ -18,7 +18,7 @@ Analysis reports are Julia scripts that generate standalone HTML. Output goes to
 - `scripts/render_stagerace.jl` — pre-race team selection for grand tours and stage races
 - `scripts/render_assessor.jl` — post-race review and result archival for prospective evaluation
 - `scripts/render_backtesting.jl` — model calibration: prior predictive checks, backtesting, prospective evaluation
-- `scripts/render_reports.jl` → `site/docs/` — public race reports website with per-race retrospectives
+- `scripts/render_reports.jl` → `site/docs/` — the public race reports, **out of the publish path since August 2026**. The site is built and deployed by `vgleague build`; this is kept as the reference implementation the cross-language checks diff against
 - `scripts/league_eval.jl` — offline league evaluation: model team vs realised points, the hindsight-optimal team, and naive baselines
 - `scripts/serve.jl` — local web frontend: a config form that adapts to the race format, runs any of the three reports and serves the result
 
@@ -110,13 +110,11 @@ Grand tours come along the same path, one entry for the whole tour rather than o
 
 Re-deriving the entire 2026 record from scratch reproduces 25 of its 29 entries exactly. The four that differ are written up under "Known issues" in `roadmap.md`: grand tour totals that disagree by a handful of points, and team names that have changed since the race was ridden, since the scrape returns whatever the entrant is called today.
 
-Both go through `scripts/deploy_site.sh`, which uploads `site/docs/` to Netlify from disk and reads its `NETLIFY_AUTH_TOKEN` / `NETLIFY_SITE_ID` from a gitignored `.env` at the repo root (see `.env.example`). Neither writes anything to git: the rendered site is build output, and the winners record lives in the archive beside every other piece of race data. `auto_publish.sh` pulls the code it is about to run and that is all, so no git failure can keep a report offline.
-
-One consequence worth knowing: a clone that has never rendered has an empty `site/docs/`, and deploying that would replace the live site with nothing, so `deploy_site.sh` refuses when `site/docs/index.html` is missing. Run `julia --project scripts/render_reports.jl --force` first on a new machine.
+The whole site — race reports, rider dossier, league standings and entrant pages — is built by `vgleague build` in the [vgleague](https://github.com/jzuccollo/vgleague) repo and deployed once, from that repo's launchd job. What this repo contributes to a publish is the ETL that runs before it: `scripts/auto_publish.sh` takes the league scrape into the archive, settles each race's winner and fetches the ProCyclingStats results. It writes nothing to git — the winners record lives in the archive beside every other piece of race data — and it pulls the code it is about to run and that is all.
 
 ### Running it unattended
 
-Set `POST_UPDATE_HOOK` in the `vgleague` deploy clone's `.env` and both of that repo's launchd jobs will call it once fresh league data has landed:
+Set `POST_UPDATE_HOOK` in the `vgleague` deploy clone's `.env` and both of that repo's launchd jobs will call it once fresh league data has landed, **before** they build the site from it:
 
 ```sh
 POST_UPDATE_HOOK=/Users/you/code/velogames-deploy/scripts/auto_publish.sh
