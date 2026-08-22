@@ -36,6 +36,33 @@ end
 """A hash of the field's rider keys, order-independent, so a reordering is not a difference."""
 keyhash(keys) = bytes2hex(sha256(join(sort(collect(String.(keys))), "\n")))[1:16]
 
+"""League winners by `(pcs_slug, year)` — the target the cheapest-beating team must clear."""
+const WINNERS = Dict(
+    (w.pcs_slug, w.year) => w.score for w in load_league_winners()
+)
+
+"""
+The two hindsight teams, as the digest sees them: keys, cost and score.
+
+Emitted alongside the field because they are what the field is *for*, and
+because both were under-determined until the tie-break landed — a single-
+objective knapsack leaves a tie set the solver resolves arbitrarily, so a team
+digest without the lexicographic fix would compare two arbitrary choices and
+report a difference that was nobody's fault.
+"""
+function team_facts(df, fmt::Symbol, target)
+    optimal =
+        fmt == :stage ? compute_optimal_stage_team(df) : compute_optimal_team(df)
+    cheapest =
+        target === nothing ? nothing :
+        fmt == :stage ? compute_cheapest_winning_stage_team(df, target) :
+        compute_cheapest_winning_team(df, target)
+    pack(t) =
+        t === nothing ? (keyhash = "", cost = 0, score = 0) :
+        (keyhash = keyhash(t.riderkey), cost = sum(t.cost), score = sum(t.score))
+    return (optimal = pack(optimal), cheapest = pack(cheapest))
+end
+
 function digest_race(pcs_slug::String, year::Int, fmt::Symbol)
     df =
         fmt == :stage ? load_stage_race_report_data(pcs_slug, year) :
@@ -47,6 +74,11 @@ function digest_race(pcs_slug::String, year::Int, fmt::Symbol)
     # gate was blind to exactly this — `unpriced_scorers` said zero for 76 races
     # that between them dropped 12,844 realised points on a `riderkey` mismatch.
     missing_points = c.race_points - (df === nothing ? 0 : sum(df.score))
+    target = get(WINNERS, (pcs_slug, year), nothing)
+    teams =
+        df === nothing ? (optimal = (keyhash = "", cost = 0, score = 0),
+                          cheapest = (keyhash = "", cost = 0, score = 0)) :
+        team_facts(df, fmt, target)
     return (
         pcs_slug = pcs_slug,
         year = year,
@@ -60,6 +92,9 @@ function digest_race(pcs_slug::String, year::Int, fmt::Symbol)
         unpriced_points = c.unpriced_points,
         race_points = c.race_points,
         missing_points = missing_points,
+        winner_score = target === nothing ? 0 : target,
+        optimal = teams.optimal,
+        cheapest = teams.cheapest,
         has_required_data = has_required_data(c),
     )
 end
