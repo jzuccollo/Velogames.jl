@@ -1,9 +1,9 @@
 # Cutting over to the single site
 
-Everything in Phase 3 and 3b is committed on `phases-2-4-publication` in both
-repos and **nothing is pushed**. The deploy clones run `origin/main`, so the
-live system is exactly as it was until somebody pushes. This is the order to do
-it in, and what to check at each step.
+**Done, 22 August 2026.** Both repos are pushed to `main`; the deploy clones
+fast-forward on their next tick. What follows is what was done and what is left,
+kept because the "what to watch" section is still live and step 4 has not been
+taken yet.
 
 Read `docs/two-package-reconciliation.md` for why any of it is shaped this way.
 
@@ -47,9 +47,16 @@ python3 -m http.server -d /tmp/vgsite 8000
 The build reports its own broken internal links and should say
 `Every internal link resolves.`
 
-## The push, in order
+## What remains
 
-1. **Push Velogames.jl.** The ETL is what the vgleague job calls, so it has to be
+**Step 4 below — the redirects on the retired site — has NOT been done.** It is
+deliberately last: until the surviving site has actually deployed with the
+reports on it, the redirects would point at pages that are not there. Do it once
+`https://dpcc-vgleague.netlify.app/races.html` serves the index.
+
+## The push, in order (done, except step 4)
+
+1. ~~**Push Velogames.jl.**~~ Done — `c5e36d3..adaedcd`. The ETL is what the vgleague job calls, so it has to be
    in place before the job that calls it changes.
    ```bash
    cd ~/code/velogames && git push origin phases-2-4-publication:main
@@ -60,7 +67,10 @@ The build reports its own broken internal links and should say
    nothing renders the reports. The league site is unaffected; the race-reports
    site simply goes stale, which it already is.
 
-2. **Push vgleague.**
+2. ~~**Push vgleague.**~~ Done — through `7e4f81c`. The two new dependencies
+   (`jinja2`, `highspy`) were also **pre-installed by hand** into the deploy
+   clone's venv, so a failure in `sync_venv_if_deps_changed` cannot abort the
+   scrape on the first tick.
    ```bash
    cd ~/code/vgleague && git push origin phases-2-4-publication:main
    ```
@@ -72,10 +82,10 @@ The build reports its own broken internal links and should say
    against a stale environment — which is right, but it means a failure stops the
    scrape, so check the log rather than assuming.
 
-3. **Check the surviving site** has `races.html`, `riders.html` and
+3. **Check the surviving site** (pending the first tick) has `races.html`, `riders.html` and
    `reports/*.html` on it, and that the nav appears on the league pages.
 
-4. **Only then, redirect the retired site.** Until step 3 the redirects would
+4. **Only then, redirect the retired site.** — **still to do** Until step 3 the redirects would
    point at pages that are not there.
    ```bash
    cd ~/code/vgleague
@@ -91,6 +101,10 @@ The build reports its own broken internal links and should say
 - **The first tick.** The hook now runs before the build, so a hook failure shows
   up as a site one tick behind rather than as a missing deploy. Read the launchd
   log rather than inferring from the site.
+- **The lock.** A check run is now nearer ten minutes than four (pacing between
+  leagues, the hook, 144 reports). `local_update.sh` waits fifteen minutes for
+  `.vgleague.lock` rather than five; if runs get longer still, that number has
+  to follow or the twice-daily backstop starts skipping itself.
 - **Build time.** The full build is around two minutes — every page every time,
   no incremental skipping. That is deliberate: the incremental version needed the
   publisher to delete a race's HTML by hand so a page rendered before its winner
