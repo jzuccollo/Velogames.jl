@@ -33,7 +33,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `scripts/render_assessor.jl` - Team assessor report: compares custom team vs optimal, retrospective analysis, writes `prediction_docs/assessor.html` (`[output] dir` overrides)
 - `scripts/render_stagerace.jl` - Stage race prediction report: reads `race_config.toml`, runs stage race pipeline, writes `prediction_docs/stagerace.html` (`[output] dir` overrides)
 - `scripts/render_backtesting.jl` - Backtesting and calibration report: prior checks, historical backtest, prospective evaluation, writes `prediction_docs/backtesting.html` (`[output] dir` overrides)
-- `scripts/render_reports.jl` - Public race reports site: generates per-race HTML retrospectives to `site/docs/`, incremental build (skips existing). **Reads the archive and fetches nothing**; a race the league has settled but whose results are not archived stops the run rather than producing a page-shaped hole
+- `scripts/render_reports.jl` - The former public race reports site. **Out of the publish path since Phase 3b** — `vgleague build` renders these pages now — and kept only as the reference implementation the three cross-language checks diff against. Writes to `site/docs/`, which nothing deploys
 - `scripts/league_eval.jl` - Offline league evaluation: scores archived model teams against realised VG points, the hindsight-optimal team, and max-cost / odds-implied baselines, then reports cumulative league placement and the entered-vs-advised delta from the `[league]` config. Its placement section matches standings race names against `CLASSICS_RACES_2026`, so it is classics-shaped — a grand tour league's per-stage race names will not resolve.
 - `scripts/ingest.jl` - **The** fetch-and-store phase. `--race=SLUG --year=N`, `--pending` (every race the league has settled a winner for whose archive is short of a required type), `--status`. Exits non-zero on a race it was asked for and could not complete, so `auto_publish.sh` stops before rendering
 - `scripts/field_digest.jl` - One JSON row per archived race: the report field's size, a hash of its rider keys, its cost and score, the completeness facts and both hindsight teams. Read by `vgleague verify-field`
@@ -43,7 +43,6 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `scripts/baseline_compare.jl` - Naive-persistence yardstick for grand tours: mean VG points across the two prior Tours, fed through `build_model_stage`, set beside the model's archived optimal team
 - `scripts/ingest_league.jl` - The one thing in this package that reads the vgleague repo: takes each league snapshot into `league/raw` (dated, content-deduped) and rebuilds `league/rosters` and `league/meta`. Idempotent; `auto_publish.sh` runs it first. `--force` rebuilds the derived tables when only the frame builders changed; `--dry-run` writes nothing
 - `scripts/auto_publish.jl` / `scripts/auto_publish.sh` - **The** publishing path, classics and grand tours alike: derive each race's league winner from the archived snapshot contemporaneous with the race, record it in `league/winners`, render and deploy. See "Unattended publishing" below
-- `scripts/deploy_site.sh` - Upload `site/docs/` to Netlify from disk. The single deploy step every publish path goes through
 - `data/race_config.toml` - Shared per-race configuration (gitignored); `race_config.toml.example` is the committed template. Sections: `[race]`, `[output]`, `[data_sources]`, `[optimisation]`, `[team_assessor]`, `[league]`, `[entered_team]`
 
 ## Key functions
@@ -184,9 +183,12 @@ ingest-vg (vgleague, Python)   vg_results, vg_stage_totals/results/riders
   → ingest-league   scripts/ingest_league.jl
   → derive-winners  scripts/auto_publish.jl
   → ingest-race     scripts/ingest.jl --pending      (PCS; VG only if absent)
-  → render          scripts/render_reports.jl        (archive-only)
-  → deploy          scripts/deploy_site.sh
+  → build           vgleague build                   (archive-only, Python)
+  → deploy          netlify, from the vgleague job
 ```
+
+Since Phase 3b the last two steps are on the vgleague side and the hook fires
+**before** them rather than after — see "One site, one deploy" below.
 
 `ingest-vg` runs in the vgleague launchd job, before the hook fires. `ingest.jl
 --pending` runs **before** `auto_publish.sh` deletes a race's existing HTML, so a
@@ -292,6 +294,36 @@ Pidcock" keys as `accdhikmoopst`, PCS's "Pidcock Tom" as `ccdikmoopt`.
   Classique Dunkerque 2025's best-value table showed Bryan Coquard or Nils
   Eekhoff depending on nothing. 98 of 132 races differed between the two
   implementations from this alone.
+
+### One site, one deploy (Phase 3b, August 2026)
+
+There is one website. `vgleague build` renders the league standings, the
+selection matrices, the entrant pages, the race recaps, the race reports, the
+season index and the rider dossier into one tree with one header nav, and the
+vgleague launchd job deploys it once. The retired `velogames-race-reports`
+Netlify site forwards every path to it.
+
+- **The hook runs before the build, not after.** The site now includes the race
+  reports, and those are a function of archive state `auto_publish.sh` produces.
+  Left where it was, every report would be one tick behind its own data.
+- **`auto_publish.sh` is the ETL and nothing else**: ingest-league, derive
+  winners, ingest-race. No render, no deploy, no HTML deletion. Its name is
+  historical and kept because the deploy machine's `POST_UPDATE_HOOK` points at
+  that path.
+- **A hook failure no longer takes the site offline.** The build runs against the
+  archive as it stood, so the worst case is a site one tick behind. The publish
+  lock is still taken — `append_league_winners` is read-modify-write — but no
+  longer has to hold for the minutes a render took.
+- **Every page is rebuilt every time**, in about two minutes. Incremental
+  building is what made the publisher delete a race's HTML by hand so a page
+  rendered before its winner was known did not keep its winner-less copy for
+  ever; both are gone.
+- **`reports/<slug>-<year>.html` and `riders.html` kept their paths** through the
+  port, so a shared link still lands on the page it named. Only the race index
+  moved, to `races.html`, because the league picker owns `/`.
+- `docs/phase-3b-cutover.md` is the order to push in and what to watch. **Nothing
+  is pushed** while it sits on `phases-2-4-publication`; the deploy clones run
+  `origin/main` and are unaffected until somebody pushes.
 
 ### Unattended publishing (August 2026)
 
@@ -544,25 +576,28 @@ Consequences to respect:
   `--force` run over both years now completes from a cold cache. Before WP1d it
   failed on the first 2025 race.
 
-### Site deployment (August 2026)
+### Site deployment (August 2026, superseded by Phase 3b)
 
-`site/docs/` is **build output, not source**: gitignored, rendered by
-`render_reports.jl`, uploaded by `scripts/deploy_site.sh` (`netlify deploy
---prod --dir=site/docs`, credentials from a gitignored `.env`). It was tracked
-until the move off GitHub Pages, which could only publish what was in the repo —
-so every race cost a push of megabytes of generated HTML, and the unattended
-publish could not run without git succeeding.
+**Nothing here deploys anything now.** The site is built by `vgleague build` and
+deployed from the vgleague clone; see "One site, one deploy" above. `site/docs/`
+is what `render_reports.jl` still writes when run, and it goes nowhere.
 
+The history is worth keeping because it explains the shape of what replaced it.
+`site/docs/` was tracked in git until the move off GitHub Pages, which could only
+publish what was in the repo — so every race cost a push of megabytes of
+generated HTML, and the unattended publish could not run without git succeeding.
 `league_winners.toml` followed it out of the repo and has since been absorbed
-into `league/winners` — see "The league lives in the archive" above.
+into `league/winners`.
 
 - Keeping it in git was never what made the site rebuildable, whatever the old
-  README said: `list_completed_races` scans `archive_dir()/vg_results/`,
-  so a clone without the Dropbox archive renders nothing at all.
-- `deploy_site.sh` refuses to deploy when `site/docs/index.html` is missing.
-  Pulling the commit that untracked these files **deletes them from every
-  existing clone**, so a deploy from a clone that hasn't re-rendered would have
-  replaced the live site with an empty one.
+  README said: `list_completed_races` scans `archive_dir()/vg_results/`, so a
+  clone without the Dropbox archive renders nothing at all. The same is true of
+  the Python build.
+- The retired `deploy_site.sh` refused to deploy when `site/docs/index.html` was
+  missing, because pulling the commit that untracked those files **deleted them
+  from every existing clone** — so a deploy from a clone that had not re-rendered
+  would have replaced the live site with an empty one. The Python build has no
+  such hazard: it renders every page every time.
 
 ### Solvers (src/race_solver.jl)
 
@@ -748,7 +783,7 @@ comparison. See `roadmap.md` "SHIPPED: one-day market blend".
 
 - Per-race config in `data/race_config.toml` (gitignored, shared by all three renderers); `race_config.toml.example` is the committed template. It is read **only** through `load_render_config` — no renderer parses TOML itself, and no solver call site hand-assembles kwargs
 - Analysis reports are standalone Julia scripts (`scripts/render_*.jl`) that generate HTML directly — no Quarto/pandoc dependency. Each exposes `render_<name>(rc::RenderConfig) -> output_path` guarded by `abspath(PROGRAM_FILE) == @__FILE__`, so `scripts/serve.jl` can `include` them once and call them per request. A renderer given the wrong race format throws
-- Public race reports site (`site/docs/`) generated by `scripts/render_reports.jl` with incremental build (skips existing HTML files), gitignored, deployed to Netlify by `scripts/deploy_site.sh`. Covers **2023–2026** since the August 2026 sweep recovered the 2023/24 rider pools; the year list in `main()` matters only for `--force`, since the index is read off the reports directory
+- The public site is built by `vgleague build` and deployed from the vgleague clone. It covers **2023–2026**, since the August 2026 sweep recovered the 2023/24 rider pools. `site/docs/` here is the retired Julia build and is deployed by nothing
 - All data functions use `cached_fetch()` with `CacheConfig` and `force_refresh` parameter
 - Rider matching across sources uses `riderkey` (from `createkey()` name normalisation)
 - Web scraping: `gettable()` -> `process_rider_table()` via HTTP/Gumbo/Cascadia; `scrape_html_tables()` parses `<table>` elements directly
@@ -771,14 +806,13 @@ comparison. See `roadmap.md` "SHIPPED: one-day market blend".
 - Run stage race predictor: `julia --project scripts/render_stagerace.jl`
 - Run backtesting: `julia --project scripts/render_backtesting.jl`
 - Local web frontend: `julia --project scripts/serve.jl [--port 8080]`, then open `http://localhost:8080`. Serves a format-adaptive config form, writes `data/race_config.toml`, runs the chosen renderer in-process and serves the report. Long-lived, so it pays the package load and JIT once — but nothing caches the resampled optimisation, so each render is a full solve. Every control carries hover help. Served reports get a back-to-form / re-run bar injected on the way out (never written to the report file, so published reports are unaffected). **`TOML.print` strips comments**: the first save copies the hand-written file to `data/race_config.toml.backup`. A `/render` POST rewrites the config only when it carries the form's hidden `form=1` marker — the bar's Re-run button omits it and so re-runs the config as it stands, rather than reading its absent fields as cleared ones.
-- Generate race reports: `julia --project scripts/render_reports.jl` (add `--force` to regenerate all)
+- Build and deploy the site: `vgleague build && npx netlify-cli deploy --prod --dir=site`, from the vgleague clone. `julia --project scripts/render_reports.jl` still renders the Julia originals into `site/docs/`, which nothing deploys
 - Ingest one race's results: `julia --project scripts/ingest.jl --race=<pcs_slug> --year=<yyyy>`; every race the league has settled but not archived: `--pending`; what the archive already holds: `--status --race=... --year=...` (fetches nothing)
 - Ingest Velogames results (the only client that can reach them): `vgleague ingest <league>` or `ingest-all`, from the vgleague clone
 - Check the two languages agree: `vgleague verify-keys <league>` (riderkeys), `vgleague verify-races` (race name squashing), `vgleague verify-results <league>` (archived results vs the live pages)
-- Publish every race the league has scored: `./scripts/auto_publish.sh` (add `--dry-run` to see what it would do — read-only end to end, so it skips the pull and tells the ingest to write nothing). Normally runs itself from the vgleague hook; see "Unattended publishing" above. There is no manual publishing script — this is the only path
+- Bring the archive up to date for every race the league has scored: `./scripts/auto_publish.sh` (add `--dry-run` to see what it would do — read-only end to end, so it skips the pull and tells the ingest to write nothing). Normally runs itself from the vgleague hook, **before** that job builds and deploys the site
 - Take the league scrape into the archive on its own: `julia --project scripts/ingest_league.jl` (`--force` to rebuild `league/rosters`/`league/meta` after changing their frame builders, `--dry-run` to write nothing). Idempotent, and `auto_publish.sh` runs it first
 - Correct a published winner: `./scripts/auto_publish.sh --redrive=<pcs_slug>`. Drops the recorded row, derives it again and re-renders in one run — a recorded winner is never re-derived otherwise, and the build skips existing HTML. Seeded rows (empty `snapshot_date`) are refused: no snapshot on disk can re-derive them, so removing one destroys the only record
-- Deploy the site without publishing a race (template or style change): `julia --project scripts/render_reports.jl --force && ./scripts/deploy_site.sh`
 - Evaluate the league: `julia --project scripts/league_eval.jl` (reads the `[league]` section; point `vgleague_data_dir` at the deploy clone `~/code/vgleague-deploy/data`, which is what the launchd job writes — `~/code/vgleague` is a dev clone and goes stale)
 - Check the two languages agree on the published pages (from the vgleague clone): `vgleague verify-field`, `vgleague verify-report`, `vgleague verify-dossier`. Their Julia halves are `scripts/field_digest.jl` and `scripts/report_dump.jl`, both of which take an output directory and never touch `site/docs`
 - Audit the archive: `julia --project scripts/archive_audit.jl` (per-type counts plus unknown types, files short of mandatory columns, files with no provenance, stray files). `--write-manifest` rewrites `_manifest.toml` from `ARCHIVE_TYPES`; `--check` exits non-zero when the two disagree
