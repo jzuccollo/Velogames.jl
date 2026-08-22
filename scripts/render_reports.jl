@@ -2493,4 +2493,10 @@ function main()
     end
 end
 
-main()
+# Logged as a phase, like every other step of the publish. `main` exits non-zero
+# on a race that produced no page, and `record_run` logs the failure and
+# rethrows — the log records what happened, it does not decide what happens.
+record_run("render") do
+    main()
+    return ("ok", "reports rendered")
+end

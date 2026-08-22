@@ -122,4 +122,15 @@ function main(args)
     return
 end
 
-main(ARGS)
+"""Wrap `main` so the derivation appears in `_runs/` as its own phase."""
+function logged(args)
+    dry_run = "--dry-run" in args
+    # A dry run derives nothing, so it logs nothing.
+    dry_run && return main(args)
+    return record_run("derive-winners") do
+        main(args)
+        return ("ok", "derivation complete")
+    end
+end
+
+logged(ARGS)

@@ -10,11 +10,17 @@
 #
 # Run:  julia --project scripts/archive_audit.jl
 #       julia --project scripts/archive_audit.jl --write-manifest
+#       julia --project scripts/archive_audit.jl --write-races
 #       julia --project scripts/archive_audit.jl --check
 #
-# `--check` compares `_manifest.toml` against ARCHIVE_TYPES and exits non-zero
-# when they differ, so a forgotten `--write-manifest` fails a run rather than
-# leaving a stale description of the archive for Python to read.
+# `--check` compares `_manifest.toml` against ARCHIVE_TYPES and `_races.toml`
+# against the race catalogue, exiting non-zero when either differs — so a
+# forgotten export fails a run rather than leaving a stale description of the
+# archive for Python to read.
+#
+# `_races.toml` is which Velogames race name is which PCS slug. Python needs it
+# to key a `vg_results` file at all, and the mapping exists only in
+# `CLASSICS_RACES_2026`.
 # ---------------------------------------------------------------------------
 
 using Velogames
@@ -67,22 +73,39 @@ function report(root::String)
         manifest_ok ? "matches ARCHIVE_TYPES" :
         "MISSING OR STALE — run with --write-manifest",
     )
+    println(
+        "_races.toml:    ",
+        race_catalogue_matches(; archive_dir = root) ? "matches the race catalogue" :
+        "MISSING OR STALE — run with --write-races",
+    )
     return a
 end
 
 function main(args)
     root = archive_dir()
+    wrote = false
     if "--write-manifest" in args
-        path = write_archive_manifest(; archive_dir = root)
-        println("Wrote $path")
-        return 0
+        println("Wrote ", write_archive_manifest(; archive_dir = root))
+        wrote = true
     end
+    if "--write-races" in args
+        println("Wrote ", write_race_catalogue(; archive_dir = root))
+        wrote = true
+    end
+    wrote && return 0
     if "--check" in args
-        if archive_manifest_matches(; archive_dir = root)
-            println("_manifest.toml matches ARCHIVE_TYPES")
+        stale = String[]
+        archive_manifest_matches(; archive_dir = root) ||
+            push!(stale, "_manifest.toml (--write-manifest)")
+        race_catalogue_matches(; archive_dir = root) ||
+            push!(stale, "_races.toml (--write-races)")
+        if isempty(stale)
+            println("_manifest.toml and _races.toml are both current")
             return 0
         end
-        println("_manifest.toml is missing or stale — run with --write-manifest")
+        for s in stale
+            println("missing or stale: $s")
+        end
         return 1
     end
     report(root)

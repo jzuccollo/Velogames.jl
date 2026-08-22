@@ -38,12 +38,24 @@ struct RunRecord
     detail::String
 end
 
-"""A run identifier shared by every phase of one publish. The `\\T` escapes the
-literal separator, which Dates would otherwise read as a format code."""
-new_run_id() =
-    Dates.format(Dates.now(UTC), "yyyymmdd\\THHMMSS") *
-    "-" *
-    string(rand(UInt16), base = 16, pad = 4)
+"""
+A run identifier shared by every phase of one publish.
+
+`auto_publish.sh` exports `VELOGAMES_RUN_ID` so its five phases — three Julia
+processes, a shell step and a deploy — land in the log under one id and can be
+read back as one publish. Without it each process would invent its own, and
+"why didn't Hamburg publish?" would mean correlating on timestamps.
+
+The `\\T` escapes the literal separator, which Dates would otherwise read as a
+format code.
+"""
+function new_run_id()
+    env = get(ENV, "VELOGAMES_RUN_ID", "")
+    isempty(env) || return env
+    return Dates.format(Dates.now(UTC), "yyyymmdd\\THHMMSS") *
+           "-" *
+           string(rand(UInt16), base = 16, pad = 4)
+end
 
 run_log_dir(month::Date = Dates.today(); archive_dir::String = archive_dir()) =
     joinpath(archive_dir, RUN_LOG_TREE, Dates.format(month, "yyyy-mm"))

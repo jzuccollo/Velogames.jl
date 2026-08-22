@@ -90,12 +90,18 @@ function ingest_race(
 end
 
 """
-The one-day arm: the season pool and race list first, then this race's results.
+The one-day arm: PCS results always, Velogames results only if they are missing.
 
-The pool and the race list are season-scoped and shared by every classic, so they
-are fetched here rather than by whoever happens to load a report first — which is
-what `load_vg_classics_riders` used to be, and is the last of the design note's
-"five problems" on this path.
+**Velogames is not reachable from here.** Since August 2026 the site sits behind
+a Cloudflare challenge that a plain HTTP client does not pass: every
+`velogames.com` page returns 403 to this package, and a real browser is the only
+client that gets through. `vgleague ingest` is the phase that fetches them —
+Python drives Playwright, so it can — and it runs first, in the vgleague job that
+fires this one. That is the `ingest-vg → ingest-pcs` split the design note called
+for, arrived at by force rather than by design.
+
+So the Velogames half is attempted only when the archive lacks it, and its
+failure is reported as what it is rather than as a scrape that went wrong.
 """
 function _ingest_oneday(
     slug::String,
@@ -103,15 +109,25 @@ function _ingest_oneday(
     cache_config::CacheConfig,
     archive_dir::String,
 )
-    # Both archive on the way past when absent, and return the archived copy
-    # when present. Velogames retires a season's pages, so a year whose pool was
-    # never captured cannot be reported on at all.
-    load_vg_classics_riders(yr; cache_config = cache_config, archive_dir = archive_dir)
-    racelist = getvg_race_list(yr; cache_config = cache_config, archive_dir = archive_dir)
+    have_vg = load_race_snapshot("vg_results", slug, yr; archive_dir = archive_dir) !== nothing
+    if have_vg
+        # PCS only. Nothing here touches velogames.com, which is the point: the
+        # season pool and race list are archive-first and already there, so
+        # asking for them would only produce a 403 we would then ignore.
+        archive_race_results(slug, yr; cache_config = cache_config)
+        return nothing
+    end
 
-    number = _vg_race_number(slug, racelist)
+    number = try
+        racelist =
+            getvg_race_list(yr; cache_config = cache_config, archive_dir = archive_dir)
+        _vg_race_number(slug, racelist)
+    catch e
+        @warn "Could not read the $yr Velogames race list: $e"
+        nothing
+    end
     if number === nothing
-        @warn "No Velogames race number for $slug $yr — its results cannot be fetched. Check the race's name against races.php."
+        @warn "No Velogames results for $slug $yr, and this package cannot fetch them — velogames.com answers 403 to anything that is not a browser. Run `vgleague ingest <league>` from the vgleague clone."
     end
     archive_race_results(
         slug,

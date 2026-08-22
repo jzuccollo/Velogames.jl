@@ -744,6 +744,91 @@ all_races() = vcat(
     ],
 )
 
+"""
+    race_squash(name) -> String
+
+A race name reduced to the letters and digits it shares with any other spelling
+of itself: ligatures expanded, accents decomposed and dropped, everything else
+removed, casefolded.
+
+**This must agree with vgleague's `_squash_tag` character for character**, which
+is why it is not `normalise_race_name` — that one strips only `-'`\``.` and leaves
+commas and parentheses, so the two would disagree on exactly the races with
+awkward names. `vgleague verify-races` checks the two implementations against
+the exported catalogue, the way `verify-keys` checks `riderkey`: a divergence
+here files a race's results under the wrong slug, or under none, and raises
+nothing.
+"""
+race_squash(name::AbstractString) =
+    replace(normalisename(String(name), true), r"[^a-z0-9]" => "")
+
+"""
+    race_catalogue_text() -> String
+
+`_races.toml`: which Velogames race name is which PCS slug, for readers that
+cannot see Julia.
+
+The mapping lives in `CLASSICS_RACES_2026` and the stage-race slug tables and
+exists nowhere else, so Python could not key a `vg_results` file — which is
+keyed by `pcs_slug` across every one of its files — without it. Exported rather
+than duplicated, for the reason `_manifest.toml` is: a race added on this side is
+known on the other at the next export, with nothing to keep in step by hand.
+
+Derived, like the manifest, so `--check` is a string comparison. Written by a
+command rather than on every save: a file rewritten in the archive root during a
+run is how Dropbox produces a conflicted copy.
+"""
+function race_catalogue_text()
+    io = IOBuffer()
+    write(io, """
+    # Which Velogames race name is which PCS slug. DO NOT EDIT.
+    #
+    # Derived from CLASSICS_RACES_2026 and _STAGE_RACE_VG_SLUGS in
+    # Velogames.jl's src/race_helpers.jl. Regenerate with
+    # `julia --project scripts/archive_audit.jl --write-races`.
+    #
+    # `squash` is the name reduced to letters and digits with accents stripped;
+    # match a scraped name by squashing it the same way. vgleague's `_squash_tag`
+    # is the Python half, and `vgleague verify-races` checks the two agree.
+
+    """)
+    for r in CLASSICS_RACES_2026
+        write(io, "[races.\"$(r.pcs_slug)\"]\n")
+        write(io, "name = $(repr(r.name))\n")
+        write(io, "squash = $(repr(race_squash(r.name)))\n")
+        write(io, "category = $(r.category)\n")
+        write(io, "format = \"oneday\"\n")
+        write(io, "date = $(repr(r.date))\n\n")
+    end
+    for slug in sort(collect(keys(_STAGE_RACE_VG_SLUGS)))
+        name = titlecase(replace(slug, "-" => " "))
+        write(io, "[races.\"$slug\"]\n")
+        write(io, "name = $(repr(name))\n")
+        write(io, "squash = $(repr(race_squash(name)))\n")
+        write(io, "format = \"stage\"\n")
+        write(io, "vg_game_slug = $(repr(_STAGE_RACE_VG_SLUGS[slug]))\n")
+        write(io, "n_stages = $(grand_tour_stages(slug))\n\n")
+    end
+    return String(take!(io))
+end
+
+"""`<archive_dir>/_races.toml`, beside `_manifest.toml`."""
+race_catalogue_path(; archive_dir::String = archive_dir()) =
+    joinpath(archive_dir, "_races.toml")
+
+"""Write `_races.toml` and return its path."""
+function write_race_catalogue(; archive_dir::String = archive_dir())
+    path = race_catalogue_path(; archive_dir = archive_dir)
+    return atomic_write(p -> write(p, race_catalogue_text()), path)
+end
+
+"""Whether the exported `_races.toml` is what this code would write."""
+function race_catalogue_matches(; archive_dir::String = archive_dir())
+    path = race_catalogue_path(; archive_dir = archive_dir)
+    isfile(path) || return false
+    return read(path, String) == race_catalogue_text()
+end
+
 """Earliest year VG ran the one-day classics competition (Superclasico)."""
 const VG_CLASSICS_FIRST_YEAR = 2023
 

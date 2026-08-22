@@ -762,3 +762,352 @@ end
     @test isfile(meta_file2)
     @test Velogames.is_cache_valid(key2, 168, cache_dir)
 end
+
+# ---------------------------------------------------------------------------
+# Phase 2: ingest as a phase, completeness computed from the archive
+# ---------------------------------------------------------------------------
+
+"""A temp archive holding one classic, with whichever pieces the test asks for."""
+function _phase2_tree(; startlist::Bool, pcs::Bool, unpriced::Bool)
+    tree = mktempdir()
+    year = 2099
+    vg_slug = Velogames.vg_classics_slug(year)
+    names = ["A Rider", "B Rider", "C Rider", "D Rider"]
+
+    save_race_snapshot(
+        DataFrame(
+            rider = names,
+            team = ["T1", "T2", "T3", "T4"],
+            riderkey = createkey.(names),
+            cost = [20, 10, 8, 6],
+            points = [900, 400, 120, 60],
+        ),
+        "vg_riders",
+        vg_slug,
+        year;
+        archive_dir = tree,
+    )
+    save_race_snapshot(
+        DataFrame(
+            race_number = [7],
+            deadline = ["2099-03-21 11:00:00"],
+            name = ["Milano-Sanremo"],
+            category = [1],
+            namekey = ["milanosanremo"],
+        ),
+        "vg_racelist",
+        vg_slug,
+        year;
+        archive_dir = tree,
+    )
+
+    # "E Rider" is in no price list at all — the Sergio Serrano case.
+    scorers = unpriced ? ["A Rider", "D Rider", "E Rider"] : ["A Rider", "D Rider"]
+    scores = unpriced ? [500, 200, 60] : [500, 200]
+    save_race_snapshot(
+        DataFrame(
+            rider = scorers,
+            team = fill("T1", length(scorers)),
+            riderkey = createkey.(scorers),
+            score = scores,
+        ),
+        "vg_results",
+        "milano-sanremo",
+        year;
+        archive_dir = tree,
+    )
+
+    if startlist
+        listed = ["A Rider", "C Rider", "D Rider"]
+        save_race_snapshot(
+            DataFrame(
+                race_number = fill(7, 3),
+                rider = listed,
+                riderkey = createkey.(listed),
+                team = ["T1", "T3", "T4"],
+                cost = [20, 8, 6],
+            ),
+            "vg_startlist",
+            vg_slug,
+            year;
+            archive_dir = tree,
+        )
+    end
+    if pcs
+        finishers = ["A Rider", "C Rider"]
+        save_race_snapshot(
+            DataFrame(
+                riderkey = createkey.(finishers),
+                rider = finishers,
+                team = ["T1", "T3"],
+                position = [1, 40],
+                in_breakaway = [false, false],
+                breakaway_km = [0.0, 0.0],
+            ),
+            "pcs_results",
+            "milano-sanremo",
+            year;
+            archive_dir = tree,
+        )
+    end
+    return tree
+end
+
+@testset "Race completeness is computed from the archive (Phase 2)" begin
+    @testset "types present, absent and required" begin
+        tree = _phase2_tree(startlist = false, pcs = true, unpriced = false)
+        c = race_completeness("milano-sanremo", 2099; archive_dir = tree)
+        @test c.format == :oneday
+        @test has_required_data(c)
+
+        by_type = Dict(r.data_type => r for r in eachrow(c.types))
+        @test by_type["vg_results"].present
+        @test by_type["vg_results"].rows == 2
+        @test by_type["vg_results"].required
+        @test by_type["vg_riders"].present
+        @test by_type["pcs_results"].present
+        # Never written, so absent — and not required, so it holds nothing back.
+        @test !by_type["vg_startlist"].present
+        @test !by_type["vg_startlist"].required
+        # Provenance is stamped on write, so a file written here carries it.
+        @test !isempty(by_type["vg_results"].fetched_at)
+    end
+
+    @testset "a missing required type is reported, not worked around" begin
+        tree = mktempdir()
+        c = race_completeness("milano-sanremo", 2099; archive_dir = tree)
+        @test !has_required_data(c)
+        @test c.field_basis == :none
+        @test c.field_riders == 0
+    end
+
+    @testset "field_basis says where the field came from" begin
+        with_sl = _phase2_tree(startlist = true, pcs = true, unpriced = false)
+        @test race_completeness("milano-sanremo", 2099; archive_dir = with_sl).field_basis ==
+              :startlist
+
+        pcs_only = _phase2_tree(startlist = false, pcs = true, unpriced = false)
+        @test race_completeness("milano-sanremo", 2099; archive_dir = pcs_only).field_basis ==
+              :pool_pcs_filtered
+
+        neither = _phase2_tree(startlist = false, pcs = false, unpriced = false)
+        c = race_completeness("milano-sanremo", 2099; archive_dir = neither)
+        @test c.field_basis == :pool
+        # The whole season pool, which is why the page withholds "N of M starters".
+        @test c.field_riders == 4
+    end
+
+    @testset "a scorer nothing can price is counted, not dropped" begin
+        tree = _phase2_tree(startlist = false, pcs = true, unpriced = true)
+        c = race_completeness("milano-sanremo", 2099; archive_dir = tree)
+        @test c.unpriced_scorers == 1
+        @test c.unpriced_points == 60
+        @test c.race_points == 760
+        @test unpriced_share(c) ≈ 60 / 760
+        @test !field_prices_every_scorer(c)
+        # `load_report_data`'s leftjoin drops the rider silently; this is the
+        # sentence the page carries instead.
+        @test occursin("One rider who scored", field_basis_note(c))
+
+        clean = _phase2_tree(startlist = false, pcs = true, unpriced = false)
+        @test field_prices_every_scorer(race_completeness("milano-sanremo", 2099; archive_dir = clean))
+    end
+
+    @testset "a grand tour's rider list is its field" begin
+        tree = mktempdir()
+        names = ["A Rider", "B Rider"]
+        for (t, df) in [
+            (
+                "vg_stage_totals",
+                DataFrame(
+                    rider = names,
+                    team = ["T1", "T2"],
+                    riderkey = createkey.(names),
+                    score = [900, 400],
+                ),
+            ),
+            (
+                "vg_stage_riders",
+                DataFrame(
+                    rider = names,
+                    team = ["T1", "T2"],
+                    riderkey = createkey.(names),
+                    cost = [20, 10],
+                    points = [900, 400],
+                ),
+            ),
+        ]
+            save_race_snapshot(df, t, "giro-d-italia", 2099; archive_dir = tree)
+        end
+        c = race_completeness("giro-d-italia", 2099; archive_dir = tree)
+        @test c.format == :stage
+        @test has_required_data(c)
+        # Not `:startlist` — riders.php carries no Start List column for a stage
+        # race, and the rider pool *is* the field.
+        @test c.field_basis == :vg_rider_list
+        @test c.field_riders == 2
+        @test field_prices_every_scorer(c)
+        @test isempty(field_basis_note(c))
+    end
+
+    @testset "reading completeness writes nothing" begin
+        tree = _phase2_tree(startlist = false, pcs = true, unpriced = false)
+        before = sort(collect(walkdir(tree)))
+        race_completeness("milano-sanremo", 2099; archive_dir = tree)
+        race_completeness("giro-d-italia", 2099; archive_dir = tree)
+        # The naive implementation reaches `load_vg_classics_riders`, which
+        # scrapes and archives on a miss — so asking the question would change
+        # the answer, and an ingest's before-and-after reading would be nonsense.
+        @test sort(collect(walkdir(tree))) == before
+    end
+end
+
+@testset "pending_races keys off the winners record (Phase 2)" begin
+    tree = mktempdir()
+    save_race_snapshot(
+        DataFrame(
+            pcs_slug = ["milano-sanremo", "paris-roubaix"],
+            year = [2099, 2099],
+            username = ["u1", "u2"],
+            teamname = ["T One", "T Two"],
+            score = [1000.0, 900.0],
+            snapshot_date = ["2099-03-22", "2099-04-13"],
+        ),
+        "league/winners",
+        "sixes-classics_1",
+        2099;
+        archive_dir = tree,
+    )
+    # Neither race has results, so both are pending.
+    @test pending_races([2099]; archive_dir = tree) ==
+          [("milano-sanremo", 2099), ("paris-roubaix", 2099)]
+
+    save_race_snapshot(
+        DataFrame(
+            rider = ["A Rider"],
+            team = ["T1"],
+            riderkey = [createkey("A Rider")],
+            score = [500],
+        ),
+        "vg_results",
+        "milano-sanremo",
+        2099;
+        archive_dir = tree,
+    )
+    save_race_snapshot(
+        DataFrame(
+            rider = ["A Rider"],
+            team = ["T1"],
+            riderkey = [createkey("A Rider")],
+            cost = [20],
+            points = [900],
+        ),
+        "vg_riders",
+        Velogames.vg_classics_slug(2099),
+        2099;
+        archive_dir = tree,
+    )
+    @test pending_races([2099]; archive_dir = tree) == [("paris-roubaix", 2099)]
+    # A year the site does not publish is not pending work.
+    @test isempty(pending_races([2098]; archive_dir = tree))
+end
+
+@testset "Run log (Phase 2)" begin
+    @testset "a record round-trips" begin
+        tree = mktempdir()
+        out = record_run(
+            "ingest-race";
+            run_id = "testrun-1",
+            items = ["milano-sanremo-2099"],
+            archive_dir = tree,
+        ) do
+            ("ok", "2 files gained")
+        end
+        @test out == ("ok", "2 files gained")
+
+        log = read_run_log(; archive_dir = tree)
+        @test nrow(log) == 1
+        @test log.run_id[1] == "testrun-1"
+        @test log.phase[1] == "ingest-race"
+        @test log.status[1] == "ok"
+        @test log.detail[1] == "2 files gained"
+        @test log.items[1] == "milano-sanremo-2099"
+        @test log.host[1] == gethostname()
+    end
+
+    @testset "a failure is logged and rethrown" begin
+        tree = mktempdir()
+        # The log records what happened; it does not decide what happens.
+        @test_throws ErrorException record_run(
+            "render";
+            run_id = "testrun-2",
+            archive_dir = tree,
+        ) do
+            error("boom")
+        end
+        log = read_run_log(; archive_dir = tree)
+        @test nrow(log) == 1
+        @test log.status[1] == "failed"
+        @test occursin("boom", log.detail[1])
+    end
+
+    @testset "one file per run, so two writers cannot collide" begin
+        tree = mktempdir()
+        for phase in ["ingest-league", "derive-winners", "ingest-race"]
+            record_run(phase; run_id = "shared-id", archive_dir = tree) do
+                "done"
+            end
+        end
+        # A single appended monthly file would be read-modify-write across two
+        # clones with no shared lock; unique filenames make that unrepresentable.
+        @test length(readdir(run_log_dir(; archive_dir = tree))) == 3
+        @test nrow(read_run_log(; archive_dir = tree)) == 3
+        @test all(read_run_log(; archive_dir = tree).run_id .== "shared-id")
+    end
+
+    @testset "VELOGAMES_RUN_ID ties a publish's phases together" begin
+        withenv("VELOGAMES_RUN_ID" => "publish-42") do
+            @test new_run_id() == "publish-42"
+        end
+        withenv("VELOGAMES_RUN_ID" => "") do
+            @test new_run_id() != "publish-42"
+        end
+    end
+end
+
+@testset "Race catalogue export (Phase 2)" begin
+    @testset "squashing is stable and collision-free" begin
+        # Must agree with vgleague's `_squash_tag`, which strips everything that
+        # is not a letter or digit *after* decomposing accents.
+        @test race_squash("La Flèche Wallonne") == "laflechewallonne"
+        @test race_squash("Kuurne - Brussel - Kuurne") == "kuurnebrusselkuurne"
+        @test race_squash("Grand Prix Cycliste de Québec") == "grandprixcyclistedequebec"
+        @test race_squash("Il Lombardia") == "illombardia"
+
+        squashes = [race_squash(r.name) for r in Velogames.CLASSICS_RACES_2026]
+        @test all(!isempty, squashes)
+        # A collision would file two races' results under one slug.
+        @test length(unique(squashes)) == length(squashes)
+    end
+
+    @testset "the export is derived, so --check is a comparison" begin
+        tree = mktempdir()
+        @test !race_catalogue_matches(; archive_dir = tree)
+        write_race_catalogue(; archive_dir = tree)
+        @test race_catalogue_matches(; archive_dir = tree)
+
+        text = read(race_catalogue_path(; archive_dir = tree), String)
+        cat = TOML.parse(text)["races"]
+        @test length(cat) == length(Velogames.CLASSICS_RACES_2026) +
+              length(Velogames._STAGE_RACE_VG_SLUGS)
+        # Everything Python needs to key a file and pick a fetcher.
+        @test cat["milano-sanremo"]["format"] == "oneday"
+        @test cat["vuelta-a-espana"]["format"] == "stage"
+        @test cat["vuelta-a-espana"]["vg_game_slug"] == "spain"
+        @test cat["vuelta-a-espana"]["n_stages"] == 21
+        @test cat["tour-de-france-femmes"]["n_stages"] == 9
+        for (slug, spec) in cat
+            @test spec["squash"] == race_squash(spec["name"])
+        end
+    end
+end

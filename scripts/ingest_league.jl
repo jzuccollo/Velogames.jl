@@ -68,19 +68,28 @@ function main(args)
     isempty(league) && error("No [league] section in $config_path")
 
     dry_run && println("dry run: reporting what would be written, writing nothing")
-    for r in ingest_league_dir(
-        league["vgleague_data_dir"];
-        date = date,
-        force = force,
-        dry_run = dry_run,
-    )
-        state = if r.snapshot_date === nothing
-            r.rebuilt ? "unchanged, derived tables rebuilt from $(r.source_date)" : "unchanged"
-        else
-            "new snapshot $(r.snapshot_date)"
+    # Logged as a phase so a publish reads back as five steps rather than as one
+    # launchd log entry. A dry run logs nothing: it did not ingest anything.
+    run = () -> begin
+        fresh = 0
+        for r in ingest_league_dir(
+            league["vgleague_data_dir"];
+            date = date,
+            force = force,
+            dry_run = dry_run,
+        )
+            state = if r.snapshot_date === nothing
+                r.rebuilt ? "unchanged, derived tables rebuilt from $(r.source_date)" :
+                "unchanged"
+            else
+                fresh += 1
+                "new snapshot $(r.snapshot_date)"
+            end
+            println("$(r.game_slug) $(r.year) $(r.league_id): $state, $(r.rows) roster rows")
         end
-        println("$(r.game_slug) $(r.year) $(r.league_id): $state, $(r.rows) roster rows")
+        return ("ok", "$fresh league-season(s) gained a snapshot")
     end
+    dry_run ? run() : record_run(run, "ingest-league")
     return
 end
 
