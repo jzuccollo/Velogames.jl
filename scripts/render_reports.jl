@@ -354,7 +354,10 @@ function _write_biggest_hauls!(io::IOBuffer, per_stage, stages)
         :ttt => "TTT",
     )
     type_map = Dict(s.stage_number => get(type_names, s.stage_type, "—") for s in stages)
-    top = first(sort(per_stage, :score, rev = true), min(10, nrow(per_stage)))
+    top = first(
+        sort(per_stage, [order(:score, rev = true), :riderkey, :stage]),
+        min(10, nrow(per_stage)),
+    )
     df = DataFrame(
         Rider = top.rider,
         Stage = top.stage,
@@ -369,7 +372,7 @@ end
 function _write_best_value!(io::IOBuffer, scorers::DataFrame; has_class::Bool = false)
     write(io, html_heading("Best value picks", 3))
     write(io, "<p>The ten riders who scored the most points per credit spent.</p>\n")
-    best_value = sort(scorers, :value, rev = true)
+    best_value = sort(scorers, [order(:value, rev = true), :riderkey])
     bv_cols = [:rider, :team, :cost, :score, :value, :riderkey]
     has_class && push!(bv_cols, :class)
     top_val = best_value[1:min(10, nrow(best_value)), bv_cols]
@@ -411,7 +414,7 @@ function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame, abandons = no
             io,
             "<p>The most expensive riders who $(fin_clause)failed to score a single point.</p>\n",
         )
-        sort!(pricey_zeroes, :cost, rev = true)
+        sort!(pricey_zeroes, [order(:cost, rev = true), :riderkey])
         display_df = pricey_zeroes[
             1:min(5, nrow(pricey_zeroes)),
             [:rider, :team, :cost, :score, :riderkey],
@@ -440,7 +443,7 @@ function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame, abandons = no
     )
     premium = filter(row -> row.cost >= 8 && row.score > 0, blame)
     if nrow(premium) > 0
-        sort!(premium, :value)
+        sort!(premium, [:value, :riderkey])
         display_df = premium[
             1:min(5, nrow(premium)),
             [:rider, :team, :cost, :score, :value, :riderkey],
@@ -470,7 +473,7 @@ function _write_ones_to_avoid!(io::IOBuffer, allriders::DataFrame, abandons = no
             # section is about credits sunk into a rider who didn't make it, so cost
             # leads; sorting by points-per-credit instead buried a 14-credit abandon
             # below an 8-credit one.
-            sort!(dnf, [order(:cost, rev = true), :score])
+            sort!(dnf, [order(:cost, rev = true), :score, :riderkey])
             top = dnf[1:min(8, nrow(dnf)), :]
             display_df = DataFrame(
                 Rider = top.rider,
@@ -502,7 +505,7 @@ function _write_team_performance!(io::IOBuffer, allriders::DataFrame)
     )
     team_stats[!, :avg_value] =
         round.(Int, team_stats.total_points ./ max.(team_stats.total_cost, 1))
-    sort!(team_stats, :total_points, rev = true)
+    sort!(team_stats, [order(:total_points, rev = true), :team])
     top_teams = team_stats[1:min(10, nrow(team_stats)), :]
     rename!(
         top_teams,
@@ -581,7 +584,14 @@ function report_html(;
     end
 
     scorers = filter(row -> row.score > 0, allriders)
-    sort!(scorers, :score, rev = true)
+    # `riderkey` as the final key on every display sort. Ties are common —
+    # equal scores, equal rounded value, equal cost — and without a total order
+    # the row that appears is whichever the frame happened to hold first, which
+    # differs between two implementations of the same field and between two
+    # sorts of the same frame. At a `head(N)` cutoff the tie decides who is on
+    # the page at all: Classique Dunkerque 2025's best-value table showed Bryan
+    # Coquard or Nils Eekhoff depending on nothing.
+    sort!(scorers, [order(:score, rev = true), :riderkey])
     optimal_keys = optimal_team !== nothing ? Set(optimal_team.riderkey) : Set{String}()
 
     io = IOBuffer()
@@ -616,7 +626,7 @@ function report_html(;
             io,
             "<li><strong>Top scorer</strong>: $(first(scorers).rider) with $(commafmt(first(scorers).score)) points</li>\n",
         )
-        best_val = first(sort(scorers, :value, rev = true))
+        best_val = first(sort(scorers, [order(:value, rev = true), :riderkey]))
         write(
             io,
             "<li><strong>Best value</strong>: $(best_val.rider) at $(round(Int, best_val.value)) pts/credit</li>\n",
@@ -679,8 +689,7 @@ function report_html(;
 
         display_df = sort(
             optimal_team[:, [:rider, :team, :cost, :score, :value, :riderkey]],
-            :score,
-            rev = true,
+            [order(:score, rev = true), :riderkey],
         )
         display_df[!, :value] = round.(Int, display_df.value)
         rename!(
@@ -707,8 +716,7 @@ function report_html(;
 
         display_df = sort(
             cheapest_team[:, [:rider, :team, :cost, :score, :value, :riderkey]],
-            :score,
-            rev = true,
+            [order(:score, rev = true), :riderkey],
         )
         display_df[!, :value] = round.(Int, display_df.value)
         rename!(
@@ -909,7 +917,14 @@ function stage_race_report_html(;
     end
 
     scorers = filter(row -> row.score > 0, allriders)
-    sort!(scorers, :score, rev = true)
+    # `riderkey` as the final key on every display sort. Ties are common —
+    # equal scores, equal rounded value, equal cost — and without a total order
+    # the row that appears is whichever the frame happened to hold first, which
+    # differs between two implementations of the same field and between two
+    # sorts of the same frame. At a `head(N)` cutoff the tie decides who is on
+    # the page at all: Classique Dunkerque 2025's best-value table showed Bryan
+    # Coquard or Nils Eekhoff depending on nothing.
+    sort!(scorers, [order(:score, rev = true), :riderkey])
     optimal_keys = optimal_team !== nothing ? Set(optimal_team.riderkey) : Set{String}()
 
     io = IOBuffer()
@@ -934,7 +949,7 @@ function stage_race_report_html(;
             io,
             "<li><strong>Top scorer</strong>: $(first(scorers).rider) with $(commafmt(first(scorers).score)) points</li>\n",
         )
-        best_val = first(sort(scorers, :value, rev = true))
+        best_val = first(sort(scorers, [order(:value, rev = true), :riderkey]))
         write(
             io,
             "<li><strong>Best value</strong>: $(best_val.rider) at $(round(Int, best_val.value)) pts/credit</li>\n",
@@ -990,7 +1005,7 @@ function stage_race_report_html(;
 
         opt_cols = [:rider, :team, :cost, :score, :value, :riderkey]
         has_class && push!(opt_cols, :class)
-        display_df = sort(optimal_team[:, opt_cols], :score, rev = true)
+        display_df = sort(optimal_team[:, opt_cols], [order(:score, rev = true), :riderkey])
         display_df[!, :value] = round.(Int, display_df.value)
         col_renames = [
             :rider => :Rider,
@@ -1017,7 +1032,7 @@ function stage_race_report_html(;
 
         ch_cols = [:rider, :team, :cost, :score, :value, :riderkey]
         has_class && push!(ch_cols, :class)
-        display_df = sort(cheapest_team[:, ch_cols], :score, rev = true)
+        display_df = sort(cheapest_team[:, ch_cols], [order(:score, rev = true), :riderkey])
         display_df[!, :value] = round.(Int, display_df.value)
         col_renames = [
             :rider => :Rider,
@@ -2496,7 +2511,14 @@ end
 # Logged as a phase, like every other step of the publish. `main` exits non-zero
 # on a race that produced no page, and `record_run` logs the failure and
 # rethrows — the log records what happened, it does not decide what happens.
-record_run("render") do
-    main()
-    return ("ok", "reports rendered")
+#
+# Guarded like every other script here, so the file can be `include`d for its
+# functions without building the site as a side effect. Without the guard, a
+# harness that wanted one race's report got a full incremental pass over 144 of
+# them and a spurious row in the run log.
+if abspath(PROGRAM_FILE) == @__FILE__
+    record_run("render") do
+        main()
+        return ("ok", "reports rendered")
+    end
 end

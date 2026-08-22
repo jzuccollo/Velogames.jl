@@ -1,0 +1,94 @@
+#!/usr/bin/env julia
+"""
+Render race reports into a directory for `vgleague verify-report` to diff.
+
+The publication layer is moving to Python and the reports are being ported. A
+port is only as good as the comparison behind it, and the comparison that
+matters is of the *content*: these pages are joining the league site and taking
+its chrome, so diffing markup would fail on every styling difference and say
+nothing about whether the report is right.
+
+So this writes Julia's HTML somewhere harmless and the Python side extracts each
+table from both and compares them row by row. That is what caught the ported
+`_rows` helper re-sorting every table by score, which turned the best-value table
+into a second top-scorers table under a different heading — every number correct,
+every row in the wrong place, and nothing to see in a summary statistic.
+
+Writes nowhere near `site/docs`, so a verification run cannot touch what is
+published.
+
+Usage:
+    julia --project scripts/report_dump.jl OUTDIR [--years=2025,2026] [--limit=N]
+"""
+
+using Velogames, DataFrames, Dates
+
+include(joinpath(@__DIR__, "render_reports.jl"))
+
+function main(args)
+    isempty(args) && error("report_dump.jl: first argument is the output directory")
+    outdir = args[1]
+    years = nothing
+    limit = 0
+    for arg in args[2:end]
+        if startswith(arg, "--years=")
+            years = parse.(Int, split(split(arg, "="; limit = 2)[2], ","))
+        elseif startswith(arg, "--limit=")
+            limit = parse(Int, split(arg, "="; limit = 2)[2])
+        else
+            error("report_dump.jl: unrecognised argument $(repr(arg))")
+        end
+    end
+    mkpath(outdir)
+
+    winners = league_winners_by_race()
+    written = 0
+    for (data_type, fmt) in (("vg_results", :oneday), ("vg_stage_totals", :stage))
+        for slug in archive_races(data_type)
+            Velogames.race_format(slug) == fmt || continue
+            for year in archive_years(data_type, slug)
+                years === nothing || year in years || continue
+                limit > 0 && written >= limit && return println("$written report(s)")
+
+                ri = Velogames._find_race_by_slug(slug)
+                gt = fmt == :stage ? _find_grand_tour(slug) : nothing
+                name =
+                    ri !== nothing ? ri.name :
+                    gt !== nothing ? gt.name : titlecase(replace(slug, "-" => " "))
+                date =
+                    ri !== nothing ? replace(ri.date, r"^\d{4}" => string(year)) :
+                    gt !== nothing ? Dates.format(Date(year, gt.month, 1), "U yyyy") : ""
+                w = get(winners, (slug, year), nothing)
+
+                html =
+                    fmt == :stage ?
+                    stage_race_report_html(;
+                        pcs_slug = slug,
+                        year = year,
+                        race_name = name,
+                        race_date = date,
+                        n_stages = gt === nothing ? 21 : gt.n_stages,
+                        winner_name = w === nothing ? "" : w.name,
+                        winner_score = w === nothing ? 0 : w.score,
+                    ) :
+                    report_html(;
+                        pcs_slug = slug,
+                        year = year,
+                        race_name = name,
+                        race_date = date,
+                        winner_name = w === nothing ? "" : w.name,
+                        winner_score = w === nothing ? 0 : w.score,
+                    )
+                html === nothing && continue
+                write(joinpath(outdir, "$slug-$year.html"), html)
+                written += 1
+            end
+        end
+    end
+    println("$written report(s)")
+    return
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    main(ARGS)
+end
