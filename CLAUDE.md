@@ -36,6 +36,8 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `scripts/render_reports.jl` - Public race reports site: generates per-race HTML retrospectives to `site/docs/`, incremental build (skips existing). **Reads the archive and fetches nothing**; a race the league has settled but whose results are not archived stops the run rather than producing a page-shaped hole
 - `scripts/league_eval.jl` - Offline league evaluation: scores archived model teams against realised VG points, the hindsight-optimal team, and max-cost / odds-implied baselines, then reports cumulative league placement and the entered-vs-advised delta from the `[league]` config. Its placement section matches standings race names against `CLASSICS_RACES_2026`, so it is classics-shaped — a grand tour league's per-stage race names will not resolve.
 - `scripts/ingest.jl` - **The** fetch-and-store phase. `--race=SLUG --year=N`, `--pending` (every race the league has settled a winner for whose archive is short of a required type), `--status`. Exits non-zero on a race it was asked for and could not complete, so `auto_publish.sh` stops before rendering
+- `scripts/field_digest.jl` - One JSON row per archived race: the report field's size, a hash of its rider keys, its cost and score, the completeness facts and both hindsight teams. Read by `vgleague verify-field`
+- `scripts/report_dump.jl` - Renders reports and the dossier payloads into a directory the caller names, for `vgleague verify-report` and `verify-dossier` to diff. Never writes to `site/docs`
 - `scripts/archive_audit.jl` - Archive integrity: per-type counts, unknown types, files short of mandatory columns, files with no provenance, stray files. `--write-manifest` / `--write-races` / `--check` keep `_manifest.toml` in step with `ARCHIVE_TYPES` and `_races.toml` with the race catalogue
 - `scripts/backfill_archive.jl` - Archive completeness: reports what is missing and fetches back what the sources still serve (`--run`), plus two narrow repairs — `--rekey` for legacy riderkeys and `--repair-predictions` for prediction archives short of `team`/`cost`
 - `scripts/baseline_compare.jl` - Naive-persistence yardstick for grand tours: mean VG points across the two prior Tours, fed through `build_model_stage`, set beside the model's archived optimal team
@@ -226,6 +228,70 @@ failure leaves the winner recorded and the old page on disk for the retry.
 - **Still archiving during a render, on purpose**: `_prepare_rider_data`'s odds,
   oracle and PCS specialty capture. Those are human inputs that exist only at
   that moment, and the prediction renderers are the lab, which Phase 4 separates.
+
+### Publication moved to Python (Phase 3, August 2026)
+
+Every page the site publishes now renders in **vgleague**, from the archive. The
+model, the backtest and the lab renderers stay here; so does `scripts/ingest.jl`,
+because the PCS scrapers are here and the model needs them. The per-race chain
+goes from five Julia steps to one.
+
+The port was decided on a measurement rather than on the note's original plan:
+`render_reports.jl` uses **29 names** from this package, one of which touches the
+model (`stage_dimension_weights`, a terrain lookup for a stage icon), one
+function from `report_charts.jl` and nothing from `report_formatters.jl`. The
+public report layer was already nearly disjoint from the lab.
+
+- **Three standing cross-language checks**, run by hand from the vgleague clone:
+  `vgleague verify-field` (the field frame, completeness and both hindsight
+  teams — 146 races), `vgleague verify-report` (every table and headline fact of
+  every report — 144), `vgleague verify-dossier` (`riders.json` and
+  `stages.json` — 22,628 rides). All three currently pass with **zero**
+  differences. `scripts/field_digest.jl` and `scripts/report_dump.jl` are the
+  Julia halves; both write to a directory the caller names and **never** to
+  `site/docs`.
+- **Reports are compared on content, not markup.** The ported pages take the
+  league site's chrome, so a byte diff would fail on every styling difference and
+  say nothing about whether the report is right. The dossier payloads *are*
+  compared outright, being data rather than markup.
+- **`render_reports.jl` now has the `abspath(PROGRAM_FILE) == @__FILE__`
+  guard** every other script here already had. Without it, including the file for
+  its functions ran a full incremental build over 144 reports and wrote a
+  spurious row to the run log.
+- **`_races.toml` gained a `[classics]` slug table and grand tour names and
+  months.** The classics game slug keys `vg_riders`, `vg_racelist` and
+  `vg_startlist`, and its 2026 rename would otherwise be a `>= 2026` written on
+  each side of the boundary. `VG_CLASSICS_SLUGS` is the const it exports.
+- **The 76 affected published pages are not re-rendered** (decided 22 August
+  2026) — see the starter-filter entry below. The Python port supersedes them, so
+  a `--force` pass from here would be thrown away. `site/docs/riders.json` in a
+  dev clone may already be regenerated with the fix, so do not deploy from such a
+  tree without re-rendering.
+
+### A scorer is in the field whatever PCS says (August 2026)
+
+`load_report_data` filtered the field to riders present in `pcs_results` whenever
+no Velogames startlist survived — which is every race before August 2026. **The
+two sources order names differently**, so a rider misses that filter on a
+`riderkey` mismatch as readily as on having abandoned: Velogames' "Thomas
+Pidcock" keys as `accdhikmoopst`, PCS's "Pidcock Tom" as `ccdikmoopt`.
+
+- Liège-Bastogne-Liège 2023 published without its second-placed rider and his
+  540 points. Across 2023-26 the filter dropped realised points from **76 of 137**
+  one-day races — 12,844 points, up to 9.7% of one — and `race_completeness`
+  reported `unpriced_scorers = 0` for every one of them, because those riders were
+  priced perfectly well. Grand tours were unaffected; there is no filter there.
+- The rule already existed one branch up, where the startlist arm keeps anyone in
+  `vg_results` whatever the startlist says. The invariant is now emitted by both
+  languages and asserted by `verify-field`: **every realised point a race scored
+  is carried by some rider in the field, bar the points of riders nothing can
+  price.**
+- **Every display sort ends on `riderkey`** (or team name) for the same class of
+  reason. Sorting on one key and letting the frame's row order break the ties
+  means that at a `head(N)` cutoff the tie decides who is on the page at all —
+  Classique Dunkerque 2025's best-value table showed Bryan Coquard or Nils
+  Eekhoff depending on nothing. 98 of 132 races differed between the two
+  implementations from this alone.
 
 ### Unattended publishing (August 2026)
 
@@ -714,6 +780,7 @@ comparison. See `roadmap.md` "SHIPPED: one-day market blend".
 - Correct a published winner: `./scripts/auto_publish.sh --redrive=<pcs_slug>`. Drops the recorded row, derives it again and re-renders in one run — a recorded winner is never re-derived otherwise, and the build skips existing HTML. Seeded rows (empty `snapshot_date`) are refused: no snapshot on disk can re-derive them, so removing one destroys the only record
 - Deploy the site without publishing a race (template or style change): `julia --project scripts/render_reports.jl --force && ./scripts/deploy_site.sh`
 - Evaluate the league: `julia --project scripts/league_eval.jl` (reads the `[league]` section; point `vgleague_data_dir` at the deploy clone `~/code/vgleague-deploy/data`, which is what the launchd job writes — `~/code/vgleague` is a dev clone and goes stale)
+- Check the two languages agree on the published pages (from the vgleague clone): `vgleague verify-field`, `vgleague verify-report`, `vgleague verify-dossier`. Their Julia halves are `scripts/field_digest.jl` and `scripts/report_dump.jl`, both of which take an output directory and never touch `site/docs`
 - Audit the archive: `julia --project scripts/archive_audit.jl` (per-type counts plus unknown types, files short of mandatory columns, files with no provenance, stray files). `--write-manifest` rewrites `_manifest.toml` from `ARCHIVE_TYPES`; `--check` exits non-zero when the two disagree
 - Run tests: `julia --project -e "using Pkg; Pkg.test()"`
 
