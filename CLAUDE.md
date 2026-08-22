@@ -180,8 +180,9 @@ that repo's launchd jobs run after fresh data lands.
   failures closed (WP6)" below for what that was worth on the 2026 Giro. GT
   catalogues carry `deadline: null`, so that structural test replaces the age
   gate rather than adding to it. `GT_PCS_SLUG` maps the
-  Velogames game slug to a PCS one; an unmapped game (the Vuelta, which nobody
-  here has seen yet) warns and is skipped rather than guessed at.
+  Velogames game slug to a PCS one (the Vuelta's is `spain`, mapped since
+  the 20 August fix that let its league winner be recorded); an unmapped game
+  warns and is skipped rather than guessed at.
 - **It walks every league-season in the archive**, not the one named in
   `[league]` — that section supplies `vgleague_data_dir` for the ingest, and
   each snapshot directory's own name dates it. A league added later needs no
