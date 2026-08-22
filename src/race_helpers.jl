@@ -790,8 +790,19 @@ function race_catalogue_text()
     # `squash` is the name reduced to letters and digits with accents stripped;
     # match a scraped name by squashing it the same way. vgleague's `_squash_tag`
     # is the Python half, and `vgleague verify-races` checks the two agree.
+    #
+    # `[classics]` is the one-day game's own slug by season, which keys
+    # `vg_riders`, `vg_racelist` and `vg_startlist`. Take the last `from_year`
+    # that is not after the season you want.
 
     """)
+    write(io, "[classics]\n")
+    write(io, "first_year = $(VG_CLASSICS_FIRST_YEAR)\n")
+    write(io, "slugs = [\n")
+    for (from_year, slug) in VG_CLASSICS_SLUGS
+        write(io, "    { from_year = $from_year, slug = $(repr(slug)) },\n")
+    end
+    write(io, "]\n\n")
     for r in CLASSICS_RACES_2026
         write(io, "[races.\"$(r.pcs_slug)\"]\n")
         write(io, "name = $(repr(r.name))\n")
@@ -829,11 +840,29 @@ function race_catalogue_matches(; archive_dir::String = archive_dir())
     return read(path, String) == race_catalogue_text()
 end
 
-"""Earliest year VG ran the one-day classics competition (Superclasico)."""
-const VG_CLASSICS_FIRST_YEAR = 2023
+"""
+The one-day classics game's VG slug by season, as `(first year, slug)` in order.
 
-"""VG URL slug for one-day classics, year-aware (renamed from Superclasico to Classics in 2026)."""
-vg_classics_slug(year::Int) = year >= 2026 ? "sixes-classics" : "sixes-superclasico"
+Velogames renamed the game from Superclasico to Classics for 2026, and the slug
+keys `vg_riders`, `vg_racelist` and `vg_startlist` — so a reader that cannot see
+this table cannot open a season's rider pool at all. A table rather than a
+conditional because `race_catalogue_text` exports it: the rename boundary then
+lives in one place across both languages instead of being a `>= 2026` on each
+side.
+"""
+const VG_CLASSICS_SLUGS = [(2023, "sixes-superclasico"), (2026, "sixes-classics")]
+
+"""Earliest year VG ran the one-day classics competition (Superclasico)."""
+const VG_CLASSICS_FIRST_YEAR = VG_CLASSICS_SLUGS[1][1]
+
+"""VG URL slug for one-day classics, year-aware. Years before the first fall to its slug."""
+function vg_classics_slug(year::Int)
+    slug = VG_CLASSICS_SLUGS[1][2]
+    for (from_year, s) in VG_CLASSICS_SLUGS
+        year >= from_year && (slug = s)
+    end
+    return slug
+end
 
 """Full VG riders page URL for a given year's one-day classics competition."""
 vg_classics_url(
