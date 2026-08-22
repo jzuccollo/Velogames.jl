@@ -599,10 +599,17 @@ end
     )
 
     withenv("VELOGAMES_ARCHIVE" => tree) do
-        # No startlist yet: the field is the season pool filtered through PCS.
+        # No startlist yet: the field is the season pool filtered through PCS —
+        # but a rider who scored is in the race whatever PCS says. D scored 200
+        # and never reached PCS, so the filter must keep him. It did not until
+        # August 2026, and the two sources' name orderings meant that was not a
+        # rare case: "Thomas Pidcock" and "Pidcock Tom" key differently, which
+        # cost Liège-Bastogne-Liège 2023 its second-placed rider and dropped
+        # realised points from 76 of 137 archived races.
         @test load_vg_startlist("milano-sanremo", year) === nothing
         pcs_filtered = load_report_data("milano-sanremo", year)
-        @test Set(pcs_filtered.rider) == Set(["A Rider", "C Rider"])
+        @test Set(pcs_filtered.rider) == Set(["A Rider", "C Rider", "D Rider"])
+        @test sum(pcs_filtered.score) == 700   # 500 when the filter drops D
 
         # With one, the field is Velogames' own — D, who scored but never
         # reached PCS, comes back, and the whole race's points are on the page.

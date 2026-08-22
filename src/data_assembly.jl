@@ -811,7 +811,17 @@ function load_report_data(
         pcs_results = load_race_snapshot("pcs_results", pcs_slug, year)
         if pcs_results !== nothing && :riderkey in propertynames(pcs_results)
             starter_keys = Set(pcs_results.riderkey)
-            filter!(row -> row.riderkey in starter_keys, df)
+            # A rider who scored was in the race, whatever PCS says — the same
+            # rule the startlist arm above applies, and it belongs here too.
+            # The two sources write names in different orders, so a rider can
+            # miss the PCS filter on a `riderkey` mismatch rather than on having
+            # abandoned: Velogames' "Thomas Pidcock" and PCS's "Pidcock Tom" key
+            # differently, and Liège-Bastogne-Liège 2023 lost its second-placed
+            # rider and his 540 points from the page. Across 2023-26 the filter
+            # was dropping realised points from 76 of 137 races, up to 9.7% of
+            # one, and `unpriced_scorers` reported none of it because those
+            # riders were priced perfectly well.
+            filter!(row -> row.riderkey in starter_keys || row.score > 0, df)
         end
     end
 
