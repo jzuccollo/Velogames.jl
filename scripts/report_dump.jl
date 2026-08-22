@@ -21,7 +21,7 @@ Usage:
     julia --project scripts/report_dump.jl OUTDIR [--years=2025,2026] [--limit=N]
 """
 
-using Velogames, DataFrames, Dates
+using Velogames, DataFrames, Dates, JSON3
 
 include(joinpath(@__DIR__, "render_reports.jl"))
 
@@ -40,6 +40,13 @@ function main(args)
         end
     end
     mkpath(outdir)
+
+    # The dossier's two JSON payloads, dumped alongside the reports. These are
+    # the one part of the port that can be compared byte for byte — they are
+    # data, not markup, so there is no styling difference to see past.
+    all_years = years === nothing ? [2023, 2024, 2025, 2026] : years
+    write(joinpath(outdir, "riders.json"), JSON3.write(collect_rider_rows(all_years)))
+    write(joinpath(outdir, "stages.json"), JSON3.write(collect_stage_rows(all_years)))
 
     winners = league_winners_by_race()
     written = 0

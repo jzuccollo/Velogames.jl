@@ -812,13 +812,22 @@ function race_catalogue_text()
         write(io, "date = $(repr(r.date))\n\n")
     end
     for slug in sort(collect(keys(_STAGE_RACE_VG_SLUGS)))
-        name = titlecase(replace(slug, "-" => " "))
+        # A grand tour's proper name and month come from `GRAND_TOUR_RACES`
+        # where it has them: "Giro d'Italia" rather than the titlecased slug,
+        # and the month a three-week race is dated by. The dossier needs both,
+        # and a reader that cannot see Julia has nowhere else to get them. The
+        # squash is unchanged either way — apostrophes and spaces are stripped.
+        gt_index = findfirst(gt -> gt.pcs_slug == slug, GRAND_TOUR_RACES)
+        gt = gt_index === nothing ? nothing : GRAND_TOUR_RACES[gt_index]
+        name = gt === nothing ? titlecase(replace(slug, "-" => " ")) : gt.name
         write(io, "[races.\"$slug\"]\n")
         write(io, "name = $(repr(name))\n")
         write(io, "squash = $(repr(race_squash(name)))\n")
         write(io, "format = \"stage\"\n")
         write(io, "vg_game_slug = $(repr(_STAGE_RACE_VG_SLUGS[slug]))\n")
-        write(io, "n_stages = $(grand_tour_stages(slug))\n\n")
+        write(io, "n_stages = $(grand_tour_stages(slug))\n")
+        gt === nothing || write(io, "month = $(gt.month)\n")
+        write(io, "\n")
     end
     return String(take!(io))
 end
