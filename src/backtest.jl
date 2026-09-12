@@ -303,27 +303,32 @@ function prefetch_race_data(
     pcs_slug_map =
         _build_pcs_slug_map(race.pcs_slug, race.year; cache_config, force_refresh)
 
-    archived_pcs = load_race_snapshot("pcs_specialty", race.pcs_slug, race.year)
-    pcspts = if archived_pcs !== nothing
-        @info "Using archived PCS specialty scores for $(race.name) $(race.year)"
-        # Supplement riders with all-missing specialty (archive may predate URL fixes)
-        _supplement_missing_pcs!(
-            archived_pcs,
-            riderdf,
-            pcs_slug_map;
-            cache_config,
-            force_refresh,
-        )
-        archived_pcs
-    else
-        @debug "No archived PCS scores for $(race.name) $(race.year) — using current PCS data"
-        getpcs_rider_pts_batch(
-            rider_names;
-            slug_map = pcs_slug_map,
-            cache_config = cache_config,
-            force_refresh = force_refresh,
-        )
-    end
+    # The same three-tier resolution production uses: this race's own archived
+    # snapshot, then the union across every earlier archived race, then live.
+    #
+    # It used to read only the own-race file and fall straight to a live batch
+    # for anything missing, which is the kind of production/backtest divergence
+    # `GameFormat` exists to prevent — the backtest was scoring a model fed
+    # differently from the one that races. It also made reconstruction brittle:
+    # `getpcs_rider_pts_batch` raises once more than `PCS_BLOCK_RAISE_THRESHOLD`
+    # riders come back blocked, so with the transport off (as it must be here,
+    # see `_TRANSPORT_ENABLED`) a handful of uncovered riders killed the whole
+    # edition rather than degrading it. `_load_pcs_specialty` catches that on
+    # its live tier and returns what tiers 1 and 2 already found.
+    #
+    # Tier 2 is date-bounded by this race's own date, so it cannot reach a
+    # later edition — the temporal guarantee the archive-first path was built
+    # around holds here too.
+    pcspts, pcs_provenance = _load_pcs_specialty(
+        race.pcs_slug,
+        race.year,
+        riderdf;
+        slug_map = pcs_slug_map,
+        cache_config = cache_config,
+        force_refresh = force_refresh,
+    )
+    @debug "PCS specialty for $(race.name) $(race.year): own=$(pcs_provenance.own_race) " *
+           "cross=$(pcs_provenance.cross_race) live=$(pcs_provenance.live_fetched)"
     riderdf = join_pcs_specialty(riderdf, pcspts)
 
     # --- 4. Fetch PCS race history (prior years + similar + within-year) ---
@@ -1686,9 +1691,16 @@ function backtest_stage_race(
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = archive_dir(),
 )
-    data =
+    # Archive only. A reconstruction that reaches the network fetches *today's*
+    # page to rebuild a race from two years ago, which is the leak
+    # `refetchable = false` exists to prevent — and at 45 editions it is also a
+    # browser launch per miss. See `_TRANSPORT_ENABLED`.
+    data = with_browser_transport(false) do
         prefetch_stage_race_data(pcs_slug, year; history_years, cache_config, archive_dir)
-    return backtest_stage_race(data; predictors, target, max_per_team)
+    end
+    return with_browser_transport(false) do
+        backtest_stage_race(data; predictors, target, max_per_team)
+    end
 end
 
 """Copy a `RaceData` with only `gt_vg_history_df` replaced (the Option A/B
@@ -2076,6 +2088,46 @@ const _ONEDAY_PREDICTORS = Dict{Symbol,Function}(
     :maxcost => maxcost_oneday_evg,
 )
 
+"""
+    champion_oneday_breakaway(data; spec, risk_aversion, kwargs...) -> DataFrame
+
+The risk-adjusted one-day champion with the breakaway channel switched on,
+fed from the per-race archive as of this race's date.
+
+Until the September 2026 backfill this arm could not exist. Breakaway rates came
+from PCS's end-of-season "most kilometres in the break" leaderboard — a
+cumulative total with no way to ask what it said in March — so
+`champion_oneday_evg` documents the channel as inert in reconstruction. The
+archive now carries a dated `in_breakaway` and `breakaway_km` per rider per
+race, which is reconstructible as of any date, so the channel can be measured
+rather than argued about.
+
+`spec` is forwarded to `compute_breakaway_rates_archive`, which is what lets a
+sweep pick the shape from evidence: `prior_strength`, `km_weighted`,
+`decay_rate`, `history_years`.
+"""
+function champion_oneday_breakaway(
+    data::OneDayBacktestData;
+    spec::NamedTuple = NamedTuple(),
+    risk_aversion::Float64 = 0.5,
+    kwargs...,
+)
+    data.race_date === nothing && return nothing
+    rates, sectors = compute_breakaway_rates_archive(
+        String.(data.race_data.rider_df.riderkey);
+        as_of = data.race_date,
+        spec...,
+    )
+    pred = _oneday_champion_predicted(
+        data;
+        breakaway_rates = rates,
+        breakaway_mean_sectors = sectors,
+        kwargs...,
+    )
+    evg = pred.expected_vg_points .- risk_aversion .* pred.downside_semi_dev
+    return DataFrame(riderkey = pred.riderkey, expected_vg_points = evg)
+end
+
 """Every built-in one-day arm, in report order."""
 const ONEDAY_PREDICTORS_ALL =
     [:simulator, :simulator_risk, :simulator_market, :odds, :maxcost]
@@ -2145,8 +2197,11 @@ function backtest_oneday_race(
         history_years,
         date,
     )
-    data = prefetch_oneday_backtest_data(race; cache_config, archive_dir)
-    return backtest_oneday_race(data; predictors, max_per_team)
+    # Archive only — see the note on the stage twin and `_TRANSPORT_ENABLED`.
+    return with_browser_transport(false) do
+        data = prefetch_oneday_backtest_data(race; cache_config, archive_dir)
+        backtest_oneday_race(data; predictors, max_per_team)
+    end
 end
 
 

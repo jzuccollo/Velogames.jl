@@ -438,3 +438,178 @@ function compute_breakaway_rates(
 
     return rates, sectors
 end
+
+# ---------------------------------------------------------------------------
+# Breakaway rates from the per-race archive
+# ---------------------------------------------------------------------------
+
+"""
+One `(rider, race)` breakaway observation per row, built once per archive dir.
+
+Reading 131 `pcs_results` files costs about a second, and every backtest race
+wants the same table filtered to a different date, so it is built once and
+filtered per call. Keyed by `archive_dir` because the tests use a scratch one.
+"""
+const _BREAKAWAY_OBS = Dict{String,DataFrame}()
+
+"""
+    breakaway_observations(; archive_dir, force_rebuild = false) -> DataFrame
+
+Every archived one-day result as `(riderkey, slug, year, date, in_break, km,
+sectors)`.
+
+`sectors` is what VG actually pays on: it awards `breakaway_points` at four
+checkpoints (half distance, then 50/20/10 km to go), so a rider's km in the
+break converts to a sector count via `breakaway_sectors_from_km` against that
+race's distance. Every archived one-day slug has a distance, so this is measured
+rather than assumed — the previous code used a flat 2.0 for every rider in every
+race.
+
+Rows for riders who were not in the break are kept deliberately: they are the
+denominator. A rate is breaks over *starts*, and without the starts there is
+nothing to divide by.
+"""
+function breakaway_observations(;
+    archive_dir::String = archive_dir(),
+    force_rebuild::Bool = false,
+)
+    if !force_rebuild && haskey(_BREAKAWAY_OBS, archive_dir)
+        return _BREAKAWAY_OBS[archive_dir]
+    end
+    rows = DataFrame(
+        riderkey = String[],
+        slug = String[],
+        year = Int[],
+        date = Date[],
+        in_break = Bool[],
+        km = Union{Float64,Missing}[],
+        sectors = Int[],
+    )
+    for slug in archive_races("pcs_results"; archive_dir = archive_dir)
+        race_format(slug) == :stage && continue
+        pattern = try
+            get_url_pattern(slug)
+        catch
+            nothing
+        end
+        distance = pattern === nothing ? 0.0 : pattern.total_distance_km
+        for year in archive_years("pcs_results", slug; archive_dir = archive_dir)
+            df = load_race_snapshot("pcs_results", slug, year; archive_dir = archive_dir)
+            (df === nothing || !hasproperty(df, :in_breakaway)) && continue
+            date = something(resolve_race_date(slug, year), Date(year, 12, 31))
+            for r in eachrow(df)
+                km = hasproperty(df, :breakaway_km) ? r.breakaway_km : missing
+                sectors =
+                    (r.in_breakaway && !ismissing(km)) ?
+                    breakaway_sectors_from_km(Float64(km), distance) : 0
+                push!(rows, (r.riderkey, slug, year, date, r.in_breakaway, km, sectors))
+            end
+        end
+    end
+    _BREAKAWAY_OBS[archive_dir] = rows
+    return rows
+end
+
+"""
+    compute_breakaway_rates_archive(startlist_keys; as_of, ...) -> (rates, sectors)
+
+Per-rider breakaway probability and expected sector count, from the per-race
+archive rather than a season leaderboard.
+
+This replaces `compute_breakaway_rates`, which read four hand-saved `.mhtml`
+files of PCS's end-of-season "most kilometres in the break" table. Two things
+were wrong with that and both are fixed here.
+
+It scaled each rider's rate proportional to *kilometres*, so a rider with three
+200 km breaks and one with six 100 km breaks came out identical, when the second
+is twice as likely to be in tomorrow's move. A rate is breaks over starts, and
+the per-race data has both.
+
+And a season total cannot be reconstructed as of a past date, which is why
+`champion_oneday_evg` documents the breakaway channel as inert in backtesting.
+Every row here is dated by its race, so `as_of` gives a clean as-of-race-day
+view and the channel can finally be evaluated.
+
+# Keyword arguments
+- `as_of`: ignore races on or after this date. Required for temporal integrity;
+  pass the race date being predicted.
+- `history_years`: how far back to look.
+- `prior_strength`: Beta prior pseudo-starts. Rates are sparse — the field mean
+  is about 0.035 over ~23 starts a rider — so an unshrunk 2-in-8 reads as 0.25
+  on almost no evidence. The prior mean is the field rate over the same window,
+  so this shrinks toward what a typical rider does. The September 2026 sweep
+  found team-points-captured monotone in this over 10 → 29 → 60 → 120 (+0.007,
+  +0.0146, +0.0158, +0.0168 against breakaway-off), so 120 is the largest value
+  tested rather than an optimum; the curve had not turned. Worth another probe
+  at 250 and 500.
+- `km_weighted`: weight each break by its sector count rather than counting it
+  as one. Distance is informative beyond the binary flag (ρ(km, VG score) ≈
+  0.41), so this is worth testing; it is off by default because it makes the
+  "rate" no longer a probability.
+- `decay_rate`: exponential recency decay in years, 0.0 for flat.
+- `max_rate`: hard cap, kept from the old implementation as a guard against a
+  rider with two starts and two breaks reading as certain.
+"""
+function compute_breakaway_rates_archive(
+    startlist_keys::AbstractVector{<:AbstractString};
+    as_of::Date,
+    history_years::Int = 3,
+    prior_strength::Float64 = 120.0,
+    km_weighted::Bool = false,
+    decay_rate::Float64 = 0.0,
+    max_rate::Float64 = 0.5,
+    archive_dir::String = archive_dir(),
+)
+    obs = breakaway_observations(; archive_dir = archive_dir)
+    cutoff = as_of - Year(history_years)
+    window = filter(r -> cutoff <= r.date < as_of, obs)
+
+    n = length(startlist_keys)
+    isempty(window) && return zeros(n), zeros(n)
+
+    weight(date) =
+        decay_rate <= 0.0 ? 1.0 :
+        exp(-decay_rate * (Dates.value(as_of - date) / 365.25))
+    credit(row) = km_weighted ? Float64(row.sectors) : 1.0
+
+    starts = Dict{String,Float64}()
+    breaks = Dict{String,Float64}()
+    sector_sum = Dict{String,Float64}()
+    sector_n = Dict{String,Float64}()
+    for r in eachrow(window)
+        w = weight(r.date)
+        starts[r.riderkey] = get(starts, r.riderkey, 0.0) + w
+        r.in_break || continue
+        breaks[r.riderkey] = get(breaks, r.riderkey, 0.0) + w * credit(r)
+        sector_sum[r.riderkey] = get(sector_sum, r.riderkey, 0.0) + w * r.sectors
+        sector_n[r.riderkey] = get(sector_n, r.riderkey, 0.0) + w
+    end
+
+    # Field rates, used as the shrinkage target so a rider with no history lands
+    # on "what a typical rider does" rather than on zero.
+    total_starts = sum(values(starts); init = 0.0)
+    total_breaks = sum(values(breaks); init = 0.0)
+    field_rate = total_starts > 0 ? total_breaks / total_starts : 0.0
+    total_sectors = sum(values(sector_sum); init = 0.0)
+    total_sector_n = sum(values(sector_n); init = 0.0)
+    field_sectors = total_sector_n > 0 ? total_sectors / total_sector_n : 2.0
+
+    rates = Float64[]
+    sectors = Float64[]
+    for key in startlist_keys
+        s = get(starts, key, 0.0)
+        b = get(breaks, key, 0.0)
+        # Beta-binomial posterior mean, with the prior centred on the field rate.
+        rate = (b + prior_strength * field_rate) / (s + prior_strength)
+        push!(rates, min(rate, max_rate))
+        sn = get(sector_n, key, 0.0)
+        # Sector counts shrink too, on a weaker prior: a rider with three breaks
+        # has three real observations of how far he goes, which is more than he
+        # has about whether he goes at all.
+        push!(
+            sectors,
+            (get(sector_sum, key, 0.0) + 2.0 * field_sectors) / (sn + 2.0),
+        )
+    end
+    return rates, sectors
+end
