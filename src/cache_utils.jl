@@ -40,7 +40,16 @@ Clear the in-memory cache. The on-disk cache is unaffected.
 function clear_memory_cache!()
     n = length(_MEMORY_CACHE)
     empty!(_MEMORY_CACHE)
-    @info "Cleared in-memory cache ($n entries)"
+    # `_PAGE_CACHE` holds raw response bodies for the pages two parsers share
+    # and `_PREFETCHED` holds pages the browser transport fetched ahead of a
+    # batch (see `scrape_get`), so both are part of the same in-process state.
+    np = length(_PAGE_CACHE) + length(_PREFETCHED)
+    empty!(_PAGE_CACHE)
+    empty!(_PREFETCHED)
+    # Also the list of hosts that refused `HTTP.jl`, so a long-lived process
+    # gets to notice if a site relents rather than using the browser for ever.
+    empty!(_BLOCKED_HOSTS)
+    @info "Cleared in-memory cache ($n entries, $np cached pages)"
     return nothing
 end
 
@@ -139,6 +148,31 @@ function load_from_cache(key::String, cache_dir::String)::Union{DataFrame,Nothin
     end
 
     return nothing
+end
+
+"""
+    is_cached(url, params; cache_config) -> Bool
+
+Whether `cached_fetch(_, url, params; cache_config)` would answer without a
+network request. Same two tiers `cached_fetch` checks, in the same order, and
+no side effects.
+
+Exists so a caller about to `prefetch!` a batch can leave out the pages it
+already holds. A browser page costs a quarter of a second and a cache hit
+costs nothing, so prefetching a warm field would be three wasted minutes.
+"""
+function is_cached(
+    url::String,
+    params::Dict = Dict();
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
+    key = cache_key(url, params)
+    haskey(_MEMORY_CACHE, key) && return true
+    data_file, _ = cache_paths(key, cache_config.cache_dir)
+    max_age =
+        isfile(data_file) ? cache_config.max_age_hours :
+        min(cache_config.max_age_hours, EMPTY_CACHE_MAX_AGE_HOURS)
+    return is_cache_valid(key, max_age, cache_config.cache_dir)
 end
 
 """
@@ -384,10 +418,10 @@ const ARCHIVE_TYPES = Dict(
         note = "Per-season PCS points and rank per rider. The current season's row moves as the year runs, so this is the as-of-race-day copy that keeps backtests honest.",
     ),
     "pcs_specialty" => (
-        version = 1,
+        version = 2,
         mandatory = [:riderkey, :rider, :oneday, :gc, :tt, :sprint, :climber],
         refetchable = false,
-        note = "PCS specialty ratings as of race day. Live ratings drift, so re-fetching would leak the future into a backtest.",
+        note = "PCS specialty ratings as of race day. Live ratings drift, so re-fetching would leak the future into a backtest. v2 adds `hills`, a sixth rating PCS began publishing in September 2026 — deliberately NOT mandatory, because the 30 files written before then cannot gain it: the ratings are season-cumulative, so a re-fetch would record today's value under a past race's key. Absence is permanent and expected, and the estimator gates on presence rather than treating a zero as an average rider.",
     ),
     "pcs_specialty_seasons" => (
         version = 1,
@@ -524,6 +558,58 @@ function missing_mandatory_columns(data_type::AbstractString, df::DataFrame)
     spec === nothing && return Symbol[]
     return setdiff(spec.mandatory, propertynames(df))
 end
+
+"""
+    hollow_mandatory_columns(data_type, df) -> Vector{Symbol}
+
+Which of `data_type`'s mandatory columns are present in `df` but are `missing`
+in every row. Empty for an unknown type or an empty frame, for the same reason
+`missing_mandatory_columns` is.
+
+Presence is not coverage: `getpcs_rider_pts_batch` returns a frame with every
+mandatory column present and every value `missing` when PCS challenges the
+request instead of erroring, and `missing_mandatory_columns` waves that
+through because the columns are all there. Two `pcs_specialty` files were
+archived exactly this way in September 2026 — 163 and 159 rows, `riderkey`
+and `rider` populated, every rating column entirely `missing` — and since
+`pcs_specialty` is `refetchable = false` they could never self-heal. Adapted
+from `hollow_columns` in vgleague's `archive.py`, which carries the fuller
+reasoning and this closes the same gap on the write side.
+
+Adapted rather than copied verbatim: vgleague's version also treats a
+whitespace-only string as blank, because its scrapers have no `missing`
+sentinel and fall back to `""` when a column is not on the page. Julia's
+writers use `missing` uniformly for "the fetch found nothing", and a real
+empty string is a real value here — `league/meta`'s `deadline` is `""` in
+every row for every grand tour, because Velogames locks a grand tour roster
+for the whole race rather than publishing a per-stage deadline. Flagging
+blank strings too would refuse that legitimate archive on every write, so
+only `missing` counts.
+
+Zero is not nothing either: an all-zero column passes, because a column can
+legitimately be full of zeros and rejecting it would be a guess about which.
+"""
+function hollow_mandatory_columns(data_type::AbstractString, df::DataFrame)
+    spec = get(ARCHIVE_TYPES, String(data_type), nothing)
+    (spec === nothing || nrow(df) == 0) && return Symbol[]
+    exempt = get(HOLLOW_COLUMN_EXEMPTIONS, String(data_type), Symbol[])
+    present = setdiff(intersect(spec.mandatory, propertynames(df)), exempt)
+    return [c for c in present if all(ismissing, df[!, c])]
+end
+
+"""
+Mandatory columns exempted from the hollow-column guard, per data type: a
+column the current scraper populates as `missing` in every row *by design*,
+not because a fetch was blocked or failed.
+
+`pcs_results`'s `breakaway_km` is the only known case. `getpcs_race_results`
+scrapes PCS's static HTML, but the `div.svg_shield` breakaway markup is only
+present in JavaScript-rendered pages — an HTTP scrape genuinely cannot see it,
+so every row's `breakaway_km` is `missing` on every successful fetch, not just
+a blocked one. `getpcs_stage_results` carries the same column but does not
+list it as mandatory for `pcs_stage_results`, so no entry is needed there.
+"""
+const HOLLOW_COLUMN_EXEMPTIONS = Dict{String,Vector{Symbol}}("pcs_results" => [:breakaway_km])
 
 """
 Provenance keys written into every archive file's Arrow schema metadata.
@@ -682,11 +768,12 @@ Save a DataFrame to the permanent archive. Creates directories as needed.
 Overwrites any existing snapshot for the same race/year/type, and stamps
 provenance into the file's Arrow schema metadata.
 
-Two things error rather than write: a `data_type` absent from `ARCHIVE_TYPES`,
-and a frame missing one of that type's mandatory columns. The first check runs
-before `mkpath`, so a typo'd type leaves no directory behind — that empty
-directory is what made `prediction` look like a real type beside `predictions`
-for four months.
+Three things error rather than write: a `data_type` absent from `ARCHIVE_TYPES`,
+a frame missing one of that type's mandatory columns, and a frame where a
+mandatory column is present but empty in every row (see
+`hollow_mandatory_columns`). The first check runs before `mkpath`, so a typo'd
+type leaves no directory behind — that empty directory is what made
+`prediction` look like a real type beside `predictions` for four months.
 
 Pass `source_url` where the URL is already to hand.
 """
@@ -712,7 +799,15 @@ function save_race_snapshot(
         "columns $missing_cols — refusing to write a snapshot nothing can read",
     )
 
-    # Both of these stay below the checks above: a typo'd type must leave no
+    hollow_cols = hollow_mandatory_columns(data_type, df)
+    isempty(hollow_cols) || error(
+        "save_race_snapshot: $data_type frame for $pcs_slug $year has mandatory columns " *
+        "$hollow_cols that are empty in all $(nrow(df)) rows — refusing to write a " *
+        "snapshot that reads as coverage and carries nothing. This is usually a fetch " *
+        "that was blocked or came back empty, not a column that is really empty.",
+    )
+
+    # All three checks stay above `mkpath`: a typo'd type must leave no
     # directory behind, which is the whole point of checking before `mkpath`.
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     mkpath(dirname(path))
@@ -757,12 +852,29 @@ function load_race_snapshot(
     return nothing
 end
 
+"""
+Older schema versions that still read correctly, per data type.
+
+A version bump that only *adds* an optional column leaves every existing file
+valid, so warning about them is noise that never goes away. `pcs_specialty` v1
+is the case in point and the permanent one: v2 added `hills`, which the 30 files
+written before September 2026 cannot ever gain, because the ratings are
+season-cumulative and a re-fetch would record today's value under a past race's
+key. Those files are correct as they stand.
+
+Listing a version here is a claim that the current readers handle it. A bump
+that renames a column, changes a type, or makes something mandatory does not
+belong here — that drift is what the warning is for.
+"""
+const SCHEMA_VERSION_COMPATIBLE = Dict{String,Set{Int}}("pcs_specialty" => Set([1]))
+
 function _warn_on_version_drift(tbl, data_type::String, pcs_slug::String, year::Int)
     spec = get(ARCHIVE_TYPES, data_type, nothing)
     spec === nothing && return nothing
     meta = Arrow.getmetadata(tbl)
     (meta === nothing || !haskey(meta, "schema_version")) && return nothing
     written = tryparse(Int, meta["schema_version"])
+    written in get(SCHEMA_VERSION_COMPATIBLE, data_type, Set{Int}()) && return nothing
     if written !== nothing && written != spec.version
         @warn "Archived $data_type for $pcs_slug $year was written at schema_version $written; ARCHIVE_TYPES declares $(spec.version)"
     end

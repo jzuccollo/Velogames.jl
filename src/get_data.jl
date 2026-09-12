@@ -212,6 +212,16 @@ function getvg_riders(
             riderdf.team = unpipe.(riderdf.team)
         end
 
+        # The rendered page carries the startlist filter widget as a table row —
+        # every team name concatenated, every race tag concatenated, no rider and
+        # no parseable cost. It only became visible once fetches started coming
+        # through a browser rather than a raw HTTP response, and a `missing` cost
+        # reaching the knapsack is not a failure worth debugging twice. vgleague's
+        # own parser drops it the same way, on `if r["rider"]`.
+        if hasproperty(riderdf, :riderkey)
+            riderdf = filter(row -> !isempty(row.riderkey), riderdf)
+        end
+
         # Calculate rider value
         riderdf.value = riderdf.points ./ riderdf.cost
 
@@ -238,6 +248,64 @@ const PCS_SLUG_OVERRIDES = Dict{String,String}(
 )
 
 """
+    pcs_rider_url(ridername; pcs_slug = "") -> String
+
+The PCS profile URL for a rider: the slug scraped from the startlist when we
+have one, a manual override, or the normalised name.
+
+Its own function because two places need to agree on it — the fetcher, and
+`_prefetch_rider_profiles`, which must ask the browser for exactly the URLs the
+fetcher is about to want.
+"""
+function pcs_rider_url(ridername::String; pcs_slug::String = "")
+    slug = if !isempty(pcs_slug)
+        pcs_slug
+    else
+        normalised = normalisename(ridername)
+        get(PCS_SLUG_OVERRIDES, normalised, normalised)
+    end
+    return "https://www.procyclingstats.com/rider/" * slug
+end
+
+"""
+    _prefetch_pages(label, targets; force_refresh, cache_config)
+
+Pull every page a batch is about to want in one browser session.
+
+`targets` are `url => cache_params` pairs, where the params are whatever the
+batch's own `cached_fetch` call will use — the two PCS batches key the same
+profile URL differently (`"rider"` for specialty, `"slug"` for seasons), so
+each has to say which it means rather than have this guess.
+
+Anything `cached_fetch` would answer from cache is left out, so a re-render
+costs no browser time. `prefetch!` drops URLs it already holds, which is what
+makes the seasons batch nearly free after the specialty batch has run over the
+same profiles.
+
+Failures are left alone: `prefetch!` reports what it could not get and
+`scrape_get` falls back to its usual path for those, which is a block, and the
+batch a frame up is already counting those.
+"""
+function _prefetch_pages(
+    label::String,
+    targets::Vector{Pair{String,Dict{String,String}}};
+    force_refresh::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+)
+    wanted = String[
+        url for (url, params) in targets if
+        force_refresh || !is_cached(url, params; cache_config = cache_config)
+    ]
+    isempty(wanted) && return nothing
+    result = prefetch!(wanted)
+    result.fetched > 0 &&
+        @info "Prefetched $(result.fetched) $label pages through the browser"
+    result.blocked > 0 &&
+        @warn "Browser transport missed $(result.blocked)/$(result.requested) $label pages"
+    return nothing
+end
+
+"""
 ## `getpcs_rider_pts`
 
 This function downloads and parses the rider points for a specific rider from the PCS website.
@@ -251,14 +319,7 @@ function getpcs_rider_pts(
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
 
-    # Use provided slug (from startlist extraction), manual override, or heuristic
-    regularisedname = if !isempty(pcs_slug)
-        pcs_slug
-    else
-        slug = normalisename(ridername)
-        get(PCS_SLUG_OVERRIDES, slug, slug)
-    end
-    pageurl = "https://www.procyclingstats.com/rider/" * regularisedname
+    pageurl = pcs_rider_url(ridername; pcs_slug = pcs_slug)
 
     _missing_rider_df() = DataFrame(
         rider = [ridername],
@@ -267,16 +328,26 @@ function getpcs_rider_pts(
         tt = Union{Int,Missing}[missing],
         sprint = Union{Int,Missing}[missing],
         climber = Union{Int,Missing}[missing],
+        hills = Union{Int,Missing}[missing],
         riderkey = [createkey(ridername)],
     )
 
     function fetch_rider_pts(url, params)
+        # The jittered pause this used to carry now lives in `scrape_get`,
+        # where it covers every scrape rather than this one path.
+        #
         # Handle HTTP errors (400 for bad URL encoding, 404 for missing page).
-        # Return missing values so the negative result is cached.
+        # Return missing values so the negative result is cached. A 403/429/
+        # challenge is a block, not a missing rider — `scrape_get` raises
+        # `ScrapeBlockedError` for that case, which is deliberately NOT caught
+        # here, so it propagates instead of being folded into the same
+        # missing-data row a genuine 404 gets.
+        # `reuse` because `getpcs_rider_seasons` parses the season table off
+        # this very page: one fetch, two parsers, two `cached_fetch` entries.
         response = try
-            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+            scrape_get(url; reuse = true)
         catch e
-            if e isa HTTP.Exceptions.StatusError && e.status in (400, 403, 404)
+            if e isa HTTP.Exceptions.StatusError && e.status in (400, 404)
                 return _missing_rider_df()
             end
             rethrow()
@@ -299,7 +370,15 @@ function getpcs_rider_pts(
             return _missing_rider_df()
         end
 
+        # PCS lists Oneday, GC, TT, Sprint, Climber, and — since September 2026 —
+        # Hills, in that order. The first five have been stable for years and are
+        # taken positionally; Hills is taken only when present, so a page served
+        # from an older cache still parses. Anything beyond the sixth is ignored
+        # rather than guessed at.
         rawpts = map(x -> parse(Int, nodeText(x)), value_elements[1:5])
+        hills =
+            length(value_elements) >= 6 ?
+            tryparse(Int, nodeText(value_elements[6])) : missing
         return DataFrame(
             rider = [ridername],
             oneday = [rawpts[1]],
@@ -307,6 +386,7 @@ function getpcs_rider_pts(
             tt = [rawpts[3]],
             sprint = [rawpts[4]],
             climber = [rawpts[5]],
+            hills = Union{Int,Missing}[hills],
             riderkey = [createkey(ridername)],
         )
     end
@@ -471,7 +551,7 @@ function get_cycling_oracle(
 
     function fetch_oracle(_url, params)
         url = params["prediction_url"]
-        response = HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; Velogames.jl)"])
+        response = scrape_get(url)
         page = Gumbo.parsehtml(String(response.body))
 
         # Predictions are embedded as HTML-entity-encoded JSON in a
@@ -544,7 +624,7 @@ function getvg_race_points(
 )
 
     function fetch_race_points(url, params)
-        page = HTTP.get(url)
+        page = scrape_get(url)
         pagehtml = Gumbo.parsehtml(String(page.body))
 
         riders = String[]
@@ -612,8 +692,7 @@ by exactly the same code as a live page.
 function parse_vg_racelist(url::AbstractString)
     # Parse directly with Gumbo — VG races.php uses <TD> not <TH> for
     # headers, which breaks TableScraper's column name detection.
-    response =
-        HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+    response = scrape_get(String(url))
     pagehtml = Gumbo.parsehtml(String(response.body))
 
     rows = eachmatch(Selector("table tr"), pagehtml.root)
@@ -995,11 +1074,17 @@ function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
     try
         return _scrape_vg_scoring(vg_slug, year; pcs_slug = pcs_slug)
     catch e
-        # Only a dead page falls back. A parse failure means the headings moved,
-        # which is exactly what the validation below exists to shout about —
-        # swallowing it here would restore the silent-zero bug it guards.
-        (stale !== nothing && e isa HTTP.Exceptions.StatusError) || rethrow()
-        @warn "Could not re-scrape VG scoring for $vg_slug $year (HTTP $(e.status)); " *
+        # Only an unreachable page falls back. A parse failure means the
+        # headings moved, which is exactly what the validation below exists to
+        # shout about — swallowing it here would restore the silent-zero bug it
+        # guards. A Cloudflare block counts as unreachable: since the VG
+        # fetchers were routed through `scrape_get`, a 403 arrives as a
+        # `ScrapeBlockedError` rather than a `StatusError`, and velogames.com
+        # answers 403 to this process on every page.
+        unreachable =
+            e isa ScrapeBlockedError || e isa HTTP.Exceptions.StatusError
+        (stale !== nothing && unreachable) || rethrow()
+        @warn "Could not re-scrape VG scoring for $vg_slug $year ($e); " *
               "keeping the stale archive, which scores stage assists as ZERO. " *
               "Patch it by hand from the published [8, 4, 2]."
         return stale
@@ -1016,7 +1101,7 @@ function _scrape_vg_scoring(
     pcs_slug::String = "",
     url::String = "https://www.velogames.com/$vg_slug/$year/scores.php",
 )
-    response = HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+    response = scrape_get(url)
     page = Gumbo.parsehtml(String(response.body))
 
     pairs = Tuple{String,Vector{Int}}[]
@@ -1072,10 +1157,26 @@ end
 
 
 """
+Number of blocked riders in one `getpcs_rider_pts_batch` call above which the
+batch raises instead of completing with the rest folded into missing-data
+rows. A block found on a handful of riders is PCS challenging the whole run,
+not a handful of riders coincidentally lacking a PCS profile — completing the
+batch anyway is how two `pcs_specialty` archive files ended up with every
+rating column `missing` in September 2026 (see
+`docs/pcs-cloudflare-block-evaluation.md`).
+"""
+const PCS_BLOCK_RAISE_THRESHOLD = 5
+
+"""
 ## `getpcs_rider_pts_batch`
 
 Batch version - get points for multiple riders efficiently.
 Returns a DataFrame with all riders' points, including rows with missing values for failed requests.
+
+Counts `ScrapeBlockedError`s separately from genuine misses (network/parse
+errors, or a rider PCS simply has no profile for). Once the block count
+passes `PCS_BLOCK_RAISE_THRESHOLD` this raises rather than returning a full
+frame of missing rows for a run that PCS is actually turning away.
 """
 function getpcs_rider_pts_batch(
     ridernames::Vector{String};
@@ -1084,8 +1185,19 @@ function getpcs_rider_pts_batch(
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
 
+    _prefetch_pages(
+        "rider profile",
+        [
+            pcs_rider_url(rider; pcs_slug = get(slug_map, createkey(rider), "")) =>
+                Dict("rider" => rider) for rider in ridernames
+        ];
+        force_refresh = force_refresh,
+        cache_config = cache_config,
+    )
+
     dfs = DataFrame[]
     failed_riders = String[]
+    blocked_riders = String[]
 
     for rider in ridernames
         try
@@ -1097,9 +1209,31 @@ function getpcs_rider_pts_batch(
                 cache_config = cache_config,
             )
             push!(dfs, rider_pts)
-        catch _e
+        catch e
+            if e isa ScrapeBlockedError
+                push!(blocked_riders, rider)
+                if length(blocked_riders) > PCS_BLOCK_RAISE_THRESHOLD
+                    throw(
+                        ScrapeBlockedError(
+                            "getpcs_rider_pts_batch: PCS blocked $(length(blocked_riders))/" *
+                            "$(length(ridernames)) riders so far — a Cloudflare challenge, " *
+                            "not $(length(blocked_riders)) riders genuinely missing from " *
+                            "PCS. Stopping rather than writing a poisoned archive; retry " *
+                            "once PCS settles. Last: $e",
+                        ),
+                    )
+                end
+                # Below the raise threshold: leave this rider uncovered rather
+                # than pushing a clean-looking "checked, no data" row — a block
+                # is not the same fact as a rider genuinely absent from PCS,
+                # and a row here would be indistinguishable from a genuine miss
+                # downstream (this is the small-scale version of the exact
+                # failure this whole function exists to stop).
+                continue
+            end
             push!(failed_riders, rider)
-            # Add row with missing values
+            # Add row with missing values — a genuine miss (no PCS profile, or
+            # a network/parse error), not a block.
             push!(
                 dfs,
                 DataFrame(
@@ -1120,11 +1254,14 @@ function getpcs_rider_pts_batch(
     if !isempty(failed_riders)
         @warn "PCS fetch failed for $(length(failed_riders))/$(length(ridernames)) riders (network/parse errors)" failed_riders
     end
+    if !isempty(blocked_riders)
+        @warn "PCS blocked $(length(blocked_riders))/$(length(ridernames)) riders (below the raise threshold) — left uncovered rather than recorded as missing; check whether this run is being challenged" blocked_riders
+    end
 
     # Summary of riders not found on PCS (returned missing from cache or fetch)
     n_missing = count(row -> ismissing(row.oneday), eachrow(all_pts))
     if n_missing > 0
-        @info "PCS data: $(length(ridernames) - n_missing)/$(length(ridernames)) riders found, $n_missing missing (not on PCS or fetch error)"
+        @info "PCS data: $(nrow(all_pts) - n_missing)/$(length(ridernames)) riders found, $n_missing missing (not on PCS or fetch error)"
     end
 
     # Remove any empty column name (fixes join issues)

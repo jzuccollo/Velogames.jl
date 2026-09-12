@@ -4,6 +4,357 @@ const DNF_POSITION = 999
 """Sentinel position/rank for unranked riders."""
 const UNRANKED_POSITION = 9999
 
+"""
+A real desktop-browser User-Agent for scraping requests. PCS and Velogames
+both sit behind Cloudflare and both have started blocking requests that
+self-identify as a bot (the previous "VelogamesBot/1.0" UA); a genuine
+browser string is a cheap way to reduce block rate.
+"""
+const SCRAPE_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
+"""
+    ScrapeBlockedError
+
+Raised when a scrape is turned away by Cloudflare bot protection — a
+challenge page, or a 403/429 — rather than the response genuinely meaning
+"no data".
+
+Named for the act, not the site: both procyclingstats.com and velogames.com
+sit behind the same WAF and both raise this, so a message naming one of them
+would send the next debugging session to the wrong host. The URL in the
+message says which.
+
+Its own type, deliberately, mirroring `BlockedError` in vgleague's
+`scraper.py`. A challenge page parses as valid HTML with none of the elements
+a scraper looks for, so an undifferentiated failure reads as a site redesign
+or a rider with no profile, and gets silently folded into a missing-data row.
+That is exactly what `getpcs_rider_pts`'s `_missing_rider_df()` fallback did
+in September 2026, and it is what let two live races render on VG-points-only
+predictions with a clean-looking log — see
+`docs/pcs-cloudflare-block-evaluation.md`.
+"""
+struct ScrapeBlockedError <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::ScrapeBlockedError) = print(io, "ScrapeBlockedError: ", e.msg)
+
+"""
+    looks_blocked(response) -> Bool
+
+Whether an HTTP response is Cloudflare bot protection rather than the page
+requested: the `cf-mitigated` header, a 403/429 status, or the challenge
+page's own body markers ("Just a moment...", "Sorry, you have been
+blocked"). Mirrors `looks_blocked` in vgleague's `scraper.py`, which checks
+the same header for the same site's WAF.
+
+`response` is anything with `.status`, `.headers` (an iterable of
+name/value pairs) and `.body` — an `HTTP.Response`, or the `.response` field
+of an `HTTP.Exceptions.StatusError`.
+"""
+function looks_blocked(response)::Bool
+    response.status in (403, 429) && return true
+    headers = Dict(lowercase(String(k)) => String(v) for (k, v) in response.headers)
+    haskey(headers, "cf-mitigated") && return true
+    # `String(v::Vector{UInt8})` takes ownership of the vector's buffer and
+    # empties it as a side effect — a real Julia gotcha, not a hypothetical.
+    # `response.body` is peeked at here, not consumed, so every caller that
+    # goes on to do `String(response.body)` after `scrape_get` returns must still
+    # find the real page. Decode a copy instead.
+    body = String(copy(response.body))
+    occursin("Just a moment...", body) && return true
+    occursin("Sorry, you have been blocked", body) && return true
+    return false
+end
+
+# Response bodies held for `scrape_get(...; reuse = true)`, keyed by URL.
+#
+# Exists for one situation: two parsers wanting the same page.
+# `getpcs_rider_pts` reads the five `.xvalue` specialty elements off
+# `/rider/{slug}` and `getpcs_rider_seasons` reads the season table off the same
+# page, and because `cached_fetch` keys on the *parsed* frame they legitimately
+# hold two entries — so a cold run fetched every profile twice.
+#
+# Opt-in rather than automatic, which is what keeps it safe. The pages that must
+# never be served stale — race results, which go from empty to partial to final
+# on race day and are deliberately read through a zero-TTL `CacheConfig` —
+# simply do not pass `reuse`. Rider profiles are stable across a run.
+#
+# It is only ever consulted when `cached_fetch` has already missed both its
+# tiers, since `scrape_get` runs inside the fetch closure; a warm cache never
+# reaches here. `clear_memory_cache!` empties it.
+const _PAGE_CACHE = Dict{String,Vector{UInt8}}()
+
+# Pages fetched ahead of time by `prefetch!`, keyed by URL, consumed once.
+#
+# Separate from `_PAGE_CACHE` because the two answer different questions.
+# `_PAGE_CACHE` is opt-in and is about two parsers sharing one page; a fetcher
+# that must see a live page (race results, read through a zero-TTL
+# `CacheConfig` because they go from empty to partial to final on race day)
+# opts out by not passing `reuse`, and must keep opting out.
+#
+# A prefetched page is not a cache entry at all — it *is* that fetch, made a
+# few seconds earlier through a transport the site accepts. So it is served to
+# every caller, `reuse` or not, and popped on the way out. A second request for
+# the same URL then goes back to the network, which is exactly what a zero-TTL
+# caller asked for. A `reuse` caller keeps it, so the specialty and season
+# parsers still share one profile page.
+const _PREFETCHED = Dict{String,Vector{UInt8}}()
+
+"""
+    prefetch!(urls; headless = false) -> NamedTuple
+
+Fetch `urls` through `vgleague fetch` and hold their HTML for `scrape_get`.
+
+This is the transport half of the Cloudflare fix. Both procyclingstats.com and
+velogames.com check the TLS and client-hint fingerprint of the client, which is
+a check `HTTP.jl` cannot pass and exposes no way to influence — so the pages
+are fetched by a headed browser in Python and parsed here, unchanged. Julia
+keeps every parser and every archive writer; only the request moves.
+
+One browser session covers the whole list, which is the point: a launch costs
+seconds and a page costs about a quarter of one, so a 160-rider field is under
+three minutes, while 160 separate launches would be eight minutes of launching
+alone. Call it once with everything a batch needs.
+
+Returns `(requested, fetched, blocked)`. A URL that could not be fetched is
+simply absent from the store, and `scrape_get` falls through to its usual
+behaviour for it — a partial prefetch degrades rather than failing, because a
+run that covered 155 of 159 riders is a good run.
+
+Headed by default: PCS challenges headless Chromium even with a full
+desktop-Chrome context, so this needs a GUI session rather than a bare launchd
+job. Velogames tolerates headless, hence the keyword.
+"""
+# Whether `scrape_get` may fall back to the browser transport.
+#
+# On by default, because the whole point is that a render can reach a site
+# Cloudflare will not let `HTTP.jl` near. Off during reconstruction — backtests
+# and prospective evaluation — for two reasons, and the second is the important
+# one.
+#
+# A backtest over 45 editions turns every archive miss into a browser launch,
+# which is minutes of wall clock and a window on the screen for each one; that
+# is merely slow. What it also does is fetch *today's* page and use it to
+# reconstruct a race from 2024, which is the same leak `pcs_specialty`'s
+# `refetchable = false` note exists to prevent. Reconstruction must read the
+# archive and nothing else, so it gets a `ScrapeBlockedError` and degrades,
+# exactly as it did when PCS first blocked us.
+const _TRANSPORT_ENABLED = Ref(true)
+
+"""
+    with_browser_transport(f, enabled::Bool)
+
+Run `f()` with the browser transport forced on or off, restoring the previous
+setting afterwards. See `_TRANSPORT_ENABLED`.
+"""
+function with_browser_transport(f, enabled::Bool)
+    old = _TRANSPORT_ENABLED[]
+    _TRANSPORT_ENABLED[] = enabled
+    try
+        return f()
+    finally
+        _TRANSPORT_ENABLED[] = old
+    end
+end
+
+function prefetch!(urls::Vector{String}; headless::Bool = false)
+    _TRANSPORT_ENABLED[] || return (
+        requested = length(urls),
+        fetched = 0,
+        blocked = length(urls),
+    )
+    # Drop what this process already holds. `_PAGE_CACHE` is why a seasons batch
+    # costs nothing after a specialty batch has been over the same profiles.
+    urls = unique(
+        url for url in urls if
+        !isempty(url) && !haskey(_PREFETCHED, url) && !haskey(_PAGE_CACHE, url)
+    )
+    isempty(urls) && return (requested = 0, fetched = 0, blocked = 0)
+
+    dir = mktempdir()
+    try
+        listfile = joinpath(dir, "urls.txt")
+        write(listfile, join(urls, "\n"))
+        pages = joinpath(dir, "pages")
+
+        cmd = `$(vgleague_executable()) fetch --urls-from $listfile --out $pages`
+        headless && (cmd = `$cmd --headless`)
+        try
+            run(pipeline(cmd; stdout = devnull, stderr = stderr))
+        catch e
+            @warn "vgleague fetch failed; leaving these URLs to the usual path" exception =
+                e count = length(urls)
+            return (requested = length(urls), fetched = 0, blocked = length(urls))
+        end
+
+        fetched = 0
+        for url in urls
+            path = joinpath(pages, bytes2hex(sha256(url)) * ".html")
+            isfile(path) || continue
+            _PREFETCHED[url] = read(path)
+            fetched += 1
+        end
+        return (
+            requested = length(urls),
+            fetched = fetched,
+            blocked = length(urls) - fetched,
+        )
+    finally
+        rm(dir; recursive = true, force = true)
+    end
+end
+
+"""
+    vgleague_executable() -> String
+
+Where the `vgleague` CLI lives. `VGLEAGUE_BIN` overrides it; otherwise take
+whatever is on `PATH`, which is how it is installed on this machine.
+"""
+vgleague_executable() = get(ENV, "VGLEAGUE_BIN", "vgleague")
+
+"""
+    scrape_get(url; headers, reuse) -> HTTP.Response
+
+Get `url`, by whatever means the site will accept, and hand back a response
+the caller's parser can read. Resolution order:
+
+1. a page `prefetch!` already fetched for this URL, consumed on the way out;
+2. a page held from an earlier `reuse` fetch in this process;
+3. `HTTP.get`, which is cheap and works on any host that is not behind a
+   challenge;
+4. `vgleague fetch`, when 3 comes back blocked.
+
+The one place every scrape goes through — PCS and Velogames alike — which is
+what lets the browser fallback exist in one function instead of at thirteen
+call sites.
+
+A genuine non-2xx status that is *not* a block (e.g. 400, 404) still raises
+`HTTP.Exceptions.StatusError` as usual, so callers keep their existing
+"missing data" handling for those. `ScrapeBlockedError` is now raised only
+when the browser transport is turned away too, which means the site has
+changed its posture again rather than merely disliking `HTTP.jl`.
+
+Step 3 is kept ahead of step 4 rather than going straight to the browser
+because it costs one request to find out, and it keeps unblocked hosts — the
+Cycling Oracle — on the fast path with no host list to maintain. It costs that
+request *once* per host per process: a refusal puts the host in
+`_BLOCKED_HOSTS` and later URLs on it skip straight to step 4, throttle
+included. A batch should not discover the block even once per rider; that is
+what `prefetch!` is for.
+
+It is also where the request throttle lives. The jittered pause used to sit
+in `getpcs_rider_pts`'s fetcher alone, which is about a sixth of the PCS
+traffic a render makes: `getpcs_rider_seasons_batch` fires one request per
+rider on the very same profile URL, and `_apply_pcs_recency!` fires five —
+some 800 unthrottled requests on a grand-tour field, against the 160 the old
+comment blamed for the block. Here it covers all of them.
+
+What it is not is a way past PCS. The measurements in
+`docs/pcs-cloudflare-block-evaluation.md` found a TLS and client-hint
+fingerprint check, scoped to deep paths and indifferent to pacing, so no
+delay makes `HTTP.jl` welcome. The delay is politeness, and it is short
+(0.2-0.4s) because uniform coverage at the old 0.5-1.5s would have added a
+quarter of an hour to a grand-tour render. The host it protects for real is
+velogames.com, which does rate-limit under burst and only reached this
+function once the Velogames fetchers were routed through it.
+
+Every call site is inside a `cached_fetch` fetch closure, so a cache hit
+still costs nothing.
+"""
+function scrape_get(
+    url::String;
+    headers = ["User-Agent" => SCRAPE_USER_AGENT],
+    reuse::Bool = false,
+)
+    if haskey(_PREFETCHED, url)
+        body = pop!(_PREFETCHED, url)
+        reuse && (_PAGE_CACHE[url] = copy(body))
+        return _page_response(body)
+    end
+    reuse && haskey(_PAGE_CACHE, url) && return _page_response(_PAGE_CACHE[url])
+
+    # A host that turned us away once will turn us away again: the check is on
+    # the TLS fingerprint, which does not vary between requests. So skip step 3
+    # for the rest of the process and go straight to the transport, saving both
+    # the throttle and a request that is known to fail. One refusal per host per
+    # run is the cost of finding out, and it is what keeps unblocked hosts on
+    # the fast path with no list to maintain.
+    if _host(url) in _BLOCKED_HOSTS
+        return _scrape_get_via_browser(url; reuse = reuse)
+    end
+
+    sleep(0.2 + 0.2 * rand())
+    response = try
+        HTTP.get(url, headers)
+    catch e
+        if e isa HTTP.Exceptions.StatusError && looks_blocked(e.response)
+            push!(_BLOCKED_HOSTS, _host(url))
+            return _scrape_get_via_browser(url; reuse = reuse)
+        end
+        rethrow()
+    end
+    if looks_blocked(response)
+        push!(_BLOCKED_HOSTS, _host(url))
+        return _scrape_get_via_browser(url; reuse = reuse)
+    end
+    reuse && (_PAGE_CACHE[url] = copy(response.body))
+    return response
+end
+
+_page_response(body::Vector{UInt8}) =
+    HTTP.Response(200, Pair{String,String}[]; body = copy(body))
+
+# Hosts that have refused `HTTP.jl` in this process. Per host rather than per
+# URL because the fingerprint check is indifferent to the path, and per process
+# rather than persisted because a site's posture is exactly the thing that
+# changes — a stored list would keep us on the slow path long after PCS
+# relented. `clear_memory_cache!` empties it, which is how a long-lived
+# `serve.jl` gets to find out.
+const _BLOCKED_HOSTS = Set{String}()
+
+"""
+    _host(url) -> String
+
+The host part of `url`, for `_BLOCKED_HOSTS`. Falls back to the whole string
+when there is no `//`, which only happens for a malformed URL — those go on to
+fail at `HTTP.get` and say so properly.
+"""
+function _host(url::AbstractString)
+    stripped = replace(String(url), r"^[a-zA-Z][a-zA-Z0-9+.-]*://" => "")
+    return String(first(split(stripped, '/'; limit = 2)))
+end
+
+"""
+    _scrape_get_via_browser(url; reuse) -> HTTP.Response
+
+The fallback `scrape_get` takes when `HTTP.jl` is turned away: fetch the one
+page through `vgleague fetch` and carry on as though the request had worked.
+
+One page means one browser launch, which is seconds rather than milliseconds.
+That is the right trade for a one-off — `_extract_rider_slugs` loads a single
+startlist — and the wrong one for a field of 160 riders, which is what
+`prefetch!` is for. Nothing here is reached on a prefetched page, because
+`scrape_get` serves those before it ever tries the network.
+"""
+function _scrape_get_via_browser(url::String; reuse::Bool = false)
+    _TRANSPORT_ENABLED[] || throw(
+        ScrapeBlockedError(
+            "Blocked fetching $url, and the browser transport is disabled for " *
+            "this call (see `with_browser_transport`). Reconstruction reads the " *
+            "archive and nothing else.",
+        ),
+    )
+    prefetch!([url])
+    haskey(_PREFETCHED, url) || throw(
+        ScrapeBlockedError(
+            "Blocked fetching $url, and the browser transport could not get it either",
+        ),
+    )
+    body = pop!(_PREFETCHED, url)
+    reuse && (_PAGE_CACHE[url] = copy(body))
+    return _page_response(body)
+end
+
 
 """
 `normalisename` takes a rider's name and returns a normalised version of it.

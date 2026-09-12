@@ -74,7 +74,7 @@ column tracking whether PCS data was successfully retrieved (before coalescing).
 function join_pcs_specialty(riderdf::DataFrame, pcsriderpts::DataFrame)
     pcs_cols = intersect(
         names(pcsriderpts),
-        ["riderkey", "oneday", "gc", "tt", "sprint", "climber"],
+        ["riderkey", "oneday", "gc", "tt", "sprint", "climber", "hills"],
     )
     if !isempty(pcs_cols)
         riderdf =
@@ -86,6 +86,13 @@ function join_pcs_specialty(riderdf::DataFrame, pcsriderpts::DataFrame)
             any(!ismissing(riderdf[i, col]) for col in specialty_cols) for
             i = 1:nrow(riderdf)
         ]
+        # `:hills` is deliberately absent from this list. The other five coalesce
+        # to zero because a rider with no sprint points genuinely is at the
+        # bottom of the field on sprinting. Hills is different: it is missing for
+        # every race before September 2026 and for any rider whose fetch was
+        # turned away, and zeroing that would tell the estimator those riders are
+        # bad at hills rather than unmeasured. `has_pcs_hills` reads the
+        # `missing` directly, so it has to survive to here.
         for col in [:oneday, :gc, :tt, :sprint, :climber]
             if col in propertynames(riderdf)
                 riderdf[!, col] = coalesce.(riderdf[!, col], 0)
@@ -103,11 +110,136 @@ end
 # ---------------------------------------------------------------------------
 
 """
+    _pcs_results_archive_first(slug, year; prefer_gc, cache_config, force_refresh)
+        -> DataFrame
+
+`getpcs_race_results` for one `(slug, year)`, but archive-first: both result
+types are `refetchable = true` and the archive typically already holds 2-3
+prior editions per race (and per similar-race slug) from an earlier render or
+from `archive_race_results`, so reading `load_race_snapshot` first restores the
+whole race-history signal with no live fetch at all. `force_refresh` bypasses
+the archive too, matching every other fetcher's escape hatch.
+
+`prefer_gc` picks the archive type as well as the URL. It used to steer only
+the live tail, so a caller asking for a grand tour's GC was handed whatever
+`pcs_results` held — a frame scraped from `/result`, which is the final
+stage's sprint. The two types exist precisely because they are not the same
+thing, and nothing in the shared schema records which page a row came from.
+Selecting the type also puts the GT signal back on the archive: the tree holds
+`pcs_gc_results` for every grand tour 2023-2026 but `pcs_results` for only two
+of them, so the old read missed and fell through to a blocked live fetch.
+"""
+function _pcs_results_archive_first(
+    slug::String,
+    year::Int;
+    prefer_gc::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    if !force_refresh
+        archived = load_race_snapshot(
+            prefer_gc ? "pcs_gc_results" : "pcs_results",
+            slug,
+            year,
+        )
+        archived !== nothing && return archived
+    end
+    try
+        return getpcs_race_results(
+            slug,
+            year;
+            prefer_gc = prefer_gc,
+            cache_config = cache_config,
+            force_refresh = force_refresh,
+        )
+    catch e
+        e isa ScrapeBlockedError || rethrow()
+        # During a live render a block must propagate. A challenge quietly
+        # becoming "no history for that year" is the precise failure that let
+        # two races go out on VG-points-only predictions with a clean log, and
+        # `ScrapeBlockedError` exists to stop it.
+        #
+        # Reconstruction is the other case, and the distinction is the
+        # transport switch rather than the exception. A backtest deliberately
+        # runs with the transport off (see `_TRANSPORT_ENABLED`), so "blocked"
+        # there means only "this edition is not in the archive" — expected, and
+        # not a reason to discard a race whose other three editions are present.
+        # Callers already drop empty years; hand them an empty frame and let
+        # them.
+        _TRANSPORT_ENABLED[] && rethrow()
+        @debug "No archived results for $slug $year; reconstruction does not fetch"
+        return DataFrame(
+            position = Int[],
+            rider = String[],
+            team = String[],
+            riderkey = String[],
+            in_breakaway = Bool[],
+            breakaway_km = Union{Float64,Missing}[],
+        )
+    end
+end
+
+"""
+    _pcs_race_history_archive_first(slug, years; prefer_gc, cache_config, force_refresh)
+        -> Union{DataFrame, Nothing}
+
+`getpcs_race_history` across `years`, but archive-first per year via
+`_pcs_results_archive_first`. Matches `getpcs_race_history`'s output shape
+(adds `:year` to each edition's results); a year with no results anywhere
+(archive or live) is dropped, same as `getpcs_race_history`. Returns
+`nothing` — not a malformed empty frame — when no year contributed any rows,
+matching `getpcs_race_history`'s old behaviour of raising rather than handing
+back a result with none of the expected columns.
+
+Each year is fetched in its own `try`/`catch`, so one bad year (a transient
+error on the one year requiring a live fetch, say) doesn't discard years
+already collected from the archive or from other live fetches — same as
+`getpcs_race_history`. `ScrapeBlockedError` is the one exception not swallowed
+here: a block found on one year will be found on every other year in this
+loop too, so it propagates to the caller rather than being folded into "no
+history for that year".
+"""
+function _pcs_race_history_archive_first(
+    slug::String,
+    years::Vector{Int};
+    prefer_gc::Bool = false,
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+)
+    frames = DataFrame[]
+    for year in years
+        try
+            df = _pcs_results_archive_first(
+                slug,
+                year;
+                prefer_gc = prefer_gc,
+                cache_config = cache_config,
+                force_refresh = force_refresh,
+            )
+            if nrow(df) > 0
+                df = copy(df)
+                df[!, :year] .= year
+                push!(frames, df)
+            end
+        catch e
+            e isa ScrapeBlockedError && rethrow()
+            @warn "Failed to fetch results for $slug $year: $e"
+        end
+    end
+    isempty(frames) && return nothing
+    return vcat(frames...; cols = :union)
+end
+
+"""
     assemble_pcs_race_history(pcs_slug, race_year, history_years;
         race_date, cache_config, force_refresh) -> Union{DataFrame, Nothing}
 
 Fetch PCS race history: prior-year primary results, prior-year similar-race
-results, and optionally within-year similar race results.
+results, and optionally within-year similar race results. Archive-first
+throughout (`_pcs_results_archive_first` / `_pcs_race_history_archive_first`):
+each `(slug, year)` pair is read from the `pcs_results` archive before any
+live fetch is attempted, which is typically enough on its own — the archive
+holds 2-3 prior editions for most races and their similar-race slugs.
 
 Returns a DataFrame with columns `riderkey`, `position`, `year`,
 `variance_penalty`, or `nothing` if no history could be fetched.
@@ -133,16 +265,22 @@ function assemble_pcs_race_history(
 
     # --- Prior-year primary race history ---
     try
-        race_history_df = getpcs_race_history(
+        fetched = _pcs_race_history_archive_first(
             pcs_slug,
             years;
             prefer_gc = primary_prefer_gc,
             cache_config = cache_config,
             force_refresh = force_refresh,
         )
-        race_history_df[!, :variance_penalty] .= 0.0
-        @info "Got $(nrow(race_history_df)) primary race history results"
+        if fetched !== nothing
+            fetched[!, :variance_penalty] .= 0.0
+            race_history_df = fetched
+        end
+        @info "Got $(race_history_df === nothing ? 0 : nrow(race_history_df)) primary race history results"
     catch e
+        # A block found while filling in the years the archive doesn't cover
+        # is worth stopping for, not folding into "this race has no history".
+        e isa ScrapeBlockedError && rethrow()
         @warn "Failed to fetch race history for $pcs_slug: $e"
     end
 
@@ -167,14 +305,14 @@ function assemble_pcs_race_history(
         @info "Fetching similar-race history from: $(join([s.slug for s in similar_specs], ", "))..."
         for spec in similar_specs
             try
-                similar_df = getpcs_race_history(
+                similar_df = _pcs_race_history_archive_first(
                     spec.slug,
                     years;
                     prefer_gc = spec.prefer_gc,
                     cache_config = cache_config,
                     force_refresh = force_refresh,
                 )
-                if nrow(similar_df) > 0
+                if similar_df !== nothing && nrow(similar_df) > 0
                     similar_df[!, :variance_penalty] .= spec.penalty
                     if race_history_df === nothing
                         race_history_df = similar_df
@@ -183,6 +321,7 @@ function assemble_pcs_race_history(
                     end
                 end
             catch e
+                e isa ScrapeBlockedError && rethrow()
                 @debug "Skipping unavailable similar race $(spec.slug)" exception = e
             end
         end
@@ -198,7 +337,7 @@ function assemble_pcs_race_history(
             similar_date = resolve_race_date(spec.slug, race_year)
             (similar_date === nothing || similar_date >= race_date) && continue
             try
-                similar_df = getpcs_race_results(
+                similar_df = _pcs_results_archive_first(
                     spec.slug,
                     race_year;
                     prefer_gc = spec.prefer_gc,
@@ -214,6 +353,7 @@ function assemble_pcs_race_history(
                     @debug "Added $(nrow(similar_df)) within-year PCS results from $(spec.slug) ($race_year)"
                 end
             catch e
+                e isa ScrapeBlockedError && rethrow()
                 @debug "Failed to fetch within-year PCS results for $(spec.slug) $race_year: $e"
             end
         end
@@ -262,6 +402,7 @@ function assemble_pcs_classification_history(
                 df[!, :variance_penalty] .= penalty
                 result = result === nothing ? df : vcat(result, df; cols = :union)
             catch e
+                e isa ScrapeBlockedError && rethrow()
                 @debug "Skipping unavailable edition $slug $y" exception = e
             end
         end
@@ -744,6 +885,115 @@ function load_vg_startlist(
 
     race = filter(:race_number => ==(number), season)
     return isempty(race) ? nothing : race
+end
+
+"""
+    _shape_vg_stage_pool(stage_pool) -> DataFrame
+
+A `vg_stage_riders` frame in `getvg_riders`' shape, for `load_vg_race_pool`.
+
+Three differences from the classics startlist it sits beside. `value` is
+computed rather than read: the Python writer omits it and the Julia one
+includes it, so neither can be assumed. `class`/`classraw` are present on some
+files only, and a file may carry the raw spelling without the normalised one —
+`build_model_stage`'s class constraints match on `allrounder`, not on the
+page's "All Rounder". And `:startlist` is left off entirely: `vg_stage_riders`
+records no start-list flag, the hash filter in `_prepare_rider_data` treats a
+missing column as "no filter", and `racehash` is empty for a stage race
+anyway. A synthesised value would only invite someone to trust it.
+"""
+function _shape_vg_stage_pool(stage_pool::DataFrame)
+    pool = select(stage_pool, :rider, :team, :cost, :riderkey)
+    pool[!, :points] = Float64.(stage_pool.points)
+    pool[!, :value] = pool.points ./ max.(pool.cost, 1)
+    if hasproperty(stage_pool, :classraw)
+        pool[!, :classraw] = String.(stage_pool.classraw)
+        pool[!, :class] =
+            hasproperty(stage_pool, :class) ? String.(stage_pool.class) :
+            lowercase.(replace.(pool.classraw, " " => ""))
+    elseif hasproperty(stage_pool, :class)
+        pool[!, :class] = String.(stage_pool.class)
+        pool[!, :classraw] = pool.class
+    end
+    return pool
+end
+
+"""
+    load_vg_race_pool(pcs_slug, year, current_url; cache_config, force_refresh,
+        archive_dir) -> DataFrame
+
+The rider pool for one race in `getvg_riders`' own shape — archive first, live
+fetch second.
+
+Velogames answers `HTTP.jl` with a Cloudflare challenge on every page, so the
+live fetch is not a fallback that usually works: it is one that never does from
+this process, and the archived `vg_startlist` that `vgleague pool` writes is the
+only route a render has. It is kept as the tail anyway because the block is a
+posture that can lift, and because a race with no archived startlist (anything
+before August 2026) has nowhere else to go.
+
+Reading the archive is also the more correct of the two even when both work.
+`riders.php` shows its Start List column only for whichever race is open for
+entry, so a render started after the next race opens gets *that* race's field
+under this race's name — the season pool with the wrong 150 riders flagged. The
+archived startlist is stamped with the race number it was captured for.
+
+Stage races take a different archive. `vg_startlist` is one file per season
+keyed by the classics game slug, so it holds no grand-tour rows at all, and a
+tour reaching for it got `nothing` and fell through to the blocked live fetch —
+the format an archive-first pool helps most was the one it did not serve.
+Their pools live in `vg_stage_riders`, one file per edition keyed by
+`pcs_slug`, which is what `race_format` routes to here.
+
+`force_refresh` skips the archive, matching every other fetcher.
+"""
+function load_vg_race_pool(
+    pcs_slug::String,
+    year::Int,
+    current_url::String;
+    cache_config::CacheConfig = DEFAULT_CACHE,
+    force_refresh::Bool = false,
+    archive_dir::String = archive_dir(),
+)
+    if !force_refresh && !isempty(pcs_slug) && race_format(pcs_slug) == :stage
+        stage_pool =
+            load_race_snapshot("vg_stage_riders", pcs_slug, year; archive_dir = archive_dir)
+        if stage_pool !== nothing
+            pool = _shape_vg_stage_pool(stage_pool)
+            @info "Loaded $(nrow(pool)) riders from the archived VG stage pool for $pcs_slug $year"
+            return pool
+        end
+    end
+
+    startlist =
+        force_refresh || isempty(pcs_slug) ? nothing :
+        load_vg_startlist(
+            pcs_slug,
+            year;
+            cache_config = cache_config,
+            archive_dir = archive_dir,
+        )
+
+    if startlist === nothing
+        @info "No archived VG startlist for $pcs_slug $year — fetching the live pool"
+        return getvg_riders(
+            current_url;
+            cache_config = cache_config,
+            force_refresh = force_refresh,
+        )
+    end
+
+    pool = select(startlist, :rider, :team, :cost, :riderkey)
+    pool[!, :startlist] = String.(startlist.start_list)
+    pool[!, :points] = Float64.(startlist.points)
+    pool[!, :value] = pool.points ./ pool.cost
+    # Empty on every classics page; the stage-race pool carries it for real.
+    if any(!isempty, startlist.class)
+        pool[!, :classraw] = String.(startlist.class)
+        pool[!, :class] = lowercase.(replace.(pool.classraw, " " => ""))
+    end
+    @info "Loaded $(nrow(pool)) riders from the archived VG startlist for $pcs_slug $year"
+    return pool
 end
 
 """

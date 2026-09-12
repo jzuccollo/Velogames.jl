@@ -13,10 +13,10 @@ Downloads and parses the finishing results for a specific race edition from the 
 URL pattern: `https://www.procyclingstats.com/race/{slug}/{year}/result`
 
 Uses `scrape_pcs_table` + `find_column` to parse the static HTML results table.
-The `div.svg_shield` breakaway indicator is only present in JavaScript-rendered HTML
-(browser), not in raw HTTP responses, so `in_breakaway` is always `false` and
-`breakaway_km` is always `missing`. The empirical breakaway model in
-`predict_expected_points` falls back to field-average rates as a result.
+The `div.svg_shield` breakaway indicator is rendered by JavaScript, so it was
+absent from every raw `HTTP.jl` response and `in_breakaway` was hardcoded
+`false`. Since fetches go through a browser (see `docs/pcs-fetch-architecture.md`)
+both breakaway columns carry real values — see `_row_breakaway`.
 
 Returns a DataFrame with the following columns:
 
@@ -67,8 +67,8 @@ function getpcs_race_results(
         # Parse directly with Gumbo to extract rider names from <a href="rider/..."> links.
         # The PCS results table concatenates rider name + team name in one cell (full cell text),
         # so scrape_pcs_table gives wrong rider names; the link text is always the clean rider name.
-        # div.svg_shield breakaway indicators are only present in JavaScript-rendered HTML, not
-        # in raw HTTP responses, so in_breakaway is always false.
+        # div.svg_shield breakaway indicators are rendered by JavaScript, so they
+        # arrive now that fetches go through a browser. `_row_breakaway` reads them.
         _empty_results() = DataFrame(
             position = Int[],
             rider = String[],
@@ -83,11 +83,12 @@ function getpcs_race_results(
         page = nothing
         for attempt_url in [url, fallback_url]
             response = try
-                HTTP.get(
-                    attempt_url,
-                    ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"],
-                )
+                scrape_get(attempt_url)
             catch e
+                # A block on one candidate URL means the other is blocked too
+                # (same site, same session) — raise rather than burning a
+                # second request and then reading the pair as "no results".
+                e isa ScrapeBlockedError && rethrow()
                 e isa HTTP.Exceptions.StatusError && continue
                 error("Failed to fetch $attempt_url: $e")
             end
@@ -122,6 +123,8 @@ function getpcs_race_results(
         positions = Int[]
         riders = String[]
         teams = String[]
+        in_break = Bool[]
+        break_km = Union{Float64,Missing}[]
 
         for row in rows
             cells = collect(eachmatch(sel"td", row))
@@ -139,9 +142,12 @@ function getpcs_race_results(
             team_name = isempty(team_links) ? "" : strip(nodeText(team_links[1]))
             pos_text = strip(nodeText(cells[1]))
             pos = something(tryparse(Int, pos_text), DNF_POSITION)
+            flag, km = _row_breakaway(row)
             push!(positions, pos)
             push!(riders, rider_name)
             push!(teams, team_name)
+            push!(in_break, flag)
+            push!(break_km, km)
         end
 
         isempty(riders) && return _empty_results()
@@ -151,8 +157,8 @@ function getpcs_race_results(
             rider = riders,
             team = teams,
             riderkey = createkey.(riders),
-            in_breakaway = falses(length(riders)),
-            breakaway_km = Vector{Union{Float64,Missing}}(fill(missing, length(riders))),
+            in_breakaway = in_break,
+            breakaway_km = break_km,
         )
         result = filter(row -> !isempty(row.riderkey), result)
         result = unique(result, :riderkey)
@@ -173,10 +179,39 @@ function getpcs_race_results(
 end
 
 
+"""
+    _row_breakaway(row) -> (Bool, Union{Float64,Missing})
+
+Read a results row's breakaway shield: whether the rider spent a meaningful
+part of the race off the front, and how far.
+
+PCS marks this with a `div.svg_shield` whose `title` reads "204 kilometre in a
+group in front of the peloton". Both facts come from the one element — the
+shield's presence is the flag, its title the distance — so a shield with an
+unparseable title still counts as a breakaway with unknown km, which is the
+honest reading.
+
+This was dead ground until September 2026. The shields are rendered by
+JavaScript and never appeared in a raw `HTTP.jl` response, so `in_breakaway` was
+hardcoded `false` and `breakaway_km` always `missing`. Fetching through a
+browser put them within reach.
+"""
+function _row_breakaway(row)
+    shields = collect(eachmatch(sel"div.svg_shield", row))
+    isempty(shields) && return false, missing
+    for shield in shields
+        title = getattr(shield, "title", "")
+        m = match(r"(\d+(?:\.\d+)?)\s*kilomet", title)
+        m === nothing && continue
+        km = tryparse(Float64, m.captures[1])
+        km === nothing || return true, km
+    end
+    return true, missing
+end
+
 function _extract_rider_slugs(pageurl::String)::Dict{String,String}
     slug_map = Dict{String,String}()
-    response =
-        HTTP.get(pageurl, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+    response = scrape_get(pageurl)
     pagehtml = Gumbo.parsehtml(String(response.body))
     for link in eachmatch(Selector("a"), pagehtml.root)
         href = get(link.attributes, "href", "")
@@ -306,10 +341,12 @@ function getpcs_rider_seasons(
     pageurl = "https://www.procyclingstats.com/rider/$(pcs_slug)"
 
     function fetch_seasons(url, params)
+        # The specialty twin of this parse (`getpcs_rider_pts`) reads the same
+        # profile page; `reuse` means whichever runs second pays no request.
         response = try
-            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+            scrape_get(url; reuse = true)
         catch e
-            if e isa HTTP.Exceptions.StatusError && e.status in (400, 403, 404)
+            if e isa HTTP.Exceptions.StatusError && e.status in (400, 404)
                 return DataFrame(year = Int[], pcs_points = Float64[], pcs_rank = Int[])
             end
             rethrow()
@@ -370,13 +407,34 @@ end
 
 Batch version — get season-by-season PCS points for multiple riders.
 Returns a single DataFrame with an additional `riderkey` column.
+
+Counts `ScrapeBlockedError`s separately from genuine misses, same as its sibling
+`getpcs_rider_pts_batch`: once the block count passes `PCS_BLOCK_RAISE_THRESHOLD`
+this raises rather than silently absorbing a challenge into an incomplete
+`pcs_seasons` archive with no signal that a block, not genuine absence,
+caused the gap.
 """
 function getpcs_rider_seasons_batch(
     rider_slugs::Dict{String,String};
     force_refresh::Bool = false,
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
+    # Usually free: the specialty batch runs first over the same profile pages,
+    # and whatever it fetched with `reuse` is still held, so `prefetch!` drops
+    # those. This covers the riders it did not want — a seasons batch run on its
+    # own, or a field where the archive already answered the specialty half.
+    _prefetch_pages(
+        "rider profile",
+        [
+            "https://www.procyclingstats.com/rider/$slug" => Dict("slug" => slug) for
+            slug in values(rider_slugs)
+        ];
+        force_refresh = force_refresh,
+        cache_config = cache_config,
+    )
+
     all_dfs = DataFrame[]
+    blocked_riders = String[]
 
     for (riderkey, slug) in rider_slugs
         try
@@ -390,8 +448,27 @@ function getpcs_rider_seasons_batch(
                 push!(all_dfs, df)
             end
         catch e
+            if e isa ScrapeBlockedError
+                push!(blocked_riders, riderkey)
+                if length(blocked_riders) > PCS_BLOCK_RAISE_THRESHOLD
+                    throw(
+                        ScrapeBlockedError(
+                            "getpcs_rider_seasons_batch: PCS blocked $(length(blocked_riders))/" *
+                            "$(length(rider_slugs)) riders so far — a Cloudflare challenge, " *
+                            "not $(length(blocked_riders)) riders genuinely missing seasons " *
+                            "data. Stopping rather than writing a poisoned archive; retry " *
+                            "once PCS settles. Last: $e",
+                        ),
+                    )
+                end
+                continue
+            end
             @warn "Failed to fetch seasons for $riderkey ($slug): $e"
         end
+    end
+
+    if !isempty(blocked_riders)
+        @warn "PCS blocked $(length(blocked_riders))/$(length(rider_slugs)) riders' season fetches (below the raise threshold) — check whether this run is being challenged" blocked_riders
     end
 
     return isempty(all_dfs) ?
@@ -439,9 +516,9 @@ function getpcs_specialty_by_season(
 
     function fetch_specialty(url, params)
         response = try
-            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+            scrape_get(url)
         catch e
-            if e isa HTTP.Exceptions.StatusError && e.status in (400, 403, 404)
+            if e isa HTTP.Exceptions.StatusError && e.status in (400, 404)
                 return DataFrame(year = Int[], points = Float64[])
             end
             rethrow()
@@ -530,6 +607,10 @@ function getpcs_race_history(
             year_df[!, :year] = fill(year, nrow(year_df))
             all_results = vcat(all_results, year_df; cols = :union)
         catch e
+            # A block found on one year will be found on every other year in
+            # this loop too — propagate rather than silently reading it as
+            # "no history for that year" and quietly trying the rest.
+            e isa ScrapeBlockedError && rethrow()
             @warn "Failed to fetch results for $pcs_race_slug $year: $e"
         end
     end
@@ -691,8 +772,9 @@ function getpcs_stage_profiles(
 
     function fetch_profiles(url, params)
         response = try
-            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+            scrape_get(url)
         catch e
+            e isa ScrapeBlockedError && rethrow()
             if e isa HTTP.Exceptions.StatusError
                 @warn "HTTP $(e.status) for $url"
                 return DataFrame()
@@ -877,8 +959,9 @@ function _fetch_stage_details(stage_url::String)
     n_cat1 = 0
 
     response = try
-        HTTP.get(stage_url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+        scrape_get(stage_url)
     catch e
+        e isa ScrapeBlockedError && rethrow()
         if e isa HTTP.Exceptions.StatusError
             @debug "HTTP $(e.status) fetching stage details from $stage_url"
             return ps, vert, gradient, n_hc, n_cat1
@@ -945,8 +1028,9 @@ function getpcs_stage_results(
         )
 
         response = try
-            HTTP.get(url, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+            scrape_get(url)
         catch e
+            e isa ScrapeBlockedError && rethrow()
             if e isa HTTP.Exceptions.StatusError
                 @warn "HTTP $(e.status) for $url — caching empty result"
                 return _empty()
@@ -961,6 +1045,8 @@ function getpcs_stage_results(
         positions = Int[]
         riders = String[]
         teams = String[]
+        in_break = Bool[]
+        break_km = Union{Float64,Missing}[]
 
         for row in rows
             cells = collect(eachmatch(sel"td", row))
@@ -978,9 +1064,12 @@ function getpcs_stage_results(
             team_name = isempty(team_links) ? "" : strip(nodeText(team_links[1]))
             pos_text = strip(nodeText(cells[1]))
             pos = something(tryparse(Int, pos_text), DNF_POSITION)
+            flag, km = _row_breakaway(row)
             push!(positions, pos)
             push!(riders, rider_name)
             push!(teams, team_name)
+            push!(in_break, flag)
+            push!(break_km, km)
         end
 
         isempty(riders) && return _empty()
@@ -990,8 +1079,8 @@ function getpcs_stage_results(
             rider = riders,
             team = teams,
             riderkey = createkey.(riders),
-            in_breakaway = falses(length(riders)),
-            breakaway_km = Vector{Union{Float64,Missing}}(fill(missing, length(riders))),
+            in_breakaway = in_break,
+            breakaway_km = break_km,
         )
         result = filter(row -> !isempty(row.riderkey), result)
         result = unique(result, :riderkey)

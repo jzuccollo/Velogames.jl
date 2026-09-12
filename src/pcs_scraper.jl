@@ -66,8 +66,9 @@ the first row; if none are present, the first `<td>` row is used as headers
 """
 function scrape_html_tables(pageurl::String)::Vector{DataFrame}
     response = try
-        HTTP.get(pageurl, ["User-Agent" => "Mozilla/5.0 (compatible; VelogamesBot/1.0)"])
+        scrape_get(pageurl)
     catch e
+        e isa ScrapeBlockedError && rethrow()
         error("Failed to fetch $pageurl: $e")
     end
     page = Gumbo.parsehtml(String(response.body))

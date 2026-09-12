@@ -38,6 +38,32 @@ struct ProspectiveResult
 end
 
 """
+    _archived_finish_order(pcs_slug, year; archive_dir) -> Union{DataFrame, Nothing}
+
+The finishing order this race should be scored against: a stage race's
+general classification, a one-day race's result.
+
+`prospective_season_summary` walks every slug in the predictions archive, and
+grand tours are in there, so this cannot assume one-day. A stage race's
+`pcs_results` is whatever `/result` returned, which for a tour is the final
+stage's sprint — scoring a GC prediction against it would rank the model on a
+race it never predicted. `pcs_gc_results` is the right type and is preferred,
+with `pcs_results` kept as the tail for the week-long races that have no GC
+file archived yet.
+"""
+function _archived_finish_order(
+    pcs_slug::String,
+    year::Int;
+    archive_dir::String = archive_dir(),
+)
+    if race_format(pcs_slug) == :stage
+        gc = load_race_snapshot("pcs_gc_results", pcs_slug, year; archive_dir = archive_dir)
+        gc === nothing || return gc
+    end
+    return load_race_snapshot("pcs_results", pcs_slug, year; archive_dir = archive_dir)
+end
+
+"""
     evaluate_prospective(pcs_slug, year; archive_dir) -> Union{ProspectiveResult, Nothing}
 
 Load archived predictions and PCS results for a race, match riders,
@@ -51,8 +77,7 @@ function evaluate_prospective(
 )
     predictions =
         load_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir)
-    pcs_results =
-        load_race_snapshot("pcs_results", pcs_slug, year; archive_dir = archive_dir)
+    pcs_results = _archived_finish_order(pcs_slug, year; archive_dir = archive_dir)
 
     if predictions === nothing || pcs_results === nothing
         return nothing
@@ -144,21 +169,20 @@ function prospective_season_summary(year::Int; archive_dir::String = archive_dir
         has_race_snapshot("predictions", pcs_slug, year; archive_dir = archive_dir) ||
             continue
 
-        # Auto-archive PCS results if predictions exist but results don't
-        if load_race_snapshot("pcs_results", pcs_slug, year; archive_dir = archive_dir) ===
-           nothing
+        # Auto-archive the finishing order if predictions exist but it doesn't.
+        # `archive_race_results` already knows which page and which type a race
+        # of each format wants, and the races here span both — this loop walks
+        # every slug with an archived prediction, grand tours included. Rolling
+        # its own `getpcs_race_results` is how a stage race's final-stage sprint
+        # got written under `pcs_results` and then scored as a GC.
+        #
+        # It writes to the default archive only — it takes no `archive_dir` —
+        # so a caller pointing this at another tree gets no auto-archive rather
+        # than a write into the wrong one.
+        if archive_dir == Velogames.archive_dir() &&
+           _archived_finish_order(pcs_slug, year; archive_dir = archive_dir) === nothing
             try
-                pcs_results = getpcs_race_results(pcs_slug, year)
-                if nrow(pcs_results) > 0
-                    save_race_snapshot(
-                        pcs_results,
-                        "pcs_results",
-                        pcs_slug,
-                        year;
-                        archive_dir = archive_dir,
-                    )
-                    @info "Auto-archived PCS results for $pcs_slug $year"
-                end
+                archive_race_results(pcs_slug, year)
             catch e
                 @warn "Failed to auto-archive PCS results for $pcs_slug $year: $e"
             end

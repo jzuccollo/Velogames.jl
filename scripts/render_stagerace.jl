@@ -33,12 +33,18 @@ function render_stagerace(rc::RenderConfig)
     # a reassigned captured variable would be boxed.
     stages = if rc.pcs_stage_scrape && !isempty(config.pcs_slug)
         @info "Scraping stage profiles from PCS..."
-        scraped = getpcs_stage_profiles(
-            config.pcs_slug,
-            config.year;
-            cache_config = config.cache,
-            force_refresh = rc.fresh,
-        )
+        scraped = try
+            getpcs_stage_profiles(
+                config.pcs_slug,
+                config.year;
+                cache_config = config.cache,
+                force_refresh = rc.fresh,
+            )
+        catch e
+            e isa ScrapeBlockedError || rethrow()
+            @warn "PCS blocked stage profile scraping for $(config.pcs_slug) $(config.year): $e"
+            StageProfile[]
+        end
         if isempty(scraped)
             @warn "PCS stage scraping returned no stages — falling back to aggregate approach"
         else

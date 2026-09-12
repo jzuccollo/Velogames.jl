@@ -46,12 +46,18 @@ function _assessor_prediction(rc::RenderConfig)
     @info "No archive found — running fresh prediction..."
     if config.type == :stage
         stages = if rc.pcs_stage_scrape && !isempty(config.pcs_slug)
-            getpcs_stage_profiles(
-                config.pcs_slug,
-                config.year;
-                cache_config = config.cache,
-                force_refresh = rc.fresh,
-            )
+            try
+                getpcs_stage_profiles(
+                    config.pcs_slug,
+                    config.year;
+                    cache_config = config.cache,
+                    force_refresh = rc.fresh,
+                )
+            catch e
+                e isa ScrapeBlockedError || rethrow()
+                @warn "PCS blocked stage profile scraping for $(config.pcs_slug) $(config.year): $e"
+                StageProfile[]
+            end
         else
             StageProfile[]
         end
@@ -443,12 +449,31 @@ function render_assessor(rc::RenderConfig)
     else
         # Results pages change from empty to partial to final on race day, and
         # what they say gets archived permanently, so the retrospective always
-        # reads them fresh rather than off a cache filled before the finish.
+        # reads them fresh rather than off a cache filled before the finish —
+        # unless `ingest.jl` has already archived a final snapshot, in which
+        # case that is the fresh read (VG blocks Julia's HTTP client outright,
+        # so a live fetch here can never do better than the archive anyway).
         results_cache = CacheConfig(race_cache.cache_dir, 0)
 
-        # Fetch actual VG results
-        local actual_results = nothing
-        if is_stage
+        # Grand tours archive under "vg_stage_totals" (written by
+        # `archive_stage_race_results`), not "vg_results" — reading the wrong
+        # type here means the archive-first check never engages for stage
+        # races and always falls through to a live fetch against a blocked
+        # velogames.com.
+        results_archive_type = is_stage ? "vg_stage_totals" : "vg_results"
+        local actual_results =
+            !isempty(config.pcs_slug) ?
+            load_race_snapshot(results_archive_type, config.pcs_slug, config.year) :
+            nothing
+        used_archived_results = actual_results !== nothing && nrow(actual_results) > 0
+
+        local actual_race_number = vg_race_number
+
+        if used_archived_results
+            # The VG half is fresh from ingest.jl; the PCS half may not be, so
+            # the `archive_race_results` call below still runs. Both halves
+            # gate on their own absence, so it is a no-op when both are there.
+        elseif is_stage
             actual_results = try
                 suppress_output() do
                     getvg_stage_race_totals(
@@ -463,7 +488,6 @@ function render_assessor(rc::RenderConfig)
             end
         else
             # Auto-detect race number for one-day races
-            local actual_race_number = vg_race_number
             if actual_race_number == 0
                 try
                     vg_racelist = suppress_output() do
@@ -495,22 +519,30 @@ function render_assessor(rc::RenderConfig)
                     @warn "Failed to fetch VG race results: $e"
                     nothing
                 end
+            end
+        end
 
-                # Archive one-day results
-                if !isempty(config.pcs_slug)
-                    try
-                        suppress_output() do
-                            archive_race_results(
-                                config.pcs_slug,
-                                config.year;
-                                vg_race_number = actual_race_number,
-                                cache_config = results_cache,
-                            )
-                        end
-                    catch e
-                        @warn "Failed to archive race results: $e"
-                    end
+        # Archive whatever of this race's results is still missing. This sits
+        # outside the branch above deliberately: `used_archived_results` is
+        # keyed on the VG half alone, so short-circuiting on it used to skip
+        # the PCS half too, and a race whose `vg_results` arrived from
+        # `vgleague ingest` while `pcs_results` did not could never be
+        # backfilled by re-rendering. Each half gates on its own absence, so
+        # this costs nothing when both are already there. A `vg_race_number`
+        # of 0 suppresses only the VG fetch, which is exactly the case where
+        # the archive already has it.
+        if !isempty(config.pcs_slug)
+            try
+                suppress_output() do
+                    archive_race_results(
+                        config.pcs_slug,
+                        config.year;
+                        vg_race_number = actual_race_number,
+                        cache_config = results_cache,
+                    )
                 end
+            catch e
+                @warn "Failed to archive race results: $e"
             end
         end
 
@@ -522,9 +554,39 @@ function render_assessor(rc::RenderConfig)
                 ),
             )
         else
-            # Build full retrospective pool
-            all_vg_riders = suppress_output() do
-                getvg_riders(config.current_url; cache_config = race_cache)
+            # Build full retrospective pool. `load_report_data` is this race's
+            # field as the archive holds it — the archived startlist where
+            # there is one, the season pool otherwise, and in both cases
+            # everyone who appears in `vg_results` whatever the startlist says.
+            #
+            # That last rule is the one that matters here, and it is why the
+            # archived prediction cannot be the pool even though it carries all
+            # four columns. `filter_startlist` and `excluded_riders` trim the
+            # rider frame before the prediction is archived, so the prediction
+            # pool is narrower than the VG field; `retro` is a left join *from*
+            # the pool, so anyone missing from it is dropped along with their
+            # score. Measured against the 2026 archive that is 11 of Coppa
+            # Sabatini's 52 scorers (390 VG points), 7 of Scheldeprijs' 50
+            # (462), 6 of San Sebastián's 52 (959) — understating the
+            # hindsight-optimal benchmark, and understating the entrant's own
+            # total whenever they picked one of them.
+            #
+            # Velogames' live page is not an option either: it is Cloudflare-
+            # blocked to Julia, and its rider list is filtered to whichever race
+            # is next open for entry, so a day after the race it returns the
+            # *next* race's field entirely.
+            pool_cols = [:rider, :team, :cost, :riderkey]
+            report_field =
+                isempty(config.pcs_slug) ? nothing :
+                load_report_data(config.pcs_slug, config.year; cache_config = race_cache)
+            all_vg_riders = if report_field !== nothing
+                report_field[:, pool_cols]
+            elseif prediction_ok && all(∈(propertynames(predicted)), pool_cols)
+                predicted[:, pool_cols]
+            else
+                suppress_output() do
+                    getvg_riders(config.current_url; cache_config = race_cache)
+                end
             end
 
             retro = leftjoin(
