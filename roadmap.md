@@ -19,6 +19,77 @@ Known bugs recorded, not fixed (moratorium): `find_race`'s fuzzy fallback mis-re
 
 ## Known issues
 
+### Breakaway channel: shipped directionally, not validated (September 2026)
+
+The breakaway scoring channel now runs on per-race archive data instead of four
+hand-saved season-leaderboard pages. The mechanism is measured and strong; the
+backtest gain is real in sign and not resolvable in size. Shipped under the
+"large effect, clear mechanism" arm of the validation triage, with a trigger.
+
+**What the data says.** The September 2026 backfill re-fetched 131 archived
+one-day editions through the browser transport, recovering `in_breakaway` and
+`breakaway_km` from the `div.svg_shield` markup that never appeared in a raw
+`HTTP.jl` response. 726 rider-race breakaway observations, 469 riders.
+
+Break participation is persistent — split-half by year parity, 694 riders with
+at least four starts in each half, Spearman ρ = 0.453 (Pearson 0.22; the gap
+says monotone and heavy-tailed, which is what a behavioural propensity looks
+like).
+
+It pays, and it pays where the model is weakest. Using `pcs_results` as the
+denominator (`vg_results` holds only riders who scored, so joining on it alone
+conditions away most of the effect):
+
+| Finish | Pack mean VG | Break mean VG | Ratio |
+| --- | --- | --- | --- |
+| Top 10 | 277.8 | 361.9 | 1.3x |
+| 21-50 | 20.7 | 86.0 | 4.2x |
+| 51+ finished | 5.3 | 64.9 | 12.2x |
+| DNF | 4.5 | 43.2 | 9.6x |
+
+The mechanism is P(scoring at all): 89.5% for a break rider against 28.6% for
+the pack. A rider who spends 200 km off the front and abandons still averages 43
+points; the model predicted him at roughly nothing. This is the quantified form
+of `gt-stagehunter-underrating`.
+
+**What the backtest says.** 108 editions, every arm the same production core at
+the same seed, paired against breakaway-off:
+
+| prior_strength | Δ team-points-captured | SE | W/L/T |
+| --- | --- | --- | --- |
+| 29 | +0.0146 | 0.0111 | 47/42/19 |
+| 60 | +0.0158 | 0.0111 | 47/41/20 |
+| 120 | +0.0168 | 0.0111 | 48/41/19 |
+
+t = 1.51, 95% CI [-0.005, +0.039], median difference zero, 48 better against 41
+worse. **Not significant.** Not driven by outliers either — trimming five races
+from each tail leaves +0.0155 against +0.0168 — the per-race spread is simply
+too wide for 108 editions to resolve a +0.017 effect.
+
+Every one of six specs beat baseline, and the effect is monotone in shrinkage
+(10 < 29 < 60 < 120), which is consistent with the sparsity: field rate 0.035
+over ~23 starts a rider, so light shrinkage lets a 2-in-8 rider read as 0.25.
+`km_weighted` did not help despite ρ(km, VG score) = 0.41, because the sector
+count already carries distance into the points calculation — weighting the rate
+by it double-counts.
+
+**Two caveats on the sizing.**
+
+The comparison is on-versus-off, *not* new-versus-old. Production did feed the
+old leaderboard rates, so the change actually being made is leaderboard →
+archive. That comparison is not backtestable, because the old source is exactly
+what cannot be reconstructed as of a past date.
+
+Separately and more solidly: mean sectors is **1.3**, not the hardcoded 2.0. The
+old path inflated this channel by about 54% for every rider it matched. That is
+a defect fixed regardless of what the rates do.
+
+**Pre-registered trigger.** If prospective team-points-captured over the next 20
+one-day races does not hold the sign, back it out. `prior_strength = 120` is the
+largest value tested and the curve had not turned — probe 250 and 500 before
+treating it as settled.
+
+
 ### Derived league winners disagree with the hand-typed record in 4 of 29 (August 2026)
 
 `scripts/auto_publish.jl` now derives every league winner from the vgleague
