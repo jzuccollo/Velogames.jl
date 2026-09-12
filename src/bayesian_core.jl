@@ -399,6 +399,24 @@ const SIGNAL_DIMENSION_WEIGHTS = (
     # backtest flat strength (1.02→0.75) with elite sprinters unchanged; inert
     # in production (market_discount suppresses PCS for priced riders).
     pcs_oneday = (flat = 0.0, hilly = 0.5, mountain = 0.0, itt = 0.0, gc = 0.0, kom = 0.0),
+    # PCS started publishing a Hills rating in September 2026, which is a direct
+    # measurement of the thing `:hilly` had only ever been able to synthesise
+    # from oneday (0.5) + climber (0.5). Weight 1.0: it is the primary signal for
+    # that dimension wherever it exists, as pcs_tt is for :itt.
+    #
+    # The oneday and climber routes are deliberately left at 0.5 rather than
+    # trimmed to make room. Two reasons. Every race before September 2026 has no
+    # Hills rating at all and never will — the ratings are season-cumulative, so
+    # the history cannot be backfilled honestly — and trimming would leave those
+    # races with a weaker :hilly than they have today. And the overlap between
+    # three correlated ability signals is already handled: all three sit in the
+    # ability cluster, where `within_cluster_correlation = 0.5` discounts exactly
+    # this, so keeping them is not naive triple-counting.
+    #
+    # Small trickle to :mountain and :kom because PCS Hills counts cat-2/cat-3
+    # finishes, which is where hilly breakaways take KOM points. Deliberately
+    # well below pcs_climber's mountain = 1.0: a puncheur is not a grimpeur.
+    pcs_hills = (flat = 0.0, hilly = 1.0, mountain = 0.1, itt = 0.0, gc = 0.0, kom = 0.1),
     # Climbing ability is the base for BOTH summit-finish placing (:mountain) and
     # the daily KOM competition (:kom) — a strong climber leads climbs whether or
     # not he chases the jersey. KOM-market signals add breakaway/jersey propensity

@@ -33,6 +33,13 @@ remain as separate arguments to `estimate_rider_strength`.
     pcs_climber_z::Float64 = 0.0
     pcs_tt_z::Float64 = 0.0
     pcs_gc_z::Float64 = 0.0
+    # PCS began publishing a sixth rating, Hills, in September 2026. Every
+    # archive written before then lacks it and can never gain it, so it carries
+    # its own presence flag rather than riding on `has_pcs`: a z-score of 0.0
+    # from an absent column is "exactly average", and updating on that would
+    # shrink every rider's :hilly toward the prior in every historical race.
+    pcs_hills_z::Float64 = 0.0
+    has_pcs_hills::Bool = false
     rider_class::String = "unclassed"
     points_oracle_implied_prob::Float64 = 0.0
     points_oracle_floor_strength::Float64 = 0.0
@@ -436,13 +443,16 @@ function estimate_rider_strength_multidim(
     mean_before = copy(posterior.mean)
     if signals.has_pcs
         base_var = pcs_variance(config)
-        for (sig_name, obs) in (
+        pcs_observations = Tuple{Symbol,Float64}[
             (:pcs_sprint, signals.pcs_sprint_z),
             (:pcs_oneday, signals.pcs_oneday_z),
             (:pcs_climber, signals.pcs_climber_z),
             (:pcs_tt, signals.pcs_tt_z),
             (:pcs_gc, signals.pcs_gc_z),
-        )
+        ]
+        # Only when the race actually has Hills ratings. See `has_pcs_hills`.
+        signals.has_pcs_hills && push!(pcs_observations, (:pcs_hills, signals.pcs_hills_z))
+        for (sig_name, obs) in pcs_observations
             weights_nt = getfield(SIGNAL_DIMENSION_WEIGHTS, sig_name)
             for dsym in STRENGTH_DIMENSIONS
                 w = getfield(weights_nt, dsym)
@@ -893,6 +903,7 @@ struct AssembledSignals
     effective_vg_variance::Float64
 
     has_pcs::Vector{Bool}
+    has_pcs_hills::Vector{Bool}
     classes::Vector{String}
 
     currency_factors::Dict{String,Float64}
@@ -994,6 +1005,17 @@ function _assemble_signals(
     else
         avail = intersect(propertynames(df), collect(pcs_specialty_cols))
         [any(df[i, c] != 0 for c in avail) for i = 1:n_riders]
+    end
+
+    # Hills is gated per rider, not per race. The column is absent entirely for
+    # every race before September 2026, and present-but-`missing` for a rider
+    # whose profile predates the change or whose fetch was turned away — both
+    # mean "no observation", and neither should become a z-score of zero that
+    # the estimator reads as an average hilly rider.
+    has_pcs_hills = if :hills in propertynames(df)
+        [has_pcs[i] && !ismissing(df[i, :hills]) for i = 1:n_riders]
+    else
+        falses(n_riders)
     end
 
     # --- Classifications (used by multidim only; harmless to always compute) ---
@@ -1248,6 +1270,7 @@ function _assemble_signals(
         vg_z,
         effective_vg_variance,
         has_pcs,
+        has_pcs_hills,
         classes,
         currency_factors,
         rider_currency,
@@ -1353,7 +1376,7 @@ function _estimate_strengths_multidim(
         σ > 0 ? (logged .- μ) ./ σ : zeros(length(raw))
     end
 
-    pcs_cols = (:sprint, :oneday, :climber, :tt, :gc)
+    pcs_cols = (:sprint, :oneday, :climber, :tt, :gc, :hills)
     pcs_z = Dict{Symbol,Vector{Float64}}()
     for col in pcs_cols
         recency_col = Symbol(col, "_r")
@@ -1478,6 +1501,8 @@ function _estimate_strengths_multidim(
             pcs_climber_z = pcs_z[:climber][i],
             pcs_tt_z = pcs_z[:tt][i],
             pcs_gc_z = pcs_z[:gc][i],
+            pcs_hills_z = pcs_z[:hills][i],
+            has_pcs_hills = sig.has_pcs_hills[i],
             rider_class = sig.classes[i],
             race_history = hist_strengths,
             race_history_years_ago = hist_years,
