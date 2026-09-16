@@ -6,7 +6,7 @@ Hacky, personal Julia package to pick a Velogames team. Always in progress, alwa
 
 Estimate expected Velogames points for each rider via Monte Carlo simulation, then solve a linear programme to maximise expected points constrained by budget and rider limits.
 
-The prediction pipeline combines multiple data sources through Bayesian strength estimation: an uninformative prior is updated sequentially with PCS specialty ratings, VG season points, race-specific history from past editions, and where available betting odds and Cycling Oracle predictions. Monte Carlo simulation converts these strength estimates into probability distributions over finishing positions, which map to expected VG points through the scoring tables. An April 2026 ablation retired the PCS form score, qualitative intelligence and trajectory signals; the code and its data collection were deleted in August 2026. VG race history was retired from the one-day estimator only — the stage-race estimator still uses it.
+The prediction pipeline combines multiple data sources through Bayesian strength estimation: an uninformative prior is updated sequentially with PCS specialty ratings, VG season points, race-specific history from past editions, and where available betting odds and Cycling Oracle predictions. Monte Carlo simulation converts these strength estimates into probability distributions over finishing positions, which map to expected VG points through the scoring tables. VG race history feeds the stage-race estimator only.
 
 For stage races the model carries a multi-dimensional posterior rather than one number: each PCS specialty source is z-scored separately and routed to strength dimensions through `SIGNAL_DIMENSION_WEIGHTS`, and `compute_stage_strengths` then projects those dimensions onto a per-stage-type strength vector. The race is simulated stage by stage with correlated cross-stage noise, so a rider's contribution reflects which stages actually suit them.
 
@@ -18,7 +18,7 @@ Analysis reports are Julia scripts that generate standalone HTML. Output goes to
 - `scripts/render_stagerace.jl` — pre-race team selection for grand tours and stage races
 - `scripts/render_assessor.jl` — post-race review and result archival for prospective evaluation
 - `scripts/render_backtesting.jl` — model calibration: prior predictive checks, backtesting, prospective evaluation
-- `scripts/render_reports.jl` → `site/docs/` — the public race reports, **out of the publish path since August 2026**. The site is built and deployed by `vgleague build`; this is kept as the reference implementation the cross-language checks diff against
+- `scripts/render_reports.jl` → `site/docs/` — retired from publishing (the site is built by `vgleague build`); kept as the reference the cross-language checks diff against
 - `scripts/league_eval.jl` — offline league evaluation: model team vs realised points, the hindsight-optimal team, and naive baselines
 - `scripts/serve.jl` — local web frontend: a config form that adapts to the race format, runs any of the three reports and serves the result
 
@@ -31,7 +31,7 @@ All scripts accept `--fresh` to bypass the cache and fetch everything from the w
 - **Risk-adjusted optimisation**: `risk_aversion` parameter penalises high-variance riders; `domestique_discount` down-weights non-leaders relative to their strength gap
 - **Market blend (one-day)**: `market_blend_weight` mixes the bookmaker's implied win probabilities into the final team pick alongside the simulator's expected points. `race_config.toml` ships 0.5; `solve_oneday`'s own default is 1.0, which disables it. One-day races only, and inert without odds
 - **One-day and stage race support**: `solve_oneday()` for Sixes Classics, `solve_stage()` for grand tours with classification constraints
-- **Robust caching**: Arrow IPC caching (`CacheConfig`) with configurable TTL to avoid hammering external sites
+- **Caching**: Arrow IPC caching (`CacheConfig`) with configurable TTL to avoid hammering external sites
 - **Historical analysis**: Deterministic optimisation on actual results to find optimal and cheapest-winning teams
 
 ## Workflow
@@ -59,7 +59,7 @@ A race name that does not resolve is an error, not a warning — it will not sil
 
 The `[race]`, `[data_sources]`, `[output]`, and `[optimisation]` sections are shared by all scripts. The `[team_assessor]` section holds your team roster and the VG race number for retrospective analysis. Two further sections feed `scripts/league_eval.jl`: `[league]` names the minileague to score against and where to read its standings, and `[entered_team]` optionally records the team you actually entered when it differs from the advised one, so the evaluation can report the override delta.
 
-Note that `[league]` describes the season-long league you are competing in — the classics game and a grand tour are separate Velogames competitions with separate leagues, so switching it to score a grand tour discards your classics tracking. Its `vgleague_data_dir` must point at the deploy clone (`~/code/vgleague-deploy/data`), which is what the launchd job actually writes; the `~/code/vgleague` dev clone stopped being updated when scraping moved to a dedicated clone in July 2026.
+Note that `[league]` describes the season-long league you are competing in — the classics game and a grand tour are separate Velogames competitions with separate leagues, so switching it to score a grand tour discards your classics tracking. Its `vgleague_data_dir` must point at the deploy clone (`~/code/vgleague-deploy/data`), which is what the launchd job writes; the `~/code/vgleague` dev clone is not updated.
 
 ### Before each race
 
@@ -98,19 +98,11 @@ This generates the full calibration picture, covering:
 5. **Prospective evaluation** — `prospective_season_summary()` compares archived pre-race predictions against actual results for races where all signals were available. This is the most trustworthy evaluation, but requires a season's worth of archived data.
 6. **Signal value analysis** — `signal_value_analysis()` shows which signals moved predictions most across the season.
 
-### Race reports website
+### Publishing
 
-A separate static website in `site/docs/` provides post-race retrospectives for the minileague. Each race gets an interactive report with the hindsight-optimal team, cheapest winning team, scatter plots (points vs cost, value vs cost), and performance tables.
+The whole site — race reports, rider dossier, league standings and entrant pages — is built by `vgleague build` in the [vgleague](https://github.com/jzuccollo/vgleague) repo and deployed from that repo's launchd job. This repo contributes the ETL that runs before the build: `./scripts/auto_publish.sh` takes the league scrape into the archive (`scripts/ingest_league.jl`), records each unsettled race's winner (`scripts/auto_publish.jl`) and fetches the ProCyclingStats results. It writes nothing to git. Run it with `--dry-run` to see what it would do.
 
-One-day races publish themselves. `./scripts/auto_publish.sh` takes the `vgleague` scrape into the archive (`scripts/ingest_league.jl`), records the highest-scoring entrant of any race the winners record hasn't caught up with (`scripts/auto_publish.jl`), then renders that report and deploys it — the name and score nobody now types were always just `argmax(score)` over the league. The winner is read from the dated snapshot contemporaneous with the race rather than the newest one, because entrants rename their teams. Run it with `--dry-run` to see what it would publish and write nothing.
-
-It reads the `[league]` section of `data/race_config.toml` to find the snapshot, and skips a race until 24 hours after its pick deadline (`--min-age-hours`), because Velogames revises scores after a race and the record is append-only — a wrong winner has to be unpicked by hand, and that race's HTML deleted so it rebuilds.
-
-Grand tours come along the same path, one entry for the whole tour rather than one per stage, and wait until every race in the catalogue has been scored — including End-of-Tour, without which the cumulative totals are a partial sum and the leader isn't the winner. There is no manual publishing script; this is the only path.
-
-Re-deriving the entire 2026 record from scratch reproduces 25 of its 29 entries exactly. The four that differ are written up under "Known issues" in `roadmap.md`: grand tour totals that disagree by a handful of points, and team names that have changed since the race was ridden, since the scrape returns whatever the entrant is called today.
-
-The whole site — race reports, rider dossier, league standings and entrant pages — is built by `vgleague build` in the [vgleague](https://github.com/jzuccollo/vgleague) repo and deployed once, from that repo's launchd job. What this repo contributes to a publish is the ETL that runs before it: `scripts/auto_publish.sh` takes the league scrape into the archive, settles each race's winner and fetches the ProCyclingStats results. It writes nothing to git — the winners record lives in the archive beside every other piece of race data — and it pulls the code it is about to run and that is all.
+The winner is the highest-scoring entrant, read from the dated league snapshot contemporaneous with the race, because entrants rename their teams. A race is skipped until 24 hours after its pick deadline (`--min-age-hours`), because Velogames revises scores after a race and the winners record is append-only; correct a wrong winner with `--redrive=<pcs_slug>`. Grand tours get one entry for the whole tour and wait until every race in the catalogue has been scored, End-of-Tour included.
 
 ### Running it unattended
 
@@ -120,9 +112,7 @@ Set `POST_UPDATE_HOOK` in the `vgleague` deploy clone's `.env` and both of that 
 POST_UPDATE_HOOK=/Users/you/code/velogames-deploy/scripts/auto_publish.sh
 ```
 
-Point it at a dedicated deploy clone rather than your working tree, so it only ever runs committed, pushed code. Setting one up is a clone, a `Pkg.instantiate()`, an `.env`, and a `data/race_config.toml` holding the `[league]` block (nothing else in that file is read).
-
-The render script scans `archive_dir()/vg_results/` for completed races and generates an HTML page per race in `site/docs/reports/`. If VG/PCS results haven't been archived yet (e.g. because the assessor wasn't run), the script auto-detects the VG race number and archives them. Incremental build: existing HTML reports are skipped (pass `--force` to regenerate all). League winners come from `archive_dir()/league/winners/`, derived by `scripts/auto_publish.jl` from the dated league snapshot contemporaneous with the race and never re-derived, because entrants rename their teams. There are no 2025 entries at all, so the whole 2025 back-catalogue renders without a league winner. Full standings are a different matter — `data/league_standings.toml` carries every entrant's real name and stays gitignored. The index page lists all races grouped by year.
+Point it at a dedicated deploy clone rather than your working tree, so it only ever runs committed, pushed code. Setting one up is a clone, a `Pkg.instantiate()` and a `data/race_config.toml` holding the `[league]` block (nothing else in that file is read).
 
 ## Data storage
 

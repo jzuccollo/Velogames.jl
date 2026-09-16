@@ -7,7 +7,7 @@ source of truth; the manifest is a derived export for readers that cannot see
 Julia code, and `--check` exits non-zero when the two have parted company.
 
 This file carries what the const cannot: the arguments behind the shape of the
-table, and the history of what used to be in it.
+table.
 
 ## What the archive is
 
@@ -40,20 +40,19 @@ trail directory counts.
 ## Two languages write here
 
 Julia owns PCS, Cycling Oracle and the odds paste. Python (vgleague) owns the
-Velogames league pages and, since Phase 1c, `vg_startlist` — the field that
-started one race, which `riders.php` exposes only while that race is on.
+Velogames league pages and `vg_startlist` — the field that started one race,
+which `riders.php` exposes only while that race is on.
 `src/vgleague/archive.py` is the Python half of the boundary and enforces the
 same two rules from `_manifest.toml`: an unknown `data_type` and a frame short
 of a mandatory column both raise before anything is written, and the same five
-provenance keys are stamped into the schema metadata. The manifest exists
-precisely so the second writer needs no copy of the type table.
+provenance keys are stamped into the schema metadata. The manifest means the
+second writer needs no copy of the type table.
 
 `riderkey` is the join key across every source and is therefore implemented
 twice. `vgleague verify-keys <league>` recomputes it from the rider names in an
 archived `vg_riders` pool and compares against the keys Julia wrote — 5,144
-names across 2023–26, zero mismatches. A divergence would drop a rider from a
-join rather than raise anything, which is why it is checked rather than
-assumed.
+names across 2023–26, zero mismatches. A divergence would silently drop a rider
+from a join.
 
 `vg_startlist` carries a uniqueness constraint the column guard cannot express:
 **one row per `(race_number, riderkey)`**. A re-capture of a race must replace
@@ -133,30 +132,15 @@ abandons, stage profiles — which that site keeps indefinitely.
 would be tidier on disk. It is not worth it: the estimation path reads each
 market separately, so consolidating means a schema change threaded through
 `_prepare_rider_data`, the signal assembly and every archived file, for no
-functional gain. Documented here rather than acted on.
+functional gain.
 
-## What used to be here
+## Retired types
 
-`RETIRED_ARCHIVE_TYPES` in `cache_utils.jl` records five trees and where they
-went; the manifest exports them. The fifth is `league_winners.toml`, absorbed
-into `league/winners` by Phase 1b and kept under `_retired/` as the pre-archive
-record. Two were signals the April 2026 ablation
-dropped (`pcs_form`, `qualitative`), one was a typo that lived long enough to
-accumulate a file (`prediction`, singular), and one was never tabular at all
-(`pcs_breakaways`, four `.mhtml` pages). The first three are Arrow like
-everything else. They were held back as Feather V1 on the argument that a
-historical record does not need the current format; that lost to the observation
-that those 40 files were the only reason an end-of-life dependency was still in
-the manifest. The pre-flight copy taken before the WP1b conversion remains
-Feather V1, and is the untouched original if a question ever arises.
-
-A fifth, `stage_profiles`, was the same dataset as `pcs_stage_profiles` at an
-older schema, written by a second hand-built frame builder that dropped two
-columns. Both write paths now go through `stage_profiles_frame`. This is the one
-drift mode the type table cannot prevent: a second name for an existing dataset
-is a design error rather than a typo. What the table buys is that adding a type
-requires a deliberate edit, which is the moment to ask whether it is the one we
-already have.
+`RETIRED_ARCHIVE_TYPES` in `cache_utils.jl` records the retired trees and where
+they went; the manifest exports them. One of them, `stage_profiles`, was
+`pcs_stage_profiles` under a second name with a drifted schema. The type table
+cannot stop that: adding a type requires a deliberate edit, which is the moment
+to ask whether it is one we already have.
 
 ## Legacy files the guard cannot fix
 
@@ -181,24 +165,12 @@ worse: the audit would read the file as complete while it carried nothing.
 The 521 files with no provenance are simply older than the stamp. Re-writing
 them to add it would put today's date on a fetch from 2023.
 
-## What was recovered, and what is provably gone
+## What is provably gone
 
-A sweep in August 2026 (`scripts/backfill_archive.jl`,
-`scripts/backfill_vg_pages.jl`) closed every gap that any source still serves:
-
-- **`pcs_results` for 2023–2025**: 104 races archived, having been entirely
-  absent. Final results do not change, so a fetch now is the same fact.
-- **The 2023 and 2024 Velogames rider pools and calendars**: recovered from the
-  Internet Archive with pinned snapshot timestamps, since Velogames serves
-  nothing at all for those seasons — `riders.php`, `races.php` and
-  `ridescore.php` all 404. 1,248 and 1,362 riders respectively.
-- **`vg_scoring` for the 2025 grand tours**: the Tour's and Vuelta's pages were
-  still live, the Giro's came from the Internet Archive.
-- **Nine legacy `riderkey`s** in 2023/2024 `vg_results`, made by an older
-  `createkey` that kept apostrophes, so O'Brien, O'Connor and D'Heygere fell out
-  of every join. Pool coverage for 2023, 2024 and 2025 is now 100%.
-
-What no source has any more:
+An August 2026 sweep (`scripts/backfill_archive.jl`,
+`scripts/backfill_vg_pages.jl`) closed every gap any source still serves,
+including the 2023 and 2024 Velogames pools and calendars from the Internet
+Archive. What no source has any more:
 
 - **Odds, oracle and `pcs_specialty` before 2026.** The market closed, the blog
   post is edited, and the rating is live — re-fetching the last would leak the

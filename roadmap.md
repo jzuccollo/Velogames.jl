@@ -1,44 +1,73 @@
-# Velogames.jl improvement roadmap
+# Velogames.jl roadmap
 
-See `CLAUDE.md` for current architecture, prediction model details, signal inventory, and parameter settings.
+Open issues, pre-registered triggers, settled findings and deferred ideas. See
+`CLAUDE.md` for current architecture and parameters. Completed work and the
+experiments behind it live in git history (this file was pruned in September
+2026; `git log -p roadmap.md` has the full record).
 
-## Remediation phases 0–1 executed (July 2026)
+## Validation philosophy
 
-Phases 0 and 1 of the July 2026 remediation plan (following `docs/architecture-review.md`; the plan itself was deleted as spent in August 2026) shipped on branch `remediation/phase-0-1`. **The mechanism moratorium is in force**: no new signals or simulation layers until the Phase 2 stage-race harness exists; genuine bug fixes only. Decisions D1–D4 were executed as follows:
+Cycling supplies only ~3 grand tours and a few dozen classics a year, and market
+signals cover even fewer races, so most changes will never have large-sample
+power. Match the rigour of the check to the change's effect size × mechanistic
+clarity, never to a race count.
 
-- **D1 (league standings)**: resolved without a new scraper — the sibling `../vgleague` package already scrapes full league standings; `load_league_standings` (data_assembly.jl) reads its JSON cache, with `data/league_standings.toml` manual paste as fallback. First measurement: **over the 9 races with both archived model teams and standings, the model would place 2nd of 15 cumulatively** (11,198 vs leader 11,616), slightly ahead of the entered teams (11,076; delta −122). After a vgleague refresh and the gent-wevelgem name fix widened coverage to 12 races, the model places **4th of 15** — the three added races (Gent-Wevelgem, GP de Plumelec, Tro-Bro Léon) were among its weaker ones, consistent with the review's stochastic-race diagnosis. Note: "Mud Springs Eternal", read by the review as a strong opponent, is the user's own team. Entered-vs-advised deltas now reported per race by `scripts/league_eval.jl`. Later-season races need `vgleague update dpcc` run in `../vgleague`.
-- **D2 (final-KOM fix, review defects 1+2)**: final mountains jersey now ranked by cumulative daily-KOM points (driven by `kom_s`, hilly+mountain); `mountain_top5_counts` deleted. Fixed-seed Giro 2026 diff: movement confined to the KOM component (sum |ΔEVG| 185.3); Ciccone +29.4, Vine +26.9, Scaroni +10.1 up; Caruso/Vendrame/Narváez down. Caveat: Giro/Tour 2026 prediction archives predate the `strength_kom` column, so retrospective reconstructions fall back to `strength_mountain` for the KOM channel.
-- **D3 (intermediate sprints)**: the undocumented runtime 0.5× folded into the config vector (`[10, 6, 4, 3, 2, 1] .* 0.5` as literals); bit-identical on fixed seeds.
-- **D4 (multidim block-correlation)**: the scalar cluster discount ported per-dimension to `estimate_rider_strength_multidim`, behind `multidim_block_correlation::Bool = true`. The branch code review then caught a missed accumulation site (the GC-odds block was excluded from the discount's cluster bookkeeping, silently deleting the market precision from priced riders' reconstructed posteriors); an invariant `@assert` now ties the accumulated cluster precision to the posterior precision so a missed site fails loudly. **Corrected acceptance numbers** (the figures in commit a806d41 were inflated by that bug): (a) SDs widen only for multi-signal riders (7/7 tests); (b) archived TdF 2026 reconstruction: Pogačar simulated GC win% 93.1% → **90.8%** (market raw implied 80.0%, normalised 55.3%) — moves toward the market, so the gate passes on its operative criterion, but falls far short of the anticipated 55–80% band: **the discount alone does not fix GC over-determinism**, which stays open (candidate causes: cross-stage correlated noise, aleatoric scale, protection layer); (c) Giro 2026 do-no-harm clean — top-20 rank ρ 0.094 → 0.094 and full-field EVG↔actual ρ 0.577 → 0.578, both unchanged. Mean :gc posterior SD widens 0.64 → 0.75. **Pre-registered revisit trigger: if Vuelta 2026 top-20 rank ρ degrades vs Giro/Tour 2026 levels, or GC win% moves further from market, flip the flag off and investigate.**
+### Triage each change
 
-Other Phase 1 fixes: GC-favourite protection no longer silently skipped when `gc_strengths` is empty (review defect 4); simulation layers (attrition, breakaway participation, aleatoric) now draw from independent per-sim RNG sub-streams so toggling one layer leaves the others' streams unchanged — the enabler for Phase 2's clean ablations. Seeded outputs changed once at that commit. Prediction archives now write a mandatory column set plus `schema_version` (review defect 5); readers warn on legacy archives (pre-April-2026 archives cannot be re-created).
+- **Large, mechanistically understood bias** — e.g. the June 2026 aleatoric-noise
+  fix (model sprinter top-10 rate ~0.98 v real ~0.42). The effect dwarfs sampling
+  noise. Ship on theory + directional confirmation + do-no-harm, then monitor.
+- **Small metric-chasing tuning** — e.g. non-uniform market discount (overall ρ
+  0.518 v 0.473, within 1–2 SEs on ~6 races). Needs power. Defer on grounds of
+  effect size, revisited when it looks material.
 
-Dead-knob prune (WP1.5): the two dead `BayesianConfig` fields the review counted (`form_absence_floor`, `qualitative_absence_floor`) are deleted — the estimation-path knob count drops by 2. The REFACTOR_PLAN audit found Phases 1–4 essentially already shipped (the plan document had not been kept in sync); only its optional 3d (estimator shared-block refactor) remained open, and the plan file was deleted as spent in August 2026 — 3d is carried here instead: worth scheduling, since the estimators keep needing edits. `qualitative_base_variance` was left as a hardcoded 2.0 literal rather than promoted to a config field; the accessor was deleted with the signal in August 2026.
+### The toolkit
 
-Known bugs recorded, not fixed (moratorium): `find_race`'s fuzzy fallback mis-resolves short aliases ("Tour" → "Paris-Tours Elite"). The gent-wevelgem display-name mismatch was subsequently verified against VG's races.php and league pages (VG has no "From") and fixed — that race now matches league standings.
+1. **Directional and magnitude checks** on the races we have. Evaluate at the
+   rider-stage level where possible; "6 GTs" undercounts the information (a
+   per-stage-type dispersion fit uses ~40 stages and every placement).
+2. **Do-no-harm guard rails** — top-~20 rank ρ must not degrade; no absurd
+   outputs (a domestique winning bunch sprints); field totals conserved (a bug
+   check, not evidence of correctness).
+3. **Selection impact, read directionally** — does a team chosen under the change
+   beat the current pick on held-out actuals? 5/6 in the right direction is
+   meaningful without significance.
+4. **Leave-one-out as information, not a veto.**
+5. **Estimate ranges, not points** — bound what is identifiable and pick a
+   defensible value in range.
+6. **Ship, then monitor** against a pre-registered revisit trigger. The
+   prospective harness (`src/prospective_eval.jl`) is the long-run validator.
+
+Rank correlation is invariant to monotonic EVG-level changes, so it cannot
+confirm calibration fixes: use PIT and team-points-captured for those.
+
+Ship one change at a time, for attribution.
+
+## Pre-registered triggers
+
+| Change | Trigger | Action |
+| --- | --- | --- |
+| Archive-fed breakaway channel (Sept 2026) | Prospective team-points-captured over the next 20 one-day races does not hold the sign | Back it out. Also probe `prior_strength` 250 and 500: 120 was the largest tested and the curve had not turned |
+| One-day market blend (July 2026) | Paired `simulator_market` − `simulator_risk` capture below +0.02 on the 2027 classics (render_backtesting.jl "Market blend — paired comparison" table) | Revert. If the blend still fails to beat odds alone, ask why we simulate marketed classics at all |
+| Multidim block correlation (`multidim_block_correlation`) | Vuelta 2026 top-20 ρ degrades v Giro/Tour 2026, or GC win% moves further from the market | Flip the flag off and investigate |
+| Stage aleatoric noise (`aleatoric_noise`) | Next 2 GTs show top sprinters under-predicting, or top-20 ρ drops materially | Revisit the per-type scale, flat first |
+| GT VG-history signal and propensity layer (`gt_vg_history`, `gt_propensity_factors`) | Next 2 GTs show a rider over-moved by a single fluke edition, or top-20 ρ drops | Revisit `κ` / `c` / `gt_vg_hist_base_variance` |
+
+**Due now: Vuelta 2026 out-of-sample check.** Run `backtest_stage_race` with
+`predictors = [:simulator, :simulator_risk, :persistence, :odds]` on Vuelta 2026
+and compare team-points-captured. Odds and predictions are archived. The
+simulator losing to `:persistence` (the 10-edition sweep had it at 0.563 v 0.451)
+should trigger a re-examination of the stage stack; losing to `:odds` alone
+raises the same question as the market blend. With n = 1, both are triggers to
+look, not pass/fail gates.
 
 ## Known issues
 
 ### Breakaway channel: shipped directionally, not validated (September 2026)
 
-The breakaway scoring channel now runs on per-race archive data instead of four
-hand-saved season-leaderboard pages. The mechanism is measured and strong; the
-backtest gain is real in sign and not resolvable in size. Shipped under the
-"large effect, clear mechanism" arm of the validation triage, with a trigger.
-
-**What the data says.** The September 2026 backfill re-fetched 131 archived
-one-day editions through the browser transport, recovering `in_breakaway` and
-`breakaway_km` from the `div.svg_shield` markup that never appeared in a raw
-`HTTP.jl` response. 726 rider-race breakaway observations, 469 riders.
-
-Break participation is persistent — split-half by year parity, 694 riders with
-at least four starts in each half, Spearman ρ = 0.453 (Pearson 0.22; the gap
-says monotone and heavy-tailed, which is what a behavioural propensity looks
-like).
-
-It pays, and it pays where the model is weakest. Using `pcs_results` as the
-denominator (`vg_results` holds only riders who scored, so joining on it alone
-conditions away most of the effect):
+The one-day breakaway channel runs on per-race archive data (131 editions
+backfilled, 726 rider-race observations). Break participation is persistent
+(split-half Spearman ρ = 0.453) and pays where the model is weakest:
 
 | Finish | Pack mean VG | Break mean VG | Ratio |
 | --- | --- | --- | --- |
@@ -47,1114 +76,216 @@ conditions away most of the effect):
 | 51+ finished | 5.3 | 64.9 | 12.2x |
 | DNF | 4.5 | 43.2 | 9.6x |
 
-The mechanism is P(scoring at all): 89.5% for a break rider against 28.6% for
-the pack. A rider who spends 200 km off the front and abandons still averages 43
-points; the model predicted him at roughly nothing. This is the quantified form
-of `gt-stagehunter-underrating`.
-
-**What the backtest says.** 108 editions, every arm the same production core at
-the same seed, paired against breakaway-off:
-
-| prior_strength | Δ team-points-captured | SE | W/L/T |
-| --- | --- | --- | --- |
-| 29 | +0.0146 | 0.0111 | 47/42/19 |
-| 60 | +0.0158 | 0.0111 | 47/41/20 |
-| 120 | +0.0168 | 0.0111 | 48/41/19 |
-
-t = 1.51, 95% CI [-0.005, +0.039], median difference zero, 48 better against 41
-worse. **Not significant.** Not driven by outliers either — trimming five races
-from each tail leaves +0.0155 against +0.0168 — the per-race spread is simply
-too wide for 108 editions to resolve a +0.017 effect.
-
-Every one of six specs beat baseline, and the effect is monotone in shrinkage
-(10 < 29 < 60 < 120), which is consistent with the sparsity: field rate 0.035
-over ~23 starts a rider, so light shrinkage lets a 2-in-8 rider read as 0.25.
-`km_weighted` did not help despite ρ(km, VG score) = 0.41, because the sector
-count already carries distance into the points calculation — weighting the rate
-by it double-counts.
-
-**Two caveats on the sizing.**
-
-The comparison is on-versus-off, *not* new-versus-old. Production did feed the
-old leaderboard rates, so the change actually being made is leaderboard →
-archive. That comparison is not backtestable, because the old source is exactly
-what cannot be reconstructed as of a past date.
-
-Separately and more solidly: mean sectors is **1.3**, not the hardcoded 2.0. The
-old path inflated this channel by about 54% for every rider it matched. That is
-a defect fixed regardless of what the rates do.
-
-**Pre-registered trigger.** If prospective team-points-captured over the next 20
-one-day races does not hold the sign, back it out. `prior_strength = 120` is the
-largest value tested and the curve had not turned — probe 250 and 500 before
-treating it as settled.
-
-
-### Derived league winners disagree with the hand-typed record in 4 of 29 (August 2026)
-
-`scripts/auto_publish.jl` now derives every league winner from the vgleague
-snapshots, grand tours included. Reproducing the whole 2026 record from scratch
-and diffing it against the entries typed by hand gives 25 exact matches out of
-29 and two distinct kinds of disagreement. Neither blocks anything — the winner
-*names* are right in every live case — but both are unexplained.
-
-**Grand tour totals are off by a handful of points.** Giro 8351 recorded
-against 8359 derived, Tour 11884 against 11880, Femmes 4382 against 4382. The
-derived figure is the sum of the per-race scores, which equals the snapshot's
-own `scored_total` exactly for all three, and `scored_races = []` for those
-leagues so nothing is being filtered. So the disagreement is between the scrape
-and whatever the hand-typed numbers were read off — probably the Velogames
-standings page at a moment when a stage had been rescored. Worth ten minutes
-with the live page during the next grand tour; not worth reconstructing now.
-
-**Team names are mutable, and the scrape returns the current one.**
-Paris-Roubaix is recorded as won by "Megaton-Structo NimaRent" and derives as
-"Lowering The Toon" — same entrant, same 1630 points, renamed since. Two more
-differ only in capitalisation ("Voecklers to the Left" → "Voecklers To The
-Left"). This is harmless in normal operation, because a race is published
-within about a day of being ridden, so the name recorded is the name the
-entrant raced under. It only bites when backfilling old races, where the
-derived name silently rewrites history. If that ever matters, the fix is to
-prefer an existing record over a re-derivation — which is already what the
-`(pcs_slug, year)` check does.
-
-### Package simplification (August 2026)
-
-Acting on the champion/challenger tie and the April 2026 ablation, three things
-were deleted rather than left dormant:
-
-- **`src/direct_evg.jl` and its tests.** The fitted challenger tied its gate on
-  both the stage harness (WP2.3) and the one-day harness. The finding — that the
-  strength→points transform is saturated — is recorded below and does not need
-  the code kept alive to restate it. `:direct` is gone from every predictor list.
-- **PCS form and qualitative intelligence, end to end.** The April 2026 ablation
-  turned both off in the estimator but left the fetch, the archival, the
-  `RaceData` fields, the `force_enable` re-enable gate, the `qualitative.jl`
-  module (YouTube transcript → Claude API) and the `getpcs_race_form` scraper in
-  place — so every production race was still making network calls for signals
-  the estimator discarded. All removed, along with the ablation report sections
-  that existed only to re-enable them.
-- **`_STAGE_RACE_PATTERNS`.** 100 lines fully derivable from the two slug dicts
-  it sat beside; the invariant is now pinned by a test.
-
-**VG race history was NOT removed.** The ablation disabled it in the *scalar*
-one-day estimator only; the multi-dim stage-race estimator consumes it
-unconditionally (`strength_pipeline.jl`, "VG race history (per-class
-projection)"). `RiderSignalData` keeps `vg_race_history`, and a test now pins
-both halves so a future cleanup cannot delete the live signal along with the
-dead one.
-
-Verified as a strict no-op on production numbers: the one-day harness returns
-identical team-points-captured and rank ρ for every surviving arm on
-Ronde van Vlaanderen 2026 and 2024.
-
-
-### Config consolidation and twin-path convergence (August 2026)
-
-Structural only — no modelling change, so it sits inside the mechanism
-moratorium rather than against it.
-
-**One config object.** `RenderConfig` / `load_render_config` replace the untyped
-TOML `Dict` that every renderer was unpacking by hand into 17+ loose kwargs.
-The trigger: setting up ADAC Cyclassics Hamburg with the config still in its
-Velogames Femmes shape, where `max_per_team = 0` would have carried over
-unnoticed. Two real defects fell out by construction — `render_assessor`'s
-fresh-solve path had been passing a strict subset of the kwargs
-`render_stagerace` passed (no odds frames, no jersey oracles, no `gt_vg_*`, no
-`season_round_slugs`), and it read `market_blend_weight` while never building
-`odds_df`, so the blend was inert there. An unresolved race name now throws
-instead of fabricating a URL.
-
-**A local web frontend** (`scripts/serve.jl`) makes the config a format-adaptive
-form, so per-format knobs are structurally unreachable on the wrong format
-rather than merely documented.
-
-**Twin paths merged where the difference was incidental:**
-
-- `_build_team_model` — the one-day and stage knapsacks differed by a single
-  class-constraint call.
-- `_score_team_points_captured` + `GameFormat` — `backtest_oneday_race` was
-  `backtest_stage_race`'s `:vg_total` branch with the model, team size and one
-  column name swapped. This is the one that mattered: the assessor bug above was
-  a twin that had drifted, and drift in the *harness* is invisible — it yields
-  plausible numbers, not an error.
-- `format_rankings_and_alternatives`, `format_near_optimal_section`,
-  `write_report` — shared by both prediction reports. The near-optimal
-  section (team switcher, locked core, filler pool, structural forks) had been
-  built for grand tours and never wired into the one-day report, which was
-  already computing the k-best set and discarding it.
-
-Left deliberately separate: `_oneday_prediction_core` vs
-`_stage_prediction_core` (106 of ~158 lines genuinely differ — one simulates a
-single race, the other 21 correlated stages), and `report_html` vs
-`stage_race_report_html` in `render_reports.jl`.
-
-**`max_per_team` does NOT derive from race format.** The consolidation plan
-assumed it was a game rule and that a wrong value meant an illegal team. It is
-not: it is production's *diversification cap* (see `_team_keys`), the same for
-both formats, and the harness defaults to the same 2 so its metric matches
-production. Deriving 0 for stage races from the old Femmes config would have
-quietly changed the objective. The plan was wrong; the knob stays a preference.
-
-Gated as a strict no-op: predictor (Hamburg 2026) and stage-race (Tour 2026)
-HTML byte-identical under a pinned seed, and all 14 backtest rows across both
-harnesses numerically identical, re-checked after formatting.
-
-### Stage assists scored zero everywhere — FIXED, archives patched 2 August 2026
-
-`_vg_scoring_field` tested `occursin("team", …)` before `occursin("stage", …)`.
-Every VG assist heading contains "Team" ("Assists - Teammate stage positions",
-"Assists - Overall Team competition"), so the stage-assist table matched the
-team test first and was filed as `team_class_assist_points`; first-match-wins
-then skipped the real team-class table, leaving `stage_assist_points` empty.
-`simulate_stage.jl` gates its whole assist loop on
-`length(scoring.stage_assist_points)`, so **top-3 teammate stage finishes scored
-zero in every run built on a poisoned snapshot.**
-
-The parser is fixed and `getvg_scoring` now re-scrapes on detecting an empty
-`stage_assist_points`, which self-heals any edition whose `scores.php` still
-resolves — `tour-de-france/2026` and `tour-de-romandie/2026` were healed that
-way on 2 August 2026 (returning `[8, 4, 2]` and `[6, 4, 2]` respectively). The
-2023/2024 pages now 302 to the site root, so the six grand-tour snapshots
-(`tour-de-france`, `giro-d-italia`, `vuelta-a-espana` × 2023, 2024) were patched
-by hand the same day: `stage_assist_points = [8, 4, 2]` appended, nothing else
-touched. Nothing was actually lost to the dropped team-class table — VG uses one
-assist schedule for all three assist types in a given game (8/4/2 for grand
-tours, 6/4/2 for shorter stage races), verified across the clean 2026 snapshots
-and confirmed by the two live re-scrapes.
-
-**Consequence for the evidence base: every stage-race backtest number computed
-before 2 August 2026 scored stage assists as zero.** That includes the WP2.3
-gate figures, the layer-adjudication Δtpc table, and the one-day/stage harness
-means recorded above. In particular the **pinned `crosscheck_option_ab` baseline
-(`base_*`, ±0.03) predates the patch and must be re-based on the next
-`render_backtesting.jl` render** — expect the alarm to trip, and treat that trip
-as expected rather than as drift.
-
-### Early-race GC is static, so sprinters never score daily-GC points (July 2026)
-
-**The biggest of the four defects surfaced by the 2026 Tour de France Femmes, and it
-affects men's grand tours identically.**
-
-`simulate_stage_race` accumulates `cumulative_gc_score[i] += gc_strengths[i] + epistemic
-+ gc_sep * aleatoric` (`src/simulate_stage.jl` ~line 466), then takes
-`sortperm(cumulative_gc_score, rev=true)` as the GC order for daily-GC scoring. The
-`gc_sep = clamp(w.mountain + w.itt, 0, 1)` guard correctly stops flat stages injecting
-spurious GC time — but `gc_strengths[i]` is still added on *every* stage from stage 1,
-so the simulated GC table is essentially the static GC-strength ordering from day one.
-
-Reality: after a bunch-sprint opening stage the whole peloton records the same time, and
-GC is ordered by bonus seconds and stage placing. The sprinter who wins stage 1 wears the
-leader's jersey and banks 25 daily-GC points a day until the race separates on time.
-
-Measured on the 2026 Femmes field (zero out `daily_gc_points`, diff the EVG):
-
-| Rider | EVG | of which daily GC | share |
-| ----- | --- | ----------------- | ----- |
-| Vollering | 1089 | 220 | 20% |
-| Reusser | 700 | 161 | 23% |
-| Ferrand-Prévot | 601 | 192 | 32% |
-| Wiebes | 576 | **12** | **2%** |
-| Rüegg | 323 | **0.8** | 0.2% |
-| Vos | 304 | **0.0** | 0% |
-
-Sprinters collect essentially nothing across all nine stages. Field-wide, daily GC is
-1989 of 14700 total EVG, of which **663 falls in stages 1–3** — before the stage-4 ITT
-separates anyone on time — and all of it is allocated on GC strength.
-
-Fix requires modelling bonus seconds (typically 10/6/4 on the stage and at intermediate
-sprints) and ordering early GC by cumulative time-then-placing rather than by strength.
-Not a small change; needs validation on the stage-race harness before shipping.
-
-### PCS recency scores treat a missed season as a zero (July 2026)
-
-`src/race_solver.jl` ~line 349 builds the `<spec>_r` recency columns as
-`scores[i] = sum(w .* pts)` — a decay-weighted **sum** over seasons present. A season a
-rider did not race contributes nothing, exactly as though they had raced and scored
-nothing. Absence is scored as weakness.
-
-This is inconsistent with the fallback path: `currency_factors`
-(`src/strength_pipeline.jl` ~line 1124) uses `decay_avg = sum(w.*pts)/sum(w)`, a weighted
-*average* over seasons present, which is absence-neutral. The preferred path is the
-punitive one.
-
-Worked example — 2026 Femmes ITT, `pcs_season_decay = 0.7` (≈1-year half-life):
-
-| Rider | 2026 | 2025 | 2024 | decayed sum | career |
-| ----- | ---- | ---- | ---- | ----------- | ------ |
-| Bäckstedt | 610 | 530 | 210 | 947 | 1532 |
-| Reusser | 220 | 530 | *no row (illness)* | 572 | 3208 |
-| van der Breggen | 120 | 260 | *retired* | 273 | 5452 |
-
-The model ranked Bäckstedt above both on `strength_itt`. Switching to the weighted-average
-form is cheap and clearly right; it narrows but does not close the gap here (Reusser ≈ 671).
-
-Two aggravating factors, worth considering alongside:
-- `pcs_season_decay = 0.7` is one global constant across all five specialties. A ~1-year
-  half-life suits volatile climbing form; time-trial ability is far more stable and is
-  over-discounted by it.
-- The `:itt` dimension is fed by a single signal (`pcs_tt → itt 1.0`) with **no market
-  input** — `odds_gc` routes `itt = 0.0` by design — so every rider's `uncertainty_itt` is
-  identical and nothing can correct a bad PCS read, unlike the other dimensions.
-
-### `stage_dimension_weights` ProfileScore ramp is calibrated on men's stage lengths (July 2026)
-
-`stage_dimension_weights` (`src/simulate_stage.jl` ~line 279) ramps flat→hilly across
-ProfileScore 40–90, and above PS 40 it discards PCS's categorical `stage_type` label
-entirely, going on ProfileScore alone.
-
-Men's Tour 2026 flat stages score PS 13–58, so five of six resolve to `flat = 1.0`. The
-2026 Femmes route's only PCS-labelled flat stage is PS 69 → `flat = 0.42`; the flattest
-treatment on the whole route is stage 8 at `flat = 0.54`. **No stage is treated as a pure
-sprint**, so the flat dimension is starved and sprinters are systematically under-rated.
-Women's stages are shorter (99–172 km against 133–180 km) at comparable vertical, so
-ProfileScore per km runs higher for the same race character.
-
-Forcing stages 2 and 8 to sprint weighting raised Wiebes +46%, Consonni +186%, Balsamo
-+39% — though it did not change the chosen team on its own (9/9 overlap).
-
-Candidate fixes: normalise the ramp by distance or vertical-metres-per-km; or floor the
-flat weight when PCS's own `stage_type` says `:flat` rather than discarding the label.
-
-### Archived VG scoring snapshots carry the stage-assist parse bug (July 2026)
-
-Fixed in `_vg_scoring_field` (`src/get_data.jl`) July 2026: every VG assist heading
-contains "Team" — either "Teammate" or "Overall Team" — and the `occursin("team", l)` test
-ran before the `"stage"` test, so the stage-assist table was filed under
-`team_class_assist_points` and the real team-assist table was dropped. `simulate_stage.jl`
-gates the whole assist loop on `length(scoring.stage_assist_points)`, so stage assists
-(8/4/2 per stage for a teammate finishing top 3) scored **zero**. GC assists were never
-affected — the `"general classification"` test already ran first.
-
-Eight of eleven archived snapshots hold the bad parse: tour-de-france 2023/2024/2026,
-giro-d-italia 2023/2024, vuelta-a-espana 2023/2024, tour-de-romandie 2026. Clean:
-giro-d-italia 2026, itzulia-basque-country 2026, tour-de-france-femmes 2026. Since
-`backtest.jl` feeds these to the stage-race harness, past stage-race backtests scored
-stage assists as zero — and `getvg_scoring` returns the archive ahead of any live scrape,
-so `render_stagerace.jl` / `render_assessor.jl` were doing the same on **live** stage-race
-predictions.
-
-**Handled, not merely recorded (July 2026).** `getvg_scoring` now treats a snapshot with
-empty `stage_assist_points` as stale: it warns, re-scrapes, and overwrites the archive, so
-2026 editions self-heal on the next run. The loud "missing essential scoring table" guard
-was extended to cover stage assists, so a future heading rename fails at the scrape rather
-than silently zeroing the channel. **2023/2024 still cannot be re-scraped** — those
-`scores.php` pages 302 to the site root — so the re-scrape throws, the stale table is kept
-with a warning, and those two years still need patching by hand from the known `[8, 4, 2]`.
-
-### VG points distributions underestimate scoring riders (March–April 2026)
-
-The most significant calibration problem, now confirmed across 10 prospective races (Omloop, Kuurne, Strade, Trofeo, Nokere, MSR, Brugge De Panne, Dwars Door Vlaanderen, E3, Gent-Wevelgem). Aggregate mean PIT for scoring riders is 0.828 (target: 0.5), consistent across all 10 races. The drop from 0.86 (6 races) is composition effects from the more predictable Flemish races, not model improvement.
-
-The underestimation is worst for outsiders and mid-tier riders: bottom-25% mean PIT = 0.9, middle-50% mean PIT = 0.9, top-25% mean PIT = 0.7. The favourite z-score bias (-0.6 in the historical backtest) and PIT right-skew (0.7) are consistent: the model slightly overestimates favourite *position* but underestimates their *VG points* due to the convex scoring table at top positions.
-
-Higher posterior uncertainty correlates with *worse* PIT, not better (Trofeo mean uncertainty 1.3, PIT 0.9 vs Dwars 0.6, PIT 0.8). This confirms the problem is asymmetric: unknown riders in stochastic races have heavily right-skewed outcomes that symmetric noise cannot capture.
-
-Three race-type clusters emerge from big-miss rates:
-
-| Cluster | Races | Big-miss rate | Characteristic |
-|---------|-------|---------------|----------------|
-| Selective | Strade, Dwars, E3 | 0–10% | Hard course thins the bunch; favourites nearly always score |
-| Standard | Brugge, MSR, Omloop | 20% | Mix of selection and bunch dynamics |
-| Stochastic | Kuurne, Nokere, Gent-Wevelgem, Trofeo | 30–60% | Bunch sprints or minor races; favourites frequently blank |
-
-### SBC test failure explained (April 2026)
-
-The SBC reports chi-squared p = 0.0 (non-uniform CDF ranks). This is a test bug, not a model bug: the SBC generates *independent* synthetic signals but `estimate_rider_strength` applies a *block-correlation discount* (within ρ=0.5, between ρ=0.15), making the posterior systematically wider than warranted by the uncorrelated DGP. Additionally, the SBC generates odds+oracle but never sets `race_has_market=true`. Per-signal SBC (one signal at a time) has been added to the backtesting report to verify each conjugate update individually.
-
-### Breakaway heuristic limitations
-
-Breakaway points are estimated heuristically from simulated finishing positions, allocating sector credits based on position ranges (see `_breakaway_sectors()` in `src/simulation.jl`). The heuristic has a known sharp boundary at position 20, where riders gain a 4th sector. Actual breakaway data (e.g. from race reports or live timing) would improve this.
-
-The impact is larger than previously thought. In MSR 2026, 8 riders scored exactly 120 VG points each purely from breakaway sectors (Tarozzi, Maestri, Marcellusi, Faure Prost, Belletta, Milesi, Moro, Tronchon). The model predicted these riders at 0.5–65 expected VG points. PCS breakaway data for the race was entirely missing (zero riders flagged), so the model fell back on the position-based heuristic alone. For Cat 1 races where breakaway points are 60 per sector (max 240 per rider), the heuristic is inadequate.
-
-### Stage-race breakaway modelling (prototype, July 2026)
-
-Grand tour breakaway participation was entirely unmodelled: `SCORING_GRAND_TOUR.breakaway_points` (20 pts, "breakaway at 50% distance", `src/scoring.jl` ~line 248) was defined but never read anywhere in `simulate_stage_race` (`src/simulate_stage.jl`) — dead code. `solve_stage`'s `breakaway_dir` kwarg was only consumed by the aggregate GC-position fallback (`src/race_solver.jl`, old `resample_optimise!` branch), never by the per-stage pipeline that every real grand-tour prediction actually uses.
-
-The empirical trigger: real historical VG scores (`getvg_stage_race_totals`) for known breakaway-reliant domestiques/opportunists are far above what the model predicts for 2026 — e.g. Pascal Eenkhoorn scored 295 (2023 Tour) and 290 (2025 Tour) but the model predicted 34.6; Clément Russo scored 241 (2024)/245 (2025) vs a 106.8 prediction. Meanwhile headline GC riders (Pogačar: real 3841/4153 in 2024/2025 vs 3819.4 predicted for 2026) are well-calibrated. The miss concentrates exactly where the scoring ceiling depends on breakaway sector/stage-win points the simulator doesn't generate — cheap (4–6 credit) riders occupying 3+ of 9 squad slots.
-
-**Prototyped fix** (`src/simulate_stage.jl` `_draw_breakaway!`/`_score_breakaway_bonus!`, `StageSimConfig.breakaway_stage_boost`, `scoring.jl` `STAGE_BREAKAWAY_MAX_RATE`): reuses the same archived PCS breakaway-km data and `compute_breakaway_rates` ranking already used for one-day races, but with a stage-specific `max_rate` (0.15/stage vs one-day's 0.35, since a GT offers ~10–13 hilly/mountain stages rather than one race day). On each hilly/mountain stage, riders with recorded breakaway history get an independent Bernoulli draw; on success they get the flat 20-pt bonus plus a `noisy`-strength boost (`breakaway_stage_boost = 2.5`, same units as `stage_strengths`) that lets them compete for stage/points-jersey/KOM placing from within a smaller effective group rather than the full bunch. Deliberately excluded from `cumulative_gc_score` — a domestique's break essentially never moves real GC, and keeping GC untouched means the feature cannot inflate the final-GC/team-classification metrics used for rank-ρ validation. Riders with no recorded breakaway km (`breakaway_rates[i] == 0`, i.e. most sprinters/GC leaders) consume zero RNG draws — an all-zero rate vector reproduces the pre-change simulation bit-for-bit (see `test/test_stage_race.jl` "breakaway event" tests).
-
-**Not yet validated** — this is a design/prototype pass, not a calibrated model. Per the Validation philosophy below, this is an EVG-level (points-level) change, not a strength-level one, so it should be judged on points-level metrics (PIT, team-points-captured, and specifically whether Eenkhoorn/Russo-shaped riders' predicted EVG moves toward, not past, their real historical range) rather than top-20 rank ρ. `STAGE_BREAKAWAY_MAX_RATE` (0.15) and `breakaway_stage_boost` (2.5) are first-pass estimates with no backtest behind them yet; HC/Cat1 climb points are NOT modelled for breakaways (`StageProfile.n_hc_climbs`/`n_cat1_climbs` are always 0 from the current PCS scraper — same limitation already documented for `_score_daily_mountains!`). `render_stagerace.jl` now passes `breakaway_dir` into `solve_stage` so the feature is live next time it runs; recommend a dry run against an archived past grand tour (e.g. re-predict TDF 2025 with these riders' pre-race data) before trusting it for a live 2026 prediction.
-
-**Deleted July 2026 (WP2.3).** The participation draw, its stage boost, the flat bonus channel and `STAGE_BREAKAWAY_MAX_RATE` were removed after failing to move team-points-captured on the WP2.1 harness (mean Δtpc +0.005, within the seed-noise band; per-edition effects ±0.08 sign-cancelling) — see the Phase 2 gate decision memo below. The one-day breakaway machinery is unaffected; `breakaway_dir` now feeds only the aggregate fallback path.
-
-### GT VG-history strength signal (Option A prototype, July 2026)
-
-**Problem.** The stage-race strength model is built from role-BLIND general-performance signals (PCS specialty, VG season points, classics race history, betting odds). In a grand tour, VG points are generated ROLE-conditionally: protected leaders convert strength→points at full efficiency, but break-hunters/opportunists score via spiky breakaway/stage-win points largely decoupled from bunch-finish strength. So the model badly under-scores cheap perennial break-hunters while getting leaders right (verified 2026 pre-signal EVG: Pogačar 3776 vs real 3841/4153 — good; Eenkhoorn 33 vs real 290/295, Russo 105 vs real 241/245, Abrahamsen 217 vs real 300/606/460 — huge misses).
-
-**Hypothesis (tested).** A rider's OWN prior GT VG total is a lower-bias proxy for their GT VG points than their general ability is, because a prior GT total is role-conditional *by construction* (a rider who domestiqued/break-hunted last year scored like one).
-
-**Mechanism** (`gt_vg_history` signal; flag `use_gt_vg_history`, default off). New same-tour VG-history signal in the multidim estimator. Data: `assemble_gt_vg_history(vg_slug, year, history_years)` (`src/data_assembly.jl`) re-fetches each prior edition's full-field VG totals via `getvg_stage_race_totals` (the corrupted `vg_results` GT archive was deleted). `_assemble_signals` log1p-z-scores each edition's field (GT totals are heavily right-skewed; log stops the 4000-pt leader dominating σ and compressing the field to z≈0). Each rider's own z-entries update the posterior conjugately in `estimate_rider_strength_multidim`, recency-decayed by `vg_hist_decay_rate`; multiple editions give ~n× precision (sparsity handled by the mechanism, no bolt-on). Base variance `gt_vg_hist_base_variance = 1.5` (unscaled by any precision-group factor).
-
-Three design decisions that make it do-no-harm (all in `src/bayesian_core.jl` / `src/strength_pipeline.jl`):
-1. **Routing** `(hilly=1.0, mountain=1.0, kom=0.5)`, ZERO on `:gc`, `:itt`, `:flat`. A GT total is a role/propensity factor, not terrain-specific — but routing it to `:gc` would fake a break-hunter into a GC threat (inflating daily/final-GC scoring), and to `:flat` would inflate a GC leader's bunch-sprint strength (their huge total comes from mountains). GT breakaways are a hilly/mountain phenomenon.
-2. **Runs AFTER the market updates.** Placed before them, the extra precision it adds on `:mountain`/`:hilly` *dampens* the later GC-odds/oracle lift and silently pulls leaders DOWN (Pogačar −238 EVG in the first cut — a precision effect, not a mean effect). After the market, a leader's already-lifted posterior mean is compared against the observation and (3) skips it.
-3. **UPWARD-ONLY clamp.** A dimension updates only when the observation would RAISE its mean. Prior GT success is evidence of *extra* propensity on top of ability; it must never drag down a rider whose ability estimate already exceeds their historical-VG z. Consequence: the INVERSE case (elite classics rider on locked domestique duty whose LOW GT history *should* pull them down) is deliberately NOT handled — the two-sided version reintroduces leader harm; that correction belongs in an EVG-stage layer (Option B).
-4. **Exempt from `market_discount`** — orthogonal to what the market prices for unpriced domestiques, so the double-counting inflation must not gut it.
-
-**Validation** (seeded `MersenneTwister(20260703)` sim, breakaway feature OFF to isolate the strength effect, n_sims=2500; `scratchpad/validate.jl` reproduces). EVG before→after against real Tour totals:
-
-| Rider | cost | EVG off→on | real Tour totals | verdict |
-|---|---|---|---|---|
-| Eenkhoorn | 4 | 33→72 | 295/290 | toward, ~25% of gap closed |
-| Russo | 4 | 105→141 | 241/245 | toward |
-| Turgis | 6 | 267→313 | 54/644/407 | toward |
-| Abrahamsen | 6 | 217→338 | 300/606/460 | into range |
-| Simmons | 6 | 54→90 | 16/380 | toward (mixed record limits it) |
-| Pogačar | 34 | 3776→3688 | 2979/3841/4153 | strength IDENTICAL; −2.3% EVG = field crowding |
-| Vingegaard | 24 | 2325→2237 | 2946/2703/3200 | strength IDENTICAL; −3.8% = crowding |
-| Van Dijke (debutant) | 4 | 162→156 | — | strength IDENTICAL (no GT history) |
-
-Do-no-harm rank ρ (predicted 2026 EVG vs real 2025 totals, signal restricted to ≤2024 to avoid leaking the 2025 target, 96 riders in both): overall 0.691→**0.700** (improves), **top-20 0.469→0.466 (flat — passes the gate)**, top-40 0.610→0.546 (mild degradation in the volatile mid-band — riders whose 2024 was strong but 2025 collapsed to injury get lifted wrongly; inherent to a 1-year-ahead check).
-
-**Verdict.** Option A does no harm (leader strengths byte-identical; top-20 ρ preserved; debutants untouched) and closes a MEANINGFUL FRACTION of the gap — it roughly doubles the flagged break-hunters' EVG and moves each *toward*, never past, their real range. But it does NOT fully close it: a strength nudge can only lift a rider's finish-position ranking so far, and these riders' 200–300-pt hauls come from breakaway/stage-win points the finish-position simulator barely generates for a mid-pack rider. The residual is exactly what the **breakaway prototype** (above) and/or **Option B** (a points-propensity layer applied at the `expected_vg_points` stage, which could also deliver the inverse pull-down that the upward-only strength nudge cannot) should stack on top of. Recommendation: keep Option A on (it is the cheap, do-no-harm half), and pursue Option B for the remaining gap and the role-DECOUPLING (strong-domestique) direction. **Flag now ON by default in `render_stagerace.jl` (July 2026 decision, alongside Option B)**; `gt_vg_hist_base_variance` (1.5) and the routing weights are un-backtested first-pass estimates, monitored prospectively per the revisit trigger below.
-
-### GT VG points-propensity layer (Option B prototype, July 2026)
-
-**Why B exists.** Option A nudges *strength*, so it is structurally (i) upward-only — a strength observation clamped to only ever raise a dimension cannot pull a rider DOWN — and (ii) capped — lifting a rider's finish-position ranking earns bunch-finish points, not the spiky breakaway/stage-win hauls that make a cheap break-hunter's 250-600pt total. B operates at the **points** level (on `expected_vg_points`), so it is naturally **two-sided** (raise break-hunters AND lower locked domestiques) and can close the residual A leaves.
-
-**Signal source — EVG-residual (Decision 1).** For each rider `i`, learn a persistent log-propensity `f_i` from the residual between their REAL prior GT totals and the model's ability-implied prediction (`src/build_model.jl` `gt_propensity_factors`):
-
-- `r_{i,e}` = real VG total in past edition `e` (`getvg_stage_race_totals(e,"velogame")`; the corrupted `vg_results` archive was deleted and 2023–2025 re-archived).
-- `p_i` = the model's ability-implied EVG (role-blind when A is off; A-lifted when A is on — see stacking).
-- `f_i = s_i · Σ_e w_e·log((r_{i,e}+c)/(p_i+c)) / Σ_e w_e`, recency weight `w_e = decay^years_ago` (decay 0.8), partial-pool shrink `s_i = W_i/(W_i+κ)` with `W_i = Σ_e w_e` and `κ = 2.0` (heavy — this is ~1-3 obs/rider small-data), floor `c = 30` VG points (regularises the log-ratio for near-zero r/p and caps cheap-rider blow-ups). Adjusted EVG = `p_i·exp(f_i)`.
-
-Algebraically this is a **log-space convex combination of the model's ability EVG and the rider's historical realised total**, with the weight on history growing with edition count: `log(EVG_adj) ≈ (1−s_i)·log(p_i) + s_i·(recency-weighted mean log r_i)`. Break-hunters (`r≫p`) get `f>0`; locked domestiques (`r≪p`) `f<0`; leaders (`r≈p`) `f≈0`; riders with no GT history get `f=0` exactly (do-no-harm, inert).
-
-**Temporal-integrity approximation (documented shortcut).** A rigorous `p_{i,e}` would be the model EVG for edition `e` reconstructed from ≤e-1 data (as-of-date startlist, costs, odds, specialty for each past year) — the historical odds especially are almost entirely un-archived, so this is out of scope for the prototype. Instead we use the CURRENT-race ability-implied EVG `p_i` as the baseline for every past edition. Leakage introduced: (1) ability drift — using current ability for a 3-year-old edition mis-attributes genuine improvement/decline to role (mitigated by recency weighting); (2) `p_i` reflects 2026 form correlated with recent results, so the residual is not a clean out-of-sample gap. The signal we actually want is the *persistent multiplicative role factor*, which the current-p approximation captures directly if ability is roughly stable — the honest weakness is riders whose ability moved a lot between editions. The do-no-harm rank check restricts the signal to ≤2024 when scoring against real 2025 to avoid leaking the target.
-
-**Injection point (Decision 2) — evaluated both, recommend (a).** `gt_vg_propensity_mode` in `src/race_solver.jl` `solve_stage`:
-- **(a) `:posthoc`** (default): multiply the final `expected_vg_points` mean by `exp(f_i)` after `resample_optimise_stage!`, re-optimise the chosen team on the adjusted points. Per-draw selection frequency stays on the unadjusted sim.
-- **(b) `:sim`**: scale every per-draw column of `sim_vg_points` by `exp(f_i)` and re-run the (RNG-free) optimise tail (`_resample_core!`) on the scaled matrix, so mean, downside deviation AND selection frequency all reflect propensity. No re-simulation — the pass-1 draws are reused.
-
-**Key finding: (a) and (b) give an IDENTICAL EVG mean.** A per-rider multiplicative factor scales the mean the same way whether applied outside or inside the draw loop (`mean(exp(f)·X) = exp(f)·mean(X)`), and it scales the SD proportionally too, leaving CV — and therefore the rank-order within every draw — unchanged. (b) differs from (a) *only* in per-draw selection frequency / team diversity, which the validation harness deliberately does not read (the final optimiser is unseeded/degenerate). The only version of (b) that would genuinely widen tails (a stochastic spiky per-draw bonus) re-implements the breakaway feature and reintroduces its calibration burden. So **(a) is recommended**: simplest, cleanly separable, identical on the validated metric; (b) remains wired (same flag, `mode="sim"`) for when a seeded team-selection harness exists to exploit its selection-diversity effect.
-
-**Validation** (same harness as A: seeded `MersenneTwister(20260703)`, breakaway OFF, n_sims=2500; `scratchpad/validate.jl`). EVG through the pipeline: role-blind → A → B-alone → A+B stacked, against real Tour totals.
-
-*1. Flagged break-hunters — B alone ≈ A; A+B stacked closes materially more:*
-
-| Rider | cost | blind→A→B→A+B | real | fB/fAB |
-|---|---|---|---|---|
-| Eenkhoorn | 4 | 33→72→63→**114** | 295/290 | 0.64/0.46 |
-| Russo | 4 | 105→141→141→**172** | 241/245 | 0.29/0.20 |
-| Turgis | 6 | 267→313→280→306 | 54/644/407 | 0.05/−0.02 |
-| Abrahamsen | 6 | 217→338→302→**386** | 300/606/460 | 0.33/0.13 |
-| Simmons | 6 | 54→90→72→**104** | 16/380 | 0.29/0.15 |
-
-*2. Inverse / role-decoupling — B pulls DOWN riders the role-blind model over-rates from ability (A structurally CANNOT do this):*
-
-| Rider | cost | blind→B | fB | real | why |
-|---|---|---|---|---|---|
-| Philipsen | 12 | 1323→**1081** | −0.20 | 1935/1482/329 | sprinter, 2025 crash-out; recency pulls down |
-| Merlier | 12 | 996→**857** | −0.15 | 575 | pure sprinter under-scores GT |
-| Bernal | 8 | 483→**362** | −0.29 | 126/292 | ex-GC-winner now scores like a domestique |
-| Van Eetvelt | 6 | 251→**135** | −0.62 | 2 (DNF) | over-moved by ONE anomalous edition — the small-data risk |
-
-Globally: 54 riders lifted, 46 lowered, 59 untouched (no GT history). The pull-down direction is B's differentiator, and it fires sensibly on sprinters and diminished GC riders — but a single DNF/crash edition (Van Eetvelt real=2) over-moves a rider; `κ`/`c` contain but do not eliminate this.
-
-*3. Leaders / 4. debutants — do-no-harm, but NOT strictly inert:*
-
-| Rider | cost | blind→B | fB | real |
-|---|---|---|---|---|
-| Pogačar | 34 | 3776→3744 | −0.01 | 2979/3841/4153 |
-| Vingegaard | 24 | 2325→**2617** | +0.12 | 2946/2703/3200 |
-| Van Dijke (debutant) | 4 | 162→162 | 0.00 | — |
-
-Unlike A (upward-clamp-after-market ⇒ leaders byte-identical), B moves ANY rider whose ability EVG diverges from their history. Pogačar (model already right) barely moves; Vingegaard moves +12% because the role-blind model *under-rates* him (blind 2325 vs real ~2950) — a correction *toward* real, not harm, but B is not leader-inert by construction. Debutants with no GT history are exactly inert (fB=0).
-
-*4. Do-no-harm rank ρ (predicted 2026 EVG vs real 2025, B signal restricted ≤2024, 96 riders):* overall 0.691→**0.723**, top-20 0.469→**0.477**, top-40 0.610→0.607. B **passes the gate and improves it** — and is notably gentler on the mid-band than A (A degraded top-40 to 0.546; B holds 0.607).
-
-*5. A+B stacked composes without double-counting.* Because B's baseline `p` in the stack is the A-lifted EVG, A raising strength shrinks B's residual factor (Eenkhoorn fB 0.64→fAB 0.46; Abrahamsen 0.33→0.13). A+B gives the largest toward-real move on every flagged break-hunter (Eenkhoorn 114, Abrahamsen 386, Russo 172) yet never overshoots their real range.
-
-**Verdict.** Option B delivers what A cannot: it closes MORE of the break-hunter gap (only when stacked with A; B-alone ≈ A) AND supplies the two-sided pull-down for ability-over-rated riders (sprinters, faded GC leaders), while *improving* rank ρ at every tier — the cleanest do-no-harm result of the three stage-race changes. **Recommend A+B together, injection mode (a) `:posthoc`** — both now ON by default in `render_stagerace.jl` (July 2026 decision), monitored prospectively. Un-calibrated / needs real monitoring: (i) `κ=2.0`/`decay=0.8`/`c=30` are first-pass — a single anomalous edition still over-moves sparse riders (Van Eetvelt); (ii) the current-`p` temporal approximation attributes genuine ability drift to role (Bernal is arguably correctly lowered, but the mechanism can't distinguish "changed role" from "declined"); (iii) B moves leaders it thinks are mis-rated (Vingegaard +12%) — directionally toward real here, but worth watching. **Pre-registered revisit trigger: if the next 2 GTs show B over-moving a rider with a single fluke edition, or top-20 ρ dropping, revisit `κ`/`c`.**
-
-**Files.** `src/build_model.jl` `gt_propensity_factors` (learner); `src/race_solver.jl` `solve_stage` (both injectors, `use_gt_vg_propensity` / `gt_vg_propensity_mode`) + `_prepare_rider_data` (GT-history fetch now triggered by A OR B); `scripts/render_stagerace.jl` + `data/race_config.toml.example` (`gt_vg_propensity`, `gt_vg_propensity_mode`); `test/test_stage_race.jl` (two-sided / shrinkage / inert unit test). Default OFF. `κ=2.0`, `decay=0.8`, `c=30` are un-backtested first-pass estimates.
-
-### Stage-race sprinter over-prediction: the aleatoric-noise diagnosis (June 2026)
-
-A full investigation into why the stage-race model over-rates grand-tour sprinters. The headline conclusion is that **the simulator's per-stage outcome noise is 2.5–3× too small**, and the fix is a per-stage-type aleatoric noise calibrated to observed dispersion. This is the single most important stage-race calibration finding to date. Everything a future analyst needs to reproduce, act on, or extend it is below.
-
-#### The symptom
-
-The 2026 Tour predictor put four sprinters (Philipsen 1670, Kooij 1429, Merlier 1301, Pedersen 1289) at near-green-jersey level, compressed into a 1.3× band. Reality (TdF/Giro 2023–2025): one sprinter dominates at 1.5–2× the next, the sprint field is deep, and ~32% of elite sprinters abandon before Paris (persistent, not a 2025 artefact — measured across 6 GTs). So the model both over-predicted the *level* and over-compressed the *spread* of sprinter scores.
-
-#### Theoretical framework: epistemic vs aleatoric noise
-
-A rider's expected VG score is
-
-$$\mathbb{E}[\text{VG}_i]=\sum_{\text{stages}}\sum_k f(k)\,P(\text{rank}_{i,\text{stage}}=k),$$
-
-where $f$ is the VG scoring table — dominated by stage-finish points, which are **shallow at the top** (220/180/160/140/120 for positions 1–5, down to 60 at 10th). The simulator generates $P(\text{rank})$ by sorting $X_i=\mu_i+\text{noise}$. The behaviour is governed by a single ratio: **(strength gap between riders) / (noise scale)**.
-
-The critical error is that the model uses one quantity — the Bayesian posterior standard deviation $\sigma_i$ (≈0.68 for most riders) — for two conceptually distinct roles:
-
-- **Epistemic uncertainty**: how unsure we are of a rider's *mean* ability. This correctly belongs in the resample/optimise outer loop (draw $\theta_i\sim N(\mu_i,\sigma_i)$) and in the persistent cross-stage term ($\alpha$-correlated noise, $\alpha=0.7$).
-- **Aleatoric variability**: the genuine race-day scatter of finishing positions (positioning, crashes, echelons, breakaways, sitting up). This should drive the *per-stage* noise, and it is **much larger** than the epistemic $\sigma$. It is a property of the race, not of how much data we hold on the rider.
-
-Because the per-stage aleatoric term is scaled by the epistemic $\sigma_i$ (via the $\beta$ component), it is far too small. With the sprinter-to-field strength gap ≈2.2 and $\sigma$≈0.68, the ratio ≈3.2. At a ratio ≫1, $P(\text{top-}10)$ collapses to a **step function**: →1 for the top ~6 riders, →0 for the rest. The placing floor **saturates** — the same handful of riders lock the top-10 on every flat stage. Saturation destroys information: when four sprinters all sit at $P(\text{top-}10)\approx1$, their true strength differences cannot express, so their scores inflate to a common high level and compress together.
-
-This framework explains every observation: the win-share was actually fine (Philipsen won 39% of simulated flat stages vs Pedersen 7% — wins are decided at the very top by small gaps plus a little noise), but the *placing floor* — 92% of a sprinter's EVG — was saturated.
-
-#### What was ruled out — the strength ($\mu$) axis
-
-Three interventions on the strength estimates were tried and **none moved the symptom**, which is itself the key diagnostic that the problem is on the noise axis, not the strength axis:
-
-- **Softening the `log1p` transform on PCS specialty.** PCS specialty is `rider_currency`-scaled then `log1p`-transformed then z-scored (`simulation.jl` ~L2412), which compresses all good sprinters into a narrow ~1.4–2.0 band. Softening the transform *sharpens the top* (Philipsen 2.1→4.5 at λ=0.5) but does **not** lift the second tier — z-scoring lets the top outliers inflate the field SD, so mid-tier riders stagnate. It also blows up the GC dimension (Vingegaard 2.4→4.3). Net: makes the cliff worse.
-- **Per-rider / per-dimension market discount.** The `market_discount` (×8) is applied race-wide, not per-rider (`simulation.jl` L855 / L561), so a rider with no odds still has their PCS variance inflated because *other* riders have a market. A per-rider + per-dimension version was prototyped (config flags `market_discount_per_dim`, `market_discount_routing_threshold`; helper `_market_discount_dims`) and **verified correct**, but it moved second-tier sprinters by only ~0.05. Removing the discount globally actually *lowers* elite sprinters (Philipsen 3.4→2.7) — its real job is to let the market signal dominate for priced riders. The prototype was reverted. It remains a principled cleanup (and would fix a backtest train/serve inconsistency: backtests have no odds, so `race_has_market=false` and non-market riders keep full signal, unlike production) but it is not the sprinter fix.
-- The `rider_currency` decline factor works correctly (Gaviria's career sprint score exceeds Kooij's, but after currency 0.47 vs 0.83 Kooij correctly ranks above — the model is not naively using career-cumulative specialty).
-
-#### Calibration: real dispersion targets and the fitted noise
-
-The saturation was measured directly. For real GT stages (2023–2025, 6 GTs, classified by PCS stage profile), the **mean top-10 overlap between same-type stage pairs** (1.0 = identical top-10 every stage = fully saturated; lower = more rotation):
-
-| stage type | real top-10 overlap | interpretation |
-|------------|--------------------|----------------|
-| flat | 0.37 | recurring sprinters + rotating lead-outs |
-| hilly | 0.15 | most chaotic — breakaways, varied puncheur terrain |
-| mountain | 0.37 | stable GC core + rotating breakaway winners |
-| itt | 0.53 | most deterministic — same TT specialists (small sample) |
-
-For flat specifically, direct sprinter metrics: the *best* sprinter each race finishes top-10 on 0.70–0.88 of sprint stages, the typical elite sprinter on 0.42 (median 0.38), and ~5.2–5.8 recognised fast-finishers occupy the top-10 per stage. The current model gives 0.93–1.00 top-10 rates and 8.8 distinct — fully saturated.
-
-Fitting the added stage-finish aleatoric SD on the 2026 field to match these targets gives:
-
-| stage type | **fitted `a`** (added SD) | current `BREAKAWAY_NOISE_BY_EVENT.stage_finish` | total per-stage noise, fitted ($\sqrt{0.68^2+a^2}$) |
-|------------|--------------------------|-------------------------------------------------|------|
-| flat | **1.5** | 0.0 | ~1.65 |
-| hilly | **2.1** | 1.0 | ~2.20 |
-| mountain | **1.2** | 1.5 | ~1.38 |
-| itt | **0.4** | 0.0 | ~0.79 |
-
-The existing hand-tuned values had the **ranking inverted**: they use mountain > hilly > flat = 0, but the data says **hilly > flat ≈ mountain > itt**. The biggest miss is flat (0 → 1.5, the entire sprinter bug); mountain is slightly *over*-noised. At the fitted flat noise the sprinter stage-finish EVG (797/662/631/601) almost exactly reproduces the real TdF-2025 haul (Milan 800 / Van Aert 710 / De Lie 655 / Groves 639) — the simulator, given the right noise, reconstructs the observed distribution.
-
-Note that fitting corrects the *level* (the dominant error) but leaves the residual ~1.3× spread among the top four sprinters. That residual is **not a bug** — real TdF-2025 also had four sprinters bunched at 639–800 (1.25×), with the green-jersey winner rising above only via the jersey bonus the simulator adds separately. Once the level is right, a mild cluster of co-favourites is exactly what the data shows.
-
-#### Validation: impact by rider archetype
-
-Running the full `simulate_stage_race` on the 2026 field, current noise vs fitted noise (mean EVG over top-50 riders by archetype; field total EVG conserved at 45.7k — this is redistribution, not inflation):
-
-| archetype | current → fitted | change | notes |
-|-----------|------------------|--------|-------|
-| Sprinter | 688 → 527 | **−23%** | elite −34% (Philipsen 1662→1089); 2nd-tier Gaviria +10% (field thickens) |
-| GC / all-rounder | 1808 → 1734 | −4% | most flat; Pogačar −11% (see below) |
-| Climber | 506 → 546 | +8% | Carapaz +9%, L. Martinez +8% |
-| Puncheur / classics | 459 → 477 | +4% | Healy +26% — breakaway/puncheur types get the top-10s the data says they earn |
-| TT | 343 → 360 | +5% | — |
-
-The fix deflates the over-predicted elite sprinters, thickens the field (second-tier sprinters, puncheurs, breakaway climbers gain), and behaves sensibly for every archetype.
-
-#### The Pogačar check, and why ability-margin-dependent noise was rejected
-
-The one non-trivial GC move was Pogačar −11% (4185→3735). Verified against his real 2025 stage-finish points by type (flat 152 / hilly 760 / mountain 860 / itt 400 = **2172**): the fitted model gives 436/536/1145/77 = **2194 ≈ real**, whereas the current model gives 2781 — over-crediting him by ~600, chiefly via an absurd **0.97 top-10 rate on bunch sprints** (real ~0.17; he sits up in the peloton). So the −11% is a **genuine correction**. His residual total shortfall (3735 vs real 4153) is in the GC/jersey scoring components, which the noise change does not touch — a *separate* issue.
-
-The only soft spot is that fitted noise under-shoots Pogačar's hilly points (536 vs real 760) by spreading his hilly results across placings rather than letting him win decisively. This motivated a prototype of **ability-margin-dependent dispersion** (reduce the aleatoric noise for riders with a large stage-strength margin, so dominant riders hold their level). It was **rejected**: raising the margin sensitivity does pull Pogačar's hilly up (536→689 at γ=0.25) but simultaneously **re-saturates the sprinter floor** (Philipsen flat top-10 rate springs back 0.70→0.89, EVG 672→868 — undoing the fix) and *worsens* his mountain over-prediction (1143→1389). The reason: margin is measured against the whole field, and sprinters are high-margin-on-flat too, so reducing "dominant rider" noise re-locks the sprint top-10. Separating the "contest among genuine contenders" from the "breakaway lottery" would need substantially more machinery for a small, self-cancelling gain. **Uniform per-type noise is the sweet spot.**
-
-#### Recommended change
-
-Wire the fitted per-type stage-finish aleatoric noise into `simulate_stage_race` as a config-driven parameter (fold `BREAKAWAY_NOISE_BY_EVENT` into `StageSimConfig`, see Phase 6), defaulting to `stage_finish = (flat=1.5, hilly=2.1, mountain=1.2, itt=0.4)`. Conceptually this term is the *aleatoric* per-stage scatter and should be documented as decoupled from the epistemic posterior $\sigma$ (which remains the resample and $\alpha$-persistent term). Prototyped by editing the `const` directly and reverted; not yet in production.
-
-#### SHIPPED (July 2026 — Phase A1)
-
-Implemented. `simulate_stage_race` per-stage performance is now `α·σ·rider_noise` (persistent epistemic, correlated across stages) `+ a_stage·stage_noise` (independent aleatoric, a flat per-type scale NOT scaled by σ, drawn `_rand_t(rng, 5)` for fat tails), replacing the old `σ·(α·rider + β·stage)`. The aleatoric scale, breakaway noise, jersey allocation, and intermediate-sprint points live in a new `StageSimConfig` (`race_helpers.jl`, `DEFAULT_STAGE_SIM_CONFIG`), threaded `render_stagerace`→`solve_stage`→`resample_optimise_stage!`→`simulate_stage_race`.
-
-`a_type` was **re-fitted by top-K (K=20) Plackett–Luce ranking-likelihood MLE** on archived GT finishing orders (finishers only; μ reconstructed via `estimate_strengths(:stage)` on archived specialty), superseding the overlap-matched estimates above. The top-K PL ignores the meaningless flat bunch-sprint tail, giving much smaller, K-robust values — clean giro-2026 fit: flat 0.54 / hilly 1.06 / mtn 0.50 / itt 0.49 (ordering hilly>flat≈mtn>itt; itt under-identified). Because `a_type ∝ μ-scale` (an identifiability confound the sweep bounds) and specialty-only μ understates production sprinter sharpening, the **shipped defaults sit at the upper-middle of the fitted range: `aleatoric_noise = (flat=0.8, hilly=1.1, mountain=0.7, itt=0.5)`**. Validation (giro-2026, market-sharpened μ): the dominant sprinter's flat top-10 rate de-saturates from 1.00 (a_type≈0) to 0.82 under the fitted config vs real 0.67; do-no-harm top-20 EVG↔actual ρ unchanged within noise. **Pre-registered revisit trigger: if the next 2 GTs show top sprinters now under-predicting, or top-20 ρ drops materially, revisit `a_type` (esp. flat).** Next: B1 (oneday→flat trim), then A2 (correlated attrition).
-
-#### A2 SHIPPED (July 2026 — attrition / DNF hazard) — deleted July 2026, WP2.3 (Δtpc −0.0001 on the harness; see decision memo)
-
-Implemented in `simulate_stage_race` via a new `rider_classes` kwarg (gates attrition; empty = off, so tests keep old behaviour) threaded from `resample_optimise_stage!` (reads `df.classraw`). Per not-yet-abandoned rider each stage, DNF hazard = `base_type × class_mult × brutal_day_shock`; abandoned riders are frozen out (`-Inf`) of every per-stage event and all final classifications, but keep points earned before abandoning. A single shared per-stage Gamma(shape 2)/2 shock (mean 1, var 0.5) eliminates sprinters in correlated cohorts. Params live in `StageSimConfig` (`attrition_hazard`, `attrition_class_mult`, `attrition_shock_shape`).
-
-**Empirical hazards** (fitted from archived `pcs_abandons` × VG class labels, 4 GTs): base per-rider-stage by type flat 0.0035 / hilly 0.0075 / mtn 0.0092 / itt 0.0018; class multipliers sprinter 1.29 / climber 1.19 / allrounder 1.53 / unclassed 0.86 (field DNF 14.8%). **Important reset of the plan's premise: the *VG sprinter class* DNFs at only 19% (1.29× field), not the assumed 32% — that figure is elite-only.** Validation: simulated field survival 0.86-0.87 (obs 0.82-0.88), sprinter survival 0.83 (obs mean 0.82), over-dispersion 1.82 (obs 1.66). EVG impact: top riders −5 to −8% (expected haircut < DNF rate, since pre-abandon points stand), survivors redistribute upward, field total ~conserved.
-
-**Residual (logged, not fixed): class-based hazard mis-attritions the tails.** It under-attritions elite sprinters (they DNF ~32%, get the class's 19%) and over-attritions the exceptionally-durable GC leader (Pogačar −8%, though he rarely abandons) — class can't identify exceptional durability/fragility. An "elite-aware" hazard (scale with strength/cost within class) was offered and deliberately not chosen (thin data). This slightly worsens the C2 GC-star under-prediction below.
-
-**Ability-based hazard tested and rejected (July 2026).** The intuitive hypothesis — DNF hazard should fall with climbing quality (weak climbers time-cut on mountains) — is **contradicted by the data**: corr(cost, DNF) = +0.066, corr(overall-quality, DNF) = +0.124, corr(climber, DNF) = +0.056 (giro-2026); quality tertiles run worst 11.5% → best 27.4% DNF. Stronger/marquee riders abandon *more* (strategic abandonment once goals evaporate), not less; climbing ability offers no protection, and the durable exception is simply the rider still winning — which no ability variable can identify ex-ante. Decision: **keep the class-based hazard**; do not re-propose a climbing-quality hazard without new evidence. (Data-consistent alternatives, if revisited: market-favourite GC protection, or a quality-*increasing* hazard paired with favourite protection.)
-
-**GC-favourite protection SHIPPED (July 2026) — deleted July 2026, WP2.3 (Δtpc −0.010, within the seed band and carried by one edition; see decision memo).** The durable-GC over-attrition surfaced visibly on the live TdF GC table: sorted by top-10%, Pogačar sat 5th with top-10 capped at 82.4% (= his climber-class finish rate), below younger low-attrition riders — because a contender's top-10% ≈ finish rate ≈ (1 − class DNF), so the column ranked by attrition class, not GC quality. Fixed two ways: (1) `StageSimConfig.gc_favourite_protection` (default 1.2) multiplies the hazard by `exp(-k·max(0, gc_z−1))` (gc_z = GC-strength z-score), so genuine favourites rarely abandon while the field-wide survival rate is unchanged (only >1 SD riders protected); (2) `format_classification_table` sorts `:gc` by win% first (top-10% is not a GC-quality ordering once attrition is in play). Live result: Pogačar top-10 82.4→98.4 (win% now 96), Vingegaard 82.4→96.6. Side note: this unmasks the model's high GC determinism (Pogačar ~96% win on strength alone) — a separate μ-calibration question, not an attrition issue.
-
-**Protection floor (July 2026):** the first cut protected too hard (Pogačar DNF ~1.6%). Historical incidence says GC favourites crash out meaningfully (Roglič DNF'd 2021/22/24 Tours + 2025 Giro; Pinot 2019; Mas 2025; field ~13%), even if the durable extreme — Pogačar has finished all ~10 GTs he started — justifies a low rate for him. Added `StageSimConfig.gc_protection_floor` (default 0.35): the protection multiplier bottoms out there, so the top favourite keeps ~5–8% irreducible crash risk. Live: Pogačar top-10 98.4→94.2 (~6% DNF), win% 96→92.8.
-
-#### Separate residual issues surfaced (do not conflate with the noise fix)
-
-1. **GC/jersey scoring under-predicts dominant all-rounders.** After stage-finish is corrected, Pogačar's total still trails real by ~400 in the daily-GC/final-GC/points-jersey terms. Independent of the noise model.
-
-   **C2 INVESTIGATED (July 2026) — the daily/final-GC hypothesis does NOT hold; the real omission was daily KOM.** Decomposing Pogačar's simulated points by component: **daily GC 626 (≈ the 630 max — he leads GC nearly every day) and final GC 599 (≈600 — wins ~99.8%) are near-maximal, not under-predicted.** The genuine gap was that the per-stage sim scored *none* of `daily_mountains_class`, `hc_climb_points`, or `cat1_climb_points` — only a crude `mountain_top5_counts` proxy feeding the final KOM. **Fix shipped: daily mountains classification** (`_score_daily_mountains!`) now awards `daily_mountains_class` (up to 33/climbing-stage) ranked by climbing ability + stage luck on mountain/hilly stages — ~100/tour for Pogačar, up to ~252 for a KOM specialist, materially lifting pure climbers/polka-dot contenders who were badly under-scored. **HC/Cat-1 per-climb points remain unscoreable** — the PCS scraper leaves `n_hc_climbs`/`n_cat1_climbs` at 0, so there's no per-climb data (a scraper-side fix would be a prerequisite). Any residual Pogačar gap is now attributable to points-jersey contribution + A2's durable-GC-leader over-attrition, not GC scoring.
-2. **Flat-strength leakage.** GC ability leaks into the `:flat` dimension (Pogačar's flat strength 2.43 sits above every second-tier sprinter; his fitted-model flat top-10 rate is 0.49 vs real 0.17). A `SIGNAL_DIMENSION_WEIGHTS` / routing cleanup, on the $\mu$ axis.
-
-   **B1 SHIPPED (July 2026) — `pcs_oneday → :flat` weight 0.2 → 0.0.** Swept the weight on the TdF-2026 field. Two findings: (a) A1's aleatoric noise already de-saturated the *backtest-regime* symptom — Pogačar's PCS-only flat top-10 was 0.13 even at weight 0.2, not 0.49 (the 0.49 was pre-A1). (b) The trim is the right conceptual cleanup regardless: it removes the all-rounder one-day → flat-sprint leak (Pogačar backtest flat 1.02 → 0.75) with **elite-sprinter flat strength unchanged** (Philipsen 2.12→2.15, Kooij 1.52→1.68 — their flat comes from `pcs_sprint`, weight 1.0). It is **inert in production** (Pogačar production flat = 2.46 at both 0.0 and 0.2, since `market_discount` suppresses PCS for priced riders), so it only helps backtests, as the plan anticipated.
-
-   **NEW residual surfaced by the sweep — the real *production* flat leak is `odds_points → :flat` (weight 0.4), not `pcs_oneday`.** Pogačar is listed in the green-jersey (points) betting market (info_share_odds_points ≈ 0.155), and that pricing routes onto `:flat`, giving him a production flat top-10 rate of ≈0.50. B1 does not touch this (market signals bypass `market_discount`). A future cleanup could route `odds_points`/`oracle_points` to `:flat` only for riders *classed* as sprinters (as B2's stage-win channel does via `RACE_HISTORY_CLASS_PROJECTION`), so a GC rider's green-jersey pricing informs points-jersey scoring without inflating his flat-sprint ability. Not in this plan's scope; logged for a future μ-routing pass.
-3. **`points_jersey` noise not recalibrated (C1 — BLOCKED on data, July 2026).** Only `stage_finish` was fitted. The points-jersey breakaway shock (`StageSimConfig.breakaway_noise.points_jersey`, hilly 1.5 / mtn 2.5) plus `points_jersey_allocation` / `intermediate_sprint_points` drive green-jersey scoring. The A1b-style ranking-likelihood recalibration is **blocked**: no per-stage points/KOM classification standings are archived (only the `odds_points`/`oracle_points` betting markets, which are predictions not results), so there's no target to fit. Prerequisite: a PCS scraper for daily points/mountains classification standings. Also note post-A1 the points-jersey shock now stacks on top of the new aleatoric `noisy`, so it may be mildly over-dispersed — revisit once classification data exists.
-
-4. **GC contest is over-deterministic — the win% is more certain than the market (diagnosed July 2026; NEXT stage-race item).** Once GC-favourite protection removed the attrition cap, the TdF-2026 board rated **Pogačar 92.8% / Vingegaard 6.6%** to win — well above the model's own market inputs (bookmaker ~55% / oracle 67% for Pogačar; ~15–18% for Vingegaard). The sim *amplifies* the strength gap into near-certainty.
-
-   **Mechanism (verified on the board):** GC is decided by *cumulative* strength over 21 stages. Pogačar `strength_gc` 4.57 vs Vingegaard 3.33 → gap **1.24 units → ~26 accumulated**; the GC-contest noise (difference of the two riders' cumulative noise) has SD ≈ **12**, so the head-to-head is z ≈ 2.2 → ~98.5% (vs the market's ~4:1 ≈ 80%, z ≈ 0.85). **Root cause:** the A1 per-stage aleatoric noise *averages out* over three weeks (grows as √21 while the gap grows as 21), so it barely affects GC order. That leaves the persistent `α·σ·rider` term as essentially the only source of GC-order uncertainty — and σ is *small* for well-characterised favourites (Pog and Ving both 0.45), so two elite peers get a near-deterministic outcome. The model cannot express "any given three weeks, the clear #2 could take it," which is exactly what the market's ~16% encodes. This is not a μ error (the strengths are roughly market-consistent) so much as a *noise* gap: there is no σ-independent, correlated-across-stages GC form/tour shock.
-
-   **Fix direction (own piece, not a knob-turn):** the GC analogue of the A1 insight. A1 gave *stage* outcomes a σ-independent aleatoric scale; the GC contest needs a **persistent, correlated-across-stages "form/tour" random effect** that likewise does *not* scale with σ — a "who is actually best across these three weeks" shock — calibrated so the top-2 win split matches the market (target head-to-head z ≈ 0.85, i.e. Pog ~75–85% / Ving ~12–18%, between the current model and the market). Practical impact on team selection is limited (both are top-EVG picks regardless), but the displayed win% reads over-confident and under-values the second favourite.
-
-5. **No stage-race backtesting path — RESOLVED July 2026 (WP2.1):** `backtest_stage_race` in `backtest.jl` now covers GTs (targets `:vg_total`/`:gc`/`:points`/`:kom`, team-points-captured primary) and the three TEMPORARY scripts named below were deleted; see the Phase 2 decision memo. Original issue kept for the record: **the GT signal-eval scripts are a temporary workaround (July 2026).** `backtest.jl` and `render_backtesting.jl` cover **one-day classics only**: everything hangs off `BacktestRace` / `build_race_catalogue` (the classics schedule) and `predict_expected_points` (the one-day MC pipeline). There is no stage-race path — no GC/points/KOM target, no multidim-GC isolation backtest — so when the cross-history and classification-history signals needed validating on GTs, that work landed in three standalone scripts instead: `scripts/eval_gt_history.jl`, `scripts/eval_classification_history.jl`, `scripts/ablation_gt_history.jl`. **These are TEMPORARY.** They do backtesting-shaped work (isolation backtest, correlation-with-actuals, signal ablation) and already borrow `backtest.jl`'s `spearman_correlation`/`top_n_overlap`, but they duplicate a shared harness between them and copy `render_stagerace.jl`'s pipeline setup, so they will drift.
-
-   **Proper fix:** fold a **stage-race signal-isolation harness into `backtest.jl`** (its natural home — it already hosts the correlation/overlap primitives and the `RaceData`/prefetch machinery), parameterised by target (`:gc`/`:points`/`:kom`) and the signal toggled, then surface a "stage-race signals" section in `render_backtesting.jl`. The three scripts then collapse into thin callers or are deleted, and future stage-race signals validate through one consistent path rather than a new bespoke script each. Connects to the open stage-race-planning question of whether team-assessor/backtesting should be combined or separate for stage races. **Until this lands, treat the three scripts as provisional (a header note on each points here).**
-
-6. **Mountain/ITT mis-attribution + stale-PCS over-rating (SHIPPED July 2026, multidim path only; validated prospectively).** Three coupled μ-axis fixes to the stage-race model, all confined to `estimate_rider_strength_multidim` / `simulate_stage_race`:
-   - **Dimension-aware market discount.** `market_discount` (8×) was applied to every non-market signal on *every* dimension whenever the race had any market, including `:itt` — which has no betting/oracle market — deleting the only ITT signal (PCS-TT) and collapsing all top TT riders to one value. `md` is now per-dimension (`market_dims` mask, keyed to which dimensions a market actually routes to). Effect: Evenepoel (TT world champ) correctly tops ITT.
-   - **KOM channel decoupling.** Added a scoring-only `:kom` dimension (in `STRENGTH_DIMENSIONS`, absent from `stage_dimension_weights` so it never enters the finish-position blend). KOM/breakaway market signals (`odds_kom`/`oracle_kom`/`kom_history`) route to `:kom` (was `:mountain` at weight 1.0) and drive `_score_daily_mountains!` only; `odds_gc/oracle_gc → :mountain` raised 0.2→0.5. Effect: polka-dot specialists (Carapaz) no longer inflate their summit-finish placing while keeping high KOM strength.
-   - **Recency-weighted PCS specialties.** Career-cumulative specialty totals over-rate veterans vs ascending youngsters. New `getpcs_specialty_by_season` (PCS filterable results pages, dated) + `_apply_pcs_recency!` produce decay-weighted per-season scores in `:<spec>_r`; the multidim z-scoring uses them (no currency multiplier) when present, else falls back to career × currency. All five specialties. Effect: Lipowitz now out-climbs Carapaz on `:mountain`.
-
-   **Validation: prospective only (deliberate).** These are large-effect, mechanistically-clear changes that pass do-no-harm (top-of-field rank unchanged, sprinters still lead `:flat`, info-share sums to 100%, full test suite green) and directional checks. Per the validation philosophy, they ship on theory + do-no-harm and are monitored prospectively — predictions and per-season specialty points (`pcs_specialty_seasons/{slug}/{year}.arrow`) are archived for as-of-race-date reconstruction. **They are NOT reachable by the current one-day/scalar backtest** (see item 5), so a numeric backtest was consciously *not* run; it would validate the wrong path. When the item-5 stage-race harness lands, these become its first regression targets.
-
-#### How to reproduce or recalibrate (e.g. for Giro/Vuelta specifics)
-
-1. **Real targets.** For target GTs: `getpcs_all_stage_results(slug, year, 21)` + `getpcs_stage_profiles(slug, year)` to classify stages; compute the mean top-10 overlap between same-type stage pairs, and for flat also the per-sprinter top-10 rate and distinct-fast-finishers-in-top-10. Watch out: the `vg_results` archive for GTs is stale/wrong (classics-game numbers, max ~585, no Pogačar) — use PCS stage results as ground truth, not that archive.
-2. **Fit.** Run `simulate_stage_race` (or a per-stage Monte Carlo replicating the stage-finish ranking) on the target field, sweep the added aleatoric SD per stage type, and match the model's overlap to the real targets.
-3. The fitted values were measured across TdF + Giro 2023–2025 and are treated as race-type-general; the *method* is the deliverable, so Giro/Vuelta can be re-checked if their dispersion differs. This is the empirical calibration of `BREAKAWAY_NOISE_BY_EVENT.stage_finish` that Phase 6 called for — now done for `stage_finish`; `points_jersey` remains.
-
----
-
-## Validation philosophy
-
-Cycling supplies only ~3 grand tours and a few dozen classics a year, and market signals cover even fewer races. We will never have large-sample statistical power for most changes, so validation is deliberately pragmatic: **match the rigour of the check to the change's effect size × mechanistic clarity, never to a race count.** A "wait for N races" gate is a counsel of perfection that freezes all progress; it is justified only where the effect is genuinely too small to see.
-
-### Triage each change
-
-- **Large, mechanistically-understood bias** — e.g. the June 2026 aleatoric-noise fix (model sprinter top-10 rate ~0.98 vs real ~0.42, a factor-of-two error with a clear mechanism). The effect dwarfs sampling noise. Ship on theory + directional confirmation + do-no-harm, then monitor. Does **not** need power.
-- **Small metric-chasing tuning** — e.g. non-uniform market discount (overall ρ 0.518 vs 0.473, within 1–2 SEs, tuning a threshold on ~6 races). Genuinely needs power. Defer — but on the grounds of **effect size**, revisited when it looks material, not merely when a race counter ticks over.
-
-### The toolkit (all cheap; none needs a large sample)
-
-1. **Directional + magnitude reality checks** on the races we have — right sign, sensible size, consistent across races. Evaluate at the rider-stage level (thousands of observations) where possible; "6 GTs" badly undercounts the information (a per-stage-type dispersion fit uses ~40 stages and every placement).
-2. **Do-no-harm guard rails** — top-~20 rank ρ must not degrade (the model's value rests on ranking the top riders); no absurd outputs (a domestique winning bunch sprints, a sprinter leading GC); field totals conserved (mechanical — a sanity check that catches bugs, **not** evidence of correctness).
-3. **Selection-impact, read directionally** — does a team chosen under the change beat the current model's pick on held-out actuals? This is the decision-relevant signal; 5/6 in the right direction is meaningful without significance, and it answers the standing objection that point-level calibration "changes budget allocation but not selection" (it flows through the optimiser into team composition).
-4. **Leave-one-out as information, not a veto** — does a fit on the other races roughly predict the held-out one? A wild miss flags a race to investigate.
-5. **Estimate ranges, not points** — when fitting a parameter, use a likelihood/CI to bound what is identifiable and pick a defensible value in range; don't agonise over a point estimate the data cannot distinguish.
-6. **Ship-then-monitor** — the prospective harness (`src/prospective_eval.jl`) is the real long-run validator and accumulates each race. Ship the well-justified change with a **pre-registered revisit trigger** (e.g. "if the next 2 GTs show sprinters now under-predicting, or top-20 ρ drops, revisit"). Monitoring is non-blocking.
-
-Metric note: rank correlation (ρ) is invariant to the monotonic EVG-level changes that calibration fixes make, so it **cannot** confirm them — use points-level metrics (PIT, team-points-captured) as the acceptance criterion for those.
-
-### Sequencing
-
-Ship one change at a time, for **attribution** (so prospective movement is interpretable and debuggable), not to accumulate power. Each ships behind its own directional + do-no-harm judgement call, then is monitored before the next lands.
-
----
-
-## Improvement plan
-
-### Overall assessment
-
-The system's rank ordering is reasonable (Spearman ρ 0.2–0.5 across 11 prospective races, median 0.5 in the 120-race historical backtest). The model's team-selection value comes almost entirely from correctly ranking the top ~20 riders (ρ=0.4 for positions 1–10, dropping to 0.1 for positions 21–40).
-
-A signal ablation study (April 2026, 11 prospective races) led to pruning three low-value signals and identified two deferred improvements. A red team review flagged statistical limitations: most claimed ρ improvements are within 1–2 SEs, 20×4 comparisons were tested with no correction, and the 6-race market sample is too small for reliable market-signal conclusions. Bootstrap CIs and a combined configuration test have been added to `render_backtesting.jl` to track these as more data accumulates.
-
-### Active signal set (after April 2026 pruning)
-
-PCS seasons + VG season + PCS race history + Cycling Oracle + bookmaker odds. Three signals were disabled:
-
-| Signal removed | Evidence | Decision |
-| -------------- | -------- | -------- |
-| PCS form | Near-zero within-tier ρ across all tiers (−0.014, 0.003, 0.106) | Removed — adds noise via block-correlation discount without improving ordering |
-| VG race history | Near-zero everywhere, anti-informative for top riders (−0.071) | Removed — same rationale |
-| Qualitative | Anti-informative for top riders (ρ=−0.291, n=60) | Removed — pipeline complexity for no benefit |
-
-Code and data collection retained for backtesting re-evaluation.
-
-### Deferred improvements
-
-**1. Drop oracle signal — or disable just the floor path.** A May 2026 listed-vs-floor split across 18 prospective races (n=2302 rider-observations) reframes the previous diagnosis: oracle's negative middle-tier ρ is entirely a floor-mechanism artefact, not a problem with oracle's published predictions. Riders with a real oracle entry (listed, n=110) show middle-tier ρ ≈ 0.004; riders pinned to the floor strength (n=2192) show middle-tier ρ = −0.159. The earlier finding that "odds only" beat "odds+oracle" for top and middle tiers (within-tier ρ: 0.136, −0.088, 0.119) reflected the floor-strength signal degrading mid-field discrimination, not oracle's listed predictions doing so. The bottom-tier listed ρ of −0.408 is striking but n=28 is too small to act on.
-
-Two interventions are now distinguishable rather than one: drop the oracle signal entirely, or disable only the floor path so that riders absent from oracle receive no oracle observation. The combined configuration test had previously shown 5/6 races with odds worsen when oracle is removed alongside other signal changes, suggesting oracle contributes via block-correlation structure when paired with odds — but that test could not separate listed from floor contributions. **Re-evaluate after 20+ races with odds** (likely end of 2026 season). The listed-vs-floor evidence should inform the choice between the two interventions.
-
-**2. Position-dependent market discount.** The only configuration that improves all tiers simultaneously (overall ρ 0.518 vs 0.473 for uniform d=8.0). The mechanism is sound: odds differentiate among favourites (ρ=0.464) but are uninformative for the rest, so applying full discount only to the top quartile by PCS z-score preserves PCS seasons' influence for mid-field riders. However, the red team flagged methodological concerns:
-
-- Circularity: tier assignment uses model-predicted strengths correlated with outcomes
-- Overfitting risk: adds a tunable threshold parameter on 6 races with odds (~250 riders per tier)
-- Per-race heterogeneity: odds improve ρ for 2/6 races (E3: +0.059, RVV: +0.071) but hurt for 4/6 (Strade: −0.136, Dwars: −0.145, MSR: −0.051, GW: −0.090)
-
-**Defer until n≥20 races with odds.** Implementation would replace the uniform `md` variable in `estimate_rider_strength` with a per-rider `md_i` based on PCS z-score quartile.
-
-**3. Correlated position simulation.** Low-moderate impact; more useful for stage races and team-heavy strategies. Not started.
-
-**4. ML augmentation.** ~3% above tuned baseline per Kholkine; requires 90+ race training set. Not started — prerequisites missing.
-
-**5. Profile-aware PCS specialty blend for one-day races.** Stage races route per-source PCS specialty columns (`:gc`, `:climber`, `:sprint`, `:oneday`, `:tt`) to per-stage strength dimensions via `SIGNAL_DIMENSION_WEIGHTS` (Phase 5). One-day races use only the generic `:oneday` column for every classic from Roubaix to Scheldeprijs, so the prior does not distinguish cobbled, flat-sprint, puncheur, or Ardennes-style courses. Adding a per-race blend (e.g. Eschborn / Brabantse Pijl / Quebec: `:oneday` 0.5 + `:climber` 0.3 + `:sprint` 0.2) would give the prior some terrain awareness, particularly valuable for younger riders missing race-history coverage. Risk of double-counting with the `SIMILAR_RACES` signal, which already provides terrain matching from observed results. Implement as a small ablation on 3–4 puncheur races and reject if Spearman ρ does not improve relative to the current single-column setup.
-
-**6. Data-driven `SIMILAR_RACES` via latent-factor model.** The current similar-races list is hand-curated terrain guesswork (cobbled / Ardennes / sprint clusters). Neither Kholkine nor VeloRost actually defines similarity from rider results — Kholkine hand-picks related-race features, and VeloRost clusters by elevation and road surface attributes. A result-driven approach would be moderately novel relative to those baselines.
-
-Build a rider × race × year tensor of normalised finishing positions or PCS race points (PCS points preferred — it concentrates information at the top of the field where it matters). Residualise on rider × year mean to remove form/peaking effects, then fit probabilistic matrix factorisation with 5–10 latent factors and exponential recency weighting on race-year (handles course evolution like Eschborn pre/post-2023 automatically). Race similarity becomes cosine distance in factor space.
-
-Two qualitative wins over the manual list: (a) automatic adaptation to course changes via the recency weighting, (b) continuous similarity scores enable weighted history observations (a Quebec result counts 0.8 toward Eschborn evidence, a Roubaix result 0.1) rather than a hard top-k threshold. The continuous weighting is the bigger structural improvement; the top-k list itself is probably mostly right at the macro level.
-
-Validation: backtest with (a) manual `SIMILAR_RACES`, (b) factor-model top-k, (c) factor-model continuous-weighted. Reject if (b) and (c) do not beat (a) by more than the bootstrap CI.
-
-Sparsity is the main risk: cross-region race pairs share 15–30 common riders per year, so factors may be unstable. Mitigate by densifying with non-prediction-set races (Tour stages, lower-tier events). Cost ~1 week to prototype (scraping infrastructure exists; PMF in `MultivariateStats.jl` or hand-rolled Gibbs sampler), plus 2 days validation.
-
-### Deprioritised (not planned)
-
-- **VG points calibration**: The PIT right-skew (mean 0.828 across 11 races) is real but roughly uniform across cheap riders. Correcting it changes budget allocation but not rider selection where signals are sparse. Second-order compared to correctly ranking top riders.
-- **Race-type selectivity adjustment**: Three clusters are observable (selective/standard/stochastic) but per-race noise adjustment makes all weak riders look more likely to score without helping pick which ones.
-- **Ownership-adjusted optimisation**: VG is cumulative points across ~40 races, not per-race GPP. Other players' picks have no bearing on your score.
-
-### Completed improvements
-
-| Phase | Description | Key details |
-|-------|-------------|-------------|
-| 1. Odds integration | Oddschecker paste + Cycling Oracle scraping as Bayesian signals | Strongest single predictor. Odds pasted from any bookmaker; Oracle covers most European professional races. Both can be active simultaneously. |
-| 2. Calibration framework | Prior predictive checks, SBC, backtesting, prospective evaluation | `BayesianConfig` reparameterised to 3 scale factors + 2 decay rates. `render_backtesting.jl` serves as unified calibration frontend. |
-| 3. Course profile matching | Terrain-similar race history via `SIMILAR_RACES` | Manual curation of terrain groupings; automatic PCS profile scraping deferred as low priority. |
-| 4. Leader/domestique roles | Domestique strength discount + max-per-team constraint | Heuristic leader detection by estimated strength within the field. |
-| 5. Recent form signal | PCS form page scraping, z-scored as Bayesian update | Disabled by the April 2026 ablation; scraper and signal deleted August 2026. |
-| 6. Season-adaptive VG | VG variance scales with season progress | `vg_season_penalty` inflates early-season VG variance. Trajectory signal removed April 2026 (negligible contribution). |
-| 7. Student's t noise | Heavy-tailed simulation noise via `simulation_df` parameter | `_rand_t(rng, df)` in `simulation.jl`. Default `simulation_df=nothing` (Gaussian); render scripts use df=5. |
-| 8. Qualitative intelligence | YouTube transcript → Claude API extraction → rider adjustments | Disabled by the April 2026 ablation; `qualitative.jl` deleted August 2026. |
-| 9. Signal cleanup (April 2026) | Trajectory removed, oracle precision reduced, VG history decay reduced | `_odds_to_oracle_ratio` 2.0 → 3.5 (April) → 5.0 (post 13-race review); `vg_hist_decay_rate` 1.3 → 0.8; trajectory signal fully deleted. |
-| 10. Enhanced backtesting report (April 2026) | Per-signal SBC, predicted-vs-actual scatter, signal directional accuracy, race selectivity clustering, calibration history tracking | Standalone HTML report via `render_backtesting.jl`. 11 prospective races archived. |
-| 11. Discrimination diagnostics (April 2026) | Per-position-band ρ, within-tier signal discrimination, signal ablation study | Revealed PCS form, VG race history, and qualitative are noise. Position-dependent market discount shows promise but deferred pending more data. |
-| 12. Signal pruning (April 2026) | Disabled PCS form, VG race history, qualitative from estimation pipeline | Red team review + bootstrap CIs confirmed low-value signals. Code and data collection deleted August 2026 (VG race history survives in the stage-race estimator only). Retained signal set: PCS seasons + VG season + PCS race history + oracle + odds. |
-| 13. Per-stage simulation (April 2026) | Per-stage scoring, PCS stage scraping, stage-type strength modifiers, cross-stage correlated simulation | `StageRaceScoringTable`, `simulate_stage_race`, `resample_optimise_stage!`. Validated against TDF 2024/2025 (scoring ρ=0.94–0.96, prediction ρ=0.77 vs aggregate 0.66). Extended to all VG stage races including week-long races (Itzulia, Catalunya, etc.) with optional class constraints. |
-
----
-
-## Phase 4: Per-stage simulation (completed April 2026)
-
-Per-stage simulation replaces the aggregate GC-position model for stage races. Each stage is simulated independently with stage-type strength modifiers and cross-stage correlated noise. The optimiser selects teams maximising total expected VG points summed across all stages.
-
-### What was built
-
-#### Scoring and data infrastructure
-
-- `StageRaceScoringTable` struct and `SCORING_GRAND_TOUR` constant in `src/scoring.jl` with all per-stage, daily classification, in-stage bonus, assist, and final classification scoring values
-- `StageProfile` struct capturing stage number, type, distance, ProfileScore, vertical metres, gradient, climb counts, and summit finish flag
-- PCS stage profile scraper (`getpcs_stage_profiles`) with two-pass approach: overview page for stage list + profile codes, individual stage pages for ProfileScore/vert/gradient
-- PCS stage results scraper (`getpcs_stage_results`, `getpcs_all_stage_results`) for per-stage finishing positions
-- VG per-stage results fetcher (`getvg_stage_results`) and overall totals (`getvg_stage_race_totals`)
-- Stage type classification from PCS profile codes: p1=flat, p2/p3=hilly, p4/p5=mountain, with ITT/TTT detection from stage name
-- `getpcs_race_results` falls back from `/result` to `/gc` URL for stage races where PCS uses a different results page structure
-
-#### Stage-type strength modifiers (deprecated — replaced in Phase 5)
-
-- The original Phase 4 design used `compute_stage_type_modifiers` to apply additive ±0.5σ modifiers on top of a single Bayesian latent strength (since deleted). Phase 5 replaced this with a multi-dimensional posterior over `STRENGTH_DIMENSIONS`; per-stage strengths come from a continuous PCS-ProfileScore-weighted blend across `:flat/:hilly/:mountain/:itt` rather than discrete modifiers.
-
-#### Per-stage simulation
-
-- `simulate_stage_race` in `src/simulation.jl` runs full per-stage simulation: stage finish points, stage/GC assist points, daily GC tracking, cumulative GC standings, and final classification bonuses (GC, points, mountains, team)
-- Cross-stage correlated noise via α-blending of persistent rider noise + independent stage noise (`cross_stage_alpha`, default 0.7)
-- `resample_optimise_stage!` wraps the simulation in the resampled optimisation framework
-
-#### Solver and race configuration
-
-- `solve_stage` in `src/race_solver.jl` dispatches to per-stage pipeline when stages are provided, falls back to aggregate when empty
-- `_STAGE_RACE_PATTERNS` dict covers all 2026 VG stage races: grand tours (TDF, Giro, Vuelta) plus week-long races (Paris-Nice, Tirreno-Adriatico, Catalunya, Itzulia, Romandie, Dauphiné, Tour de Suisse)
-- `_STAGE_RACE_PCS_SLUGS` and `_STAGE_RACE_VG_SLUGS` map aliases to PCS/VG slugs with automatic PCS slug propagation for stage profile scraping
-- `build_model_stage` classification constraints are optional — skipped for week-long races without VG class data (e.g. Itzulia), enforced for grand tours
-- `render_stagerace.jl` reads shared `race_config.toml` and generates standalone HTML reports
-
-#### Validation findings (TDF 2024/2025)
-
-- **Scoring accuracy**: Spearman ρ = 0.94–0.96 between calculated VG points (from PCS positions) and actual VG scores. Per-stage sums + final classification pseudo-stage (st=22) match overall totals exactly for all riders.
-- **Scoring gap**: ~6 pts/stage mean gap from sprint/climb/breakaway bonuses we cannot reconstruct from PCS finishing positions. Largest for mountain stages (8–15 pts) due to HC/Cat1 climb bonuses, smallest for ITT stages (~3 pts).
-- **Prediction quality**: Per-stage model ρ=0.77 vs aggregate ρ=0.66 (2024); per-stage ρ=0.77 vs aggregate ρ=0.68 (2025). Top-9 team points captured ratio 0.95–0.96.
-
-### What remains (v2 enhancements)
-
-- In-stage climb/sprint bonus simulation (requires per-stage climb/sprint counts from PCS — HC/Cat1 data is scraped but not yet used in scoring)
-- Breakaway modelling for stage races
-- Abandonment modelling (survival probability per stage)
-- Stage-race-specific PIT calibration in prospective evaluation. **Interim (July 2026):** `prospective_pit_values` now *skips* stage races (`haskey(_STAGE_RACE_VG_SLUGS, pcs_slug)`) with an `@info`, rather than silently mis-scoring them. Previously it fell back to one-day Cat 2 scoring (`_find_race_by_slug` returns `nothing` for grand-tour slugs → `cat=2`), producing meaningless PIT numbers. The one-day `simulate_vg_draws` path (`ScoringTable`, single race, scalar strength) cannot consume `SCORING_GRAND_TOUR`; correct follow-up is to route stage races through `simulate_stage_race` (per-stage multi-dim strengths, stage profiles, GC/jersey scoring) for their PIT draws.
-- Stage race backtesting (extend `backtest.jl` to compare per-stage vs aggregate predictions across historical grand tours)
-- Tour de Pologne and Renewi Tour VG slug mappings (VG pages not yet created for 2026)
-
----
-
-## Phase 5: Multi-dimensional rider strength for stage races (May 2026)
-
-The Phase 4 stage-race model produced a single Bayesian latent strength per rider, with a thin per-stage-type modifier layer adding ±0.5σ shifts on top from PCS specialty z-scores. The architecture failed for non-GC riders. On the Giro 2026 prediction, Cycling Oracle listed only 15 GC contenders; the remaining 168 riders absorbed an oracle-floor observation of strength=−4.69 across their entire base strength, which the +0.7 sprint modifier on flat stages could not recover. Mads Pedersen — second-overall for VG points in the 2025 Tour — was ranked alongside mid-tier domestiques. Phase 5 replaces the scalar posterior with a multi-dimensional one aligned to stage profile types.
-
-### What was built
-
-Each rider now carries a Gaussian posterior over five dimensions (`STRENGTH_DIMENSIONS = (:flat, :hilly, :mountain, :itt, :gc)`) rather than a single strength. Four dimensions match `StageProfile.stage_type`; `:gc` tracks cumulative ranking ability. The prior is independent across dimensions (`N(0, prior_variance)` per dim). Cross-dimension information flow happens only through the explicit `SIGNAL_DIMENSION_WEIGHTS` routing table, not via a hierarchical prior or covariance structure — earlier covariance designs were tried and abandoned because the implicit leakage overpowered the explicit routing for strong signals (a rider's huge PCS GC score would leak into ITT and swamp a true TT specialist's PCS TT direct evidence).
-
-Each signal carries a weight vector across the five dimensions (`SIGNAL_DIMENSION_WEIGHTS`), and each non-zero weight produces a per-dimension Bayesian update with effective variance $v / w$. PCS specialty signals route to their natural dimensions: PCS sprint to `:flat` (1.0) and `:hilly` (0.1), PCS climber to `:hilly` (0.5) and `:mountain` (1.0), PCS GC to `:hilly` (0.3), `:mountain` (0.7), and `:gc` (1.0). The Cycling Oracle splits into three independent sources: GC oracle routes mainly to `:gc` with light cross-routing to `:hilly`/`:mountain`, points-jersey oracle to `:flat`/`:hilly`, and KOM oracle to `:mountain`. Bookmaker GC odds use the same routing as oracle GC.
-
-Two routing mechanisms coexist by design. PCS specialty / oracles / odds use direct (signal-specific) weights because the signal source itself carries dimension information — sprint points means flat ability for every rider regardless of class. VG season points and PCS race history use per-rider class projection (`RACE_HISTORY_CLASS_PROJECTION`) because the signal is dimension-agnostic — the rider's classification acts as an attribution prior over an otherwise undifferentiated total. The principle is documented inline in `src/simulation.jl`.
-
-The keystone fix is the floor mechanism. When a rider is absent from the GC oracle, the floor observation now updates only `:gc`, not the entire strength vector. A sprinter outside the GC contenders no longer takes a hit on `:flat`. The new test `test_stage_race.jl` "Pedersen-shaped sprinter sanity check" pins this behaviour: a high-sprint, low-GC rider absent from oracle ranks in the top decile on `:flat` despite the GC oracle floor pushing his `:gc` down.
-
-`simulate_stage_race` accumulates per-stage GC contributions from the `:gc` dimension rather than summing stage finish positions. A sprinter winning a flat stage no longer accumulates GC points he should not have. The per-stage strength used for ranking comes from a continuous PCS-ProfileScore-weighted blend across `:flat/:hilly/:mountain/:itt`, so a low-PS "hilly" stage (Giro 2026 stage 6, PS=14) is treated as mostly flat while a high-PS hilly with summit finish blends toward mountain. Per-event breakaway noise (consolidated in `BREAKAWAY_NOISE_BY_EVENT`) is added to specific ranking events (stage finish, points jersey) to prevent dominant climbers sweeping mountain stages and the points jersey in simulation.
-
-### Code surface
-
-`src/simulation.jl`: `STRENGTH_DIMENSIONS`, `STAGE_TYPES`, `MultiDimPosterior`, `bayesian_update_multidim_dim`, `SIGNAL_DIMENSION_WEIGHTS`, `RACE_HISTORY_CLASS_PROJECTION`, `MultiDimStrengthEstimate`, `estimate_rider_strength_multidim`, `_estimate_strengths_multidim`, `compute_stage_strengths`, `stage_dimension_weights`, `BREAKAWAY_NOISE_BY_EVENT`, `STAGE_POINTS_JERSEY_ALLOCATION`, `INTERMEDIATE_SPRINT_POINTS`, `StageRaceDiagnostics`. `simulate_stage_race` always returns `(vg_points, diagnostics)`. `_assemble_signals` is the shared signal-prep helper used by both the scalar one-day and multidim stage paths. `STAGE_RACE_PCS_WEIGHTS`, `compute_stage_race_pcs_score`, `STAGE_TYPE_MODIFIER_WEIGHTS`, `SPRINTER_MOUNTAIN_PENALTY`, and `compute_stage_type_modifiers` were deleted; their roles are subsumed by direct per-dimension routing. `RaceData` gains `points_oracle_df` and `kom_oracle_df` slots.
-
-`src/race_solver.jl`'s `solve_stage` accepts `points_oracle_url` and `kom_oracle_url` keyword arguments, fetches each independently via the existing `get_cycling_oracle`, and archives them under `oracle_points` and `oracle_kom` data types. The `_archive_predictions` column allowlist includes per-dimension `strength_<dim>` and `uncertainty_<dim>` columns.
-
-`src/report_helpers.jl` adds `format_classification_table`, `format_team_classification`, `format_stage_podium_picks`, and `format_signal_impact_per_dim` so the stage-race report builds classification tables and per-dimension signal panels via reusable helpers rather than inline script logic.
-
-### Validation
-
-Rider-level multidim test on a Pedersen-shaped synthetic sprinter (high PCS sprint, low PCS GC, absent from oracle and odds): the new test asserts `strength_flat > 1.0`, `strength_gc < strength_flat`, and `strength_flat > strength_gc + 0.5` — the GC oracle floor pushes `:gc` down without dragging `:flat` with it. The full test suite passes. The one-day pipeline shares `_assemble_signals` with the multidim path but keeps its own PCS handling (raw decay-weighted points substitution) and signal set.
-
-### What remains for Phase 6
-
-See the dedicated Phase 6 section below.
-
----
-
-## Phase 6: Empirical calibration and architectural follow-ups
-
-Deferred work surfaced by the May 2026 cleanup. Listed roughly in priority order; each item is independent of the others.
-
-- Empirical calibration of `SIGNAL_DIMENSION_WEIGHTS`, `RACE_HISTORY_CLASS_PROJECTION`, `STAGE_POINTS_JERSEY_ALLOCATION`, and `BREAKAWAY_NOISE_BY_EVENT` against historical per-stage VG points (Tour and Vuelta 2025 plus aggregate Giro 2023–2025; ~350 rider-race pairs available). Today these tables are hand-tuned against specific failure modes; calibration would let the data set them.
-- Hierarchical prior with per-rider ability $\tau^2$ and per-dimension deviation $\sigma_d^2$. The current independent-prior design works for data-rich riders (top contenders have lots of signal) but is weakest for sparse-data riders. A hierarchy would couple dimensions structurally so a rider with only VG points still gets a coherent strength vector. Add as part of the calibration work so $\tau^2/\sigma_d^2$ have empirical guidance.
-- PCS race history projection through the actual stage-type mix of each past race rather than the Phase 5 fallback of projecting via the rider's own class profile.
-- Stage-winner bookmaker markets routed per stage type (no infrastructure exists yet).
-- Multi-dim prior predictive checks and SBC.
-- Promote per-stage scoring tables (`STAGE_POINTS_JERSEY_ALLOCATION`, `INTERMEDIATE_SPRINT_POINTS`, `BREAKAWAY_NOISE_BY_EVENT`) into `StageSimConfig` alongside `BayesianConfig` (the unrelated `StageRaceConfig` struct this once proposed was deleted unused in August 2026; `StageSimConfig` is the live home), so race-specific scoring (Giro vs Tour vs Vuelta) is one parameter swap rather than five `const` reassignments.
-- Routing-principle empirical validation: should VG season points stay on per-class projection or move to direct weights?
-- Migrate one-day races to the multi-dim model if the architecture proves robust on stage races.
-
----
-
-## Evidence appendix
-
-### Key academic references
-
-#### Sports forecasting and market efficiency
-
-A systematic review of ML in sports betting (Hubáček et al., 2024, arxiv:2410.21484) found that ML prediction accuracy "reaches not more than about 70% and is at the same level as model-free bookmaker odds alone." Franck et al. (2010, *International Journal of Forecasting*) showed betting exchanges provide more accurate predictions than bookmakers, using 5,478 football matches. Constantinou & Fenton (2013, *Journal of Forecasting*) developed the Betting Odds Rating System showing bookmaker odds are the best source of probabilistic forecasts for sports matches, outperforming ELO-based models on highly significant levels. Forrest & Simmons (2000) found no statistically significant evidence to reject market efficiency for English football betting.
-
-**Kholkine et al. (2021) - "A machine learning approach to predict the outcome of professional cycling races"**
-*Frontiers in Sports and Active Living* (also PMC8527032)
-
-Tested 15 feature categories for predicting top-10 finishers in six spring classics using learn-to-rank (LambdaMART). Key findings for this project:
-
-- Overall PCS performance (career and season-long points) was important across all six races
-- Best historical result in the specific race was the single most important feature for Tour of Flanders and Paris-Roubaix
-- Results from related races were strongly predictive for some events: LBL relied heavily on Fleche Wallonne results rather than overall performance, demonstrating that course-type matching carries significant weight
-- 6-week pre-race form received minimal weight — the model "does not seem to learn a lot from" short-term form features
-- Achieved 0.82 NDCG@10, approximately 3% above a tuned logistic regression baseline
-
-**Rize, Saldanha & Moskovitch (2025) - "VeloRost: a Bayesian dual-skill framework for roster-based cycling race outcome prediction"**
-*ISACE 2025 / Springer*
-
-Achieved NDCG@10 of 0.443 by separately modelling leader skill and helper/domestique contributions, and by clustering races by elevation and road surface type before applying TrueSkill ratings. Two key findings:
-
-- Modelling leader vs helper roles separately "significantly outperforms" treating riders independently
-- Two-stage approach (cluster races by terrain, then estimate skill within clusters) outperformed single global skill ratings
-
-**Haugh & Singal (2021) - "How to play fantasy sports strategically (and win)"**
-*Management Science, 67(1)*
-
-Definitive result on ownership-adjusted optimisation. Modelled opponents' team selections using a Dirichlet-multinomial process and optimised for expected reward conditional on outperforming the field:
-
-- 350% returns over 17 weeks in top-heavy GPP contests vs 50% for an ownership-blind benchmark
-- 7x performance differential from ownership adjustment alone, without improving underlying player projections
-- Effect is strongest in large-field tournaments; negligible in head-to-head or small-league formats
-
-**Applicability to VG:** These results do not transfer to VG's format. VG scores accumulate across ~40 races in a season — the objective is to maximise total points, not to beat the field in any single race. Ownership-adjusted optimisation only helps when your payoff depends on relative performance within a single contest. In a cumulative format, what other players pick has no bearing on your score. The cumulative format also favours consistency over variance, further penalising the contrarian picks that ownership adjustment promotes.
-
-**Baronchelli et al. (2025) - "Data-driven team selection in Fantasy Premier League"**
-*arXiv:2505.02170v1*
-
-Found that recency-weighted Bayesian models provide "strong and stable baselines" for expected points forecasting. Hybrid approaches augmenting Bayesian estimates with additional features yield "modest but consistent improvements." Optimal blend: roughly two-thirds model-based scores, one-third realised recent points.
-
-### DFS community sources
-
-Sharpstack (Ash, 2021) demonstrated that using Cholesky decomposition to generate correlated player projections (rather than independent simulations) produces substantially more realistic tournament outcome distributions. Ignoring correlation can approximately double the standard deviation of simulation outputs.
-
-FantasyLabs defines "leverage score" as the gap between a player's optimal lineup percentage and their ownership projection, making it the primary tool for GPP construction. The simple `leverage = E[pts] * (1 - ownership)` captures most of the benefit of more sophisticated opponent modelling.
-
-Consistent themes from experienced VG players (The Pelotonian, Sicycle, ProCyclingUK, Marginal Brains):
-
-- Value identification (spending less budget for more points) matters more than picking the winner
-- Balance over star power: low-cost GC contenders who grind out daily points are undervalued
-- Stage composition analysis: counting sprint/mountain/TT stages to calibrate rider-type allocation
-- Young riders on upward trajectories are systematically underpriced by VG's backward-looking cost algorithm
-- Classification constraints create within-category pricing inefficiencies
-
-### Conditional VG-points calibration
-
-The per-race PIT histogram and aggregate PIT across prospective races (now implemented) answer whether the model is calibrated on average. Conditional calibration asks whether it is calibrated *for specific strata of riders*, which matters because miscalibration may be concentrated in ways that affect team selection.
-
-Natural strata to check once sufficient data is available (15+ prospective races):
-
-- **By predicted strength**: are the top-10 predicted riders' distributions well-calibrated? The Strade Bianche 2026 data suggests favourites may be under-dispersed (actuals exceeding the simulated range).
-- **By cost**: cheap riders (cost 4–6) are where VG points calibration most affects team selection, since the optimiser frequently swaps between similarly-priced alternatives.
-- **By signal coverage**: riders with odds vs without. The `market_discount` parameter changes the model's behaviour substantially when odds are present, and the VG-points calibration could differ systematically between these groups.
-
-The implementation would add faceted PIT histograms or a calibration table by stratum to the prospective evaluation section of `render_backtesting.jl`.
-
-### Impact estimates summary
-
-| Priority | Improvement | Expected impact | Evidence strength | Status |
-| --- | --- | --- | --- | --- |
-| 1 | Odds integration | Very high | Strong (market efficiency literature) | Done |
-| 2 | Calibration framework | High (indirect) | Strong (enables calibration) | Done |
-| 3 | Course profile matching | High | Strong (Kholkine, VeloRost) | Done (manual similar-races); PCS profile scraping deferred |
-| 4 | Stage race prediction | High (grand tours) | Moderate (community consensus) | Done — per-stage ρ=0.77 vs aggregate 0.66 |
-| 5 | Ownership-adjusted optimisation | Irrelevant — VG is cumulative points across ~40 races, not per-race GPP | Strong for GPPs (Haugh & Singal) but inapplicable here | Dropped |
-| 6 | Leader/domestique roles | Moderate | Moderate (VeloRost) | Done |
-| 7 | Recent form signal | Moderate-low | Weak (Kholkine: minimal weight) | Done |
-| 8 | Season-adaptive VG | Moderate | Post-Kuurne analysis | Done (trajectory removed April 2026 — negligible contribution) |
-| 9 | Student's t noise | Low-moderate | Moderate (fat-tailed cycling outcomes) | Done |
-| 10 | Correlated simulation | Low-moderate | Moderate (Sharpstack, but cycling differs) | Not done |
-| 11 | ML models | Unknown | Weak (+3% over baseline) | Not done — prerequisites missing |
-| 12 | Conditional VG-points calibration | Medium (diagnostic) | Depends on aggregate PIT findings | Not done — requires 15+ prospective races |
-
----
-
-### Phase 2 champion–challenger gate: decision memo (July 2026, WP2.3)
-
-**Pre-registered question (D5):** is the seventeen-layer simulator stack retained as the GT points engine only if it beats the direct-EVG challenger on team-points-captured (9-rider optimiser on each model's EVG, scored on actual VG totals) across the archived GTs by more than the bootstrap 90% CI?
-
-**Set-up.** Harness: `backtest_stage_race` (WP2.1, ec98bdf), 10 editions (Giro 2023–2026, Tour/Vuelta 2023–2025), reconstruction as-of race day, both engines on identical inputs (market data exists only for the 2026 editions and feeds both). Challenger: `direct_evg` (WP2.2, 1de8173) — 7 fitted parameters (fit 2023–24, validated 2025, 2026 evaluation-only) + market weight fixed a priori. Champion: full production stack at seed 20260704, n_resamples=500.
-
-**Result: no winner.** Team-points-captured, challenger − simulator, per edition: Giro 23 −0.085, Giro 24 +0.035, Giro 25 +0.251, Giro 26 −0.080, Tour 23 −0.160, Tour 24 −0.073, Tour 25 −0.016, Vuelta 23 −0.169, Vuelta 24 −0.086, Vuelta 25 −0.016. Primary set (all 10): mean −0.040, bootstrap 90% CI [−0.093, +0.025] (B=10,000) — straddles zero. Out-of-sample subset (2025 ×3 + Giro 26): mean +0.035, CI [−0.048, +0.168] — straddles zero. The simulator wins 8/10 editions but never outside the CI; the challenger's one large win (Giro 2025, its best edition vs the simulator's worst) flips the out-of-sample mean positive. **Per the pre-registered tie rule: the challenger does not replace the simulator; it is retained as a standing harness comparator (and the Vuelta 2026 prospective benchmark), not wired into `solve_stage`. Individually non-earning simulator layers are deleted.**
-
-**Layer adjudication** (10-edition mean Δtpc with the layer toggled off; seed-noise band on the mean ±0.0126):
-
-| Layer | mean Δtpc | Verdict |
-|---|---|---|
-| Attrition (hazards, class multipliers, day-shock) | −0.0001 (max per-edition 0.001) | **deleted** — a near-exact no-op on tpc; removal marginally improved full-field ρ (+0.003) |
-| Breakaway participation draw (stage path) | +0.005 (per-edition ±0.08, sign-cancelling) | **deleted** — indistinguishable from noise injection; one-day breakaway scoring untouched (real VG scoring category there) |
-| GC-favourite protection + floor | −0.010 (entirely one edition: Giro 23 −0.106) | **deleted** — within band; single-edition support |
-| Option B (points propensity) | **−0.039** | **retained** — outside the band; the one layer that demonstrably earns tpc. Its rank-ρ contribution on current code (+0.003..+0.010 overall) is smaller than the recorded +0.032 — the Phase 1 fixes improved the baseline it corrects (see the WP2.1 cross-check attribution) |
-| Option A (GT-history strength signal) | not individually toggleable; indirect estimate +0.014 (within band) | **not adjudicated** — an estimation-path signal rather than a simulator layer; stays under its existing pre-registered prospective trigger |
-
-**Post-deletion do-no-harm:** 10-edition sweep re-run after the deletions: mean tpc 0.5709 vs 0.5634 pre-deletion (bound ±0.0126) — within the band (Δ +0.0075), accepted; full test suite green.
-
-**Caveats, recorded honestly.** (i) The challenger's 2023–24 editions are in-sample (its fit years); the simulator carries its own in-sample exposure (PL-fitted aleatoric noise, attrition hazards fitted on these same archives), so neither side is clean and the primary set slightly favours the challenger while the 8/10 win count favours the simulator. (ii) The deleted attrition layer was the model's only DNF mechanism; sprinter DNF risk (~32% for 2nd–4th-tier GT sprinters) returns to explicitly unmodelled — it was not being converted into team-points anyway. (iii) Deleting GC protection removes a determinism-increasing layer, which should move simulated GC win% toward the market (the direction the WP1.6 investigation wants). (iv) Both engines beat naive persistence on mean tpc (simulator 0.563, challenger 0.524, persistence 0.451), and the simulator beat the odds-implied baseline on the one edition with odds (Giro 26: 0.596 vs 0.546).
-
-**Pre-registered next test (Vuelta 2026, WP2.4) — RE-SCOPED, August 2026.**
-
-The original registration was "archive predictions from BOTH engines before the
-deadline, compare team-points-captured prospectively". That became unrunnable
-when `direct_evg.jl` was deleted in the August 2026 simplification: the
-challenger had tied its gate twice (here and on the one-day harness), the
-simulator was no longer on trial against it, and carrying ~500 lines to service
-one more tie was not judged worth it. Recording the cancellation rather than
-letting the deadline pass quietly.
-
-**Replacement, pre-registered before the race:** on Vuelta 2026, run
-`backtest_stage_race` with `predictors = [:simulator, :simulator_risk,
-:persistence, :odds]` and compare team-points-captured. This keeps a genuine
-out-of-sample check on the same deadline, against baselines that already exist
-and need no new code.
-
-- **`:persistence` will run unconditionally** — Vuelta `vg_stage_totals` are
-  archived for 2023, 2024 and 2025.
-- **`:odds` requires action before the deadline.** There is no
-  `archive/odds/vuelta-a-espana/` directory yet; the GC winner market has to be
-  pasted and archived pre-race or that arm silently drops out, exactly as it did
-  for every pre-2026 edition. This is the one manual precondition.
-- **Reading it:** the simulator failing to beat naive persistence would be a
-  serious result and should trigger a re-examination of the whole stage stack —
-  the WP2.3 sweep had it at 0.563 vs 0.451. Losing to `:odds` alone would raise
-  the same question the one-day market blend raised: why simulate a marketed
-  race at all. Neither is a pass/fail gate on a single edition; both are
-  triggers to look, given n = 1.
-
-### One-day champion/challenger harness (July 2026)
-
-**What was built.** The stage-race predictor harness generalised to one-day races (the asymmetry §2 of the architecture review flagged): `backtest_oneday_race`/`backtest_oneday_season` score any predictor `f(::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)` on **team-points-captured** (6-rider `build_model_oneday` on the predictor's EVG, scored against the rider's TRUE scraped VG total from the `vg_results` archive — incl. assist + breakaway, not the finish-only proxy `backtest_race` uses). Built-ins: `:simulator` (`champion_oneday_evg`, the production stack via the new fetch-free `_oneday_prediction_core`), `:direct` (`direct_oneday_evg` — the stage challenger's blend core reused with one-day inputs: scalar ability, single winner market, prior-edition VG history), `:odds`, `:maxcost`. The one-day production model is not changed; this is comparison infrastructure.
-
-**Challenger fit.** `direct_oneday_evg` fitted on 65 classics across 2023–2024 (6,609 rider-editions; log-space MSE 0.5128), validated on 2025, 2026 evaluation-only. `market_weight` fixed a priori at 2.0 (no pre-2026 one-day odds, so the fit editions are marketless). Fitted `hist_weight` is low (0.5): unlike a grand tour, a rider's prior-edition one-day VG total carries little signal over current ability.
-
-**Held-out 2025 result (39 classics): a tie, mirroring the stage gate.** Mean team-points-captured — simulator **0.520** (median 0.541, ρ 0.505), direct **0.515** (median 0.524, ρ 0.507), maxcost 0.351 (ρ 0.46); `:odds` skipped (no 2025 odds archives). The ~200-line direct model matches the full production one-day stack to within 0.005 on held-out data while both beat star-buying by ~0.17. The champion's 0.520 reproduces the review's §2.1 mean (0.52). As with the WP2.3 GT gate, the challenger is retained as a standing harness comparator, not wired into `solve_oneday`. The report (`render_backtesting.jl` "One-day harness") runs the same comparison over a curated major-classics set across 2023–2025.
-
-### Ways forward from the champion/challenger tie (July 2026)
-
-**Diagnosis.** Two maximally-different strength→points transforms (generative position simulation vs a fitted rank→points curve) converge to the same capture and rank ρ. When the entire back half of the model can be swapped with no effect, the back half is not the binding constraint. Three things follow: (i) the **strength→points transform is saturated** — added simulator physics buys ~zero point-prediction accuracy; (ii) both models sit at an **information ceiling** (ability + market dominate; the challenger's fitted `hist_weight`=0.5 says own-history barely helps), consistent with the "ML ≈ bookmaker odds" prior; (iii) the residual is **aleatoric mid-field variance** — *which* cheap/mid rider over-performs on a given day (breakaway, echelon, crash-thinned bunch), which is where the league gap and the PIT-0.826 failure both live. The challenger fits the rank→points curve directly and *still* can't close it, so the average curve is right; the day-to-day dispersion is the problem. Implication: stop chasing point-prediction accuracy (saturated) and spend effort on the two levers that can still move the objective — team construction under uncertainty, and de-distorting the mid-field. All four experiments below gate on held-out **team-points-captured** on the one-day (and where noted, stage) harness, which we now have.
-
-Ranked by cost-adjusted expected value:
-
-1. **Mid-field de-distortion (do-no-harm, run first).** The two shelved candidates the review named — the **per-rider/per-dimension market discount** (replace the blanket ×8 haircut that crushes unpriced mid-field riders toward the prior) and **oracle-floor disablement** — both *remove* distortion rather than add mechanism and both target the PIT/mid-field failure directly. Now testable with 20+ odds races banked. Gate: top-20 rank ρ must not degrade and mid-tier PIT must move toward 0.5 on the odds-race subset. Lowest risk, aimed straight at the documented league gap.
-
-2. **Champion + challenger ensemble.** They tie but err differently (different machinery, different input weighting). Average the two EVG columns (or switch by selectivity cluster / race type) and score on the harness — the classic free win when two decorrelated predictors tie. One harness run to a first answer. Gate: ensemble capture beats both singles by more than the bootstrap CI.
-
-3. **Risk-aware / upside team construction (highest conceptual upside, least proven).** If EVG is at ceiling, the edge is in the *team given* the EVG. The simulator's unique output the challenger cannot supply is per-rider `downside_semi_dev` + selection frequency; the harness currently picks the plain EVG-max team. In stochastic races the winning team is built from cheap high-variance over-performers, so an upside-tilted objective (mean-variance / CVaR on the simulator's per-draw distribution) may beat EVG-max. This **reframes the simulator's justification: keep it for its variance, not its mean.** Gate: upside objective beats EVG-max on team-points-captured across the harness, and survives the cumulative-season objective (it may not — upside-chasing can lose over a season). This is the one experiment that could give the retained simulator a reason we can point to.
-
-4. **New information, not new machinery (speculative, gate hard).** Technique is saturated, so the ceiling only lifts with inputs the market has not priced: a **qualitative/YouTube signal** (DS interviews, form intel — the deleted August 2026 implementation would have to be rebuilt), **echelon/weather risk**, **parcours-specific breakaway propensity**, live odds movement. The review's own evidence is that most added signals have not moved the numbers, so treat each as a speculative bet gated on the challenger's held-out harness before belief; expect most to fail.
-
-**Caveats.** The 0.005 champion–challenger gap is inside the noise on 39 races and neither number is fully clean (the challenger's 2023–24 are its fit years; 2025 is its clean held-out; the champion carries its own in-sample noise-fitting exposure). Act on the tie, not on the ordering. Experiment 3 is highest-upside but least certain to survive the season objective; 1 and 2 are the safe, cheap shots on goal to run first.
-
-### Experiment 1 result: CLOSED, null (July 2026)
-
-**Both halves of experiment 1 are dead. Do not re-run it.**
-
-**(b) Oracle-floor disablement was already shipped.** `floor_signals` defaults to
-`Set([:odds])` and `strength_pipeline.jl` gates the oracle floor on
-`:oracle in config.floor_signals`, so the floor has never been active in
-production. The experiment-1 entry above listing it as a candidate was simply
-wrong about the code.
-
-**(a) The market discount is flat across a 64× range.** Added a per-rider
-`market_discount_unpriced` (priced riders keep the ×8 haircut; unpriced riders
-discount at a separate rate), swept it over 1.0/2.0/4.0/8.0/16.0/32.0/64.0, and
-scored `team_points_captured` on all 12 one-day editions with archived odds
-(2026; paired, deterministic seed). The `md=8.0` arm reproduces the shipped
-numbers exactly, so the rig is sound.
-
-| `market_discount_unpriced` | mean capture | vs shipped | top-20 ρ |
-| --- | --- | --- | --- |
-| 1.0 | 0.535 | **−0.037** | 0.431 |
-| 2.0 | 0.572 | −0.000 | 0.442 |
-| 4.0 | 0.572 | +0.000 | 0.464 |
-| **8.0 (shipped)** | **0.572** | — | **0.474** |
-| 16.0 | 0.568 | −0.004 | 0.490 |
-| 32.0 | 0.569 | −0.003 | 0.491 |
-| 64.0 | 0.570 | −0.002 | 0.491 |
-
-Weakening the discount *degrades* rank ρ monotonically and costs capture at the
-extreme (2 wins / 5 losses / 5 ties at md=1.0). Strengthening it does nothing
-(±0.004). So the mid-field PIT failure is **not** caused by the blanket haircut
-crushing unpriced riders toward the prior — the roadmap's stated mechanism is
-refuted, with the sign reversed on the ρ side. The `market_discount_unpriced`
-field was deleted after the sweep; the blanket race-level discount stands.
-
-**Standing observation, not yet an experiment.** On those same 12 marketed
-classics the bare odds ranking beats the full production stack on both metrics —
-capture 0.630 vs 0.572, top-20 ρ 0.575 vs 0.474. Treat with care: the gap is
-concentrated in two editions (Eschborn +0.345, Roubaix +0.266) and drops to
-~0.01 with both removed, and the simulator wins Gent-Wevelgem by 0.196. Odds win
-6, simulator 3, 3 ties. This is the same information-ceiling story as the
-champion/challenger tie, and it is **not** reachable via the market-discount
-knob. If anything is worth trying next it is experiment 2 (ensemble), which
-attacks the decorrelation directly.
-
-**Harness metric re-based (July 2026).** `backtest_stage_race` /
-`backtest_oneday_race` now default `max_per_team=2`, matching production, applied
-to predictor teams and the hindsight optimum alike. Capture values recorded
-anywhere above this line predate that change and are not comparable. The
-one-day harness also gained a `:simulator_risk` arm and 2026 coverage (it had
-been looping `backtest_years`, so the `:odds` arm never produced a row).
-
-### Experiment 2 result: split — challenger ensemble NULL, market ensemble PROMISING (July 2026)
-
-Ensembles built by normalising each EVG column to unit sum (a knapsack's argmax
-is invariant to scaling one column, but a *blend* is not — simulator/direct are
-in VG points, odds is a win probability), then mixing at w ∈ {0.25, 0.5, 0.75}.
-Scored on `team_points_captured` via the one-day harness.
-
-**(a) Champion + challenger: null, as specified. CLOSED.** n=59 editions
-(2023–2026). Every blend lands at or below the simulator; `sim_dir_0.5` vs `sim`
-is **−0.004, bootstrap CI [−0.026, +0.019]**, 15 wins / 14 losses / 30 ties. The
-champion and challenger tie because they make the *same* errors, not because
-they are decorrelated, so averaging them buys nothing. This kills the "free win
-from two decorrelated predictors" premise for this pair.
-
-**(b) Champion + market odds: the real decorrelation.** n=12 marketed editions
-(all 2026).
-
-| arm | mean capture | vs sim | top-20 ρ |
-| --- | --- | --- | --- |
-| sim (production) | 0.572 | — | 0.474 |
-| odds | 0.627 | +0.055 | 0.575 |
-| direct | 0.629 | +0.056 | 0.517 |
-| **sim_odds_0.25** | **0.651** | **+0.079** | 0.543 |
-| **sim_odds_0.5** | **0.651** | **+0.079** | 0.532 |
-| sim_dir_odds | 0.642 | +0.070 | 0.533 |
-
-`sim_odds_0.5` vs `sim`: **+0.079, CI [+0.028, +0.136]** (excludes 0), **7 wins /
-0 losses / 5 ties** — it never loses to production. Robust to dropping the two
-editions that drive the raw odds advantage (drop Eschborn: +0.064, CI [+0.018,
-+0.119]; drop Eschborn + Roubaix: +0.044, CI [+0.010, +0.084]). Survives honest
-weight selection (leave-one-out, weight fitted on the other 11: **+0.066**, 7
-wins / 1 loss / 4 ties). Top-20 ρ improves 0.474 → 0.532.
-
-**But the stated gate is NOT met.** It required beating *both* singles outside
-the CI. Against odds alone the blend is only **+0.024, CI [−0.015, +0.069]**;
-against direct **+0.023, CI [−0.059, +0.118]**. So: the simulator alone is
-clearly the worst of the three options on marketed races, and blending clearly
-beats it — but **that the simulator adds value on top of the raw market is not
-established at n=12**. Blending also surrenders upside where the market is much
-stronger (Eschborn −0.094 vs odds-only, Flèche −0.063).
-
-Scope limits: one season, one-day only (the GT harness has just 2 marketed
-editions). Marketless races are unaffected — there is no odds column to blend.
-
-**Next step if pursued:** wire a market blend into `solve_oneday` for races where
-odds exist, at w=0.5 (0.25 ties it and is more market-heavy than the evidence
-compels), gated as a ship-then-monitor change under the validation philosophy —
-large effect, clear mechanism, do-no-harm satisfied. Re-check after the 2027
-classics, when n roughly doubles. Pre-registered revisit trigger: if the blend's
-capture advantage falls below +0.02 on 2027 races, revert — measured against
-`simulator_risk`, paired on common editions. See "SHIPPED: one-day market blend"
-below for why that baseline and not `sim`.
-
-### SHIPPED: one-day market blend (July 2026)
-
-Wired into `solve_oneday` / `_oneday_prediction_core` as specified above. Stage
-races are untouched — the GT harness has 2 marketed editions, nowhere near
-enough.
-
-**⚠️ PRE-REGISTERED REVERT TRIGGER.** If `simulator_market` minus
-**`simulator_risk`** mean team-points-captured falls below **+0.02** on the 2027
-classics, back the blend out. The check is a report render, not a re-analysis —
-`render_backtesting.jl`'s one-day harness section renders a dedicated "Market
-blend — paired comparison" table, and `oneday_harness_years` runs to the current
-season so 2027 rows appear without editing the script.
-
-Two things that table exists to prevent. First, **the arms cover different
-edition sets** — `simulator_market` and `odds` only exist where odds were
-archived — so subtracting the summary-table means compares the blend on marketed
-2026 editions against a `simulator` averaged over 2023–2026. The trigger must be
-computed paired, on editions where both arms produced a row. Second, **the
-baseline is `simulator_risk`, not `simulator`**: the blend sits on top of the
-risk-adjusted column, so differencing against the unadjusted arm bundles the
-risk adjustment into the measured effect. The +0.079 quoted below is the
-`simulator` difference, which is what the experiment reported; the paired table
-renders both.
-
-Note *which* claim this protects: the blend clearly beating the simulator is
-established (+0.079, CI [+0.028, +0.136]); the blend beating the raw market is
-**not** (+0.024, CI [−0.015, +0.069]) — and that weaker, unestablished claim is
-the one justifying keeping the simulator at all on marketed races. If 2027 shows
-the blend still failing to beat odds alone, the live question is not "revert the
-blend" but "why are we simulating marketed classics".
-
-Implementation notes:
-
-- Insertion point: `_resample_core!` in `build_model.jl`, on the **risk-adjusted**
-  column (`expected_pts / (1 + risk_aversion·cv_down)`), immediately before the
-  k-best team enumeration. Both arms are unit-normalised
-  (`blend_market_points`) — mandatory, since EVG is in VG points and the market
-  arm is a probability; mixed raw, the market would be swamped.
-- Blending *after* the risk adjustment rather than before is what makes `w = 1`
-  bit-identical to the pre-blend path (blending raw EVG would have quietly
-  dropped production's risk adjustment at `w = 1`). The experiment blended raw
-  EVG and re-optimised EVG-max; the difference is second-order — `risk_aversion`
-  was 44/50 ties on the one-day harness — and the harness re-run below confirms
-  it does not move the headline.
-- `market_blend_weight` is per-race config (`[optimisation]`, default 0.5). 0.25
-  scored identically on the 2026 evidence, so going lower on races where the
-  book is trusted more is supported; 1.0 disables.
-- Marketless races are bit-identical to before at any `w` — there is no market
-  column to blend, and the code short-circuits on that.
-- `champion_oneday_evg` (`:simulator`) deliberately stays UNBLENDED so the
-  standing champion comparison keeps its meaning; `champion_oneday_market_evg`
-  (`:simulator_market`) is the new arm, and it runs the production code path
-  rather than reimplementing the blend.
-
-**Harness re-run through the shipped code, 12 marketed 2026 editions:**
-
-| arm | mean capture | vs sim | top-20 ρ |
-| --- | --- | --- | --- |
-| simulator | 0.572 | — | 0.474 |
-| odds | 0.630 | +0.058 | 0.575 |
-| **simulator_market** | **0.651** | **+0.079** | 0.533 |
-
-`simulator_market` − `simulator`: **+0.0793, bootstrap CI [+0.028, +0.137], 7
-wins / 0 losses / 5 ties** — the experiment's headline reproduced exactly
-through the production path, which settles the risk-adjustment placement
-question empirically: blending after the risk adjustment does not move it.
-(`odds` reads 0.630 here against 0.627 in the experiment; a 0.003 arm-level
-drift, direction of the result unaffected.)
-
-Per-edition shape, for what the blend is actually doing: it never loses to the
-simulator, and its wins are large where the simulator failed outright — Roubaix
-0.303 → 0.569, Brabantse Pijl 0.618 → 0.774, Eschborn 0.270 → 0.521. In the
-other direction it protects against the market: Gent-Wevelgem holds the
-simulator's 0.431 where odds alone captured 0.235. The cost is the upside it
-surrenders when the market is simply better — Eschborn 0.521 against odds-only's
-0.615, Flèche 0.701 against 0.764. That trade is the whole unresolved question
-above.
+P(scoring at all) is 89.5 per cent for a break rider against 28.6 per cent for
+the pack. Use `pcs_results` as the denominator: `vg_results` holds only riders
+who scored, and joining on it alone conditions away most of the effect.
+
+Backtest, 108 editions, paired against breakaway-off: Δ capture +0.0168 (SE
+0.0111, 48/41/19) at `prior_strength = 120`. Not significant, but every one of
+six specs beat baseline and the effect is monotone in shrinkage. `km_weighted`
+rates double-count distance, since the sector count already carries it. The
+comparison is on v off; the change actually made (leaderboard → archive) cannot
+be backtested because the old source cannot be reconstructed as-of. Mean sectors
+is 1.3, not the old hardcoded 2.0, which had inflated the channel by ~54 per
+cent.
+
+### VG points distributions underestimate scoring riders
+
+The largest calibration problem. Mean PIT for scoring riders is ~0.83 (target
+0.5) across the 2026 prospective races; bottom and middle tiers ~0.9, top 25 per
+cent ~0.7. Higher posterior uncertainty correlates with worse PIT, so the
+failure is asymmetric: unknown riders in stochastic races have right-skewed
+outcomes that symmetric noise cannot capture. The rank ordering is decent; the
+failure is in converting strength to VG points.
+
+Race selectivity clusters, by big-miss rate: selective (Strade, Dwars, E3: 0–10
+per cent), standard (Brugge, MSR, Omloop: ~20 per cent), stochastic (Kuurne,
+Nokere, Gent-Wevelgem, Trofeo: 30–60 per cent). The league gap has the same
+shape: within 3–10 per cent of the winning human in selective races, 30–60 per
+cent below in stochastic ones.
+
+### Early-race GC is static, so sprinters never score daily-GC points
+
+`simulate_stage_race` adds `gc_strengths[i]` to `cumulative_gc_score` on every
+stage from stage 1, so the simulated GC table is the static GC-strength order
+from day one. In reality a sprinter who wins stage 1 leads GC on bonus seconds
+until the race separates on time. On the 2026 Femmes field, 663 of 1,989 daily-GC
+EVG fell in stages 1–3 (before the ITT) and all went to GC riders; Wiebes got 2
+per cent of her EVG from daily GC, Vos 0. Men's grand tours are affected the
+same way. The fix needs bonus seconds (10/6/4 on stage and intermediate sprints)
+and early GC ordered by time-then-placing. Validate on the stage harness first.
+
+### GC contest is over-deterministic
+
+The TdF 2026 board rated Pogačar ~93 per cent to win against a market ~55 per
+cent. GC is decided by cumulative strength over 21 stages; per-stage aleatoric
+noise averages out (grows as √21 while the gap grows as 21), leaving the
+persistent `α·σ·rider` term as the only GC-order uncertainty, and σ is small for
+well-characterised favourites. The fix direction is a persistent, σ-independent
+"form across these three weeks" shock calibrated so the top-2 split matches the
+market (head-to-head z ≈ 0.85). The GC-favourite protection layer that amplified
+this was deleted in July 2026, so re-measure before building anything. Impact on
+team selection is limited; the displayed win% reads over-confident.
+
+### PCS recency scores treat a missed season as a zero
+
+`_apply_pcs_recency!` (`race_solver.jl`) builds `<spec>_r` as `sum(w .* pts)` over
+seasons present, so a season not raced counts as weakness. The fallback
+`currency_factors` path uses a weighted average, which is absence-neutral. Example
+(2026 Femmes ITT): Bäckstedt 947 outranks Reusser 572 (missed 2024 through
+illness, career 3,208). Switching to the weighted average is cheap and clearly
+right. Aggravating: `pcs_season_decay = 0.7` is global across specialties, which
+over-discounts stable TT ability, and `:itt` has a single signal (`pcs_tt`) with
+no market input.
+
+### `stage_dimension_weights` ramp is calibrated on men's stage lengths
+
+The flat→hilly ramp runs over ProfileScore 40–90 and ignores PCS's `stage_type`
+above PS 40. Women's stages are shorter at comparable vertical, so PS runs higher:
+no stage of the 2026 Femmes route was treated as a pure sprint (flattest
+`flat = 0.54`), starving sprinters. Candidate fixes: normalise by distance or
+vertical metres per km, or floor the flat weight when PCS says `:flat`.
+
+### `odds_points → :flat` leaks GC riders into bunch sprints
+
+A GC rider priced in the green-jersey market gets flat strength from it
+(`odds_points` routes `flat = 0.4`); Pogačar's production flat top-10 rate is
+~0.50 against a real ~0.17. Route `odds_points` / `oracle_points` to `:flat` only
+for riders classed as sprinters.
+
+### Stage-race channels that cannot be scored or calibrated
+
+- **HC/Cat-1 per-climb points**: `n_hc_climbs` / `n_cat1_climbs` are always 0
+  from the PCS scraper, so neither `_score_daily_mountains!` nor anything else
+  scores them.
+- **Points-jersey noise** (`StageSimConfig.breakaway_noise.points_jersey`) is
+  hand-set. Recalibration needs archived per-stage points/mountains
+  classification standings, which nothing scrapes.
+- **Sprinter DNFs** (~32 per cent for 2nd–4th-tier GT sprinters) are unmodelled
+  since the attrition layer was deleted for not moving team-points-captured.
+- **Stage-race PIT**: `prospective_pit_values` skips stage races; the right fix
+  routes them through `simulate_stage_race` for their draws.
+- GT prediction archives before July 2026 lack `strength_kom`, so reconstructions
+  fall back to `strength_mountain` for the KOM channel.
+
+### Derived league winners disagree with the hand-typed record in 4 of 29
+
+Grand tour totals differ by a handful of points (Giro 8,351 recorded v 8,359
+derived; Tour 11,884 v 11,880). The derived figure matches the snapshot's own
+`scored_total`, so the disagreement is with whatever the hand-typed numbers were
+read off, probably a standings page mid-rescore. Check against the live page
+during the next grand tour.
+
+Team names are mutable and the scrape returns the current one (Paris-Roubaix:
+"Megaton-Structo NimaRent" recorded, "Lowering The Toon" derived). Harmless when
+publishing within a day of the race; it only bites on backfill, where the
+existing `(pcs_slug, year)` check already prefers the record.
+
+### Other
+
+- The `crosscheck_option_ab` baseline (`base_*`) predates the August 2026
+  stage-assist archive patch; expect its drift alarm to trip once and re-base it.
+- The estimators (`estimate_rider_strength`, `estimate_rider_strength_multidim`)
+  duplicate their signal-update blocks and keep needing paired edits. A shared
+  block refactor is worth scheduling.
+- The retired `velogames-race-reports` Netlify site still needs its redirects
+  deployed (`vgleague/scripts/retired-site/README.md`; the two site ids are easy
+  to confuse). `scripts/render_reports.jl` is kept only as the reference the
+  `vgleague verify-*` checks diff against; delete it once the Python site has run
+  a season.
+
+## Settled findings
+
+Do not re-run these without new evidence.
+
+- **The strength→points transform is saturated.** A fitted direct-EVG challenger
+  (deleted August 2026) tied the full simulator on both harnesses: stage
+  (10 editions, Δ −0.040, 90% CI [−0.093, +0.025]) and one-day (39 held-out 2025
+  classics, 0.515 v 0.520). Both sit at an information ceiling set by ability +
+  market. Remaining levers are team construction under uncertainty and new
+  information.
+- **Stage-sim layers that did not earn their keep** (10-edition Δ capture with the
+  layer off; seed band ±0.0126): attrition −0.0001, stage breakaway draw +0.005,
+  GC-favourite protection −0.010 (one edition). All deleted. The propensity layer
+  scored −0.039 and was kept.
+- **Market discount is flat across a 64× range.** Sweeping a separate discount for
+  unpriced riders (1–64) on the 12 marketed 2026 classics moved capture ±0.004
+  except at 1.0 (−0.037), and weakening it degraded top-20 ρ monotonically. The
+  mid-field PIT failure is not caused by the blanket haircut. The oracle floor has
+  never been active in production (`floor_signals = Set([:odds])`).
+- **Simulator + challenger ensemble is null** (59 editions, −0.004, CI [−0.026,
+  +0.019]): they make the same errors. Simulator + odds is the real
+  decorrelation, hence the shipped market blend (+0.079, CI [+0.028, +0.136], 7/0/5
+  on 12 editions). Blending clearly beats the simulator; it does not clearly beat
+  odds alone (+0.024, CI [−0.015, +0.069]).
+- **Sprinter over-prediction was on the noise axis, not the strength axis.**
+  Softening the PCS `log1p` transform, and a per-rider market discount, did not
+  move second-tier sprinters. Ability-margin-dependent noise was rejected: it
+  re-saturates the sprint top-10. Uniform per-stage-type aleatoric noise
+  (`aleatoric_noise`, fitted by top-20 Plackett–Luce on archived GT finishing
+  orders; ordering hilly > flat ≈ mountain > itt) is the fix.
+- **DNF hazard does not fall with ability.** Stronger riders abandon more (giro
+  2026: quality tertiles 11.5 → 27.4 per cent DNF). Do not re-propose a
+  climbing-quality hazard.
+- **Propensity layer: `:posthoc` and `:sim` modes give identical EVG means.** A
+  per-rider multiplicative factor scales mean and SD alike, so the modes differ
+  only in selection frequency.
+- **VG uses one assist schedule per game**: 8/4/2 for grand tours, 6/4/2 for
+  shorter stage races.
+- **`max_per_team` is a diversification preference**, not a game rule; the
+  harness defaults to production's 2.
+- **VG race history is live in the stage-race estimator only.** The April 2026
+  ablation removed it from the one-day path; a test pins both halves.
+- **Ownership-adjusted optimisation does not apply.** VG is cumulative points
+  across ~40 races, so other players' picks do not affect your score (Haugh &
+  Singal 2021 gains are for single-contest GPPs).
+
+## Deferred ideas
+
+1. **Risk-aware / upside team construction.** If EVG is at ceiling, the edge is in
+   the team given the EVG. The simulator's unique output is the per-draw
+   distribution; an upside-tilted objective may beat EVG-max in stochastic races.
+   Gate on the harness and on the cumulative-season objective.
+2. **Correlated position simulation.** `simulate_race` has no shared race-day or
+   team-block factor, so its team-score distributions are too narrow (two teams
+   both at the 0th/1st percentile of their own sims).
+3. **Drop the oracle signal.** May 2026 analysis: listed oracle riders show
+   middle-tier ρ ≈ 0.004. Re-evaluate after 20+ races with odds.
+4. **Position-dependent market discount** (full discount only for the top PCS
+   quartile). Improved every tier (ρ 0.518 v 0.473) on 6 races, but with
+   circular tier assignment and mixed per-race signs. Defer until n ≥ 20 races
+   with odds.
+5. **Profile-aware PCS specialty for one-day races.** One-day races use only
+   `:oneday`; a per-race blend (with Hills now available) would give the prior
+   terrain awareness. Risk of double-counting `SIMILAR_RACES`. Ablate on 3–4
+   puncheur races.
+6. **Data-driven `SIMILAR_RACES`.** Matrix-factorise a rider × race × year tensor
+   of PCS points (residualised on rider-year, recency-weighted) and use factor
+   cosine similarity as continuous history weights. Sparsity is the main risk.
+   Validate manual v top-k v continuous.
+7. **Conditional calibration.** PIT by predicted strength, cost band and odds
+   coverage, in the prospective section of `render_backtesting.jl`.
+8. **Stage-race model follow-ups.** Empirical calibration of
+   `SIGNAL_DIMENSION_WEIGHTS`, `RACE_HISTORY_CLASS_PROJECTION` and the
+   `StageSimConfig` tables against per-stage VG points; a hierarchical prior over
+   dimensions for sparse-data riders; project race history through each past
+   race's stage-type mix; per-stage-type stage-winner markets; multidim prior
+   checks and SBC.
+9. **New information.** Echelon/weather risk, live odds movement, a rebuilt
+   qualitative signal. Most added signals have not moved the numbers; gate hard.
+
+## References
+
+- Hubáček et al. (2024, arXiv:2410.21484): ML sports prediction reaches bookmaker
+  accuracy at best. Franck et al. (2010), Constantinou & Fenton (2013): betting
+  markets are the best probabilistic forecasts.
+- Kholkine et al. (2021, *Frontiers in Sports and Active Living*): for classics
+  top-10, PCS career/season points matter everywhere; best prior result in the
+  race dominates Flanders and Roubaix; related-race results drive LBL; 6-week
+  form gets minimal weight.
+- Rize, Saldanha & Moskovitch (2025, VeloRost): modelling leader and helper
+  roles separately, and clustering races by terrain before rating, both help.
+- Haugh & Singal (2021, *Management Science*): ownership-adjusted DFS
+  optimisation, strong for single-contest GPPs only.
+- Baronchelli et al. (2025, arXiv:2505.02170): recency-weighted Bayesian models
+  are strong FPL baselines; roughly two-thirds model, one-third realised points.
