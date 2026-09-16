@@ -430,14 +430,22 @@ function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
     # freshly computed ones, and prediction archives cannot be re-created — so
     # the fix has to live at match time.
     depunct(k) = replace(k, r"[-.]" => "")
+    # PCS startlists render the name surname-first ("PIDCOCK Tom"), everything
+    # else surname-last, and the riderkey is order-insensitive so nothing upstream
+    # notices. Index both ends of the name and try both ends of the external one;
+    # the uniqueness requirement below is what keeps a first name that doubles as
+    # someone else's surname from matching the wrong rider.
+    ends(name) = (parts = split(strip(name));
+    isempty(parts) ? String[] :
+    unique([normalisename(String(first(parts)), true),
+        normalisename(String(last(parts)), true)]))
     ref_depunct = Dict{String,Vector{String}}()
     ref_surname = Dict{String,Vector{String}}()
     for row in eachrow(reference_df)
         push!(get!(ref_depunct, depunct(row.riderkey), String[]), row.riderkey)
-        parts = split(strip(row.rider))
-        isempty(parts) && continue
-        surname = normalisename(String(last(parts)), true)
-        push!(get!(ref_surname, surname, String[]), row.riderkey)
+        for token in ends(row.rider)
+            push!(get!(ref_surname, token, String[]), row.riderkey)
+        end
     end
 
     n_fixed = 0
@@ -445,10 +453,10 @@ function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
         row.riderkey in ref_keys && continue
         candidates = get(ref_depunct, depunct(row.riderkey), String[])
         if length(candidates) != 1
-            parts = split(strip(row.rider))
-            isempty(parts) && continue
-            surname = normalisename(String(last(parts)), true)
-            candidates = get(ref_surname, surname, String[])
+            for token in ends(row.rider)
+                candidates = get(ref_surname, token, String[])
+                length(candidates) == 1 && break
+            end
         end
         if length(candidates) == 1
             row.riderkey = candidates[1]

@@ -807,6 +807,11 @@ function _prepare_rider_data(
                 force_refresh = force_refresh,
             )
             if nrow(startlist_df) > 0 && :riderkey in propertynames(startlist_df)
+                # PCS and VG disagree on given names ("Tom" vs "Thomas" Pidcock),
+                # and this is a hard semijoin: an unmatched key silently deletes a
+                # rider from the field. Reconcile against the VG pool first, which
+                # also fixes the pcs_slug map built from the same frame below.
+                rematch_riderkeys!(startlist_df, riderdf)
                 before = nrow(riderdf)
                 riderdf = semijoin(riderdf, startlist_df[:, [:riderkey]], on = :riderkey)
                 @info "Filtered to $(nrow(riderdf)) riders confirmed on PCS startlist (removed $(before - nrow(riderdf)))"

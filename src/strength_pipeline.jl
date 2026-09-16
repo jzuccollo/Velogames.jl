@@ -1169,6 +1169,12 @@ function _assemble_signals(
        :riderkey in propertynames(race_history_df) &&
        :position in propertynames(race_history_df) &&
        :year in propertynames(race_history_df)
+        # PCS results name the rider "PIDCOCK Tom" where VG says "Thomas
+        # Pidcock". Without this the whole history signal for such a rider is
+        # silently absent — no warning, just a strength estimate built on the
+        # market alone.
+        :rider in propertynames(race_history_df) &&
+            rematch_riderkeys!(race_history_df, df)
         has_penalty = :variance_penalty in propertynames(race_history_df)
         for row in eachrow(race_history_df)
             key = row.riderkey
