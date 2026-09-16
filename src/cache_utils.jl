@@ -8,9 +8,6 @@ Two layers:
 - **On-disk**: Arrow IPC files with JSON metadata and TTL-based expiry.
 """
 
-"""
-Cache configuration structure
-"""
 struct CacheConfig
     cache_dir::String
     max_age_hours::Int
@@ -19,13 +16,11 @@ end
 # Default on-disk cache directory. Scripts reuse this and vary only the TTL.
 const DEFAULT_CACHE_DIR = joinpath(homedir(), ".velogames_cache")
 
-# Default cache configuration
 const DEFAULT_CACHE = CacheConfig(
     DEFAULT_CACHE_DIR,
     168,  # 7 days default cache lifetime
 )
 
-# Session-scoped in-memory cache (avoids redundant disk reads within a session)
 const _MEMORY_CACHE = Dict{String,DataFrame}()
 
 # An empty fetch means "not published yet", not "this page is empty", so it is
@@ -46,8 +41,8 @@ function clear_memory_cache!()
     np = length(_PAGE_CACHE) + length(_PREFETCHED)
     empty!(_PAGE_CACHE)
     empty!(_PREFETCHED)
-    # Also the list of hosts that refused `HTTP.jl`, so a long-lived process
-    # gets to notice if a site relents rather than using the browser for ever.
+    # Also the hosts that refused `HTTP.jl`, so a long-lived process notices if
+    # a site relents.
     empty!(_BLOCKED_HOSTS)
     @info "Cleared in-memory cache ($n entries, $np cached pages)"
     return nothing
@@ -58,12 +53,9 @@ Generate a cache key from URL and parameters
 """
 function cache_key(url::String, params::Dict = Dict())::String
     content = url * string(params)
-    return bytes2hex(sha256(content))[1:16]  # Use first 16 chars of hash
+    return bytes2hex(sha256(content))[1:16]
 end
 
-"""
-Cache metadata structure
-"""
 struct CacheMetadata
     url::String
     timestamp::DateTime
@@ -75,7 +67,7 @@ end
 Get cache file paths for data and metadata
 """
 function cache_paths(key::String, cache_dir::String)
-    mkpath(cache_dir)  # Ensure cache directory exists
+    mkpath(cache_dir)
     data_file = joinpath(cache_dir, key * ".feather")
     meta_file = joinpath(cache_dir, key * ".json")
     return data_file, meta_file
@@ -122,10 +114,9 @@ function save_to_cache(
     # This ordering makes the interrupted state "not yet valid", so a reader
     # refetches instead.
     #
-    # An empty result still writes metadata only. That absence is the "not
-    # published yet" marker `EMPTY_CACHE_MAX_AGE_HOURS` keys off, so the entry
-    # expires in hours rather than sitting out the full TTL — and with no data
-    # to write there is no window here to open.
+    # An empty result writes metadata only. That absence is the "not published
+    # yet" marker `EMPTY_CACHE_MAX_AGE_HOURS` keys off, so the entry expires in
+    # hours instead of the full TTL.
     if nrow(data) > 0
         Arrow.write(data_file, data)
     end
@@ -198,9 +189,8 @@ function cached_fetch(
     end
 
     # 2. Check on-disk cache. An empty entry means the page had nothing on it
-    # yet (results fetched before the race finished), so it expires quickly
-    # rather than at the full TTL — otherwise the race results stay invisible
-    # for a week after they appear.
+    # yet (results fetched before the race finished), so it expires quickly;
+    # at the full TTL the results would stay invisible for a week.
     data_file, _ = cache_paths(key, cache_config.cache_dir)
     max_age =
         isfile(data_file) ? cache_config.max_age_hours :
@@ -213,7 +203,7 @@ function cached_fetch(
             return cached_data
         end
         if !isfile(data_file)
-            # Metadata with no data file at all is the deliberate empty marker.
+            # Metadata with no data file is the empty marker.
             verbose && @info "Loading cached empty result: $url"
             return DataFrame()
         end
@@ -266,18 +256,15 @@ const ARCHIVE_EXT = ".arrow"
 Archive trees that are no longer data types, with where they went and why.
 
 Documentation, not machinery: the entries are here so the type manifest can
-account for every directory in the archive without anyone having to rediscover
-what these held. These trees are Arrow like everything else: they were left as
-Feather V1 on the argument that a historical record does not need the current
-format, which lost to the simpler one that those 40 files were the only thing
-keeping an end-of-life dependency in the manifest. `_inputs/` holds `.mhtml`
-pages and no tabular data, so nothing there was converted.
+account for every directory in the archive. These trees are Arrow like
+everything else, except `_inputs/`, which holds `.mhtml` pages and no tabular
+data.
 """
 const RETIRED_ARCHIVE_TYPES = [
     (
         name = "pcs_form",
         moved_to = "_retired/pcs_form",
-        reason = "PCS form score, dropped by the April 2026 ablation and deleted from the code in August. The only surviving record of what the signal contained, and roadmap.md cites its evidence.",
+        reason = "PCS form score, dropped by the April 2026 ablation and deleted from the code in August. The only surviving record of what the signal contained.",
     ),
     (
         name = "qualitative",
@@ -287,7 +274,7 @@ const RETIRED_ARCHIVE_TYPES = [
     (
         name = "prediction",
         moved_to = "_retired/prediction",
-        reason = "Singular typo of `predictions`, the drift WP5's guard exists to stop. Its one file (strade-bianche 2026) was a 38-column superset of the 13-column plural and was swapped in before the tree retired.",
+        reason = "Singular typo of `predictions`, the drift the `ARCHIVE_TYPES` guard exists to stop. Its one file (strade-bianche 2026) was a 38-column superset of the 13-column plural and was swapped in before the tree retired.",
     ),
     (
         name = "pcs_breakaways",
@@ -297,15 +284,15 @@ const RETIRED_ARCHIVE_TYPES = [
     (
         name = "league_winners",
         moved_to = "_retired/league_winners.toml",
-        reason = "A hand-maintained, append-only five-field summary of the league snapshots, which lived here only because the snapshots themselves lived somewhere nothing backed up. Phase 1b moved the snapshots into `league/raw` and the winners into `league/winners`; the file was migrated once and kept as the pre-archive record, since it is the only contemporaneous evidence for the four 2026 races no surviving snapshot predates.",
+        reason = "A hand-maintained, append-only five-field summary of the league snapshots, which lived here only because the snapshots themselves lived somewhere nothing backed up. The snapshots moved into `league/raw` and the winners into `league/winners`; the file was migrated once and kept as the pre-archive record, since it is the only contemporaneous evidence for the four 2026 races no surviving snapshot predates.",
     ),
 ]
 
 """
 Archive trees that hold raw documents rather than tables.
 
-They are part of the contract — `league/raw` is the most irreplaceable thing in
-the archive — but they carry no columns, so they cannot go in `ARCHIVE_TYPES`,
+`league/raw` is the most irreplaceable thing in the archive, but these trees
+carry no columns, so they cannot go in `ARCHIVE_TYPES`,
 whose entries mean "a frame with these mandatory columns" and are what
 `save_race_snapshot` validates against. The audit and the manifest read both
 consts; nothing else needs to know the difference.
@@ -569,22 +556,16 @@ in every row. Empty for an unknown type or an empty frame, for the same reason
 Presence is not coverage: `getpcs_rider_pts_batch` returns a frame with every
 mandatory column present and every value `missing` when PCS challenges the
 request instead of erroring, and `missing_mandatory_columns` waves that
-through because the columns are all there. Two `pcs_specialty` files were
-archived exactly this way in September 2026 — 163 and 159 rows, `riderkey`
-and `rider` populated, every rating column entirely `missing` — and since
-`pcs_specialty` is `refetchable = false` they could never self-heal. Adapted
-from `hollow_columns` in vgleague's `archive.py`, which carries the fuller
-reasoning and this closes the same gap on the write side.
+through. For a `refetchable = false` type such as `pcs_specialty`, a file
+written that way can never self-heal. Adapted from `hollow_columns` in
+vgleague's `archive.py`, which closes the same gap.
 
-Adapted rather than copied verbatim: vgleague's version also treats a
-whitespace-only string as blank, because its scrapers have no `missing`
-sentinel and fall back to `""` when a column is not on the page. Julia's
-writers use `missing` uniformly for "the fetch found nothing", and a real
-empty string is a real value here — `league/meta`'s `deadline` is `""` in
-every row for every grand tour, because Velogames locks a grand tour roster
-for the whole race rather than publishing a per-stage deadline. Flagging
-blank strings too would refuse that legitimate archive on every write, so
-only `missing` counts.
+vgleague's version also treats a whitespace-only string as blank, because its
+scrapers have no `missing` sentinel and fall back to `""`. Julia's writers use
+`missing` for "the fetch found nothing", and an empty string is a real value
+here: `league/meta`'s `deadline` is `""` in every row for every grand tour,
+because Velogames locks a grand tour roster for the whole race. Flagging blank
+strings would refuse that archive on every write, so only `missing` counts.
 
 Zero is not nothing either: an all-zero column passes, because a column can
 legitimately be full of zeros and rejecting it would be a guess about which.
@@ -604,7 +585,7 @@ not because a fetch was blocked or failed.
 
 `pcs_results`'s `breakaway_km` is the only known case. `getpcs_race_results`
 scrapes PCS's static HTML, but the `div.svg_shield` breakaway markup is only
-present in JavaScript-rendered pages — an HTTP scrape genuinely cannot see it,
+present in JavaScript-rendered pages — an HTTP scrape cannot see it,
 so every row's `breakaway_km` is `missing` on every successful fetch, not just
 a blocked one. `getpcs_stage_results` carries the same column but does not
 list it as mandatory for `pcs_stage_results`, so no entry is needed there.
@@ -641,8 +622,8 @@ _archive_provenance(data_type::AbstractString, version::Int, source_url::Abstrac
     archive_provenance(data_type, pcs_slug, year; archive_dir) -> Union{Dict{String,String}, Nothing}
 
 The provenance stamped on an archive file, or `nothing` for a file written
-before WP5 (which is most of them — the audit is what reports those, not a
-warning on every read).
+before provenance stamping existed (most of them — the audit reports those, not
+a warning on every read).
 """
 function archive_provenance(path::AbstractString)
     isfile(path) || return nothing
@@ -728,8 +709,8 @@ has_race_snapshot(
 Write `path` by handing `f` a temporary path in the same directory and renaming
 it into place. The temporary file is removed if `f` throws.
 
-The archive sits in Dropbox, is written by launchd and by `serve.jl`, and is due
-to be read by a Python package on its own schedule — with no locking anywhere.
+The archive sits in Dropbox, is written by launchd and by `serve.jl`, and is
+read by a Python package on its own schedule, with no locking anywhere.
 A writer interrupted part-way through `Arrow.write` leaves a truncated file that
 `load_race_snapshot` reports as unreadable, or a short one that reads cleanly
 and is wrong. `rename` is atomic within a filesystem, so a reader sees either
@@ -737,13 +718,12 @@ the old file or the new one and never half of either.
 
 Three things the implementation depends on:
 
-  * the temporary file lives in the **target directory**, because that is what
-    keeps the rename inside one filesystem;
-  * it is **dot-prefixed**, because that is what `audit_archive` and
-    `archive_years` skip — so a write in flight is not a stray file and not a
-    year, and neither is one leaked by a kill;
+  * the temporary file lives in the **target directory**, which keeps the
+    rename inside one filesystem;
+  * it is **dot-prefixed**, which `audit_archive` and `archive_years` skip, so
+    a write in flight (or one leaked by a kill) is not a stray file or a year;
   * `mv(...; force = true)` tries `rename` first and only falls back to
-    unlink-and-copy if that raises, so this is a genuine atomic replace.
+    unlink-and-copy if that raises.
 
 The pid is in the name so two writers racing on one path cannot corrupt each
 other's temporary file. That makes the *file* safe, not the write: the last
@@ -771,9 +751,8 @@ provenance into the file's Arrow schema metadata.
 Three things error rather than write: a `data_type` absent from `ARCHIVE_TYPES`,
 a frame missing one of that type's mandatory columns, and a frame where a
 mandatory column is present but empty in every row (see
-`hollow_mandatory_columns`). The first check runs before `mkpath`, so a typo'd
-type leaves no directory behind — that empty directory is what made
-`prediction` look like a real type beside `predictions` for four months.
+`hollow_mandatory_columns`). All three run before `mkpath`, so a typo'd type
+leaves no empty directory that looks like a real type.
 
 Pass `source_url` where the URL is already to hand.
 """
@@ -807,8 +786,6 @@ function save_race_snapshot(
         "that was blocked or came back empty, not a column that is really empty.",
     )
 
-    # All three checks stay above `mkpath`: a typo'd type must leave no
-    # directory behind, which is the whole point of checking before `mkpath`.
     path = archive_path(data_type, pcs_slug, year; archive_dir = archive_dir)
     mkpath(dirname(path))
     atomic_write(path) do tmp
@@ -828,9 +805,9 @@ end
 Load a DataFrame from the permanent archive. Returns `nothing` if the file does not exist.
 
 Warns when a file was written at a different `schema_version` from the one
-`ARCHIVE_TYPES` now declares. A file with no provenance at all is silent: every
-file written before WP5 is in that state, and a backtest opens hundreds of them
-in a run. Finding those is `scripts/archive_audit.jl`'s job.
+`ARCHIVE_TYPES` now declares. A file with no provenance at all is silent: most
+older files are in that state, and a backtest opens hundreds of them in a run.
+Finding those is `scripts/archive_audit.jl`'s job.
 """
 function load_race_snapshot(
     data_type::String,
@@ -857,10 +834,8 @@ Older schema versions that still read correctly, per data type.
 
 A version bump that only *adds* an optional column leaves every existing file
 valid, so warning about them is noise that never goes away. `pcs_specialty` v1
-is the case in point and the permanent one: v2 added `hills`, which the 30 files
-written before September 2026 cannot ever gain, because the ratings are
-season-cumulative and a re-fetch would record today's value under a past race's
-key. Those files are correct as they stand.
+is the case in point: v2 added `hills`, which older files can never gain (see
+the type's note in `ARCHIVE_TYPES`).
 
 Listing a version here is a claim that the current readers handle it. A bump
 that renames a column, changes a type, or makes something mandatory does not
@@ -1002,9 +977,7 @@ Walk the archive and report what the write guard cannot: legacy files that
 predate it. Returns `unknown_types`, `stray_files`, `empty_races`,
 `missing_columns`, `missing_provenance`, `unreadable` and per-type `counts`.
 
-The guard stops new drift; this is how you find out about the old kind. It also
-serves as WP1b's verification tool (every file is Arrow and loads) and WP4's
-acceptance test (which prediction archives are still deficient).
+The guard stops new drift; this finds the old kind.
 """
 function audit_archive(; archive_dir::String = archive_dir())
     root = archive_dir
@@ -1038,8 +1011,8 @@ function audit_archive(; archive_dir::String = archive_dir())
             files = [f for f in readdir(racedir) if !startswith(f, ".")]
             archived = filter(f -> occursin(year_file, f), files)
             append!(stray_files, [joinpath(racedir, f) for f in setdiff(files, archived)])
-            # A race directory does not imply a data file: three in the live tree
-            # hold nothing, which is why file counts trail directory counts.
+            # A race directory does not imply a data file, so file counts can
+            # trail directory counts.
             isempty(archived) && push!(empty_races, joinpath(data_type, race))
             for f in archived
                 path = joinpath(racedir, f)
@@ -1085,13 +1058,11 @@ Clear cache (all files or specific key)
 """
 function clear_cache(cache_dir::String = DEFAULT_CACHE.cache_dir, key::String = "")
     if isempty(key)
-        # Clear all cache files
         if isdir(cache_dir)
             rm(cache_dir, recursive = true)
             @info "Cleared all cache files from $cache_dir"
         end
     else
-        # Clear specific cache entry
         data_file_feather, meta_file = cache_paths(key, cache_dir)
 
         removed = false

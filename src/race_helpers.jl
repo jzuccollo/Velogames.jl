@@ -113,8 +113,7 @@ const CLASSICS_RACES_2026 = [
         204.0,
     ),
     RaceInfo(
-        # VG's name for Gent-Wevelgem 2026 (races.php and league pages agree;
-        # there is no "From" — the previous name here never matched either).
+        # VG's name for Gent-Wevelgem 2026 (races.php and league pages agree).
         "In Flanders Fields - Middelkerke to Wevelgem",
         "2026-03-29",
         2,
@@ -566,9 +565,8 @@ the race itself: the tuning knobs, the parsed bookmaker markets, and the output
 location.
 
 Built once by `load_render_config`, so every renderer and the local server hand
-the solvers an identical argument set. The bookmaker markets are stored parsed
-rather than as filenames — assembling them at each call site is what previously
-let `render_assessor.jl` run without the odds the other renderers used.
+the solvers an identical argument set. The bookmaker markets are stored parsed,
+so no renderer can end up without the odds the others use.
 """
 struct RenderConfig
     race::RaceConfig
@@ -769,10 +767,9 @@ race_squash(name::AbstractString) =
 cannot see Julia.
 
 The mapping lives in `CLASSICS_RACES_2026` and the stage-race slug tables and
-exists nowhere else, so Python could not key a `vg_results` file — which is
-keyed by `pcs_slug` across every one of its files — without it. Exported rather
-than duplicated, for the reason `_manifest.toml` is: a race added on this side is
-known on the other at the next export, with nothing to keep in step by hand.
+nowhere else, and Python needs it to key a `vg_results` file by `pcs_slug`.
+Exported, like `_manifest.toml`, so a race added here is known on the other side
+at the next export.
 
 Derived, like the manifest, so `--check` is a string comparison. Written by a
 command rather than on every save: a file rewritten in the archive root during a
@@ -1018,10 +1015,9 @@ function get_url_pattern(race_name::String; year::Int = Dates.year(Dates.today()
         )
     end
 
-    # No fabricated fallback: an unresolved name used to become a 9-rider stage
-    # race on a made-up URL, because `category = 0` is what `setup_race` reads as
-    # "stage race". Failing here is the difference between a typo costing a
-    # second and a typo costing a whole plausible-looking report.
+    # No fallback: `setup_race` reads `category = 0` as "stage race", so a
+    # fabricated pattern would turn a typo into a plausible-looking 9-rider
+    # report on a made-up URL.
     near =
         [r.slug for r in all_races() if startswith(r.slug, first(lowercase(race_name), 3))]
     error(
@@ -1124,11 +1120,8 @@ end
 The archive frame for `pcs_stage_profiles`: one row per stage, one column per
 `StageProfile` field.
 
-One builder rather than two. The pre-race write (`race_solver.jl`) and the
-post-race one (`data_assembly.jl`) used to construct this by hand and differed
-only in dropping `gradient_final_km` and `n_intermediate_sprints`, which made
-the narrow result look like a second dataset — `stage_profiles` — rather than
-the same one at an older schema. Retired in WP3.
+Shared by the pre-race write (`race_solver.jl`) and the post-race one
+(`data_assembly.jl`), so the two cannot drift to different schemas.
 """
 stage_profiles_frame(stages::Vector{StageProfile}) = DataFrame(
     stage_number = [s.stage_number for s in stages],
@@ -1147,26 +1140,23 @@ stage_profiles_frame(stages::Vector{StageProfile}) = DataFrame(
     StageSimConfig
 
 Tuneable constants for the per-stage grand-tour simulator (`simulate_stage_race`).
-Consolidates values that were previously module-level constants so they can be
-threaded like `stage_scoring` and calibrated (see roadmap Phase 6 / C1).
+Threaded like `stage_scoring` so they can be calibrated per race.
 
 Fields:
 - `aleatoric_noise` — per-dimension race-day scatter scale (`a_type`). This is the
   coefficient on the independent per-stage Student-t(5) noise draw; the SD it
   contributes to a rider's stage performance is `a_type · √(5/3)`. A stage's
   scalar scale is blended across dimensions by the stage's `stage_dimension_weights`.
-  Fitted by Plackett–Luce ranking-likelihood MLE on archived GT finishing orders
-  (A1b, June 2026): hilly is the most stochastic, ITT the least.
+  Fitted by Plackett–Luce ranking-likelihood MLE on archived GT finishing orders:
+  hilly is the most stochastic, ITT the least.
 - `breakaway_noise` — per-event, per-dimension breakaway σ (decoupled from GC).
 - `points_jersey_allocation` — per-stage-type points-jersey allocation vectors.
 - `intermediate_sprint_points` — intermediate-sprint banner allocation, awarded
-  as-is per banner rank. The default halves the model's former hardcoded vector
-  (20/12/8/6/4/2/1): a runtime 0.5× multiplier folded into the config (July
-  2026, decision D3) — it damps the banner contribution because not every
-  stage's sprint is contested by the strongest flat riders. NB the actual VG
+  as-is per banner rank. The default is half of 20/12/8/6/4/2/1, damped because
+  not every stage's sprint is contested by the strongest flat riders. The VG
   table pays 10 banner ranks ([20,16,12,8,6,5,4,3,2,1], see
-  `SCORING_GRAND_TOUR.intermediate_sprint_points`); this vector is a
-  deliberately damped modelling allocation, not the published table.
+  `SCORING_GRAND_TOUR.intermediate_sprint_points`); this vector is a damped
+  modelling allocation, not the published table.
 """
 struct StageSimConfig
     aleatoric_noise::NamedTuple
@@ -1342,10 +1332,6 @@ const GT_SIMILAR_RACES = Dict{String,Vector{String}}(
 """
 The grand tours the public site reports on, with the stage count the ingest and
 report paths both need.
-
-Lived in `scripts/render_reports.jl` until Phase 2, where it was reachable only
-by rendering. `scripts/ingest.jl` needs the same stage counts to fetch a tour's
-per-stage results, and race metadata belongs beside the rest of the catalogue.
 
 `month` is the display month for the report subtitle, and is *not* the same fact
 as `_GT_APPROX_DATE` below, which is the approximate start date the similar-race

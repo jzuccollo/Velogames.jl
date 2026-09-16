@@ -25,9 +25,8 @@ function render_predictor(rc::RenderConfig)
     @info "Configuration" race = config.name year = config.year
     scoring = get_scoring(config.category > 0 ? config.category : 2)
 
-    # Note: predictions are archived by solve_oneday() via _archive_predictions().
-    # The archive is protected: existing archives are not overwritten unless
-    # the VELOGAMES_FORCE_ARCHIVE environment variable is set.
+    # solve_oneday() archives the predictions. Once the race date has passed an
+    # existing archive is not overwritten unless VELOGAMES_FORCE_ARCHIVE is set.
     predicted, chosenteam, top_teams, sim_vg_points = solve_oneday(rc)
 
     if nrow(predicted) == 0

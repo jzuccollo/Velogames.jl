@@ -20,10 +20,9 @@ Prints one `slug year score winner` line per recorded race to stdout (nothing
 when there is nothing to do), so a calling script can tell whether to bother
 re-rendering. Reasoning goes to stderr.
 
-The gates live in `derive_league_winners`; the one that matters here is that a
-classic waits `--min-age-hours` (default 24) past its pick deadline, because
-Velogames revises scores after a race and the record is not re-derived once
-written.
+The gates live in `derive_league_winners`. A classic waits `--min-age-hours`
+(default 24) past its pick deadline, because Velogames revises scores after a
+race and the record is not re-derived once written.
 
 `--redrive=PCS_SLUG` drops that race's recorded winner and lets the same run
 derive it again — the escape hatch for one that went in wrong, since a recorded
@@ -46,9 +45,6 @@ function main(args)
         elseif startswith(arg, "--redrive=")
             redrive = String(split(arg, "="; limit = 2)[2])
         else
-            # `auto_publish.sh` used to forward every argument here, so
-            # `--config=` was accepted, ignored, and never reached the step that
-            # reads it — a flag that looked like it worked.
             error(
                 "auto_publish.jl: unrecognised argument $(repr(arg)); known arguments are --dry-run, --min-age-hours=N and --redrive=PCS_SLUG",
             )
@@ -82,8 +78,7 @@ function main(args)
 
     # `derive_league_winners` only sees its own league-season's record, so two
     # archived leagues on the same game and year would each record every race.
-    # This is the global guard the pre-archive script held and the move to a
-    # per-league function dropped.
+    # This is the global guard.
     published = Set((w.pcs_slug, w.year) for w in load_league_winners())
     appended = String[]
     for l in leagues
@@ -109,8 +104,8 @@ function main(args)
         else
             append_league_winners(new, l.game_slug, l.year, l.league_id)
         end
-        # Outside the dry-run branch on purpose: auto_publish.sh keys `[ -z
-        # "$NEW" ]` off this stdout to decide whether to re-render.
+        # Outside the dry-run branch: auto_publish.sh keys `[ -z "$NEW" ]` off
+        # this stdout.
         for r in eachrow(new)
             push!(published, (String(r.pcs_slug), Int(r.year)))
             push!(appended, r.pcs_slug)

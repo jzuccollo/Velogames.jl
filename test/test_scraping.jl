@@ -62,9 +62,8 @@ end
 
 @testset "_vg_scoring_field assist headings" begin
     # Every VG assist heading contains "Team" — either "Teammate" or "Overall
-    # Team". The bare "team" test used to run ahead of the "stage" test and
-    # swallow the stage-assist table, silently zeroing stage assists in the
-    # simulator. GC was never affected: its test already ran first.
+    # Team". A bare "team" test run ahead of the "stage" test swallows the
+    # stage-assist table and silently zeroes stage assists in the simulator.
     @test Velogames._vg_scoring_field("Assists - Teammate stage positions") ==
           :stage_assist_points
     @test Velogames._vg_scoring_field(
@@ -74,9 +73,8 @@ end
           :team_class_assist_points
     @test Velogames._vg_scoring_field("Assists - Overall Team Classification positions") ==
           :team_class_assist_points
-    # "stage" is tested after "general classification", not before it, so a
-    # heading naming both still files as GC rather than being captured by the
-    # broader stage test.
+    # "stage" is tested after "general classification", so a heading naming
+    # both files as GC.
     @test Velogames._vg_scoring_field(
         "Assists - Teammate General Classification positions after each stage",
     ) == :gc_assist_points
@@ -89,8 +87,8 @@ end
           :ttt_team_points
 
     # The 2025 Vuelta names the TTT only to exclude it. Read as a TTT heading,
-    # this table was filed as TTT points and first-match-wins kept it there, so
-    # `stage_finish_points` came back empty and the whole scrape failed.
+    # first-match-wins would file this table as TTT points, leaving
+    # `stage_finish_points` empty and failing the whole scrape.
     @test Velogames._vg_scoring_field(
         "Stage Result (all stages, except for the Stage 5 team time trial)",
     ) == :stage_finish_points

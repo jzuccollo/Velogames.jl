@@ -2,17 +2,10 @@
 """
 Render race reports into a directory for `vgleague verify-report` to diff.
 
-The publication layer is moving to Python and the reports are being ported. A
-port is only as good as the comparison behind it, and the comparison that
-matters is of the *content*: these pages are joining the league site and taking
-its chrome, so diffing markup would fail on every styling difference and say
-nothing about whether the report is right.
-
-So this writes Julia's HTML somewhere harmless and the Python side extracts each
-table from both and compares them row by row. That is what caught the ported
-`_rows` helper re-sorting every table by score, which turned the best-value table
-into a second top-scorers table under a different heading — every number correct,
-every row in the wrong place, and nothing to see in a summary statistic.
+The reports are ported to Python, whose pages take the league site's chrome, so
+diffing markup would fail on every styling difference. This writes Julia's HTML
+somewhere harmless and the Python side extracts each table from both and
+compares them row by row, which also catches rows in the wrong order.
 
 Writes nowhere near `site/docs`, so a verification run cannot touch what is
 published.
@@ -41,9 +34,8 @@ function main(args)
     end
     mkpath(outdir)
 
-    # The dossier's two JSON payloads, dumped alongside the reports. These are
-    # the one part of the port that can be compared byte for byte — they are
-    # data, not markup, so there is no styling difference to see past.
+    # The dossier's two JSON payloads, dumped alongside the reports. Being data,
+    # these can be compared byte for byte.
     all_years = years === nothing ? [2023, 2024, 2025, 2026] : years
     write(joinpath(outdir, "riders.json"), JSON3.write(collect_rider_rows(all_years)))
     write(joinpath(outdir, "stages.json"), JSON3.write(collect_stage_rows(all_years)))

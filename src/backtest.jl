@@ -1,11 +1,10 @@
 """
-Backtesting and model calibration framework.
+Backtesting harnesses.
 
-Evaluates prediction quality against historical race results, runs signal
-ablation studies, and tunes BayesianConfig hyperparameters.
-
-Focuses on one-day classics races. Ground truth is PCS finishing
-positions (always available) supplemented by VG points when accessible.
+The per-race calibration backtest (`backtest_race`) scores one-day classics
+against PCS finishing positions, supplemented by VG points when accessible. The
+champion/challenger harnesses (`backtest_stage_race`, `backtest_oneday_race`)
+score team-points-captured against archived VG totals.
 """
 
 # ---------------------------------------------------------------------------
@@ -180,20 +179,6 @@ end
 # Data pre-fetching
 # ---------------------------------------------------------------------------
 
-# Uses vg_classics_url() from race_helpers.jl
-
-"""
-    prefetch_race_data(race::BacktestRace; cache_config, force_refresh) -> RaceData
-
-Fetch all data for a historical race (PCS results, VG roster, PCS specialty
-scores, race history) and return a reusable `RaceData` struct. This is the
-I/O-heavy step; subsequent `backtest_race` calls with this data are pure
-compute.
-
-PCS specialty scores are always fetched (signal selection happens later).
-Odds and oracle are set to `nothing` (no historical data for these).
-"""
-
 function _build_pcs_slug_map(
     pcs_slug::String,
     year::Int;
@@ -216,6 +201,14 @@ function _build_pcs_slug_map(
     return slug_map
 end
 
+"""
+    prefetch_race_data(race::BacktestRace; cache_config, force_refresh) -> RaceData
+
+Fetch all data for a historical race (PCS results, VG roster, PCS specialty
+scores, race history, archived odds and oracle) and return a reusable
+`RaceData` struct. This is the I/O-heavy step; subsequent `backtest_race` calls
+with this data are pure compute. Signal selection happens later.
+"""
 function prefetch_race_data(
     race::BacktestRace;
     vg_racelists::Union{Dict{Int,DataFrame},Nothing} = nothing,
@@ -268,20 +261,11 @@ function prefetch_race_data(
 
     # The same three-tier resolution production uses: this race's own archived
     # snapshot, then the union across every earlier archived race, then live.
-    #
-    # It used to read only the own-race file and fall straight to a live batch
-    # for anything missing, which is the kind of production/backtest divergence
-    # `GameFormat` exists to prevent — the backtest was scoring a model fed
-    # differently from the one that races. It also made reconstruction brittle:
-    # `getpcs_rider_pts_batch` raises once more than `PCS_BLOCK_RAISE_THRESHOLD`
-    # riders come back blocked, so with the transport off (as it must be here,
-    # see `_TRANSPORT_ENABLED`) a handful of uncovered riders killed the whole
-    # edition rather than degrading it. `_load_pcs_specialty` catches that on
-    # its live tier and returns what tiers 1 and 2 already found.
-    #
+    # With the transport off (see `_TRANSPORT_ENABLED`) the live tier can hit
+    # `getpcs_rider_pts_batch`'s block threshold; `_load_pcs_specialty` catches
+    # that and returns what tiers 1 and 2 found, so the edition degrades.
     # Tier 2 is date-bounded by this race's own date, so it cannot reach a
-    # later edition — the temporal guarantee the archive-first path was built
-    # around holds here too.
+    # later edition.
     pcspts, pcs_provenance = _load_pcs_specialty(
         race.pcs_slug,
         race.year,
@@ -450,18 +434,12 @@ function backtest_race(
         riderdf[!, :points] .= 0.0
     end
 
-    # Include race history only if signal is enabled
     race_history_df = :race_history in signals ? data.race_history_df : nothing
-
-    # VG race history
     vg_history_df = :vg_history in signals ? data.vg_history_df : nothing
-
-    # Odds and oracle (from archived data)
     odds_df = :odds in signals ? data.odds_df : nothing
     oracle_df = :oracle in signals ? data.oracle_df : nothing
 
-    # Cross-season PCS points (trajectory signal removed, but seasons_df
-    # may still be used by estimate_strengths for PCS recency scaling)
+    # Used by estimate_strengths for PCS recency scaling
     seasons_df = data.seasons_df
 
     # --- Run prediction pipeline ---
@@ -722,10 +700,8 @@ function _compute_cumulative_vg_points(
         end
     end
 
-    # Parse deadlines to dates and filter races before the target
     cumulative = Dict{String,Float64}()
     for row in eachrow(vg_racelist)
-        # Parse deadline string to extract the date portion
         race_date = try
             Date(first(split(string(row.deadline), " ")))
         catch _e
@@ -733,7 +709,6 @@ function _compute_cumulative_vg_points(
         end
         race_date >= race.date && continue
 
-        # Fetch results for this earlier race
         try
             vg_df = getvg_race_results(
                 race.year,
@@ -766,7 +741,6 @@ function _compute_team_metrics(
         makeunique = true,
     )
 
-    # Use actual VG scoring tables instead of a linear proxy
     joined[!, :actual_vg_points] =
         [Float64(finish_points_for_position(Int(p), scoring)) for p in joined.position]
 
@@ -940,7 +914,7 @@ function summarise_backtest(results::Vector{BacktestResult})
 end
 
 # ---------------------------------------------------------------------------
-# Stage-race backtest harness (WP2.1) — data-reconstruction layer
+# Stage-race backtest harness — data-reconstruction layer
 # ---------------------------------------------------------------------------
 
 """
@@ -992,7 +966,7 @@ Temporal-integrity notes (documented approximations, in the spirit of
 3. Career-specialty totals join only where a race-day snapshot is archived
    (`pcs_specialty`, 2026 editions). For earlier editions the career fallback
    is absent — a current-day career page would leak — so riders without
-   per-season data simply carry no PCS signal.
+   per-season data carry no PCS signal.
 4. `seasons_df` (PCS season totals → currency factors) is omitted: it only
    scales the career fallback, which is race-day-archived where present.
 5. Odds/oracle snapshots exist only for 2026 editions; earlier editions run
@@ -1369,13 +1343,12 @@ end
 """
     champion_evg_risk(data; risk_aversion=0.5, kwargs...) -> DataFrame
 
-The champion scored the way production actually races it. `champion_evg`
-returns raw EVG, and the harness then builds an EVG-max team — but
-`resample_optimise!` optimises `expected_vg_points / (1 + risk_aversion *
-cv_down)`, and every `solve_stage` path defaults `risk_aversion` to 0.5. So
-the two arms enter different teams, and until now only the EVG-max one was
-ever measured. Returns the risk-adjusted values in `expected_vg_points` so
-the harness's team optimisation reproduces production's choice.
+The champion scored the way production races it. `champion_evg` returns raw
+EVG, and the harness then builds an EVG-max team, but `resample_optimise!`
+optimises `expected_vg_points / (1 + risk_aversion * cv_down)`, and every
+`solve_stage` path defaults `risk_aversion` to 0.5. Returns the risk-adjusted
+values in `expected_vg_points` so the harness's team optimisation reproduces
+production's choice.
 """
 function champion_evg_risk(
     data::StageRaceBacktestData;
@@ -1392,7 +1365,7 @@ function champion_evg_risk(
 end
 
 # ---------------------------------------------------------------------------
-# Stage-race backtest harness (WP2.1) — predictors, scoring, cross-check
+# Stage-race backtest harness — predictors, scoring, cross-check
 # ---------------------------------------------------------------------------
 
 """Naive-persistence baseline: each rider's most recent prior-edition VG total
@@ -1457,9 +1430,8 @@ _safe_spearman(x, y) =
 
 Everything the team-points-captured metric needs to know about which Velogames
 game it is scoring. The two harnesses differ only in these four values, so the
-scoring core below is written once against this rather than twice against the
-two formats — a divergence between them would be invisible, producing plausible
-numbers rather than an error.
+scoring core below is written once against this: a divergence between two copies
+would produce plausible numbers, not an error.
 """
 struct GameFormat
     team_size::Int
@@ -1475,7 +1447,7 @@ cost-only — the same rule for every predictor and for the hindsight optimum, s
 team-points-captured compares like with like. `max_per_team` mirrors production's
 diversification cap (`[optimisation] max_per_team`, 2); it is applied to the
 optimum as well as to each predictor's team, keeping the metric a measure of
-prediction quality within the constraint set production actually races under."""
+prediction quality within the constraint set production races under."""
 function _team_keys(
     df::DataFrame,
     points_col::Symbol,
@@ -1503,9 +1475,8 @@ optimum under the same constraints. Also returns full-field and top-20 Spearman 
 and the top-N overlaps.
 
 `data` needs `.riders` (with `riderkey` and `actual_total`), `.pcs_slug` and
-`.year`. The top-N overlap column is named for the team size — `overlap6` on a
-classic, `overlap9` on a grand tour — so the two report tables keep the headings
-they have always had.
+`.year`. The top-N overlap column is named for the team size: `overlap6` on a
+classic, `overlap9` on a grand tour.
 """
 function _score_team_points_captured(
     data,
@@ -1564,7 +1535,7 @@ const FORMAT_STAGE = GameFormat(9, build_model_stage, "Stage", _STAGE_PREDICTORS
 
 Score predictors against one archived grand-tour edition. A predictor is a
 built-in `Symbol` (`:simulator` → `champion_evg`, `:simulator_risk` →
-`champion_evg_risk` (the team `solve_stage` actually enters),
+`champion_evg_risk` (the team `solve_stage` enters),
 `:persistence` → `persistence_evg`, `:odds` → `odds_evg`) or a `name => f` pair where
 `f(data::StageRaceBacktestData) -> DataFrame(riderkey, expected_vg_points)`.
 Predictors returning `nothing` (e.g. `:odds` on a marketless edition) are
@@ -1655,9 +1626,9 @@ function backtest_stage_race(
     archive_dir::String = archive_dir(),
 )
     # Archive only. A reconstruction that reaches the network fetches *today's*
-    # page to rebuild a race from two years ago, which is the leak
-    # `refetchable = false` exists to prevent — and at 45 editions it is also a
-    # browser launch per miss. See `_TRANSPORT_ENABLED`.
+    # page to rebuild a race from two years ago (the leak `refetchable = false`
+    # exists to prevent), and launches a browser per miss. See
+    # `_TRANSPORT_ENABLED`.
     data = with_browser_transport(false) do
         prefetch_stage_race_data(pcs_slug, year; history_years, cache_config, archive_dir)
     end
@@ -1678,32 +1649,28 @@ _with_gt_history(rd::RaceData, gt_df::Union{DataFrame,Nothing}) = RaceData(;
     crosscheck_option_ab(; data=nothing, n_resamples=2500, seed=20260703,
         cache_config, archive_dir) -> DataFrame
 
-Option A/B drift alarm for the harness (WP2.1): reconstruct the 2026 Tour
+Option A/B drift alarm for the harness: reconstruct the 2026 Tour
 as-of race day and produce EVG four ways — role-blind (A off, B off), A only,
 B only, A+B — with the GT VG-history signal restricted to same-GT editions
 ≤ 2024, then Spearman-correlate each EVG against riders' real 2025 Tour VG
 totals over the riders present in both (n = 96), overall and within top-20 /
 top-40 tiers ranked by the real totals. `multidim_block_correlation` is
-disabled for these runs (era-matching the original recording, pre-WP1.6).
+disabled for these runs to match the baseline.
 
-Two reference sets are carried, with different jobs:
+Two reference sets are carried:
 
-- `base_*` — the PINNED baseline (July 2026, post-WP2.3 code with the branch
-  code-review fixes applied). `pass` = every ρ within ±0.03 of it. This is
-  the operative alarm: a future change that trips it has shifted the seeded
-  pipeline by more than seed noise (±0.008) and should be investigated — or
-  the baseline consciously re-based if the movement is intended.
-- `rec_*` — the HISTORICAL values recorded in roadmap.md (early July 2026,
-  pre-Phase-1 code). Kept for the record, NOT a pass criterion. Known,
-  attributed divergences from them: WP1.1 (final-KOM ranking), WP1.4 (RNG
-  substream restructure), the WP2.3 layer deletions (attrition and
-  GC-favourite protection were ACTIVE in the recorded run; their removal,
-  and the removal of the per-sim layer-seed draws, shifts every seeded
-  output), the WP2.1 reconstruction approximations, and the review-fix
-  market-frame rematching. Net effect ≈ +0.05 on overall ρ, uniform across
-  variants; the improved baseline also mechanically shrinks Option B's
-  marginal deltas, since B corrects the residual the baseline leaves. n = 96
-  and Option A's fingerprint (overall up, top-40 down) reproduce throughout.
+- `base_*` — the pinned baseline (July 2026). `pass` = every ρ within ±0.03
+  of it. A change that trips it has shifted the seeded pipeline by more than
+  seed noise (±0.008) and should be investigated, or the baseline re-based if
+  the movement is intended.
+- `rec_*` — the historical values from the original July 2026 validation. Kept for the record, not a pass criterion. Attributed
+  divergences: final-KOM ranking, the RNG substream restructure, deletion of
+  the attrition and GC-favourite protection layers (active in the recorded run),
+  the reconstruction approximations, and market-frame rematching. Net effect
+  ≈ +0.05 on overall ρ, uniform across variants; the improved baseline also
+  shrinks Option B's marginal deltas, since B corrects the residual the
+  baseline leaves. n = 96 and Option A's fingerprint (overall up, top-40 down)
+  reproduce throughout.
 """
 function crosscheck_option_ab(;
     data::Union{StageRaceBacktestData,Nothing} = nothing,
@@ -1750,14 +1717,14 @@ function crosscheck_option_ab(;
     common = findall(k -> haskey(real_of, k), keys_)
     real = [real_of[k] for k in keys_[common]]
 
-    # Pinned post-WP2.3 baseline (see docstring) — the operative pass criterion.
+    # Pinned baseline (see docstring) — the pass criterion.
     baseline = Dict(
         "role-blind" => (0.750, 0.433, 0.620),
         "A only" => (0.767, 0.394, 0.562),
         "B only" => (0.756, 0.446, 0.581),
         "A+B" => (0.751, 0.389, 0.511),
     )
-    # Historical roadmap.md values (pre-Phase-1 code) — kept for the record.
+    # Original July 2026 validation values — kept for the record.
     recorded = Dict(
         "role-blind" => (0.691, 0.469, 0.610),
         "A only" => (0.700, 0.466, 0.546),
@@ -1803,7 +1770,7 @@ end
 #   predictor(data::OneDayBacktestData) -> DataFrame(riderkey, expected_vg_points)
 # Scores team-points-captured against TRUE scraped VG totals (vg_results archive,
 # incl. assist + breakaway), unlike the finish-only `_compute_team_metrics` path
-# used by `backtest_race`/`BacktestResult` (both retained, untouched).
+# used by `backtest_race`/`BacktestResult`.
 # ===========================================================================
 
 """
@@ -1848,7 +1815,7 @@ end
 Return a `riderkey => true VG total` map for a completed one-day race. Prefers
 the `vg_results` archive; falls back to a live scrape
 (`getvg_race_list` → `match_vg_race_number` → `getvg_race_results`) that
-auto-archives on success (the pattern used by `prospective_eval.jl`). Returns
+auto-archives on success. Returns
 `nothing` when neither the archive nor the live fetch yields usable results.
 """
 function _oneday_vg_totals_asof(
@@ -1902,12 +1869,8 @@ function prefetch_oneday_backtest_data(
     )
     riders = select(rd.rider_df, :riderkey, :rider, :team, :cost)
 
-    # Surname-rematch market frames against the roster ONCE here, exactly as
-    # `prefetch_stage_race_data` does, so every predictor sees identical
-    # riderkeys regardless of call order: `_assemble_signals` rematches these
-    # frames IN PLACE at estimation time, which would otherwise make the `:odds`
-    # baseline's market coverage depend on whether a simulator arm ran first on
-    # the same struct.
+    # Surname-rematch market frames once, as `prefetch_stage_race_data` does
+    # (see the note there on call-order dependence).
     for mdf in (rd.odds_df, rd.oracle_df)
         mdf !== nothing && :rider in propertynames(mdf) && rematch_riderkeys!(mdf, riders)
     end
@@ -1937,9 +1900,9 @@ end
 
 The champion predictor: the FULL production one-day stack re-run as-of race day
 via `_oneday_prediction_core` (`estimate_strengths` → `resample_optimise!`).
-Seeded for reproducibility. Breakaway rates are unavailable in reconstruction,
-so the breakaway channel is inert (a small, documented gap). The one-day twin of
-`champion_evg`.
+Seeded for reproducibility. Runs without breakaway rates, so the breakaway
+channel is inert; `champion_oneday_breakaway` switches it on. The one-day twin
+of `champion_evg`.
 """
 function champion_oneday_evg(data::OneDayBacktestData; kwargs...)
     predicted = _oneday_champion_predicted(data; kwargs...)
@@ -1971,7 +1934,7 @@ end
 """
     champion_oneday_evg_risk(data; risk_aversion=0.5, kwargs...) -> DataFrame
 
-The one-day champion scored the way `solve_oneday` actually races it — the twin
+The one-day champion scored the way `solve_oneday` races it — the twin
 of `champion_evg_risk`. Returns the risk-adjusted values in
 `expected_vg_points` so the harness's team optimisation reproduces production's
 choice.
@@ -2006,9 +1969,8 @@ The market-blended production arm: the same `_oneday_prediction_core` as
 `champion_oneday_evg`, run with `market_blend_weight` so the blend happens at
 production's real insertion point (risk-adjusted EVG mixed with implied win
 probability, both unit-normalised), and returning the blended column the final
-team optimisation maximises. The harness then optimises EVG-max on it, which is
-exactly what production does — so this row measures the shipped construction
-rule, not a reimplementation of it.
+team optimisation maximises. The harness then optimises EVG-max on it, as
+production does, so this row measures the shipped construction rule.
 
 Returns `nothing` on a marketless edition. `champion_oneday_evg` remains the
 UNBLENDED arm so the standing champion comparison keeps its meaning.
@@ -2018,9 +1980,8 @@ function champion_oneday_market_evg(
     market_blend_weight::Float64 = DEFAULT_MARKET_BLEND_WEIGHT,
     kwargs...,
 )
-    # Checked up front so a marketless edition skips the resampling run entirely,
-    # and via the same helper the blend itself uses — so "priced" means exactly
-    # what it means in production.
+    # Checked up front so a marketless edition skips the resampling run, via the
+    # same helper the blend uses so "priced" means what it means in production.
     isempty(market_win_probs(data.race_data.odds_df, data.riders.riderkey)) &&
         return nothing
     predicted = _oneday_champion_predicted(
@@ -2055,19 +2016,11 @@ const _ONEDAY_PREDICTORS = Dict{Symbol,Function}(
     champion_oneday_breakaway(data; spec, risk_aversion, kwargs...) -> DataFrame
 
 The risk-adjusted one-day champion with the breakaway channel switched on,
-fed from the per-race archive as of this race's date.
+fed from the per-race archive (dated `in_breakaway` and `breakaway_km` per rider
+per race) as of this race's date.
 
-Until the September 2026 backfill this arm could not exist. Breakaway rates came
-from PCS's end-of-season "most kilometres in the break" leaderboard — a
-cumulative total with no way to ask what it said in March — so
-`champion_oneday_evg` documents the channel as inert in reconstruction. The
-archive now carries a dated `in_breakaway` and `breakaway_km` per rider per
-race, which is reconstructible as of any date, so the channel can be measured
-rather than argued about.
-
-`spec` is forwarded to `compute_breakaway_rates_archive`, which is what lets a
-sweep pick the shape from evidence: `prior_strength`, `km_weighted`,
-`decay_rate`, `history_years`.
+`spec` is forwarded to `compute_breakaway_rates_archive` so a sweep can vary
+`prior_strength`, `km_weighted`, `decay_rate`, `history_years`.
 """
 function champion_oneday_breakaway(
     data::OneDayBacktestData;
@@ -2104,7 +2057,7 @@ const FORMAT_ONEDAY = GameFormat(6, build_model_oneday, "One-day", _ONEDAY_PREDI
 
 Score one-day predictors against one archived classic edition. A predictor is a
 built-in `Symbol` (`:simulator` → `champion_oneday_evg`, `:simulator_risk` →
-`champion_oneday_evg_risk` (the team `solve_oneday` actually enters),
+`champion_oneday_evg_risk` (the team `solve_oneday` enters),
 `:simulator_market` → `champion_oneday_market_evg` (the same, with the market
 blended in at `w=0.5`), `:odds`,
 `:maxcost`) or a `name => f` pair where

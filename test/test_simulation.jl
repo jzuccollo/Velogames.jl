@@ -101,8 +101,8 @@ end
     # Floor uses higher variance than direct odds (wider posterior).
     # Use market_discount=1.0 to isolate floor vs direct odds behaviour.
     # Use a listing above baseline (positive evidence path) so the direct
-    # update actually fires — listings below baseline now fall through to
-    # the floor (longshot tail-pricing isn't strong negative evidence).
+    # update fires: listings below baseline fall through to the floor, since
+    # longshot tail-pricing isn't strong negative evidence.
     no_discount = BayesianConfig(market_discount = 1.0)
     direct_odds = estimate_rider_strength(
         pcs_score = 0.5,
@@ -147,7 +147,6 @@ end
 end
 
 @testset "Floor observations in estimate_strengths pipeline" begin
-    # Build a small rider DataFrame
     rider_df = DataFrame(
         rider = ["Rider A", "Rider B", "Rider C"],
         riderkey = ["ridera", "riderb", "riderc"],
@@ -176,7 +175,7 @@ end
 @testset "vg_points_observed gates the season-adaptive VG variance" begin
     # The season-round substitution fills riders with no prior-round data with
     # the field mean, so every rider ends up with non-zero `points`. Counting
-    # non-zeros would report 100% season coverage and cancel the very variance
+    # non-zeros would report 100% season coverage and cancel the variance
     # widening (`vg_season_penalty`) that a thin, substituted column calls for.
     # `:vg_points_observed` carries the real coverage.
     base = DataFrame(
@@ -376,11 +375,6 @@ end
     @test result.has_pcs[2] == false
 end
 
-# Stage race PCS blending was removed: the multidim model routes each PCS
-# specialty source to its own dimension(s) directly, no class-aware blend.
-# See `estimate_strengths(...; race_type=:stage)` and the multidim tests in
-# `test_stage_race.jl`.
-
 @testset "Variance penalties in strength estimation" begin
     exact = estimate_rider_strength(
         pcs_score = 0.0,
@@ -408,10 +402,10 @@ end
 end
 
 @testset "VG race history is scalar-inert but live in multidim" begin
-    # The April 2026 ablation dropped VG race history from the SCALAR (one-day)
-    # estimator only — the multi-dim stage-race estimator still consumes it, which
-    # is why `RiderSignalData` keeps the fields. Pin both halves so a future
-    # cleanup can't quietly delete the multidim signal along with the scalar one.
+    # VG race history is inert in the SCALAR (one-day) estimator but consumed by
+    # the multi-dim stage-race estimator, which is why `RiderSignalData` keeps
+    # the fields. Both halves are pinned so a cleanup can't delete the multidim
+    # signal along with the scalar one.
     with_vg = estimate_rider_strength(
         Velogames.RiderSignalData(
             pcs_score = 0.0,
@@ -458,7 +452,6 @@ end
         race_history_df = history_exact,
         n_sims = 5000,
     )
-    # History actually shifts strength (not just a no-op)
     @test result_exact.strength[1] != baseline.strength[1]
     @test result_exact.strength[1] > baseline.strength[1]  # two 1st places → upward shift
 
@@ -479,7 +472,7 @@ end
     @test result_penalised.strength[1] > baseline.strength[1]
     @test result_penalised.strength[1] < result_exact.strength[1]
 
-    # VG history signal is disabled (April 2026) — passing it should be a no-op
+    # The one-day estimator ignores VG history, so passing it is a no-op
     vg_hist = DataFrame(
         riderkey = ["strong", "medium", "weak", "strong", "medium", "weak"],
         score = [500.0, 200.0, 50.0, 450.0, 180.0, 40.0],

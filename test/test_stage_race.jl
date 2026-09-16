@@ -135,7 +135,7 @@ end
 
 @testset "Pedersen-shaped sprinter sanity check" begin
     # Top sprinter, low GC PCS, no oracle/odds data — should NOT be penalised
-    # on :flat by the GC oracle floor (the architectural fix in Phase 1).
+    # on :flat by the GC oracle floor.
     n_riders = 20
     rider_df = DataFrame(
         rider = ["Pedersen-shape"; ["Filler $i" for i = 1:(n_riders-1)]],
@@ -223,8 +223,8 @@ end
     # At least some riders score non-zero in every simulation
     @test all(sum(sim, dims = 1) .> 0)
 
-    # Same-seed bit-identity: seeded reproducibility is load-bearing (gate
-    # results, cross-check, archived comparisons) — pin it explicitly.
+    # Same-seed bit-identity: gate results, the cross-check and archived
+    # comparisons all depend on seeded reproducibility.
     sim_repeat, _ = simulate_stage_race(
         stages,
         stage_strengths,
@@ -317,7 +317,7 @@ end
 
     # With near-zero uncertainty, the team ranking is deterministic.
     # All teams should receive some classification points (final_team_class has 5 positions).
-    # Before the fix, teams ranked 4th and 5th would get team_class_assist_points[3] = 2
+    # With the wrong table, teams ranked 4th and 5th would get team_class_assist_points[3] = 2
     # instead of final_team_class[4] = 20 and final_team_class[5] = 10.
     team_totals = Dict{String,Float64}()
     mean_pts = vec(mean(sim, dims = 2))
@@ -335,8 +335,7 @@ end
     # VG: "awarded to riders whose team is in the Top 3 of the Teams
     # Classification at the end of each day ... not given out for the Individual
     # Time Trial Stages." Scored per stage, so the award must scale with stage
-    # count — it was previously not scored at all, and only the one-off
-    # final_team_class bonus reached the riders.
+    # count, separately from the one-off final_team_class bonus.
     scoring = SCORING_GRAND_TOUR
     off = StageRaceScoringTable(
         scoring.stage_finish_points,
@@ -447,7 +446,6 @@ end
     mean_itt = vec(mean(sim_itt, dims = 2))
     mean_flat = vec(mean(sim_flat, dims = 2))
 
-    # Riders 2-4 are teammates of the winner; they get assist on flat but not ITT
     @test mean_flat[2] > mean_itt[2]
     @test mean_flat[3] > mean_itt[3]
     @test mean_flat[4] > mean_itt[4]
@@ -595,7 +593,7 @@ end
 end
 
 # =========================================================================
-# Helpers extracted in May 2026 cleanup
+# Stage simulation config helpers
 # =========================================================================
 
 @testset "StageSimConfig breakaway noise + _breakaway_sd" begin
@@ -623,17 +621,16 @@ end
     @test Velogames._aleatoric_sd(flat_w, an) == an.flat
     @test Velogames._aleatoric_sd(mtn_w, an) == an.mountain
 
-    # Intermediate-sprint pin (WP1.2, decision D3): the vector is awarded as-is;
-    # the old runtime 0.5x multiplier is folded into these defaults (half the
-    # published VG 20/12/8/6/4/2/1). Changing either without the other is a
-    # silent 2x scoring change.
+    # The intermediate-sprint vector is awarded as-is and already carries the
+    # damping: half the published VG 20/12/8/6/4/2/1. A runtime multiplier on
+    # top would be a silent scoring change.
     @test Velogames.DEFAULT_STAGE_SIM_CONFIG.intermediate_sprint_points ==
           [10.0, 6.0, 4.0, 3.0, 2.0, 1.0, 0.5]
 end
 
 # =========================================================================
-# GT VG-history signal (Option A prototype, July 2026 — roadmap.md
-# "GT VG-history strength signal")
+# GT VG-history signal (Option A)
+# and points-propensity factors (Option B)
 # =========================================================================
 
 @testset "GT VG-history signal: lifts break-hunter, clamps leader, inert off" begin
@@ -706,7 +703,7 @@ end
     # Break-hunter scored far above ability ⇒ positive factor (EVG raised).
     @test f[2] > 0.2
     # Locked domestique scored far below ability ⇒ negative factor (EVG lowered).
-    # This is the two-sided correction Option A structurally cannot deliver.
+    # Option A, being upward-only, cannot make this correction.
     @test f[3] < -0.1
     # Leader's real ≈ predicted ⇒ factor ≈ 0 (do-no-harm on leaders).
     @test abs(f[1]) < 0.1
@@ -787,10 +784,9 @@ end
 end
 
 @testset "final mountains jersey ranked by cumulative daily-KOM points" begin
-    # WP1.1 (review defects 1+2): a high-kom_s specialist who finishes mid-pack
-    # must beat the GC leader to the final mountains jersey. Under the old
-    # mountain-top-5-finish-count proxy the leader (who wins every summit) took
-    # the jersey and kom_s never touched it.
+    # A high-kom_s specialist who finishes mid-pack must beat the GC leader, who
+    # wins every summit, to the final mountains jersey. A proxy counting
+    # mountain top-5 finishes would give the leader the jersey and ignore kom_s.
     scoring = SCORING_GRAND_TOUR
     stages = [mountain_stage(1), mountain_stage(2), hilly_stage(3)]
     n = 6
@@ -823,8 +819,6 @@ end
 end
 
 @testset "simulate_stage_race always returns (matrix, diagnostics)" begin
-    # Regression test: with the record_diagnostics kwarg removed, the function
-    # must unconditionally return a tuple of the right shapes.
     rng = Random.MersenneTwister(7)
     scoring = SCORING_GRAND_TOUR
     stages = [flat_stage(1), mountain_stage(2)]
@@ -927,8 +921,7 @@ end
 end
 
 # =========================================================================
-# Review remediation (July 2026): empty scoring tables, market-discount mask,
-# per-rider recency fallback.
+# Empty scoring tables, market-discount mask, per-rider recency fallback
 # =========================================================================
 
 @testset "format_classification_table handles empty scoring table" begin
@@ -958,7 +951,7 @@ end
     @test W.odds_gc.mountain >= θ
     # ... but its incidental cross-routes into :kom and :hilly must stay below θ,
     # so a race carrying only GC odds does NOT discount and collapse the KOM
-    # channel field-wide (the regression fixed in July 2026).
+    # channel field-wide.
     @test W.odds_gc.kom < θ
     @test W.odds_gc.hilly < θ
     @test W.oracle_gc.kom < θ
@@ -1091,7 +1084,7 @@ end
     # Ranked by weakly descending objective (best first)
     objs = [sum(ptmap[k] for k in ks) for ks in key_lists]
     @test issorted(objs, rev = true)
-    @test objs[1] > objs[end]                         # genuine spread
+    @test objs[1] > objs[end]                         # not all tied
 
     # Every team honours budget + class + team-size constraints
     for ks in key_lists

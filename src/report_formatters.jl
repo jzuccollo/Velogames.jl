@@ -64,14 +64,13 @@ function precision_budget(
     )
 end
 
-# One-day production display: the signals the scalar estimator actually runs.
+# One-day production display: the signals the scalar estimator runs.
 const _SIGNAL_NAMES = ["PCS", "VG", "Hist", "Oracle", "Odds"]
 # Parallel info-share columns. Order-invariant precision-share metric:
 # `signal_precision / total_observed_precision`, computed in
-# `_estimate_strengths_multidim` / scalar `estimate_strengths`. Replaces the
-# L2-norm shift display in `format_signal_waterfall` so the magnitude
-# comparison across signals is fair (PCS routes to all 5 dims; odds routes
-# mostly to gc — L2 norm structurally inflates PCS).
+# `_estimate_strengths_multidim` / scalar `estimate_strengths`. Used in place of
+# an L2-norm shift so the comparison across signals is fair (PCS routes to all
+# dims, odds mostly to gc, so an L2 norm inflates PCS).
 const _INFO_SHARE_COLS = [
     :info_share_pcs,
     :info_share_vg,
@@ -81,11 +80,10 @@ const _INFO_SHARE_COLS = [
 ]
 
 # Stage-race (multidim) path splits several signals into per-market sub-channels
-# (GC / points / KOM / stage-win odds & oracle, points/KOM history). The scalar
-# 8-column view above collapses ORACLE→oracle_gc and ODDS→odds (GC) only, so its
-# rows do NOT sum to 100% — the hidden sub-channels silently pad the denominator.
-# When these columns are present, render the full set so the breakdown is
-# genuine and sums to 100%.
+# (GC / points / KOM / stage-win odds & oracle, points/KOM history). The one-day
+# view above shows only oracle_gc and odds (GC), so on a stage race its rows would
+# not sum to 100%: the hidden sub-channels pad the denominator. When these
+# columns are present, render the full set.
 const _SIGNAL_NAMES_STAGE = [
     "PCS",
     "VG",
@@ -160,8 +158,6 @@ heatmap; flags single-signal dominance > 60%.
 function format_signal_waterfall(df::DataFrame; max_riders::Int = 10)
     subset = df[1:min(max_riders, nrow(df)), :]
 
-    # Stage-race path exposes per-market sub-channels; render the full set so the
-    # shares genuinely sum to 100%. One-day path falls back to the 8-column view.
     is_stage = :info_share_odds_kom in propertynames(df)
     signal_names = is_stage ? _SIGNAL_NAMES_STAGE : _SIGNAL_NAMES
     info_share_cols = is_stage ? _INFO_SHARE_COLS_STAGE : _INFO_SHARE_COLS
@@ -588,9 +584,9 @@ class columns) and `build_model_fn` drive the fork re-solves.
 `points_col` must be the column the team was actually picked on, or the forks
 describe a different team from the one displayed above them. On the one-day path
 with the market blend active that is `:market_blend_points`, whose unit-normalised
-values are far too small to print as points — hence fork sizes are reported as a
-share of the optimal team's total, with the absolute only shown when the objective
-really is expected VG points.
+values are far too small to print as points, so fork sizes are reported as a
+share of the optimal team's total, with the absolute shown only when the objective
+is expected VG points.
 """
 function format_near_optimal_section(
     top_teams::Vector{DataFrame},
@@ -683,7 +679,7 @@ $(_switcher_fallback(top_teams))
 """
     write(io, switcher)
 
-    # --- Explicit core + filler pool (Refinement A) ---
+    # --- Explicit core + filler pool ---
     core_df, filler_df, _ = compute_filler_pool(top_teams)
     write(io, html_heading("Locked core and the filler menu", 3))
     core_cost = nrow(core_df) > 0 ? sum(core_df.cost) : 0
@@ -735,7 +731,7 @@ $(_switcher_fallback(top_teams))
         )
     end
 
-    # --- Structural forks (Refinement B) ---
+    # --- Structural forks ---
     forks_result = compute_structural_forks(
         predicted,
         build_model_fn;
@@ -825,13 +821,13 @@ riders, and the best-value / high-upside / budget breakdowns over the riders the
 optimiser left out.
 
 `ranking_cols` is the *candidate* column list, intersected with what `predicted`
-actually carries. It stays a caller's choice rather than a shared union because
+carries. It stays a caller's choice because
 the two reports order their columns differently — the stage frame carries both
 scalar `:strength` and per-dimension `:strength_gc`, so a merged list would
 silently reshuffle the stage table.
 
 Class columns are optional throughout: the one-day frame has no `:classraw` and
-the rider tables simply omit it.
+the rider tables omit it.
 """
 function format_rankings_and_alternatives(
     predicted::DataFrame,

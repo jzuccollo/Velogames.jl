@@ -224,8 +224,8 @@
 
     @testset "one-day harness" begin
         # Synthetic fixture: 12 riders, VARIED cost (so maxcost is non-degenerate
-        # and demonstrably suboptimal), actual VG totals descending 120..10 —
-        # no network, no archive.
+        # and suboptimal), actual VG totals descending 120..10 — no network, no
+        # archive.
         riders = DataFrame(
             riderkey = ["r$(lpad(i, 2, '0'))" for i = 1:12],
             rider = ["Rider $i" for i = 1:12],
@@ -294,10 +294,8 @@
         @test 0.0 < res_odds.team_points_captured[1] <= 1.0
 
         # max_per_team binds on BOTH the predictor team and the hindsight
-        # optimum — the harness must score the constraint set production races
-        # under, not a larger one. Stack the six best riders onto one team: the
-        # uncapped optimum is those six (570), the capped optimum takes only two
-        # of them plus the next four (390).
+        # optimum, so the harness scores the constraint set production races
+        # under. Stack the six best riders onto one team.
         stacked = copy(riders)
         stacked.team = ["T1", "T1", "T1", "T1", "T1", "T1", "T2", "T3", "T4", "T5", "T6", "T7"]
         stacked_data = OneDayBacktestData(

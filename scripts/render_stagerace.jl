@@ -311,8 +311,7 @@ function render_stagerace(rc::RenderConfig)
             html_table(sort(chosenteam[:, display_cols], :expected_vg_points, rev = true)),
         )
 
-        # Signal breakdown — order-invariant info-share percentages (signal precision /
-        # total observed precision per rider). Sums to 100% across signals per rider.
+        # Signal breakdown
         waterfall =
             format_signal_waterfall(sort(chosenteam, :expected_vg_points, rev = true))
         write(

@@ -12,11 +12,8 @@ Downloads and parses the finishing results for a specific race edition from the 
 
 URL pattern: `https://www.procyclingstats.com/race/{slug}/{year}/result`
 
-Uses `scrape_pcs_table` + `find_column` to parse the static HTML results table.
-The `div.svg_shield` breakaway indicator is rendered by JavaScript, so it was
-absent from every raw `HTTP.jl` response and `in_breakaway` was hardcoded
-`false`. Since fetches go through a browser (see `docs/pcs-fetch-architecture.md`)
-both breakaway columns carry real values — see `_row_breakaway`.
+Rider and team names come from the row's links; breakaway columns from
+`_row_breakaway`.
 
 Returns a DataFrame with the following columns:
 
@@ -67,8 +64,6 @@ function getpcs_race_results(
         # Parse directly with Gumbo to extract rider names from <a href="rider/..."> links.
         # The PCS results table concatenates rider name + team name in one cell (full cell text),
         # so scrape_pcs_table gives wrong rider names; the link text is always the clean rider name.
-        # div.svg_shield breakaway indicators are rendered by JavaScript, so they
-        # arrive now that fetches go through a browser. `_row_breakaway` reads them.
         _empty_results() = DataFrame(
             position = Int[],
             rider = String[],
@@ -103,9 +98,9 @@ function getpcs_race_results(
         # PCS renders every classification (stage result, GC, points, KOM, …) as a tab on
         # the same page, but only the active tab's div.resTab lacks the `hide` class. On
         # /result that active tab is the finish; on /gc it is the general classification.
-        # Taking the first <table> blindly grabs a hidden tab (e.g. the latest-stage result
-        # shown above the GC), so we scope to the visible resTab and fall back to the first
-        # table only if the layout is missing.
+        # The first <table> can be a hidden tab (e.g. the latest-stage result shown above the
+        # GC), so scope to the visible resTab and fall back to the first table only if the
+        # layout is missing.
         active_tabs = filter(
             t -> !occursin("hide", getattr(t, "class", "")),
             collect(eachmatch(sel"div.resTab", page.root)),
@@ -188,13 +183,11 @@ part of the race off the front, and how far.
 PCS marks this with a `div.svg_shield` whose `title` reads "204 kilometre in a
 group in front of the peloton". Both facts come from the one element — the
 shield's presence is the flag, its title the distance — so a shield with an
-unparseable title still counts as a breakaway with unknown km, which is the
-honest reading.
+unparseable title still counts as a breakaway with unknown km.
 
-This was dead ground until September 2026. The shields are rendered by
-JavaScript and never appeared in a raw `HTTP.jl` response, so `in_breakaway` was
-hardcoded `false` and `breakaway_km` always `missing`. Fetching through a
-browser put them within reach.
+The shields are rendered by JavaScript, so only a page fetched through the
+browser transport carries them; a raw `HTTP.jl` response parses as no
+breakaways.
 """
 function _row_breakaway(row)
     shields = collect(eachmatch(sel"div.svg_shield", row))
@@ -341,8 +334,8 @@ function getpcs_rider_seasons(
     pageurl = "https://www.procyclingstats.com/rider/$(pcs_slug)"
 
     function fetch_seasons(url, params)
-        # The specialty twin of this parse (`getpcs_rider_pts`) reads the same
-        # profile page; `reuse` means whichever runs second pays no request.
+        # `getpcs_rider_pts` reads the same profile page; `reuse` means
+        # whichever runs second pays no request.
         response = try
             scrape_get(url; reuse = true)
         catch e
@@ -408,21 +401,19 @@ end
 Batch version — get season-by-season PCS points for multiple riders.
 Returns a single DataFrame with an additional `riderkey` column.
 
-Counts `ScrapeBlockedError`s separately from genuine misses, same as its sibling
-`getpcs_rider_pts_batch`: once the block count passes `PCS_BLOCK_RAISE_THRESHOLD`
-this raises rather than silently absorbing a challenge into an incomplete
-`pcs_seasons` archive with no signal that a block, not genuine absence,
-caused the gap.
+Counts `ScrapeBlockedError`s separately from misses, as
+`getpcs_rider_pts_batch` does: once the block count passes
+`PCS_BLOCK_RAISE_THRESHOLD` this raises instead of writing an incomplete
+`pcs_seasons` archive.
 """
 function getpcs_rider_seasons_batch(
     rider_slugs::Dict{String,String};
     force_refresh::Bool = false,
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
-    # Usually free: the specialty batch runs first over the same profile pages,
-    # and whatever it fetched with `reuse` is still held, so `prefetch!` drops
-    # those. This covers the riders it did not want — a seasons batch run on its
-    # own, or a field where the archive already answered the specialty half.
+    # Usually free: the specialty batch has already fetched these profiles with
+    # `reuse`, and `prefetch!` drops URLs it holds. This covers a seasons batch
+    # run on its own, or a field whose specialty half came from the archive.
     _prefetch_pages(
         "rider profile",
         [
@@ -607,9 +598,8 @@ function getpcs_race_history(
             year_df[!, :year] = fill(year, nrow(year_df))
             all_results = vcat(all_results, year_df; cols = :union)
         catch e
-            # A block found on one year will be found on every other year in
-            # this loop too — propagate rather than silently reading it as
-            # "no history for that year" and quietly trying the rest.
+            # A block on one year will be found on every other year too, so
+            # propagate it instead of reading it as "no history for that year".
             e isa ScrapeBlockedError && rethrow()
             @warn "Failed to fetch results for $pcs_race_slug $year: $e"
         end

@@ -5,9 +5,8 @@ Provides alias-based column resolution so that when PCS renames a column
 (e.g. `Rider` → `h2hRider`), you add one string to the relevant alias
 constant and everything works again.
 
-This is deliberately separate from the VG scraping in get_data.jl —
-the two sites have different table structures and shouldn't share
-column-processing logic.
+Kept separate from the VG scraping in get_data.jl: the two sites have
+different table structures and shouldn't share column-processing logic.
 """
 
 # ---------------------------------------------------------------------------
@@ -60,9 +59,9 @@ end
 Download a web page and extract all HTML tables as DataFrames.
 This is the lowest-level scraping function, shared by both VG and PCS paths.
 
-Uses HTTP.jl + Gumbo for parsing. Column names come from `<th>` elements in
-the first row; if none are present, the first `<td>` row is used as headers
-(common on VG pages). Duplicate column names are deduplicated with a suffix.
+Fetches through `scrape_get` and parses with Gumbo. Column names come from
+`<th>` elements in the first row; if none are present, the first `<td>` row is
+used as headers (common on VG pages). Duplicate column names are deduplicated with a suffix.
 """
 function scrape_html_tables(pageurl::String)::Vector{DataFrame}
     response = try
@@ -162,7 +161,6 @@ function scrape_pcs_table(
         end
     end
 
-    # Fallback: try first table that meets min_rows
     for tbl in tables
         if nrow(tbl) >= min_rows
             return tbl

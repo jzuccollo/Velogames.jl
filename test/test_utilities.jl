@@ -1,7 +1,7 @@
 @testset "league_race_slug" begin
-    # scripts/auto_publish.jl decides whether a scraped league race is a
-    # publishable classic by whether this comes back non-empty, so the empty
-    # string for a grand tour stage is load-bearing, not just a miss.
+    # Winner derivation treats a scraped league race as a publishable classic
+    # only when this comes back non-empty, so the empty string for a grand tour
+    # stage is a verdict, not a miss.
     @test league_race_slug("Ronde van Brugge") == "classic-brugge-de-panne"
     @test league_race_slug("In Flanders Fields-Middelkerke to Wevelgem") == "gent-wevelgem"
     @test league_race_slug("Stage 4: Pau - Luchon") == ""
@@ -119,7 +119,7 @@ end
         @test moved.snapshot_date == Date(2026, 4, 3)
 
         # The winner is derived from the snapshot contemporaneous with the race,
-        # not the newest — which is the whole reason the raw tier is dated. Both
+        # not the newest, which is why the raw tier is dated. Both
         # snapshots postdate the deadline by more than the settling window, so
         # the earliest one wins and the rename does not rewrite history.
         winners = derive_league_winners(
@@ -168,16 +168,15 @@ end
 end
 
 # The winner above is derived from the 2026-04-01 snapshot and `now` defaults to
-# today, which is far past any settling window. That is deliberately a
-# regression guard on the diagnostic pass in `_derive_classics_winners`: it must
-# report on races the dated pass could not settle and never settle one itself.
-# If it ever starts publishing, `snapshot_date` there stops being "2026-04-01".
+# today, which is far past any settling window. That guards the diagnostic pass
+# in `_derive_classics_winners`: it must report on races the dated pass could
+# not settle and never settle one itself. If it ever starts publishing,
+# `snapshot_date` there stops being "2026-04-01".
 
 @testset "Grand tour waits for the whole catalogue (WP6)" begin
     # A grand tour catalogue grows: End-of-Tour is added when the tour finishes.
     # A snapshot taken in between lists every race it knows about as scored, so
-    # testing it against its own catalogue settles the tour on a partial total —
-    # on the 2026 Giro that is 20% of the winning score, on a 33-point margin.
+    # testing it against its own catalogue settles the tour on a partial total.
     partial = """
     {"meta": {"game_slug": "velogame", "year": 2026, "league_id": "3",
               "series_type": "grand_tour", "race_catalogue": {
@@ -225,16 +224,15 @@ end
             archive_dir = tree,
         )
         @test nrow(w) == 1
-        # All three flip on the bug: gating each snapshot against its own
-        # catalogue picks X, on 100, from the 06-01 snapshot.
+        # Gating each snapshot against its own catalogue would flip all three:
+        # it picks X, on 100, from the 06-01 snapshot.
         @test w.teamname[1] == "Y"
         @test w.score[1] == 140.0
         @test w.snapshot_date[1] == "2026-06-02"
 
-        # F1b: the newest catalogue is only trustworthy once it has settled. A
+        # The newest catalogue is only trustworthy once it has settled. A
         # publish landing inside the window sees the partial catalogue as the
-        # current one, and gating on "newest" cannot help — this is what makes
-        # that window unreachable rather than merely unlikely.
+        # current one, so gating on "newest" alone cannot help.
         @test isempty(
             derive_league_winners(
                 "velogame",
@@ -279,8 +277,8 @@ end
 @testset "A classic the gate cannot settle says so (WP6)" begin
     # `save_league_snapshot` dedupes on content, so once the season's final race
     # settles nothing changes again and no snapshot dated a full window past its
-    # deadline is ever written. The gate then cannot be satisfied — which is
-    # correct, and used to be silent.
+    # deadline is ever written. The gate then cannot be satisfied, and has to
+    # say so.
     late = """
     {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "9",
               "series_type": "classics", "race_catalogue": {
@@ -307,7 +305,7 @@ end
             archive_dir = tree,
         )
         @test isempty(call())
-        # The emptiness passes on the old code too — the log is the actual test.
+        # A silent gate would also return empty, so the log is the test.
         @test_logs (:info, r"Settle it by hand") match_mode = :any call()
 
         # And the remedy it names has to work.
@@ -325,8 +323,8 @@ end
 end
 
 @testset "A scored race with no deadline says so (WP6)" begin
-    # The live classics catalogue has already shrunk from 44 entries to 43, so a
-    # scored race can be absent from every catalogue held.
+    # The live classics catalogue can shrink, so a scored race can be absent
+    # from every catalogue held.
     orphan = """
     {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "8",
               "series_type": "classics", "race_catalogue": {}},
@@ -355,8 +353,9 @@ end
 
 @testset "Forced rebuild of the derived tables (WP6)" begin
     # The derived tables are a function of the newest snapshot AND of
-    # `league_rosters_frame`. Only the snapshot half is checked, so a finished
-    # season keeps whatever the old code wrote.
+    # `league_rosters_frame`. Only the snapshot half is checked, so without
+    # `force` a finished season keeps whatever an older `league_rosters_frame`
+    # wrote.
     src = """
     {"meta": {"game_slug": "sixes-classics", "year": 2026, "league_id": "7",
               "series_type": "classics", "race_catalogue": {
@@ -560,24 +559,12 @@ end
 # Smoke test: VG rider scraping
 # =========================================================================
 
-# This used to fetch the live classics pool and check its shape. Velogames now
-# answers every page with a Cloudflare challenge — 403 to `HTTP.jl`, and only
-# `vgleague`'s Playwright path gets through (`docs/pcs-cloudflare-block.md`) —
-# so with `force_refresh` set it could not pass from Julia, and a permanently
-# red test is worth less than no test.
-#
-# What is asserted instead is the block itself, which is the behaviour the
-# renderers now depend on: `getvg_riders` must raise rather than hand back an
-# empty or half-parsed frame, because a challenge page parses as valid HTML.
-# If Velogames ever lifts the block this fails, which is the signal to restore
-# the shape checks — the pool's own shape is covered meanwhile by the
-# `load_vg_race_pool` tests against the archive.
 @testset "getvg_riders reaches Velogames through the browser transport" begin
-    # Velogames answers `HTTP.jl` with a 403 and has done for a year, so this
-    # passing at all means `scrape_get` fell through to `vgleague fetch` and got
-    # the page. It is the end-to-end check on the Cloudflare fix: a live network
-    # call, deliberately, because nothing short of one tests the thing that
-    # breaks. Needs `vgleague` on PATH and a GUI session.
+    # Velogames answers `HTTP.jl` with a 403, so this passes only if
+    # `scrape_get` fell through to `vgleague fetch` and got the page (see
+    # docs/pcs-fetch-architecture.md). A live network call, because nothing
+    # short of one tests the transport. Needs `vgleague` on PATH and a GUI
+    # session.
     url = vg_classics_url(Dates.year(Dates.today()))
     riders = getvg_riders(url, force_refresh = true)
     @test nrow(riders) > 100
@@ -665,7 +652,8 @@ end
           omloop.pcs_slug == "omloop-het-nieuwsblad"
     @test find_race("Paris-Roubaix").category == 1
     @test find_race("NonExistentRace") === nothing
-    # Prefix match, not substring: "Tour" used to resolve to Paris-Tours Elite.
+    # Prefix match, not substring, so "Tour" does not resolve to Paris-Tours
+    # Elite.
     @test find_race("Tour") === nothing
 
     # Every race the picker can offer must resolve, and round-trip its slug.
@@ -750,7 +738,6 @@ end
     # and resolve_race_date needs an approximate date for each.
     @test Set(keys(Velogames.GT_SIMILAR_RACES)) == Set(keys(Velogames._GT_APPROX_DATE))
 
-    # RaceInfo carries total_distance_km
     omloop_info = find_race("Omloop")
     @test omloop_info !== nothing
     @test omloop_info.total_distance_km == 200.0

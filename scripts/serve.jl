@@ -52,8 +52,8 @@ const PASTES = [
 # ---------------------------------------------------------------------------
 
 # scope: :both, :oneday, :stage, :assessor — drives which fieldset a control sits
-# in, and so which controls are reachable for a given race format. This is what
-# makes a stage-race value like max_per_team = 0 unreachable on a classic.
+# in, and so which controls are reachable for a given race format: a stage-race
+# value like max_per_team = 0 is unreachable on a classic.
 const FIELDS = [
     (
         sec = "race",
@@ -125,7 +125,7 @@ const FIELDS = [
         kind = :number,
         scope = :both,
         step = "1",
-        help = "Cap on riders drawn from a single professional team, matching the Velogames game rule. Set it to whatever this game states; 0 means no cap.",
+        help = "Cap on riders drawn from a single professional team. A diversification preference, not a game rule; 0 means no cap.",
     ),
     (
         sec = "optimisation",
@@ -297,7 +297,7 @@ function vg_race_options(year::Int)
 end
 
 # `title` as well as the styled bubble: the bubble is the readable one, the title
-# attribute is what a screen reader and a keyboard user actually get.
+# attribute is what a screen reader and a keyboard user get.
 hint(text) =
     isempty(text) ? "" :
     "<span class=\"hint\" tabindex=\"0\" role=\"note\" title=\"$(esc(text))\">?" *

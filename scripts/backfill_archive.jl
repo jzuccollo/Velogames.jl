@@ -15,7 +15,7 @@
 #   pcs_specialty NOT recoverable. It is a snapshot of a live rating: fetching
 #   pcs_seasons   it today returns today's values, which would let a backtest
 #                 see results the model could not have seen. A gap here stays a
-#                 gap — filling it would be worse than leaving it.
+#                 gap.
 #   odds, oracle  NOT recoverable. The market closed; the blog post is edited.
 #   vg_riders     Handled by backfill_vg_pages.jl, which pins Internet Archive
 #   vg_racelist   timestamps for the seasons Velogames has taken down.
@@ -24,9 +24,9 @@
 # riderkeys made by an older `createkey` that kept apostrophes, so O'Brien and
 # O'Connor fall out of every join against a pool keyed today. It rewrites only
 # rows where the recomputed key is in that season's rider pool and the stored
-# one is not — which is why it leaves alone the two `oracle` rows whose stored
-# key is deliberately the fuller name ("Juan Sebastián Molano" against a
-# display name of "Sebastian Molano"), where recomputing would break the match.
+# one is not, so it leaves alone the two `oracle` rows whose stored key is the
+# fuller name ("Juan Sebastián Molano" against a display name of "Sebastian
+# Molano"), where recomputing would break the match.
 #
 # Run:  julia --project scripts/backfill_archive.jl            # report only
 #       julia --project scripts/backfill_archive.jl --run      # fetch and archive
@@ -107,8 +107,8 @@ end
 """
 Rows whose `riderkey` disagrees with `createkey(rider)` today *and* whose
 recomputed key matches that season's Velogames pool while the stored one does
-not. Both halves matter: the first finds the drift, the second establishes that
-recomputing is an improvement rather than a different kind of wrong.
+not. The first finds the drift; the second shows that recomputing is an
+improvement.
 """
 function rekey_vg_results(years)
     fixed_files = 0
@@ -142,7 +142,7 @@ function rekey_vg_results(years)
             for i in rows
                 df.riderkey[i] = createkey(String(df.rider[i]))
             end
-            # Written without provenance, deliberately. These are legacy files
+            # Written without provenance. These are legacy files
             # that never carried any, and re-deriving a join key does not make
             # today the date the result was fetched — stamping it would put a
             # false fetch date on a 2023 record. The audit goes on reporting
@@ -158,15 +158,13 @@ Restore `team` and `cost` to prediction archives that lack them, by joining the
 season's Velogames pool on `riderkey`. Costs are constant within a season, so
 the pool still carries February's prices.
 
-`chosen`, `selection_frequency` and `expected_vg_points` are **not** restored,
-here or ever. They are model outputs, and the model has changed since — the
-April 2026 ablation dropped signals, the July market blend changed the pick — so
-recomputing them today produces a different prediction from the one that was
-actually made, in a file labelled "what we predicted". Materialising them as
-all-`missing` to satisfy the write guard would be the same dishonesty wearing a
-disguise: the audit would read the file as complete while it carried nothing.
-Those races stay deficient, the audit goes on saying so, and that is the end
-state.
+`chosen`, `selection_frequency` and `expected_vg_points` are **not** restored.
+They are model outputs, and the model has changed since (the April 2026 ablation
+dropped signals, the July market blend changed the pick), so recomputing them
+today produces a different prediction from the one that was made, in a file
+labelled "what we predicted". Materialising them as all-`missing` to satisfy the
+write guard would make the audit read the file as complete while it carried
+nothing. Those races stay deficient.
 """
 function repair_predictions(years)
     repaired = 0

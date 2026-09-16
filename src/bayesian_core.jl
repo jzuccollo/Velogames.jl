@@ -6,10 +6,10 @@ Velogames points. The pipeline has two stages:
 
 1. **Bayesian strength estimation** — an uninformative prior (mean=0, SD=10) is
    updated sequentially with observations from multiple signal sources (PCS
-   specialty, VG season points, form, race history, VG race history,
-   oracle, betting odds). Each observation has a
-   variance controlling its precision; lower variance = more influence. The
-   posterior mean is a precision-weighted average of all observations.
+   specialty, VG season points, race history, VG race history, oracle, betting
+   odds). Each observation has a variance controlling its precision; lower
+   variance = more influence. The posterior mean is a precision-weighted average
+   of all observations.
 
 2. **Monte Carlo simulation** — draws noisy strengths from each rider's
    posterior, ranks them to simulate finishing positions, and maps positions to
@@ -88,10 +88,10 @@ Parameters are organised into four groups with different roles:
 ### 1. Tuneable scale factors (adjust these)
 
 Three scale factors control signal group precision. Higher = more precise
-(lower variance). Default 1.0 reproduces the original hardcoded variances.
+(lower variance).
 
 - `market_precision_scale` — odds + oracle (most precise signals)
-- `history_precision_scale` — form + race history + VG history
+- `history_precision_scale` — race history + VG history
 - `ability_precision_scale` — PCS specialty + VG season points (broadest)
 
 Effective variance = base_variance × ratio / scale_factor. Use
@@ -101,9 +101,9 @@ to validate settings against domain knowledge.
 ### 2. Base variances and ratios (change only if domain knowledge changes)
 
 These encode the signal hierarchy *within* each group. For example, in the
-history group, form (variance 0.9) is more precise than race history
-(variance 3.0, ratio 10/3). Adjusting a scale factor moves all signals in
-that group together, preserving these ratios.
+history group, VG history is noisier than race history (ratios 5.0 and 3.0).
+Adjusting a scale factor moves all signals in that group together, preserving
+these ratios.
 
 ### 3. Temporal decay rates (set once)
 
@@ -125,13 +125,11 @@ signal degrades rather than *how much* to trust the signal source.
 """
 @kwdef struct BayesianConfig
     # --- Three tuneable scale factors ---
-    # These control signal group precision. Higher = more precise (lower variance).
-    # Default 1.0 reproduces the original hardcoded variances exactly.
 
     # Market signals: odds, oracle
     market_precision_scale::Float64 = 4.0
 
-    # Historical signals: form, race history, VG history
+    # Historical signals: race history, VG history
     history_precision_scale::Float64 = 2.0
 
     # Broad ability signals: PCS specialty, VG season points
@@ -139,12 +137,12 @@ signal degrades rather than *how much* to trust the signal source.
 
     # --- Fixed ratios between signals within each group (domain knowledge, not tuned) ---
 
-    # Market: oracle is less precise than odds. Raised 2.0 → 3.5 (April 2026) then
-    # 3.5 → 5.0 (post 13-race review) as oracle's within-tier ρ stayed weakly anti-
-    # informative in the middle tier (−0.128) despite having the largest mean |shift|.
+    # Market: oracle is less precise than odds. Oracle's within-tier ρ was weakly
+    # anti-informative in the middle tier (−0.128 over 13 races) despite having the
+    # largest mean |shift|.
     _odds_to_oracle_ratio::Float64 = 5.0
 
-    # Historical: race history and VG history are noisier than recent form
+    # Historical: variances relative to the retired form signal's unit base
     _form_to_hist_ratio::Float64 = 3.0
     _form_to_vg_hist_ratio::Float64 = 5.0
 
@@ -154,25 +152,23 @@ signal degrades rather than *how much* to trust the signal source.
     # --- Temporal decay (independent, not grouped) ---
 
     hist_decay_rate::Float64 = 3.2
-    # Reduced from 1.3: recent-edition VG results are genuinely informative
-    # but the old decay made even 1-year-old data imprecise (var 2.5+1.3=3.8)
+    # A decay of 1.3 made even 1-year-old VG results imprecise (var 2.5+1.3=3.8)
     vg_hist_decay_rate::Float64 = 0.8
     # PCS season decay: weight = exp(-rate × years_ago). Default 0.7 gives
     # half-life ≈ 1 season (last season ~50%, 2 years ago ~25%, 3 years ago ~12%).
     pcs_season_decay::Float64 = 0.7
 
-    # --- GT VG-history signal (Option A prototype, July 2026) ---
+    # --- GT VG-history signal ---
     # Base observation variance for a rider's OWN historical grand-tour VG total
     # (log1p-z-scored across each past edition's field, recency-decayed by
     # `vg_hist_decay_rate`). This is a role/propensity proxy: a rider who scored
     # like a break-hunter last Tour scored so *because* of their role, so their
     # own prior GT VG is a lower-bias predictor of their GT VG than their general
-    # ability is. Deliberately NOT divided by `history_precision_scale` — it is a
+    # ability is. Not divided by `history_precision_scale`: it is a
     # distinct signal kept independent of the ability/history/market groups — and
     # is exempt from `market_discount` in `estimate_rider_strength_multidim`
     # (it carries information the GC/stage-win markets do not price for cheap
-    # domestiques). Lower = more influence. See roadmap.md "GT VG-history strength
-    # signal (Option A prototype)".
+    # domestiques). Lower = more influence.
     gt_vg_hist_base_variance::Float64 = 1.5
 
     # --- Other parameters ---
@@ -190,12 +186,10 @@ signal degrades rather than *how much* to trust the signal source.
     within_cluster_correlation::Float64 = 0.5
     between_cluster_correlation::Float64 = 0.15
     # Apply the block-correlation discount per dimension in the multidim
-    # (stage-race) path too. Off reproduces the pre-July-2026 behaviour where
-    # stage-race posteriors carried no correlation discount and were
-    # systematically overconfident relative to one-day posteriors (review §3).
-    # Pre-registered revisit trigger (remediation plan D4): if Vuelta 2026
-    # top-20 rank ρ degrades vs Giro/Tour 2026, or GC win% moves further from
-    # market, flip default off and investigate.
+    # (stage-race) path too. Without it stage-race posteriors are overconfident
+    # relative to one-day posteriors. Revisit trigger: if Vuelta 2026 top-20
+    # rank ρ degrades vs Giro/Tour 2026, or GC win% moves further from market,
+    # flip default off and investigate.
     multidim_block_correlation::Bool = true
     # Scales vg_variance early in the season when few riders have points.
     # Effective variance = vg_variance * (1 + penalty * (1 - frac_nonzero)).
@@ -212,7 +206,7 @@ signal degrades rather than *how much* to trust the signal source.
     # field, so absence is informative (residual probability mass shared
     # across absent riders).
     #
-    # `:oracle` is intentionally absent: Cycling Oracle publishes a top-15
+    # `:oracle` is absent: Cycling Oracle publishes a top-15
     # with probabilities normalised to sum to 1.0, so applying the residual-
     # probability floor erroneously infers that absent riders have ~1% of
     # baseline (floor strength ≈ -4.7), which dominated the posterior of any
@@ -234,8 +228,7 @@ signal degrades rather than *how much* to trust the signal source.
 end
 
 # --- Accessor functions: compute effective variances from scale factors ---
-# Each function returns ratio / scale_factor for the appropriate signal group.
-# All code should use these rather than accessing the underscore-prefixed fields directly.
+# All code should use these, not the underscore-prefixed fields.
 pcs_variance(c::BayesianConfig) = 1.0 / c.ability_precision_scale
 vg_variance(c::BayesianConfig) = c._pcs_to_vg_ratio / c.ability_precision_scale
 hist_base_variance(c::BayesianConfig) = c._form_to_hist_ratio / c.history_precision_scale
@@ -287,8 +280,8 @@ per-stage rather than feeding the per-stage strength blend. See
 # `:kom` is a scoring-only dimension: it drives the daily mountains-classification
 # competition (`_score_daily_mountains!`) but is NOT part of the finish-position
 # blend (`stage_dimension_weights` returns no kom weight). This decouples KOM /
-# breakaway propensity from summit-finish placing so a polka-dot specialist no
-# longer inflates his predicted stage-finish position (see mountain-dimension fix).
+# breakaway propensity from summit-finish placing so a polka-dot specialist does
+# not inflate his predicted stage-finish position.
 const STRENGTH_DIMENSIONS = (:flat, :hilly, :mountain, :itt, :gc, :kom)
 
 """
@@ -305,13 +298,12 @@ const _DIM_INDEX = Dict(d => i for (i, d) in enumerate(STRENGTH_DIMENSIONS))
     MultiDimPosterior(mean::Vector{Float64}, variance::Vector{Float64})
 
 Per-dimension Gaussian posterior over `STRENGTH_DIMENSIONS`. Dimensions are
-treated as independent — cross-dimension coupling is captured *explicitly*
+treated as independent — cross-dimension coupling is captured explicitly
 by `SIGNAL_DIMENSION_WEIGHTS` (each observation updates whichever dimensions
-the routing table says it informs, with a per-target precision). An earlier
-design used a full covariance matrix, but the implicit cov-driven leakage
-overpowered the explicit routing for strong signals (e.g. a rider's huge
-PCS GC score would leak into ITT, swamping a true TT specialist's PCS TT
-direct evidence).
+the routing table says it informs, with a per-target precision). A full
+covariance matrix lets strong signals leak across dimensions and overpower
+the routing (e.g. a rider's huge PCS GC score would leak into ITT, swamping a
+true TT specialist's PCS TT direct evidence).
 """
 struct MultiDimPosterior
     mean::Vector{Float64}
@@ -370,9 +362,6 @@ end
 #      `:flat`/`:hilly`; a climber's project mostly to `:mountain`. The
 #      class signal becomes a multiplier on an otherwise undifferentiated
 #      total.
-#
-# Phase 6 will calibrate both tables empirically against per-stage VG
-# history, and may revisit which mechanism each signal should use.
 # --------------------------------------------------------------------------
 
 """
@@ -391,31 +380,23 @@ const SIGNAL_DIMENSION_WEIGHTS = (
     pcs_sprint = (flat = 1.0, hilly = 0.1, mountain = 0.0, itt = 0.0, gc = 0.0, kom = 0.0),
     # PCS oneday lumps together flat classics (sprinters score here too) and
     # hilly classics. Routed to :hilly at 0.5 (needs oneday AND climber to make
-    # :hilly strong). NO :flat weight (B1, July 2026): all-rounders with huge
-    # one-day scores that are really *hilly/GC* ability (Pogačar, oneday≈9983)
-    # leaked onto :flat and inflated their flat-sprint top-10 rate. Pure flat
-    # sprint ability is already captured by pcs_sprint (weight 1.0), so the
-    # oneday→flat route was almost all leak. Trimming it drops Pogačar's
-    # backtest flat strength (1.02→0.75) with elite sprinters unchanged; inert
-    # in production (market_discount suppresses PCS for priced riders).
+    # :hilly strong). No :flat weight: all-rounders with huge one-day scores
+    # that are really hilly/GC ability (Pogačar, oneday≈9983) leak onto :flat
+    # and inflate their flat-sprint top-10 rate. Pure flat sprint ability is
+    # already captured by pcs_sprint (weight 1.0).
     pcs_oneday = (flat = 0.0, hilly = 0.5, mountain = 0.0, itt = 0.0, gc = 0.0, kom = 0.0),
-    # PCS started publishing a Hills rating in September 2026, which is a direct
-    # measurement of the thing `:hilly` had only ever been able to synthesise
-    # from oneday (0.5) + climber (0.5). Weight 1.0: it is the primary signal for
-    # that dimension wherever it exists, as pcs_tt is for :itt.
+    # PCS Hills (published from September 2026) measures `:hilly` directly;
+    # weight 1.0, as pcs_tt is for :itt.
     #
-    # The oneday and climber routes are deliberately left at 0.5 rather than
-    # trimmed to make room. Two reasons. Every race before September 2026 has no
-    # Hills rating at all and never will — the ratings are season-cumulative, so
-    # the history cannot be backfilled honestly — and trimming would leave those
-    # races with a weaker :hilly than they have today. And the overlap between
-    # three correlated ability signals is already handled: all three sit in the
-    # ability cluster, where `within_cluster_correlation = 0.5` discounts exactly
-    # this, so keeping them is not naive triple-counting.
+    # The oneday and climber routes stay at 0.5. Races before September 2026
+    # have no Hills rating and cannot be backfilled (the ratings are
+    # season-cumulative), so trimming would weaken their :hilly. The overlap
+    # between the three correlated ability signals is discounted by
+    # `within_cluster_correlation`.
     #
     # Small trickle to :mountain and :kom because PCS Hills counts cat-2/cat-3
-    # finishes, which is where hilly breakaways take KOM points. Deliberately
-    # well below pcs_climber's mountain = 1.0: a puncheur is not a grimpeur.
+    # finishes, which is where hilly breakaways take KOM points. Well below
+    # pcs_climber's mountain = 1.0: a puncheur is not a grimpeur.
     pcs_hills = (flat = 0.0, hilly = 1.0, mountain = 0.1, itt = 0.0, gc = 0.0, kom = 0.1),
     # Climbing ability is the base for BOTH summit-finish placing (:mountain) and
     # the daily KOM competition (:kom) — a strong climber leads climbs whether or
@@ -435,10 +416,8 @@ const SIGNAL_DIMENSION_WEIGHTS = (
     # information. Positive evidence cross-routes to mountain (Tour-winning
     # climbers typically win summit finishes), but minimally to :hilly — they
     # score daily-GC points there but rarely win punchy hilly stages.
-    # mountain raised 0.2→0.5 (toward pcs_gc's 0.7): the *market's* GC signal is
-    # sharper than career PCS and should inform summit-finish placing at least as
-    # strongly. Previously KOM-market riders out-punched real GC climbers on
-    # :mountain because odds_gc reached it at only 0.2 while odds_kom hit 1.0.
+    # mountain = 0.5 (near pcs_gc's 0.7): the market's GC signal is sharper than
+    # career PCS and should inform summit-finish placing at least as strongly.
     oracle_gc = (flat = 0.0, hilly = 0.05, mountain = 0.5, itt = 0.0, gc = 1.0, kom = 0.1),
     odds_gc = (flat = 0.0, hilly = 0.05, mountain = 0.5, itt = 0.0, gc = 1.0, kom = 0.1),
     # Jersey oracles predict season-long jersey winners. Points oracle
@@ -454,7 +433,7 @@ const SIGNAL_DIMENSION_WEIGHTS = (
         gc = 0.0,
         kom = 0.0,
     ),
-    # KOM jersey signals now route to :kom ONLY (was :mountain 1.0). :kom drives
+    # KOM jersey signals route to :kom only. :kom drives
     # the daily mountains-classification scoring, not finish position — so a
     # breakaway/jersey hunter earns KOM points without being predicted to place
     # on summit finishes he doesn't contest.
@@ -476,18 +455,17 @@ const SIGNAL_DIMENSION_WEIGHTS = (
         kom = 0.0,
     ),
     kom_history = (flat = 0.0, hilly = 0.0, mountain = 0.0, itt = 0.0, gc = 0.0, kom = 1.0),
-    # GT VG-history (Option A prototype, July 2026): a rider's OWN prior grand-tour
+    # GT VG-history: a rider's OWN prior grand-tour
     # VG total, a role/propensity proxy rather than a terrain signal. Routed to the
     # stage-FINISH-placing dimensions a break-hunter/opportunist actually scores on
     # (hilly/mountain), plus a modest :kom (breakaways collect KOM points).
-    # Deliberately ZERO on :gc, :itt AND :flat: routing to :gc would falsely elevate
+    # ZERO on :gc, :itt AND :flat: routing to :gc would falsely elevate
     # a break-hunter as a GC threat (inflating daily/final-GC scoring); a domestique's
     # VG total says nothing about time-trial ability; and :flat would inflate a GC
     # leader's bunch-sprint strength (their huge GT total comes from mountains, not
-    # flat sprints — the classic "propensity factor routed uniformly distorts" trap).
-    # Grand-tour breakaways are overwhelmingly a hilly/mountain phenomenon anyway.
+    # flat sprints).
     # Consumed UPWARD-ONLY and AFTER the market updates — see
-    # estimate_rider_strength_multidim and roadmap.md "GT VG-history strength signal".
+    # estimate_rider_strength_multidim.
     gt_vg_history = (
         flat = 0.0,
         hilly = 1.0,
@@ -500,10 +478,9 @@ const SIGNAL_DIMENSION_WEIGHTS = (
 
 """
 Per-class default weighting used to project a past PCS race-history result onto
-the multidim strength vector. Until we know the stage-type mix of each past race
-(deferred to Phase 2), each result is attributed to dimensions according to the
-rider's own class profile — a reasonable shortcut: a sprinter's past results
-are mostly evidence about flat-stage ability, etc.
+the multidim strength vector. Without the stage-type mix of each past race, each
+result is attributed to dimensions according to the rider's own class profile:
+a sprinter's past results are mostly evidence about flat-stage ability, etc.
 """
 # `kom` mirrors `mountain`: generic (dimension-agnostic) history / VG evidence
 # for a climber is as much evidence about KOM-competition ability as about
@@ -531,10 +508,9 @@ const MARKET_DIM_THRESHOLD = 0.3
 # present in another. `SIGNAL_KEYS` is the scalar (one-day) estimator's set;
 # `SIGNAL_KEYS_MULTIDIM` adds the per-market sub-channels (GC / points / KOM /
 # stage-win) and classification history used by the stage-race estimator. Both
-# are used only for order-independent Dict initialisation, so the order here is
-# for readability. (The prediction-archive allow-list in `race_solver.jl` and the
-# report display columns are deliberately kept explicit — they carry `shift_`/
-# `info_share_` prefixes and per-dimension strength columns, not bare keys.)
+# are used only for order-independent Dict initialisation. The prediction-archive
+# allow-list in `race_solver.jl` and the report display columns stay explicit:
+# they carry `shift_`/`info_share_` prefixes and per-dimension strength columns.
 const SIGNAL_KEYS = (:pcs, :vg, :history, :oracle, :odds)
 const SIGNAL_KEYS_MULTIDIM = (
     :pcs,

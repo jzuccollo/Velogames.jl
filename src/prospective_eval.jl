@@ -9,13 +9,12 @@ backtesting framework (Spearman rho, top-N overlap, signal shifts).
 """
     _check_prediction_schema(predictions, label) -> predictions
 
-Warn (once per legacy archive read) if an archived prediction DataFrame
-predates the WP0.3 schema hardening — i.e. is missing any of the mandatory
-columns `ARCHIVE_TYPES["predictions"]` declares (`riderkey, rider, team, cost,
-chosen, selection_frequency, expected_vg_points`).
-Never throws: legacy (pre-April-2026) archives can't be re-created, so readers
-must tolerate them and degrade gracefully rather than crash. Returns
-`predictions` unchanged for chaining.
+Warn (once per legacy archive read) if an archived prediction DataFrame is
+missing any of the mandatory columns `ARCHIVE_TYPES["predictions"]` declares
+(`riderkey, rider, team, cost, chosen, selection_frequency,
+expected_vg_points`). Never throws: legacy (pre-April-2026) archives can't be
+re-created, so readers must tolerate them. Returns `predictions` unchanged for
+chaining.
 """
 function _check_prediction_schema(predictions::DataFrame, label::AbstractString)
     missing_cols = missing_mandatory_columns("predictions", predictions)
@@ -43,13 +42,10 @@ end
 The finishing order this race should be scored against: a stage race's
 general classification, a one-day race's result.
 
-`prospective_season_summary` walks every slug in the predictions archive, and
-grand tours are in there, so this cannot assume one-day. A stage race's
-`pcs_results` is whatever `/result` returned, which for a tour is the final
-stage's sprint — scoring a GC prediction against it would rank the model on a
-race it never predicted. `pcs_gc_results` is the right type and is preferred,
-with `pcs_results` kept as the tail for the week-long races that have no GC
-file archived yet.
+The predictions archive includes grand tours, so this cannot assume one-day. A
+stage race's `pcs_results` is whatever `/result` returned, which for a tour is
+the final stage's result, so `pcs_gc_results` is preferred, with `pcs_results`
+as the fallback for week-long races that have no GC file archived yet.
 """
 function _archived_finish_order(
     pcs_slug::String,
@@ -84,7 +80,6 @@ function evaluate_prospective(
     end
     _check_prediction_schema(predictions, "$pcs_slug $year")
 
-    # Match on riderkey
     if !hasproperty(pcs_results, :riderkey)
         return nothing
     end
@@ -96,7 +91,6 @@ function evaluate_prospective(
         return nothing
     end
 
-    # Compute actual positions (rank by PCS result position)
     pos_col =
         hasproperty(matched, :position) ? :position :
         hasproperty(matched, :rnk) ? :rnk : nothing
@@ -111,7 +105,6 @@ function evaluate_prospective(
     # Spearman correlation (higher strength should mean lower position)
     rho = spearman_correlation(-predicted_strengths, Float64.(actual_positions))
 
-    # Top-N overlap
     pred_top5 = Set(partialsortperm(-predicted_strengths, 1:min(5, n)))
     pred_top10 = Set(partialsortperm(-predicted_strengths, 1:min(10, n)))
     actual_top5 = Set(partialsortperm(actual_positions, 1:min(5, n)))
@@ -121,12 +114,10 @@ function evaluate_prospective(
     top10_overlap = length(intersect(pred_top10, actual_top10))
     top10_in_top20 = length(intersect(pred_top10, actual_top20))
 
-    # Mean absolute rank error
     pred_ranks = _average_ranks(-predicted_strengths)
     actual_ranks = _average_ranks(Float64.(actual_positions))
     mare = mean(abs.(pred_ranks .- actual_ranks))
 
-    # Signal shift summaries
     shift_cols = filter(
         c -> startswith(string(c), "shift_") && hasproperty(matched, c),
         propertynames(predictions),
@@ -170,15 +161,12 @@ function prospective_season_summary(year::Int; archive_dir::String = archive_dir
             continue
 
         # Auto-archive the finishing order if predictions exist but it doesn't.
-        # `archive_race_results` already knows which page and which type a race
-        # of each format wants, and the races here span both — this loop walks
-        # every slug with an archived prediction, grand tours included. Rolling
-        # its own `getpcs_race_results` is how a stage race's final-stage sprint
-        # got written under `pcs_results` and then scored as a GC.
+        # Go through `archive_race_results`, which knows which page and type
+        # each race format wants: a direct `getpcs_race_results` call would
+        # write a stage race's final-stage result under `pcs_results`.
         #
-        # It writes to the default archive only — it takes no `archive_dir` —
-        # so a caller pointing this at another tree gets no auto-archive rather
-        # than a write into the wrong one.
+        # `archive_race_results` writes to the default archive only, so a caller
+        # pointing this at another tree gets no auto-archive.
         if archive_dir == Velogames.archive_dir() &&
            _archived_finish_order(pcs_slug, year; archive_dir = archive_dir) === nothing
             try
@@ -236,8 +224,8 @@ function prospective_pit_values(
         # `simulate_vg_draws` only knows the one-day `ScoringTable` (single race,
         # scalar strength, one-day finish/assist/breakaway rules). Stage races need
         # the grand-tour simulator (`simulate_stage_race`, per-stage multi-dim
-        # strengths + GC/jersey scoring), so scoring them here would silently use
-        # the wrong points model. Skip until stage-race PIT is wired up.
+        # strengths + GC/jersey scoring), so scoring them here would use the wrong
+        # points model.
         if haskey(_STAGE_RACE_VG_SLUGS, pcs_slug)
             @info "Skipping stage-race PIT for $pcs_slug $year — needs the grand-tour simulator (simulate_stage_race), not the one-day simulate_vg_draws path"
             continue
@@ -281,9 +269,8 @@ function prospective_pit_values(
         !hasproperty(predictions, :strength) && continue
         !hasproperty(predictions, :uncertainty) && continue
 
-        # Need team column for assist computation in simulate_vg_draws.
-        # Prefer predictions.team if archived; otherwise join from VG results
-        # (only covers scoring riders — re-run oneday_predictor to fix).
+        # simulate_vg_draws needs the team column for assists. Legacy archives
+        # lack it; the VG-results join only covers scoring riders.
         if !hasproperty(predictions, :team)
             if hasproperty(vg_results, :team)
                 predictions = leftjoin(
@@ -303,12 +290,10 @@ function prospective_pit_values(
             end
         end
 
-        # Determine scoring category from race metadata
         ri = _find_race_by_slug(pcs_slug)
         cat = ri !== nothing ? ri.category : 2
         scoring = get_scoring(cat > 0 ? cat : 2)
 
-        # Compute breakaway rates for this race's riders
         b_rates, b_sectors = if !isempty(breakaway_dir) && isdir(breakaway_dir)
             try
                 bdf = load_pcs_breakaway_stats(breakaway_dir)
@@ -322,7 +307,6 @@ function prospective_pit_values(
             Float64[], Float64[]
         end
 
-        # Regenerate draws
         sim_vg_points = simulate_vg_draws(
             predictions,
             scoring;
@@ -332,7 +316,6 @@ function prospective_pit_values(
             simulation_df = simulation_df,
         )
 
-        # Build actual results DataFrame with riderkey and actual VG points
         actual_df = leftjoin(
             predictions[:, [:riderkey, :rider]],
             vg_results[:, [:riderkey, :score]];
@@ -381,15 +364,11 @@ end
 """
     signal_value_analysis(year; archive_dir) -> DataFrame
 
-For each signal, compute:
-- Mean absolute shift (how much it moves predictions)
-- Number of races where the signal was active
-
-Requires archived predictions. Signal direction correctness requires
-actual results (computed only for races with both).
+For each signal, compute the mean absolute shift (how much it moves
+predictions) and the number of rider observations where it was active, from
+archived predictions.
 """
 function signal_value_analysis(year::Int; archive_dir::String = archive_dir())
-    # Accumulate per-signal stats across races
     signal_totals = Dict{Symbol,Vector{Float64}}()
 
     for pcs_slug in archive_races("predictions"; archive_dir = archive_dir)
@@ -459,7 +438,7 @@ reported figures. One row per race in `ORACLE_2026_BASELINE`. Rows where we
 lack archived predictions or PCS results have `missing` in our columns.
 
 Caveat: Cycling Oracle is a signal in our model, so this measures
-"us-with-Oracle vs Oracle alone" rather than a clean head-to-head.
+"us-with-Oracle vs Oracle alone".
 """
 function oracle_2026_comparison(year::Int = 2026; archive_dir::String = archive_dir())
     rows = []

@@ -52,15 +52,12 @@ casts cost/rank/points to numeric types, and adds a riderkey column.
 This is for VG pages only. PCS pages use `find_column()` + caller-specific processing.
 """
 function process_vg_table!(riderdf::DataFrame)
-    # lowercase the column names and remove spaces
     rename!(riderdf, lowercase.(replace.(names(riderdf), " " => "", "#" => "rank")))
 
-    # rename score to points if it exists
     if hasproperty(riderdf, :score)
         rename!(riderdf, :score => :points)
     end
 
-    # cast the cost and rank columns to Int64 if they exist
     for col in [:cost, :rank]
         if hasproperty(riderdf, col)
             riderdf[!, col] = [
@@ -72,7 +69,6 @@ function process_vg_table!(riderdf::DataFrame)
         end
     end
 
-    # cast points column to number
     riderdf[!, :points] = [
         let v = tryparse(Float64, string(x))
             v === nothing ? 0.0 : v
@@ -89,10 +85,7 @@ function process_vg_table!(riderdf::DataFrame)
         ]
     end
 
-    # add a riderkey column based on the name
     riderdf.riderkey = map(createkey, riderdf.rider)
-
-    # drop duplicate riderkeys
     riderdf = unique(riderdf, :riderkey)
 
     # Remove any empty column name (fixes join issues)
@@ -100,7 +93,6 @@ function process_vg_table!(riderdf::DataFrame)
         select!(riderdf, Not(""))
     end
 
-    # check that the riderkey is unique
     @assert length(unique(riderdf.riderkey)) == length(riderdf.riderkey) "Rider keys are not unique"
 
     return riderdf
@@ -201,28 +193,23 @@ function getvg_riders(
     function fetch_vg_data(url, params)
         riderdf = gettable(url)
 
-        # Process class data if it exists
         if hasproperty(riderdf, :class)
             rename!(riderdf, :class => :classraw)
             riderdf.class = lowercase.(replace.(riderdf.classraw, " " => ""))
         end
 
-        # Clean up team names
         if hasproperty(riderdf, :team)
             riderdf.team = unpipe.(riderdf.team)
         end
 
-        # The rendered page carries the startlist filter widget as a table row —
-        # every team name concatenated, every race tag concatenated, no rider and
-        # no parseable cost. It only became visible once fetches started coming
-        # through a browser rather than a raw HTTP response, and a `missing` cost
-        # reaching the knapsack is not a failure worth debugging twice. vgleague's
-        # own parser drops it the same way, on `if r["rider"]`.
+        # The browser-rendered page carries the startlist filter widget as a
+        # table row: every team name and race tag concatenated, no rider and no
+        # parseable cost, which would put a `missing` cost into the knapsack.
+        # vgleague's parser drops it the same way, on `if r["rider"]`.
         if hasproperty(riderdf, :riderkey)
             riderdf = filter(row -> !isempty(row.riderkey), riderdf)
         end
 
-        # Calculate rider value
         riderdf.value = riderdf.points ./ riderdf.cost
 
         return riderdf
@@ -253,9 +240,8 @@ const PCS_SLUG_OVERRIDES = Dict{String,String}(
 The PCS profile URL for a rider: the slug scraped from the startlist when we
 have one, a manual override, or the normalised name.
 
-Its own function because two places need to agree on it — the fetcher, and
-`_prefetch_rider_profiles`, which must ask the browser for exactly the URLs the
-fetcher is about to want.
+Its own function because the fetcher and the `_prefetch_pages` call in
+`getpcs_rider_pts_batch` must agree on the URL.
 """
 function pcs_rider_url(ridername::String; pcs_slug::String = "")
     slug = if !isempty(pcs_slug)
@@ -273,18 +259,14 @@ end
 Pull every page a batch is about to want in one browser session.
 
 `targets` are `url => cache_params` pairs, where the params are whatever the
-batch's own `cached_fetch` call will use — the two PCS batches key the same
-profile URL differently (`"rider"` for specialty, `"slug"` for seasons), so
-each has to say which it means rather than have this guess.
+batch's own `cached_fetch` call will use: the two PCS batches key the same
+profile URL differently (`"rider"` for specialty, `"slug"` for seasons).
 
 Anything `cached_fetch` would answer from cache is left out, so a re-render
-costs no browser time. `prefetch!` drops URLs it already holds, which is what
-makes the seasons batch nearly free after the specialty batch has run over the
-same profiles.
+costs no browser time.
 
-Failures are left alone: `prefetch!` reports what it could not get and
-`scrape_get` falls back to its usual path for those, which is a block, and the
-batch a frame up is already counting those.
+Failures are left alone: `scrape_get` takes its usual path for those, and the
+calling batch counts the blocks.
 """
 function _prefetch_pages(
     label::String,
@@ -310,7 +292,7 @@ end
 
 This function downloads and parses the rider points for a specific rider from the PCS website.
 
-Returns a DataFrame with columns: rider, oneday, gc, tt, sprint, climber, riderkey
+Returns a DataFrame with columns: rider, oneday, gc, tt, sprint, climber, hills, riderkey
 """
 function getpcs_rider_pts(
     ridername::String;
@@ -333,17 +315,11 @@ function getpcs_rider_pts(
     )
 
     function fetch_rider_pts(url, params)
-        # The jittered pause this used to carry now lives in `scrape_get`,
-        # where it covers every scrape rather than this one path.
-        #
-        # Handle HTTP errors (400 for bad URL encoding, 404 for missing page).
-        # Return missing values so the negative result is cached. A 403/429/
-        # challenge is a block, not a missing rider — `scrape_get` raises
-        # `ScrapeBlockedError` for that case, which is deliberately NOT caught
-        # here, so it propagates instead of being folded into the same
-        # missing-data row a genuine 404 gets.
+        # 400 (bad URL encoding) and 404 return missing values so the negative
+        # result is cached. `ScrapeBlockedError` is not caught: a block must not
+        # become the missing-data row a 404 gets.
         # `reuse` because `getpcs_rider_seasons` parses the season table off
-        # this very page: one fetch, two parsers, two `cached_fetch` entries.
+        # the same page.
         response = try
             scrape_get(url; reuse = true)
         catch e
@@ -370,11 +346,9 @@ function getpcs_rider_pts(
             return _missing_rider_df()
         end
 
-        # PCS lists Oneday, GC, TT, Sprint, Climber, and — since September 2026 —
-        # Hills, in that order. The first five have been stable for years and are
-        # taken positionally; Hills is taken only when present, so a page served
-        # from an older cache still parses. Anything beyond the sixth is ignored
-        # rather than guessed at.
+        # PCS lists Oneday, GC, TT, Sprint, Climber and Hills, in that order.
+        # Hills is newer and taken only when present, so a page served from an
+        # older cache still parses. Anything beyond the sixth is ignored.
         rawpts = map(x -> parse(Int, nodeText(x)), value_elements[1:5])
         hills =
             length(value_elements) >= 6 ?
@@ -452,11 +426,10 @@ function parse_oddschecker_odds(text::String)
         non_empty = [strip(t) for t in tokens if !isempty(strip(t))]
         length(non_empty) < 2 && return false
         valid = Float64[d for d in (to_decimal(t) for t in non_empty) if d !== nothing]
-        # Tolerate a MINORITY of junk tokens (e.g. "9/2Bet" where a bookmaker's
-        # "Bet" button label glues onto the price, "100/ 30" with stray spaces):
-        # a genuine bookmaker row is mostly prices. Requiring the decodable tokens
-        # to be at least half keeps that tolerance while rejecting a stray line
-        # that merely happens to contain a few numbers among mostly non-odds text.
+        # Tolerate a minority of junk tokens (e.g. "9/2Bet" where a bookmaker's
+        # "Bet" button label glues onto the price, "100/ 30" with stray spaces).
+        # Requiring at least half the tokens to decode rejects a stray line with
+        # a few numbers among mostly non-odds text.
         length(valid) >= 3 && 2 * length(valid) >= length(non_empty) && return true
         # Two-token line: only accept if every token decodes and both agree
         length(valid) == length(non_empty) && length(valid) == 2 && valid[1] == valid[2]
@@ -690,8 +663,6 @@ Parse a Velogames `races.php` page into the race catalogue. Split out from
 by exactly the same code as a live page.
 """
 function parse_vg_racelist(url::AbstractString)
-    # Parse directly with Gumbo — VG races.php uses <TD> not <TH> for
-    # headers, which breaks TableScraper's column name detection.
     response = scrape_get(String(url))
     pagehtml = Gumbo.parsehtml(String(response.body))
 
@@ -757,9 +728,9 @@ function getvg_race_list(
     slug = vg_classics_slug(year)
     url = "https://www.velogames.com/$slug/$year/races.php"
 
-    # `races.php` retires with its season — 2024 and 2025 both 404 as of August
-    # 2026 — and nothing else records a race's VG number, deadline or category.
-    # Archive first, and archive whatever a live scrape returns.
+    # `races.php` retires with its season and nothing else records a race's VG
+    # number, deadline or category. Archive first, and archive whatever a live
+    # scrape returns.
     if !force_refresh
         archived = load_race_snapshot("vg_racelist", slug, year; archive_dir = archive_dir)
         archived === nothing || return archived
@@ -795,8 +766,7 @@ function match_vg_race_number(race_name::String, vg_racelist::DataFrame)
     target_key = normalise_race_name(race_name)
     # An empty key (e.g. a stage race with no entry in the classics schedule,
     # passed through as "") would otherwise substring-match every row via
-    # `occursin("", row.namekey)`, silently returning the first race in the
-    # list. Bail out instead of returning a bogus match.
+    # `occursin("", row.namekey)`, returning the first race in the list.
     isempty(target_key) && return nothing
     for row in eachrow(vg_racelist)
         if row.namekey == target_key
@@ -954,26 +924,18 @@ function _df_to_scoring(df::DataFrame)
     return _scoring_from_fields(fields)
 end
 
-"""
-    getvg_scoring(vg_slug, year; pcs_slug) -> StageRaceScoringTable
-
-Scrape the VG scoring rules from scores.php for a stage race.
-Archives the result if `pcs_slug` is provided. Loads from archive if available.
-"""
 # Map a VG scores.php section heading (the <b>/<h3> text above each table) to
-# the scoring field it populates. Heading-based mapping is robust to the table
-# count/order changing between years — e.g. the 2026 Tour opens with a TTT, so
-# VG inserts two extra "Team Time Trial" tables at the front that would shift a
-# positional mapping by +2 (silently corrupting final_gc_points, etc.).
+# the scoring field it populates. Mapping on headings survives the table
+# count/order changing between years: the 2026 Tour opens with a TTT, so VG
+# inserts two extra "Team Time Trial" tables that would shift a positional
+# mapping by two.
 function _vg_scoring_field(heading::AbstractString)
     l = lowercase(heading)
     # Team time trial: the stage-result table feeds ttt_team_points; the
     # "overall leader" bonus table is not modelled. A heading that names the TTT
-    # only to *exclude* it — "Stage Result (all stages, except for the Stage 5
-    # team time trial)", the 2025 Vuelta — is the ordinary stage table, and must
-    # escape both tests. Without the guard it was filed as TTT points, first
-    # match won over the real TTT table below it, and `stage_finish_points` came
-    # back empty, which is the one thing the validation downstream refuses.
+    # only to exclude it ("Stage Result (all stages, except for the Stage 5 team
+    # time trial)", 2025 Vuelta) is the ordinary stage table and must escape
+    # both tests.
     ttt = occursin("team time trial", l) && !occursin("except", l)
     ttt && occursin("stage result", l) && return :ttt_team_points
     ttt && return nothing
@@ -985,13 +947,10 @@ function _vg_scoring_field(heading::AbstractString)
         occursin("team", l) && return :final_team_class
     end
     if occursin("assist", l)
-        # Order matters: every assist heading VG writes begins "Assists -
-        # Teammate ..." or "Assists - Overall Team ...", so a bare "team" test
-        # matches "teammate". It used to run ahead of the "stage" test and
-        # swallow the stage-assist table; "general classification" already ran
-        # first, so GC was never affected. Keep "team" last, as the fallback,
-        # and keep GC ahead of "stage" so a heading naming both still files as
-        # GC.
+        # Order matters: every assist heading begins "Assists - Teammate ..." or
+        # "Assists - Overall Team ...", so a bare "team" test matches
+        # "teammate". Keep "team" last, as the fallback, and GC ahead of "stage"
+        # so a heading naming both files as GC.
         occursin("general classification", l) && return :gc_assist_points
         occursin("stage", l) && return :stage_assist_points
         occursin("team", l) && return :team_class_assist_points
@@ -1049,14 +1008,12 @@ end
 Archived `vg_scoring` snapshot when one exists and parses cleanly, otherwise a
 live scrape of `scores.php` (which is then archived under `pcs_slug`).
 
-Snapshots written before the July 2026 heading-order fix have an empty
-`stage_assist_points` — the "Assists - Teammate stage positions" table was
-filed under `team_class_assist_points` — and `simulate_stage.jl` gates its whole
-assist loop on that vector's length, so they silently score stage assists as
-zero. Such a snapshot is treated as stale: re-scrape and overwrite it. Editions
-whose `scores.php` no longer resolves (2023/2024 now 404) keep the stale table,
-with a warning, rather than losing scoring altogether — only on an HTTP error,
-so a parse failure on a live page still throws.
+A snapshot with an empty `stage_assist_points` (written by an older parser that
+filed that table under `team_class_assist_points`) is stale: `simulate_stage.jl`
+gates its assist loop on that vector's length, so it would score stage assists
+as zero. Re-scrape and overwrite it. Editions whose `scores.php` no longer
+resolves keep the stale table with a warning, but only when the page is
+unreachable, so a parse failure on a live page still throws.
 """
 function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
     stale = nothing
@@ -1075,12 +1032,9 @@ function getvg_scoring(vg_slug::String, year::Int; pcs_slug::String = "")
         return _scrape_vg_scoring(vg_slug, year; pcs_slug = pcs_slug)
     catch e
         # Only an unreachable page falls back. A parse failure means the
-        # headings moved, which is exactly what the validation below exists to
-        # shout about — swallowing it here would restore the silent-zero bug it
-        # guards. A Cloudflare block counts as unreachable: since the VG
-        # fetchers were routed through `scrape_get`, a 403 arrives as a
-        # `ScrapeBlockedError` rather than a `StatusError`, and velogames.com
-        # answers 403 to this process on every page.
+        # headings moved, which the validation in `_scrape_vg_scoring` exists to
+        # report. A Cloudflare block counts as unreachable: `scrape_get` raises
+        # it as `ScrapeBlockedError`, not `StatusError`.
         unreachable =
             e isa ScrapeBlockedError || e isa HTTP.Exceptions.StatusError
         (stale !== nothing && unreachable) || rethrow()
@@ -1093,8 +1047,7 @@ end
 
 # `url` is an override for the one caller that cannot use the live address:
 # `scores.php` retires with its season, so a backfill reads the page from an
-# Internet Archive snapshot instead. Same parser, same field mapping — a second
-# copy of the heading loop is how the two would drift.
+# Internet Archive snapshot instead, through the same parser.
 function _scrape_vg_scoring(
     vg_slug::String,
     year::Int;
@@ -1117,12 +1070,10 @@ function _scrape_vg_scoring(
 
     scoring = _scoring_from_fields(fields)
 
-    # Heading-based mapping silently yields empty vectors when a section label
-    # changes, which would collapse a whole scoring component to zero with no
-    # error. Stage finish and final GC the simulator cannot do without; stage
-    # assists it *can* (the loop is length-gated), which is exactly why their
-    # mis-filing went unnoticed across every archived snapshot until July 2026.
-    # All three fail loudly.
+    # Heading-based mapping yields empty vectors when a section label changes,
+    # collapsing a scoring component to zero with no error. The simulator cannot
+    # run without stage finish or final GC; stage assists it can (the loop is
+    # length-gated), so a mis-filing there goes unnoticed. All three fail loudly.
     missing_tables = [
         n for (n, v) in (
             "stage_finish" => scoring.stage_finish_points,
@@ -1160,10 +1111,8 @@ end
 Number of blocked riders in one `getpcs_rider_pts_batch` call above which the
 batch raises instead of completing with the rest folded into missing-data
 rows. A block found on a handful of riders is PCS challenging the whole run,
-not a handful of riders coincidentally lacking a PCS profile — completing the
-batch anyway is how two `pcs_specialty` archive files ended up with every
-rating column `missing` in September 2026 (see
-`docs/pcs-cloudflare-block-evaluation.md`).
+and completing the batch anyway writes a `pcs_specialty` archive with every
+rating column `missing`.
 """
 const PCS_BLOCK_RAISE_THRESHOLD = 5
 
@@ -1173,10 +1122,10 @@ const PCS_BLOCK_RAISE_THRESHOLD = 5
 Batch version - get points for multiple riders efficiently.
 Returns a DataFrame with all riders' points, including rows with missing values for failed requests.
 
-Counts `ScrapeBlockedError`s separately from genuine misses (network/parse
-errors, or a rider PCS simply has no profile for). Once the block count
-passes `PCS_BLOCK_RAISE_THRESHOLD` this raises rather than returning a full
-frame of missing rows for a run that PCS is actually turning away.
+Counts `ScrapeBlockedError`s separately from misses (network/parse errors, or
+a rider PCS has no profile for). Once the block count passes
+`PCS_BLOCK_RAISE_THRESHOLD` this raises instead of returning a frame of missing
+rows for a run PCS is turning away.
 """
 function getpcs_rider_pts_batch(
     ridernames::Vector{String};
@@ -1223,17 +1172,13 @@ function getpcs_rider_pts_batch(
                         ),
                     )
                 end
-                # Below the raise threshold: leave this rider uncovered rather
-                # than pushing a clean-looking "checked, no data" row — a block
-                # is not the same fact as a rider genuinely absent from PCS,
-                # and a row here would be indistinguishable from a genuine miss
-                # downstream (this is the small-scale version of the exact
-                # failure this whole function exists to stop).
+                # Below the raise threshold: leave this rider uncovered. A
+                # missing-data row would be indistinguishable downstream from a
+                # rider absent from PCS.
                 continue
             end
             push!(failed_riders, rider)
-            # Add row with missing values — a genuine miss (no PCS profile, or
-            # a network/parse error), not a block.
+            # A miss (no PCS profile, or a network/parse error), not a block.
             push!(
                 dfs,
                 DataFrame(

@@ -32,7 +32,6 @@ function compute_pit_values(
         actual_pts = Float64(coalesce(row[actual_col], 0))
         draws = @view sim_vg_points[idx, :]
         n_draws = length(draws)
-        # Empirical CDF: fraction of draws <= actual
         pit = count(<=(actual_pts), draws) / n_draws
         rider_name =
             :rider in propertynames(actual_results) ? string(row.rider) :
@@ -82,7 +81,6 @@ function pit_histogram_chart(
     expected = n / 10
     max_count = max(maximum(counts), expected) * 1.1
 
-    # SVG dimensions
     w = compact ? 240 : 400
     h = compact ? 140 : 250
     pad_l = compact ? 30 : 45
@@ -103,7 +101,6 @@ function pit_histogram_chart(
         "<svg width=\"$(w)\" height=\"$(h)\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family:sans-serif;\">",
     )
 
-    # Title
     write(
         io,
         "<text x=\"$(w÷2)\" y=\"$(pad_t - 6)\" text-anchor=\"middle\" font-size=\"$(title_size)\" fill=\"#333\">$(title)$(subtitle)</text>",
@@ -176,7 +173,6 @@ function scatter_chart(
 
     xmin, xmax = extrema(x)
     ymin, ymax = extrema(y)
-    # Add 5% padding to ranges
     xrange = max(xmax - xmin, 1e-6)
     yrange = max(ymax - ymin, 1e-6)
     xmin -= 0.05 * xrange
@@ -193,7 +189,6 @@ function scatter_chart(
         "<svg width=\"$(w)\" height=\"$(h)\" xmlns=\"http://www.w3.org/2000/svg\" style=\"font-family:sans-serif;\">",
     )
 
-    # Title
     !isempty(title) && write(
         io,
         "<text x=\"$(w÷2)\" y=\"16\" text-anchor=\"middle\" font-size=\"13\" fill=\"#333\">$(title)</text>",
@@ -464,7 +459,6 @@ function team_total_distribution_chart(
     end
     max_count = maximum(counts) * 1.1
 
-    # SVG dimensions
     w, h = 400, 250
     pad_l, pad_r, pad_t, pad_b = 45, 15, 30, 40
     plot_w = w - pad_l - pad_r
@@ -615,7 +609,6 @@ function sim_distribution_chart(
     sort_col = :expected_vg_points in propertynames(team_df) ? :expected_vg_points : :rider
     team_sorted = sort(team_df, sort_col, rev = sort_col == :expected_vg_points)
 
-    # Collect box plot stats for each rider
     riders = NamedTuple{
         (:name, :q0, :q25, :q50, :q75, :q100, :actual),
         Tuple{String,Float64,Float64,Float64,Float64,Float64,Union{Float64,Nothing}},
@@ -647,7 +640,6 @@ function sim_distribution_chart(
     isempty(riders) && return ""
 
     n = length(riders)
-    # SVG dimensions
     name_space = 120
     w = 500
     h = max(200, n * 28 + 60)
@@ -739,7 +731,3 @@ function sim_distribution_chart(
     write(io, "</svg>")
     return String(take!(io))
 end
-
-# ---------------------------------------------------------------------------
-# Stage race (grand tour) report data assembly
-# ---------------------------------------------------------------------------

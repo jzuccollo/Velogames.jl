@@ -19,8 +19,7 @@ remain as separate arguments to `estimate_rider_strength`.
     race_history_years_ago::Vector{Int} = Int[]
     race_history_variance_penalties::Vector{Float64} = Float64[]
     vg_points::Float64 = 0.0
-    # Read by the multi-dim (stage-race) estimator only; the scalar one-day
-    # estimator dropped this signal in the April 2026 ablation.
+    # Read by the multi-dim (stage-race) estimator only.
     vg_race_history::Vector{Float64} = Float64[]
     vg_race_history_years_ago::Vector{Int} = Int[]
     odds_implied_prob::Float64 = 0.0
@@ -33,11 +32,10 @@ remain as separate arguments to `estimate_rider_strength`.
     pcs_climber_z::Float64 = 0.0
     pcs_tt_z::Float64 = 0.0
     pcs_gc_z::Float64 = 0.0
-    # PCS began publishing a sixth rating, Hills, in September 2026. Every
-    # archive written before then lacks it and can never gain it, so it carries
-    # its own presence flag rather than riding on `has_pcs`: a z-score of 0.0
-    # from an absent column is "exactly average", and updating on that would
-    # shrink every rider's :hilly toward the prior in every historical race.
+    # PCS Hills exists only from September 2026 and older archives can never
+    # gain it, so it has its own presence flag: a z-score of 0.0 from an absent
+    # column is "exactly average", and updating on that would shrink every
+    # rider's :hilly toward the prior in every historical race.
     pcs_hills_z::Float64 = 0.0
     has_pcs_hills::Bool = false
     rider_class::String = "unclassed"
@@ -55,11 +53,9 @@ remain as separate arguments to `estimate_rider_strength`.
     kom_history::Vector{Float64} = Float64[]
     kom_history_years_ago::Vector{Int} = Int[]
     kom_history_penalties::Vector{Float64} = Float64[]
-    # GT VG-history (Option A prototype, July 2026; multi-dim only). Each entry is
-    # this rider's own log1p-z-scored VG total from one past edition of THIS grand
-    # tour; `years_ago` drives recency decay. Multiple results ⇒ multiple conjugate
-    # updates ⇒ a naturally tighter, sparsity-appropriate posterior for riders with
-    # a longer GT record.
+    # GT VG-history (multi-dim only). Each entry is this rider's own
+    # log1p-z-scored VG total from one past edition of THIS grand tour;
+    # `years_ago` drives recency decay.
     gt_vg_history::Vector{Float64} = Float64[]
     gt_vg_history_years_ago::Vector{Int} = Int[]
 end
@@ -68,7 +64,6 @@ end
     estimate_rider_strength(;
         pcs_score, race_history, race_history_years_ago,
         race_history_variance_penalties, vg_points,
-        vg_race_history, vg_race_history_years_ago,
         odds_implied_prob, oracle_implied_prob, n_starters,
         config
     ) -> BayesianPosterior
@@ -81,9 +76,8 @@ Returns a `BayesianPosterior` with mean (strength) and variance (uncertainty).
 1. **PCS score** (prior): general ability from ProCyclingStats ranking/specialty
 2. **VG season points** (broad form): current season Velogames performance
 3. **PCS race history** (specific): historical finishing positions in this or similar races
-4. **VG race history** (specific): historical VG points from past editions (z-scored per year)
-5. **Cycling Oracle** (model prediction): algorithmic win probabilities
-6. **Betting odds** (market consensus): if available, the most precise signal
+4. **Cycling Oracle** (model prediction): algorithmic win probabilities
+5. **Betting odds** (market consensus): if available, the most precise signal
 
 ## Data arguments
 - `pcs_score`: normalised PCS specialty score (z-scored, mean 0, std 1)
@@ -93,8 +87,6 @@ Returns a `BayesianPosterior` with mean (strength) and variance (uncertainty).
 - `race_history_variance_penalties`: per-entry variance penalty (0.0 for exact-race,
   1.0 for similar-race history). Same length as `race_history`.
 - `vg_points`: normalised VG season points (z-scored)
-- `vg_race_history`: vector of z-scored VG race points from past editions
-- `vg_race_history_years_ago`: how many years ago each VG history entry is
 - `odds_implied_prob`: implied win probability from betting odds (0-1, 0 = not available)
 - `oracle_implied_prob`: win probability from Cycling Oracle (0-1, 0 = not available)
 - `n_starters`: expected number of starters (used to scale odds to strength)
@@ -121,8 +113,6 @@ function estimate_rider_strength(
         oracle_floor_strength,
     ) = signals
     # --- Uninformative prior ---
-    # Start from a diffuse prior (mean=0, large variance). All signals,
-    # including PCS specialty, update this as observations.
     prior = BayesianPosterior(0.0, config.prior_variance)
     posterior = prior
     n_signals = 0
@@ -143,7 +133,6 @@ function estimate_rider_strength(
     md = race_has_market ? config.market_discount : 1.0
 
     # --- Update with PCS specialty ---
-    # PCS specialty z-score is the broadest signal: general rider ability.
     # Only applied when the rider has real PCS data (not coalesced-from-missing).
     mean_before = posterior.mean
     if has_pcs
@@ -156,7 +145,6 @@ function estimate_rider_strength(
     shift_pcs = posterior.mean - mean_before
 
     # --- Update with VG season points ---
-    # VG points reflect current season form. Moderate precision.
     mean_before = posterior.mean
     if vg_points != 0.0
         eff_vg_var =
@@ -173,9 +161,8 @@ function estimate_rider_strength(
     prec_after_ability = 1.0 / posterior.variance
 
     # --- Update with PCS race-specific history ---
-    # Each past result in this or similar races is a strong signal.
-    # More recent results are more informative (lower variance).
-    # Similar-race history gets an additional variance penalty.
+    # More recent results get lower variance; similar-race history gets an
+    # additional variance penalty.
     mean_before = posterior.mean
     if length(race_history) != length(race_history_years_ago)
         @warn "race_history ($(length(race_history))) and race_history_years_ago ($(length(race_history_years_ago))) have different lengths; using pairwise minimum"
@@ -203,7 +190,7 @@ function estimate_rider_strength(
     # --- Update with Cycling Oracle predictions ---
     # Algorithmic win probabilities. Cycling Oracle publishes a normalised
     # top-15; inclusion is itself a positive endorsement, and the published
-    # probability is intra-list ranking rather than a claim against the full
+    # probability is intra-list ranking, not a claim against the full
     # field. Clamp at 0 so a low-probability listing never reduces strength.
     mean_before = posterior.mean
     if oracle_implied_prob > 0.0
@@ -227,7 +214,6 @@ function estimate_rider_strength(
     shift_oracle = posterior.mean - mean_before
 
     # --- Update with betting odds ---
-    # Odds-implied probability is the market's posterior. Very precise when available.
     # When listed below baseline (longshot tail), fall through to the bounded
     # absence floor instead of applying the negative obs — listings at long
     # odds are conservative tail-pricing, not strong negative endorsements.
@@ -352,8 +338,8 @@ so a below-baseline observation is a true no-op (clamp at 0) with no absence
 floor. The log-odds observation is cross-routed to each dimension weighted by
 `weights` (a fixed `SIGNAL_DIMENSION_WEIGHTS` field, or a class projection for
 stage-win odds), accumulating precision under `key`. Returns the updated
-posterior. Shared by five otherwise byte-identical blocks; the GC oracle/odds
-markets keep their own code because they carry an absence floor.
+posterior. The GC oracle/odds markets have their own code because they carry an
+absence floor.
 """
 function _market_update_listed!(
     posterior,
@@ -395,7 +381,7 @@ Multi-dimensional Bayesian strength estimation for stage races. Mirrors the
 signal sequence in `estimate_rider_strength` but routes each observation to
 the dimensions in `STRENGTH_DIMENSIONS` according to `SIGNAL_DIMENSION_WEIGHTS`.
 GC-flavoured floors (Cycling Oracle GC, GC odds) only touch the `:gc`
-dimension; sprinters absent from the GC market are no longer penalised on
+dimension, so sprinters absent from the GC market are not penalised on
 `:flat`/`:hilly`.
 
 The scalar path's block-correlation discount is applied per dimension at the
@@ -434,8 +420,8 @@ function estimate_rider_strength_multidim(
     precisions = Dict{Symbol,Vector{Float64}}(s => zeros(D) for s in SIGNAL_KEYS_MULTIDIM)
     # Per-(cluster, dim) observation precision and update counts, accumulated at
     # every update site for the end-of-function block-correlation discount.
-    # Order-invariant by construction (unlike the scalar path's boundary
-    # snapshots, which rely on cluster-contiguous update order).
+    # Order-invariant, unlike the scalar path's boundary snapshots, which rely on
+    # cluster-contiguous update order.
     cluster_prec = zeros(Float64, 3, D)
     cluster_n = zeros(Int, 3, D)
 
@@ -467,13 +453,10 @@ function estimate_rider_strength_multidim(
     end
     shifts[:pcs] = posterior.mean .- mean_before
 
-    # --- VG season points (per-class projection rather than uniform ability) ---
-    # Routing VG points uniformly across all dimensions caused strong cross-dim
-    # leakage: a rider with high VG points (e.g. Vingegaard from GC scoring)
-    # would inflate every dimension, including ones where they are not strong
-    # (e.g. ITT, where Ganna with low VG but huge PCS tt should dominate).
-    # Project VG via the rider's class profile instead — same mechanism as
-    # PCS race history.
+    # --- VG season points (per-class projection) ---
+    # Routing VG points uniformly across all dimensions leaks: a rider with high
+    # VG points (e.g. Vingegaard from GC scoring) would inflate every dimension,
+    # including ITT, where Ganna with low VG but huge PCS tt should dominate.
     mean_before = copy(posterior.mean)
     if signals.vg_points != 0.0
         eff_var_base =
@@ -526,8 +509,8 @@ function estimate_rider_strength_multidim(
 
     # --- Points/KOM classification history (fixed dimension routing) ---
     # Prior-edition points-jersey and KOM standings, routed to the dimensions
-    # they inform (points → flat/hilly, KOM → mountain) via SIGNAL_DIMENSION_WEIGHTS
-    # rather than the rider's class — a past green-jersey finish is direct
+    # they inform via SIGNAL_DIMENSION_WEIGHTS, not the rider's class: a past
+    # green-jersey finish is direct
     # evidence of flat/hilly ability regardless of how the rider is classed.
     for (sig_key, obs, yrs, pens) in (
         (
@@ -596,17 +579,13 @@ function estimate_rider_strength_multidim(
     # positive endorsement; the published probability ranks within the listed
     # set, not against the full field. A bottom-of-list 0.01% prob would
     # otherwise compute a strongly negative observation (worse than absence),
-    # which is wrong — clamp at 0 so listing never reduces strength.
-    # Routes to gc + a secondary boost on mountain/hilly (GC contenders
-    # are elite climbers).
+    # so clamp at 0: listing never reduces strength.
     mean_before = copy(posterior.mean)
     if signals.oracle_implied_prob > 0.0
         baseline = 1.0 / n_starters
         obs = log(signals.oracle_implied_prob / baseline) / config.odds_normalisation
-        # Skip entirely if obs is negative — list-cutoff publication means a
-        # below-baseline listing is intra-list ranking, not negative evidence.
-        # Observing 0 with finite variance would still shrink the posterior;
-        # we want a true no-op for low-prob listings.
+        # Skip entirely rather than observe 0: observing 0 with finite variance
+        # would still shrink the posterior.
         if obs > 0.0
             base_var = oracle_variance(config)
             for dsym in STRENGTH_DIMENSIONS
@@ -633,12 +612,9 @@ function estimate_rider_strength_multidim(
     end
     shifts[:oracle_gc] = posterior.mean .- mean_before
 
-    # --- Cycling Oracle Points (→ :flat 0.4 + :hilly 0.1, listed only, clamp at 0) ---
-    # Jersey-prediction oracles have selection bias: only riders chasing the
-    # jersey are listed. A GC contender absent from points oracle is not
-    # automatically weak on flat/hilly stages. Apply listed-rider boost only
-    # (no absence floor); clamp at 0 so a low-probability listing never
-    # reduces strength.
+    # --- Cycling Oracle Points (listed only) ---
+    # Only riders chasing the jersey are listed, so a GC contender absent from
+    # the points oracle is not automatically weak on flat/hilly stages.
     posterior = _market_update_listed!(
         posterior,
         precisions,
@@ -653,7 +629,7 @@ function estimate_rider_strength_multidim(
         cluster_n,
     )
 
-    # --- Cycling Oracle KOM (→ :mountain, listed only, clamp at 0) ---
+    # --- Cycling Oracle KOM (listed only) ---
     posterior = _market_update_listed!(
         posterior,
         precisions,
@@ -712,9 +688,7 @@ function estimate_rider_strength_multidim(
     end
     shifts[:odds] = posterior.mean .- mean_before
 
-    # --- Bookmaker Points-jersey market (→ :flat 0.4 + :hilly 0.1, listed only) ---
-    # Same list-cutoff logic as Cycling Oracle: bookmakers only price plausible
-    # jersey contenders. Inclusion is itself a positive endorsement; clamp at 0.
+    # --- Bookmaker Points-jersey market (listed only) ---
     posterior = _market_update_listed!(
         posterior,
         precisions,
@@ -729,7 +703,7 @@ function estimate_rider_strength_multidim(
         cluster_n,
     )
 
-    # --- Bookmaker KOM market (→ :mountain, listed only, clamp at 0) ---
+    # --- Bookmaker KOM market (listed only) ---
     posterior = _market_update_listed!(
         posterior,
         precisions,
@@ -747,10 +721,7 @@ function estimate_rider_strength_multidim(
     # --- Bookmaker "Rider To Win A Stage" market — class-aware routing ---
     # Stage-winning evidence informs the dimensions where the rider plausibly
     # wins (a sprinter scores stage-win points on flat/hilly, a climber on
-    # hilly/mountain). Reuse RACE_HISTORY_CLASS_PROJECTION which already
-    # encodes the per-class dimension mix.
-    # List-cutoff market: skip update entirely when obs ≤ 0 (true no-op,
-    # not posterior-shrinkage-toward-zero).
+    # hilly/mountain), so reuse RACE_HISTORY_CLASS_PROJECTION.
     stagewin_cls =
         haskey(RACE_HISTORY_CLASS_PROJECTION, signals.rider_class) ? signals.rider_class :
         "unclassed"
@@ -768,34 +739,30 @@ function estimate_rider_strength_multidim(
         cluster_n,
     )
 
-    # --- GT VG-history (Option A prototype, July 2026) ---
+    # --- GT VG-history ---
     # A rider's OWN prior grand-tour VG totals (log1p-z-scored per past edition).
-    # Fixed routing via SIGNAL_DIMENSION_WEIGHTS.gt_vg_history — a role/propensity
-    # factor, NOT the rider's class projection: the whole point is that it captures
-    # scoring role the class/ability signals are blind to. Recency decay reuses
-    # `vg_hist_decay_rate`. Sparsity is handled by the conjugate mechanism itself —
-    # n editions give ~n× the precision of a single result, so a longer GT record
-    # yields a tighter, more-informed posterior with no bolt-on multiplier.
+    # Fixed routing via SIGNAL_DIMENSION_WEIGHTS.gt_vg_history, not the rider's
+    # class projection: it captures scoring role the class/ability signals are
+    # blind to. n editions give ~n× the precision of a single result, so no
+    # sparsity multiplier is needed.
     #
-    # Two deliberate design choices make this do-no-harm on leaders:
+    # Two design choices stop this harming leaders:
     #   1. Runs LAST, AFTER the market updates. A leader's mountain/hilly posterior
     #      is already lifted (and tightened) by GC odds/oracle by this point, so the
-    #      upward clamp below skips them entirely — no precision is added, so the
-    #      market lift is not dampened. (Running BEFORE the market instead silently
-    #      pulls leaders DOWN: the extra precision blunts the later market update.)
+    #      upward clamp below skips them and the market lift is not dampened.
+    #      (Running BEFORE the market pulls leaders DOWN: the extra precision
+    #      blunts the later market update.)
     #   2. UPWARD-ONLY: a dimension updates only when the observation would RAISE its
     #      mean. Prior GT VG success is evidence of *extra* scoring propensity on top
     #      of ability (a role bonus); it must never drag down a rider whose ability
-    #      estimate already exceeds their historical-VG z. Same spirit as the
-    #      "clamp at 0" list-cutoff market updates. Consequence: the inverse case (an
+    #      estimate already exceeds their historical-VG z. The inverse case (an
     #      elite classics rider on locked domestique duty whose LOW GT history should
-    #      pull them down) is deliberately NOT handled — that two-sided correction
-    #      would reintroduce the leader harm and belongs in an EVG-stage layer (B).
+    #      pull them down) is NOT handled: a two-sided correction would reintroduce
+    #      the leader harm.
     #
     # NOT multiplied by `md_vec`: unlike PCS/history this is orthogonal to what the
     # GC/stage-win markets price for cheap domestiques, so the double-counting
-    # `market_discount` must not suppress it (that would gut the signal on the very
-    # dimensions the flagged break-hunters need lifting on).
+    # `market_discount` must not suppress it.
     mean_before = copy(posterior.mean)
     if !isempty(signals.gt_vg_history)
         w_nt = SIGNAL_DIMENSION_WEIGHTS.gt_vg_history
@@ -836,7 +803,7 @@ function estimate_rider_strength_multidim(
             total_obs_prec = post_prec - prior_prec
             # Invariant: every update site must accumulate into cluster_prec.
             # A missed site silently drops that signal's precision from the
-            # discount reconstruction (this fired once, for the GC-odds block).
+            # discount reconstruction.
             @assert isapprox(
                 cluster_prec[1, d] + cluster_prec[2, d] + cluster_prec[3, d],
                 total_obs_prec;
@@ -887,12 +854,10 @@ end
 
 All per-rider signal data prepared from raw input DataFrames, ready for
 either the scalar (`:oneday`) or multi-dimensional (`:stage`) per-rider
-update loop. Built once by `_assemble_signals` so the two pipelines don't
-duplicate ~250 lines of identical assembly.
+update loop. Built once by `_assemble_signals`.
 
-Fields that are pipeline-specific (e.g. `classes` for stage; `seasons_keys`
-for one-day reporting) are computed unconditionally — the cost is trivial
-and avoids tangled kwargs.
+Pipeline-specific fields (e.g. `classes` for stage; `seasons_keys` for one-day
+reporting) are computed unconditionally.
 """
 struct AssembledSignals
     n_riders::Int
@@ -944,8 +909,8 @@ read unconditionally for the VG z-score). PCS specialty columns
 (`:sprint, :oneday, :climber, :tt, :gc`) and `:classraw`/`:class` are
 read when present.
 
-Mutates `rider_df` only via `rematch_riderkeys!` on the market-source
-DataFrames (preserved from the original behaviour). Per-source PCS
+Mutates the market-source and history DataFrames via `rematch_riderkeys!`.
+Per-source PCS
 specialty z-scoring is left to each pipeline because the scalar one-day
 path uses a different mechanism (raw decay-weighted points substitution)
 than the multidim path (currency-factor multiplier on career specialty).
@@ -1018,7 +983,7 @@ function _assemble_signals(
         falses(n_riders)
     end
 
-    # --- Classifications (used by multidim only; harmless to always compute) ---
+    # --- Classifications (used by multidim only) ---
     class_col =
         :classraw in propertynames(df) ? :classraw :
         :class in propertynames(df) ? :class : nothing
@@ -1055,7 +1020,7 @@ function _assemble_signals(
     end
     rider_currency = Float64[get(currency_factors, df.riderkey[i], 1.0) for i = 1:n_riders]
 
-    # --- Market-source lookup helper (closure captures df, n_riders, etc.) ---
+    # --- Market-source lookup helper ---
     function _market_lookup(
         src_df,
         prob_col::Symbol,
@@ -1123,9 +1088,6 @@ function _assemble_signals(
     end
 
     # --- Oracle GC: always build lookup; gate floor on `:oracle in floor_signals`.
-    # The previous multidim path skipped building the lookup entirely when
-    # `:oracle` was absent from `floor_signals`, dropping listed oracle riders
-    # alongside the floor. Aligning with the scalar one-day behaviour.
     apply_oracle_floor = :oracle in config.floor_signals
     oracle_lookup, oracle_floor = _market_lookup(
         oracle_df,
@@ -1217,13 +1179,11 @@ function _assemble_signals(
         end
     end
 
-    # --- GT VG-history lookup (Option A prototype). log1p, then z-score WITHIN
+    # --- GT VG-history lookup. log1p, then z-score WITHIN
     # each past edition's full field, so a rider's entry is "how their VG total
     # ranked among that Tour's starters". log1p first because GT totals are
     # heavily right-skewed (leaders 3000-4000, domestiques 50-300) — raw z-scoring
-    # would let a single 4000 dominate σ and compress everyone else toward 0. A
-    # cheap break-hunter who out-scores the median then lands materially above 0,
-    # pulling their (currently far-below-average) strength estimate upward. ---
+    # would let a single 4000 dominate σ and compress everyone else toward 0. ---
     gt_vg_history_lookup = Dict{String,Vector{Tuple{Float64,Int}}}()
     if gt_vg_history_df !== nothing &&
        :riderkey in propertynames(gt_vg_history_df) &&
@@ -1308,8 +1268,8 @@ Multi-dimensional strength estimation for stage races. Routes each signal
 to the dimensions in `STRENGTH_DIMENSIONS` according to `SIGNAL_DIMENSION_WEIGHTS`,
 producing per-dimension strength and uncertainty columns.
 
-`strength` and `uncertainty` are aliased to the `:gc` dimension for back-compat
-with downstream display code that expects scalar columns.
+`strength` and `uncertainty` are aliased to the `:gc` dimension for downstream
+display code that expects scalar columns.
 """
 function _estimate_strengths_multidim(
     rider_df::DataFrame;
@@ -1370,9 +1330,9 @@ function _estimate_strengths_multidim(
     #
     # Standardise a raw specialty vector to a z-score using ONLY the riders who
     # actually have data (raw>0) to set μ/σ: the many domestiques with none would
-    # otherwise drag the mean down and inflate the sd, compressing genuine
-    # specialists toward the pack. Riders with no data still receive the resulting
-    # (negative) z, which correctly ranks them below the field.
+    # otherwise drag the mean down and inflate the sd, compressing specialists
+    # toward the pack. Riders with no data still receive the resulting (negative)
+    # z, ranking them below the field.
     function _specialty_z(raw)
         logged = log1p.(max.(raw, 0.0))
         has_data = raw .> 0.0
@@ -1412,7 +1372,7 @@ function _estimate_strengths_multidim(
 
     D = length(STRENGTH_DIMENSIONS)
 
-    # --- Dimension-aware market mask (Issue A) ---
+    # --- Dimension-aware market mask ---
     # A dimension is "market-informed" iff some market signal present in this race
     # routes to it *materially*. The double-counting discount (`market_discount`)
     # then applies per dimension: full weight kept on dimensions no market touches
@@ -1422,11 +1382,8 @@ function _estimate_strengths_multidim(
     # dimensions (odds_gc → kom 0.1, hilly 0.05) as a small correction, but that
     # trickle does NOT replace the primary PCS signal there, so discounting the
     # whole dimension 8× on the strength of it collapses (e.g.) KOM toward the
-    # prior for the entire field whenever GC odds exist — defeating the point of
-    # a separate KOM channel. Only mark a dimension when a market's routing weight
-    # to it is ≥ MARKET_DIM_THRESHOLD (0.3): keeps odds_points→flat (0.4),
-    # odds_gc→{mountain 0.5, gc 1.0} and odds_kom→kom (1.0), but not the 0.05/0.1
-    # cross-routes.
+    # prior for the entire field whenever GC odds exist. Hence
+    # MARKET_DIM_THRESHOLD.
     market_dims = fill(false, D)
     _mark_dims!(mask, wnt) =
         for (d, dsym) in enumerate(STRENGTH_DIMENSIONS)
@@ -1444,9 +1401,7 @@ function _estimate_strengths_multidim(
     if !isempty(sig.stagewin_odds_lookup)
         # Stage-win routing is per-rider class (RACE_HISTORY_CLASS_PROJECTION),
         # so the market-informed set is the union of dimensions any class routes
-        # to materially — including :kom (climber 0.7) and :mountain (climber
-        # 0.7), which the old hardcoded flat/hilly/mountain/gc list missed while
-        # still applying the stage-win signal there.
+        # to materially.
         for proj in values(RACE_HISTORY_CLASS_PROJECTION)
             _mark_dims!(market_dims, proj)
         end
@@ -1490,11 +1445,9 @@ function _estimate_strengths_multidim(
         stagewin_odds_prob = get(sig.stagewin_odds_lookup, key, 0.0)
 
         # Always pass the race-level odds floor strength: the estimator's
-        # listed-below-baseline branch falls through to the floor, which needs
-        # access regardless of whether the rider is listed (a longshot listing
-        # at 1001/1 should fall to the floor, not produce a sharp negative obs).
-        # For listed-above-baseline riders, the positive-evidence branch fires
-        # first and the floor is unused.
+        # listed-below-baseline branch falls through to the floor (a longshot
+        # listing at 1001/1 should fall to the floor, not produce a sharp
+        # negative obs).
         odds_floor = sig.odds_floor
         oracle_floor = haskey(sig.oracle_lookup, key) ? 0.0 : sig.oracle_floor
         points_floor = haskey(sig.points_oracle_lookup, key) ? 0.0 : sig.points_oracle_floor
@@ -1588,7 +1541,7 @@ function _estimate_strengths_multidim(
         df[!, Symbol("uncertainty_$dsym")] = round.(sqrt.(vars_per_dim[d]), digits = 3)
     end
 
-    # --- Back-compat: scalar :strength and :uncertainty alias :gc dim ---
+    # --- Scalar :strength and :uncertainty alias :gc dim ---
     gc_idx = _DIM_INDEX[:gc]
     df[!, :strength] = round.(means_per_dim[gc_idx], digits = 3)
     df[!, :uncertainty] = round.(sqrt.(vars_per_dim[gc_idx]), digits = 3)
@@ -1679,9 +1632,8 @@ function _estimate_strengths_multidim(
             )
         end
     end
-    # Alias: :info_share_oracle mirrors :info_share_oracle_gc (matches the
-    # existing :shift_oracle alias). Lets the waterfall use a single oracle
-    # column name across scalar and multidim pipelines.
+    # Alias so the waterfall uses one oracle column name across scalar and
+    # multidim pipelines (as :shift_oracle does).
     df[!, :info_share_oracle] = df[!, :info_share_oracle_gc]
 
     df[!, :domestique_penalty] = round.(domestique_penalties, digits = 3)
@@ -1700,7 +1652,7 @@ and computes posterior strength and uncertainty for each rider.
 - `:oneday` — uses PCS one-day specialty as the prior; scalar posterior.
 - `:stage` — multi-dimensional posterior over `STRENGTH_DIMENSIONS`. Output
   DataFrame gains `strength_<dim>` and `uncertainty_<dim>` columns; scalar
-  `strength`/`uncertainty` aliases the `:gc` dimension for back-compat.
+  `strength`/`uncertainty` aliases the `:gc` dimension.
 
 ## Returns
 The input DataFrame augmented with:
@@ -1730,7 +1682,6 @@ function estimate_strengths(
     race_date::Union{Date,Nothing} = nothing,
     domestique_discount::Float64 = 0.0,
 )
-    # Stage races: route to multidim path
     if race_type == :stage
         return _estimate_strengths_multidim(
             rider_df;
@@ -1760,7 +1711,7 @@ function estimate_strengths(
         race_history_df = race_history_df,
         odds_df = odds_df,
         oracle_df = oracle_df,
-        # VG race history disabled in April 2026 ablation; ignore caller's vg_history_df
+        # The scalar estimator does not use VG race history.
         vg_history_df = nothing,
         seasons_df = seasons_df,
         config = config,
@@ -1783,8 +1734,8 @@ function estimate_strengths(
 
     # Step 2: for riders with seasons data, replace the z-score with the raw
     # decay-weighted PCS points (absolute value, not currency ratio). Differs
-    # from the multidim path which uses currency_factors as a multiplier on
-    # career specialty rather than an absolute substitute.
+    # from the multidim path, which uses currency_factors as a multiplier on
+    # career specialty.
     if seasons_df !== nothing &&
        :riderkey in propertynames(seasons_df) &&
        :pcs_points in propertynames(seasons_df) &&
@@ -1831,7 +1782,7 @@ function estimate_strengths(
         hist_years = Int[h[2] for h in hist]
         hist_penalties = Float64[h[3] for h in hist]
 
-        # VG race history disabled (April 2026); pass empty.
+        # Not used by the scalar estimator.
         vg_hist_strengths = Float64[]
         vg_hist_years = Int[]
 
@@ -2035,7 +1986,6 @@ function predict_expected_points(
         domestique_discount = domestique_discount,
     )
 
-    # MC simulation for expected points (used by backtesting)
     n_riders = nrow(df)
     strengths = Float64.(df.strength)
     uncertainties = Float64.(df.uncertainty)

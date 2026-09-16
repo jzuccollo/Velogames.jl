@@ -14,9 +14,8 @@
 #       julia --project scripts/archive_audit.jl --check
 #
 # `--check` compares `_manifest.toml` against ARCHIVE_TYPES and `_races.toml`
-# against the race catalogue, exiting non-zero when either differs — so a
-# forgotten export fails a run rather than leaving a stale description of the
-# archive for Python to read.
+# against the race catalogue, exiting non-zero when either differs, so a
+# forgotten export fails the run instead of leaving Python a stale description.
 #
 # `_races.toml` is which Velogames race name is which PCS slug. Python needs it
 # to key a `vg_results` file at all, and the mapping exists only in
@@ -58,8 +57,8 @@ function report(root::String)
         a.missing_columns,
         x -> "$(x.path)  missing $(x.missing)",
     )
-    # Every file written before WP5 is in this state, so print the count and a
-    # sample rather than several hundred paths.
+    # Every file written before provenance stamping is in this state, so print
+    # the count and a sample.
     println("\nFiles with no provenance metadata: $(length(a.missing_provenance))")
     for p in first(a.missing_provenance, 5)
         println("  ", p)

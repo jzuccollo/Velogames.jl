@@ -58,14 +58,10 @@ end
 
 """Return true if the race has already happened (so its archive should be protected).
 
-Dates come from `resolve_race_date`, which covers the classics schedule and the
-grand tours. The previous lookup was `find_race(config.name)`, which searches
-`CLASSICS_RACES_2026` alone: every stage race resolved to `nothing`, fell to the
-"unknown date — protect by default" branch, and was treated as already run. So a
-grand tour's prediction archive was write-once — the first render of a season
-kept its snapshot for ever, and every later pre-race re-run (fresh odds, a model
-fix, a corrected startlist) was declined with a warning. Prospective evaluation
-then scored a prediction the model no longer makes.
+Dates come from `resolve_race_date`, which covers the grand tours as well as the
+classics schedule. A lookup that misses stage races treats every one as already
+run, so its prediction archive becomes write-once and pre-race re-runs are
+declined.
 """
 function _race_has_happened(config::RaceConfig)
     today = Dates.today()
@@ -166,13 +162,12 @@ end
 Per-rider breakaway probability and expected sector count for the simulation.
 
 Prefers the per-race archive, which carries a dated `in_breakaway` /
-`breakaway_km` for every archived one-day result since the September 2026
-backfill. Falls back to the old hand-saved season leaderboard in
-`breakaway_dir` when `as_of` is unknown or the archive has nothing to say.
+`breakaway_km` for every archived one-day result. Falls back to the hand-saved
+season leaderboard in `breakaway_dir` when `as_of` is unknown or the archive has
+nothing to say.
 
-The archive path is the one that can be reconstructed as of a past date, which
-is what lets the backtest evaluate this channel at all — the season totals
-cannot, and `champion_oneday_evg` documented the channel as inert because of it.
+Only the archive path can be reconstructed as of a past date, so only it can be
+backtested.
 
 `spec` is the tunable half, passed through to
 `compute_breakaway_rates_archive`: `prior_strength`, `km_weighted`,
@@ -225,13 +220,11 @@ Fetch and archive actual PCS results and VG results for a completed race.
 Stage races archive their GC under `pcs_gc_results`; one-day races archive
 their finishing order under `pcs_results`.
 
-**Skips whatever is already archived** unless `force_refresh` is set. It used to
-re-fetch and overwrite on every call, which is the wrong default for a file in a
-shared, Dropbox-synced archive with no locking: a transient scrape failure or a
-rate-limited PCS page would replace a good snapshot with a worse one, and a
-re-run during a live race would race whoever else is writing. Velogames does
-revise scores for about 24 hours after a race, which is the case for overwriting
-— `force_refresh` is how to ask for it, deliberately.
+**Skips whatever is already archived** unless `force_refresh` is set. The archive
+is shared and Dropbox-synced with no locking, so overwriting by default would let
+a transient scrape failure or a rate-limited PCS page replace a good snapshot
+with a worse one. Velogames revises scores for about 24 hours after a race;
+`force_refresh` picks those up.
 """
 function archive_race_results(
     pcs_slug::String,
@@ -243,9 +236,7 @@ function archive_race_results(
     # Archive PCS race results. A stage race's result is its general
     # classification, and `/result` returns the final stage's sprint instead —
     # so it goes to `pcs_gc_results` via `prefer_gc`, on the same four-column
-    # projection `archive_stage_race_results` writes. Writing a stage race's
-    # final-stage order under `pcs_results` would put a frame the race-history
-    # path reads as a GC one page away from the page it means.
+    # projection `archive_stage_race_results` writes.
     if race_format(pcs_slug) == :stage
         if force_refresh || load_race_snapshot("pcs_gc_results", pcs_slug, year) === nothing
             try
@@ -324,32 +315,15 @@ end
 # Shared data preparation
 # ---------------------------------------------------------------------------
 
-"""
-    _prepare_rider_data(config, racehash, excluded_riders, history_years,
-                        oracle_url, min_riders, cache_config,
-                        force_refresh; pcs_check_col=:oneday,
-                        filter_startlist=true)
-
-Shared data-fetching pipeline for `solve_oneday` and `solve_stage`.
-
-Fetches VG riders, filters by startlist hash and exclusions, optionally filters
-against PCS confirmed startlist, joins PCS specialty ratings, fetches race history
-(including similar races), VG historical race points, odds, and Cycling Oracle
-predictions, and logs a data quality summary. Odds come from a pre-parsed
-DataFrame (e.g. Oddschecker paste) passed via the `odds_df` keyword.
-
-Returns a `RaceData` struct or `nothing` if fewer than `min_riders` remain
-after filtering.
-"""
 # Recency-weight all five PCS specialties. For each rider and specialty, fetch
 # per-season points and collapse to a decay-weighted sum (recent seasons
 # dominate) using the default `pcs_season_decay`. Adds `:<spec>_r` columns
 # consumed by the multidim z-scoring. Riders with no PCS profile / no specialty
 # results are left `missing` (NOT 0), so the z-scoring falls back to their
-# career specialty per-rider rather than reading a spurious zero. Returns the
-# raw per-season data in long format (riderkey, specialty, year, points) so the
-# caller can archive it for backtest temporal integrity. Logs coverage so a
-# scrape regression is visible.
+# career specialty per-rider instead of reading a spurious zero, and a
+# field-wide scrape regression degrades to career data. Returns the raw
+# per-season data in long format (riderkey, specialty, year, points) so the
+# caller can archive it for backtest temporal integrity.
 function _apply_pcs_recency!(
     riderdf::DataFrame,
     pcs_slug_map::Dict{String,String},
@@ -367,11 +341,6 @@ function _apply_pcs_recency!(
         points = Float64[],
     )
     for spec in specialties
-        # `missing` (not 0.0) for riders whose scrape returned nothing, so the
-        # z-scoring downstream can fall back to career × currency per-rider
-        # rather than reading a spurious zero. A field-wide scrape regression
-        # then degrades gracefully to career data instead of zeroing the whole
-        # specialty dimension.
         scores = Vector{Union{Missing,Float64}}(missing, n)
         covered = 0
         for i = 1:n
@@ -392,15 +361,13 @@ function _apply_pcs_recency!(
                     force_refresh = force_refresh,
                 )
             catch e
-                # A block found for one rider will be found for the rest too —
-                # propagate rather than silently reading it as "no per-season
-                # data for this rider" and quietly working through the field.
+                # A block found for one rider will be found for the rest too, so
+                # propagate it instead of reading it as "no per-season data".
                 e isa ScrapeBlockedError && rethrow()
                 DataFrame(year = Int[], points = Float64[])
             end
             # A cached "no data for this rider/specialty" result can come back
-            # as a columnless DataFrame rather than raising — treat the same
-            # as the catch-block fallback above (no data, skip this rider).
+            # as a columnless DataFrame instead of raising.
             hasproperty(df, :year) || continue
             # Only seasons up to the race year. A per-season page can carry
             # post-race results (re-run after the race, or a stale current_year);
@@ -436,19 +403,17 @@ Every archived `(slug, year)` of `data_type` other than this race's own, dated
 on or before this race, newest first. The candidate list the cross-race tier of
 an archive-first loader walks.
 
-Two rules are doing work here. A candidate dated *after* the target is skipped:
-re-rendering or backfilling an earlier race once later races are archived must
-not leak a future rating into the past, which is the whole reason these types
-are `refetchable = false`. And the whole list is empty when *this* race's date
-cannot be resolved — with no bound to draw, running the tier unbounded would
-make every archived file eligible, including later ones. That costs coverage
-on races outside the catalogue; the live tier still runs for them.
+A candidate dated *after* the target is skipped: re-rendering or backfilling an
+earlier race once later races are archived must not leak a future rating into
+the past. The whole list is empty when *this* race's date cannot be resolved,
+since with no bound every archived file would be eligible, including later ones.
+That costs coverage on races outside the catalogue; the live tier still runs for
+them.
 
-Ordering is on the resolved date, not the year. Ordering on year alone leaves
-the within-season tie to `archive_races`' alphabetical directory order, so
-rendering an August race would take `amstel-gold-race` (April) ahead of
-`cyclassics-hamburg` three weeks earlier — the opposite of the freshness
-argument the tier rests on.
+Ordering is on the resolved date, not the year. On year alone the within-season
+tie falls to `archive_races`' alphabetical directory order, so an August race
+would take `amstel-gold-race` (April) ahead of `cyclassics-hamburg` three weeks
+earlier.
 """
 function _archived_races_before(data_type::String, pcs_slug::String, year::Int)
     target_date = resolve_race_date(pcs_slug, year)
@@ -478,20 +443,15 @@ temporally faithful first:
 2. for riders still uncovered, the union across every *other* archived
    `pcs_specialty` file dated on or before this race, most recent race first —
    specialty ratings are season-cumulative and move slowly, so a rating from
-   a recent race is a close read on race day (see
-   `docs/pcs-cloudflare-block-evaluation.md`). A candidate dated after this
-   race — or whose own date can't be resolved — is skipped: re-rendering or
-   backfilling an earlier race after later races have been archived must not
-   leak a future rating into the past. The whole tier is skipped when *this*
-   race's date can't be resolved, since there is then no bound to apply;
+   a recent race is a close read on race day. Candidates are date-bounded as
+   described in `_archived_races_before`;
 3. for whoever is still uncovered, a live fetch (`getpcs_rider_pts_batch`),
-   which now raises `ScrapeBlockedError` rather than degrading silently when
-   PCS is actually blocking the run.
+   which raises `ScrapeBlockedError` when PCS is blocking the run.
 
 A rider only counts as covered by a tier if at least one specialty column in
-that tier's row is a real (non-missing) value — a hollow row (riderkey
-present, every rating missing, exactly what a blocked-but-not-erroring fetch
-used to produce) does not block the later tiers from healing that rider.
+that tier's row is non-missing, so a hollow row (riderkey present, every rating
+missing, as a blocked-but-not-erroring fetch produces) does not stop the later
+tiers from healing that rider.
 
 `force_refresh` skips both archive steps and live-fetches everyone, matching
 every other fetcher's escape hatch.
@@ -513,9 +473,9 @@ function _load_pcs_specialty(
     force_refresh::Bool = false,
 )
     # `hills` rides along in the projection but is not a `rating_col`: coverage
-    # is still judged on the five ratings every archive has, so a pre-2026 file
-    # is as good a tier-2 donor as it ever was. The `vcat(...; cols = :union)`
-    # below is what lets layers with and without it combine.
+    # is judged on the five ratings every archive has, so a file without it is
+    # still a full tier-2 donor. `cols = :union` in the `vcat` below combines
+    # layers with and without it.
     spec_cols = ["riderkey", "rider", "oneday", "gc", "tt", "sprint", "climber", "hills"]
     rating_cols = ["oneday", "gc", "tt", "sprint", "climber"]
     wanted = Set(String.(riderdf.riderkey))
@@ -558,10 +518,8 @@ function _load_pcs_specialty(
 
     # --- 3. Live fetch for whoever is still uncovered ---
     # The tier that is allowed to fail. A block here must cost only the riders
-    # the archive could not cover — throwing would discard every row tiers 1
-    # and 2 just harvested, which is the whole point of doing them first. The
-    # caller still hears about it: this warns, and the coverage counts it
-    # returns show the live tier contributed nothing.
+    # the archive could not cover; throwing would discard every row tiers 1 and
+    # 2 just harvested. The warning and the returned coverage counts report it.
     n_live = 0
     remaining = filter(r -> !(r.riderkey in covered), riderdf)
     if nrow(remaining) > 0
@@ -602,17 +560,14 @@ end
 """
     _archivable_pcs_specialty(specialty_df) -> DataFrame
 
-The subset of `_load_pcs_specialty`'s blended output that was genuinely
-sourced for THIS race — own-race archive hit or live fetch — with the
-internal `:_source` provenance column dropped, ready to write under the
-race's own `pcs_specialty` archive key.
+The subset of `_load_pcs_specialty`'s blended output sourced for THIS race —
+own-race archive hit or live fetch — with the internal `:_source` provenance
+column dropped, ready to write under the race's own `pcs_specialty` archive key.
 
-Excludes cross-race-sourced rows (tier 2) deliberately: `pcs_specialty` is
-`refetchable = false` specifically because it means "what PCS said on this
-race's day", and persisting a rating pulled from another race's archive
-under this race's key would corrupt that guarantee for a later render's own
-cross-race lookup, which would then treat the contaminated file as
-trustworthy own-race data.
+Excludes cross-race rows (tier 2): `pcs_specialty` is `refetchable = false`
+because it means "what PCS said on this race's day", and a rating pulled from
+another race's archive written under this key would be read by a later render
+as own-race data.
 """
 function _archivable_pcs_specialty(specialty_df::DataFrame)
     :_source in propertynames(specialty_df) || return specialty_df
@@ -630,22 +585,14 @@ the same three tiers as `_load_pcs_specialty`: this race's own `pcs_seasons`
 snapshot, then the union across every other archived race dated on or before
 this one (newest first), then a live fetch for whoever is left.
 
-This was the last full-field PCS fetch in a render, and after the specialty
-loader went archive-first it became the dominant one by an order of magnitude:
-on Quebec the specialty tier reached the network for 9 riders while this one
-still asked for all 153, on the very same profile pages. The archive already
-held 151 `pcs_seasons` files.
-
 A rider counts as covered once any tier yields at least one season row with a
-real `pcs_points` value, so a hollow row — riderkey present, points missing,
-what a blocked-but-not-erroring fetch produces — does not block the later
-tiers from healing them.
+non-missing `pcs_points`, so a hollow row does not stop the later tiers from
+healing them.
 
-The staleness this admits is the same shape as the specialty loader's and is
-acceptable for the same reason: prior seasons are closed and never move, and
-only the current year's row grows through the season, so a file from a race a
-few weeks earlier understates the current year slightly and is exact on every
-other. `force_refresh` skips both archive tiers.
+The cross-race tier admits little staleness: prior seasons are closed, and only
+the current year's row grows through the season, so a file from a race a few
+weeks earlier understates the current year slightly and is exact on every other.
+`force_refresh` skips both archive tiers.
 
 Returns `(seasons_df, provenance)` with `getpcs_rider_seasons_batch`'s columns
 (`riderkey, year, pcs_points, pcs_rank`) plus the internal `:_source` tier
@@ -743,6 +690,23 @@ function _archivable_pcs_seasons(seasons_df::DataFrame)
     return archivable
 end
 
+"""
+    _prepare_rider_data(config, racehash, excluded_riders, history_years,
+                        oracle_url, min_riders, cache_config,
+                        force_refresh; pcs_check_col=:oneday,
+                        filter_startlist=true)
+
+Shared data-fetching pipeline for `solve_oneday` and `solve_stage`.
+
+Fetches VG riders, filters by startlist hash and exclusions, optionally filters
+against PCS confirmed startlist, joins PCS specialty ratings, fetches race history
+(including similar races), VG historical race points, odds, and Cycling Oracle
+predictions, and logs a data quality summary. Odds come from a pre-parsed
+DataFrame (e.g. Oddschecker paste) passed via the `odds_df` keyword.
+
+Returns a `RaceData` struct or `nothing` if fewer than `min_riders` remain
+after filtering.
+"""
 function _prepare_rider_data(
     config::RaceConfig,
     racehash::String,
@@ -863,18 +827,15 @@ function _prepare_rider_data(
                   "$(season_round_slugs) — leaving `points` at zero"
         else
             # Riders who skipped every scored round are missing data, not weak
-            # ones: give them the covered-field mean so they z-score to exactly
-            # 0 and leave the posterior untouched, rather than 0 points, which
-            # would read as evidence of weakness.
+            # ones: the covered-field mean z-scores them to 0 and leaves the
+            # posterior untouched, where 0 points would read as weakness.
             fill_value = mean(lookup[k] for k in riderdf.riderkey[covered])
             riderdf.points = [
                 covered[i] ? lookup[riderdf.riderkey[i]] : fill_value for
                 i = 1:nrow(riderdf)
             ]
-            # `frac_nonzero` in `_assemble_signals` reads this when present. The
-            # fill makes every rider's `points` non-zero, so counting non-zeros
-            # would report full season coverage and switch off the very variance
-            # widening (`vg_season_penalty`) that thin VG data calls for.
+            # Read by `_assemble_signals`: the fill makes every `points` non-zero,
+            # which would otherwise switch off `vg_season_penalty`.
             riderdf[!, :vg_points_observed] = covered
             @info "Season VG points: filled $(count(covered))/$(nrow(riderdf)) riders " *
                   "($(round(Int, 100count(covered) / nrow(riderdf)))% covered)"
@@ -884,10 +845,9 @@ function _prepare_rider_data(
     # --- 2. Fetch PCS specialty ratings (archive-first: own race → cross-race
     #        union → live fetch — see _load_pcs_specialty) ---
     # Specialty scores are season-cumulative and move slowly, unlike the race
-    # data `cache_config` is tuned for — reusing that short TTL means a fresh
-    # 100+-rider burst against PCS on almost every render, which is what
-    # tripped its Cloudflare protection for GP Industria 2026. A week-long TTL
-    # cuts that burst down to roughly once a week instead of once a race.
+    # data `cache_config` is tuned for. Its short TTL would mean a 100+-rider
+    # fetch against PCS on almost every render; a week-long TTL makes it roughly
+    # weekly.
     @info "Fetching PCS specialty ratings for $(nrow(riderdf)) riders..."
     specialty_cache_config = CacheConfig(cache_config.cache_dir, 24 * 7)
     pcsriderpts, specialty_provenance = try
@@ -900,11 +860,9 @@ function _prepare_rider_data(
             force_refresh = force_refresh,
         )
     catch e
-        # Sibling fetch steps (startlist, oracle, seasons, below) all degrade
-        # the same way on failure: warn and carry on with nothing, rather than
-        # crash the whole render. PCS blocking more than a handful of riders
-        # raises `ScrapeBlockedError` out of the live-fetch tier — that's exactly
-        # the case this is for.
+        # Degrade like the sibling fetch steps (startlist, oracle, seasons): warn
+        # and carry on with nothing. The expected case is `ScrapeBlockedError`
+        # from the live-fetch tier.
         @warn "Failed to fetch PCS specialty ratings: $e — continuing with no PCS specialty data"
         DataFrame(
             riderkey = String[],
@@ -930,11 +888,9 @@ function _prepare_rider_data(
     # scalar path uses its own single-dimension recency source — so skip the
     # 5×N per-rider specialty fetches for one-day races.
     if apply_recency
-        # `_apply_pcs_recency!` rethrows a block rather than reading it as "no
-        # per-season data for this rider", which is right — but the render must
-        # still finish on the career specialty ratings tiers 1 and 2 just
-        # harvested, exactly as the specialty step above degrades. Letting it
-        # propagate here would abort the run and throw those away.
+        # `_apply_pcs_recency!` rethrows a block, but the render must still
+        # finish on the career specialty ratings already harvested, as the
+        # specialty step above degrades.
         pcs_seasons = try
             _apply_pcs_recency!(
                 riderdf,
@@ -961,14 +917,12 @@ function _prepare_rider_data(
     # live-fetched rows only, never cross-race ones (see
     # `_archivable_pcs_specialty`), merged over whatever is already on disk.
     #
-    # The merge is what stops this shrinking the file. `harvest!` keeps only
-    # riders in the current pool, so a re-render with a narrower one — a
-    # tighter `racehash`, more `excluded_riders`, a PCS startlist that lost
-    # names — would otherwise overwrite a full field with a subset, and
-    # `pcs_specialty` is `refetchable = false`, so those rows are gone. Both
-    # sides are this race's own as-of-race-day data, so the union is the whole
-    # of what was true; fresh rows win a riderkey collision, which is what
-    # keeps `force_refresh` meaningful.
+    # `harvest!` keeps only riders in the current pool, so without the merge a
+    # re-render with a narrower one — a tighter `racehash`, more
+    # `excluded_riders`, a PCS startlist that lost names — would overwrite a
+    # full field with a subset, and `pcs_specialty` is `refetchable = false`.
+    # Both sides are this race's own as-of-race-day data; fresh rows win a
+    # riderkey collision, so `force_refresh` still replaces them.
     if !isempty(config.pcs_slug) && nrow(pcsriderpts) > 0
         archivable_specialty = _archivable_pcs_specialty(pcsriderpts)
         if nrow(archivable_specialty) > 0
@@ -994,12 +948,9 @@ function _prepare_rider_data(
     # --- 3. Fetch PCS race history (primary + similar + within-year) ---
     race_info = _find_race_by_slug(config.pcs_slug)
     race_date = resolve_race_date(config.pcs_slug, config.year)
-    # Same reasoning as the recency step: `assemble_pcs_race_history` rethrows a
-    # block found while filling in the years its archive doesn't cover, which is
-    # the right call there — one blocked year means every other live year is
-    # blocked too, so there is nothing to be gained by working through them. But
-    # a render with no race history is a degraded render, not a failed one, and
-    # the archive usually covers most years on its own.
+    # As in the recency step: `assemble_pcs_race_history` rethrows a block
+    # (one blocked live year means all are), but a render with no race history
+    # is degraded, not failed, and the archive usually covers most years.
     race_history_df = try
         assemble_pcs_race_history(
             config.pcs_slug,
@@ -1019,10 +970,9 @@ function _prepare_rider_data(
 
     # --- 3b. Fetch VG race history (automatic; one-day classics only) ---
     # Grand tours / week-long stage races have no entry in CLASSICS_RACES_2026,
-    # so `race_info` is always `nothing` and `race_name` would be "". Skip
-    # entirely for stage races rather than looking up VG race history under a
-    # blank name — that VG competition (`sixes-classics`) is unrelated to a
-    # stage race's own VG competition, and this signal is one-day-specific.
+    # so `race_info` is always `nothing` and `race_name` would be "". The VG
+    # classics competition is unrelated to a stage race's own, and this signal
+    # is one-day-specific.
     race_name = race_info !== nothing ? race_info.name : ""
     vg_history_df = if config.type == :stage
         nothing
@@ -1039,8 +989,8 @@ function _prepare_rider_data(
     end
 
     # --- 3b-ii. Fetch prior-edition points/KOM classification history (stage races) ---
-    # Same-race only: the July 2026 isolation backtest (recorded in roadmap.md;
-    # its successor is backtest_stage_race(...; target = :points/:kom))
+    # Same-race only: the July 2026 isolation backtest (its successor is
+    # backtest_stage_race(...; target = :points/:kom))
     # found same-race jersey history predictive (ρ≈0.33) but GT cross-history
     # harmful for jerseys (KOM no-harm Δρ −0.10) — jersey roles are parcours- and
     # team-specific and transfer poorly across grand tours, unlike GC ability.
@@ -1069,14 +1019,13 @@ function _prepare_rider_data(
         )
     end
 
-    # --- 3b-iii. Fetch this grand tour's own prior-edition VG totals (Option A
-    # prototype, July 2026 — see roadmap.md "GT VG-history strength signal").
+    # --- 3b-iii. Fetch this grand tour's own prior-edition VG totals (Option A).
     # A rider's own prior GT VG success is a role-conditional (lower-bias) proxy
     # for their GT VG points than their role-blind general ability is. Gated by
     # `use_gt_vg_history` (default off ⇒ nothing ⇒ signal inert), stage races only.
     # Also fetched for the Option B points-propensity layer (`use_gt_vg_propensity`),
     # which learns a role factor from the same prior-edition totals but applies it
-    # at the EVG level rather than as a strength nudge (see roadmap.md Option B).
+    # at the EVG level rather than as a strength nudge.
     gt_vg_history_df = nothing
     if (use_gt_vg_history || use_gt_vg_propensity) && config.type == :stage
         vg_slug = get(_STAGE_RACE_VG_SLUGS, config.pcs_slug, "")
@@ -1116,11 +1065,9 @@ function _prepare_rider_data(
                 @info "Got cross-season PCS points for $n_riders_with_seasons riders"
                 if !isempty(config.pcs_slug)
                     archivable_seasons = _archivable_pcs_seasons(seasons_df)
-                    # Same merge as the specialty write, for the same reason —
-                    # a narrower pool must not shrink a `refetchable = false`
-                    # file. Keyed on riderkey, so a rider re-fetched this run
-                    # replaces all of their season rows rather than doubling
-                    # them.
+                    # Same merge as the specialty write. Keyed on riderkey, so
+                    # a rider re-fetched this run replaces all of their season
+                    # rows instead of doubling them.
                     if nrow(archivable_seasons) > 0
                         existing = load_race_snapshot(
                             "pcs_seasons",
@@ -1280,8 +1227,8 @@ optimisation of expected Velogames points.
 `market_blend_weight < 1` mixes the bookmaker's implied win probabilities into
 the column the final team optimisation maximises:
 `w · unitnorm(risk-adjusted EVG) + (1 − w) · unitnorm(implied win prob)`. On the
-12 marketed 2026 classics this lifted team-points-captured from 0.572 to 0.651
-(see roadmap.md, "Experiment 2"). `w = 1` (the default) disables it, as does a
+12 marketed 2026 classics this lifted team-points-captured from 0.572 to 0.651.
+`w = 1` (the default) disables it, as does a
 race with no odds.
 
 ## Returns
@@ -1456,10 +1403,9 @@ function _stage_prediction_core(
         sim_config = sim_config,
     )
 
-    # --- Option B: GT VG points-propensity layer (prototype, July 2026 —
-    # see roadmap.md). Two-sided EVG correction learned from the residual
-    # between each rider's REAL prior GT totals and their ability-implied
-    # EVG. Default off ⇒ inert. Stacks on Option A: because `evg_raw` here
+    # --- Option B: GT VG points-propensity layer. Two-sided EVG correction
+    # learned from the residual between each rider's REAL prior GT totals and
+    # their ability-implied EVG. Default off ⇒ inert. Stacks on Option A: because `evg_raw` here
     # is the A-lifted prediction whenever the RaceData carries
     # `gt_vg_history_df` (A is data-gated at signal assembly, two layers up),
     # B captures only the residual A leaves, so the two compose without
@@ -1584,8 +1530,7 @@ end
 Construct an optimal team for a stage race using resampled optimisation.
 
 When `stages` is non-empty, uses per-stage simulation with stage-type strength
-modifiers (the new pipeline). When empty, falls back to the aggregate GC-position
-approach.
+modifiers. When empty, falls back to the aggregate GC-position approach.
 
 Uses class-aware strength estimation and enforces VG classification constraints
 (all-rounders, climbers, sprinters, unclassed) during optimisation.
@@ -1593,8 +1538,8 @@ Uses class-aware strength estimation and enforces VG classification constraints
 When `breakaway_dir` points at archived PCS breakaway-km data (same source as
 one-day races), the aggregate fallback enables per-rider breakaway scoring via
 `resample_optimise!`'s one-day-style mechanism. The per-stage pipeline does not
-model breakaway participation (deleted July 2026, WP2.3 — it failed to move
-team-points-captured on the backtest harness).
+model breakaway participation; it did not move team-points-captured on the
+backtest harness.
 
 ## Returns
 A `StageResult` (`predicted`, `chosenteam`, `top_teams`, `sim_vg_points`,

@@ -184,10 +184,8 @@ Approximate stage race scoring table.
 
 Maps overall GC finishing position to expected total VG points accumulated across
 the whole race. Calibrated from historical VG grand tour results: winners typically
-score 3000-4000 points, top 10 score 1000-2000, with a long tail.
-
-This is a placeholder for the aggregate prediction approach. Proper stage-by-stage
-simulation (see roadmap) would replace this with per-stage scoring.
+score 3000-4000 points, top 10 score 1000-2000, with a long tail. The per-stage
+simulator scores with `SCORING_GRAND_TOUR` instead.
 
 The assist and breakaway fields are set to zero because stage race VG points
 already include these components implicitly in the aggregate totals.
@@ -461,13 +459,10 @@ sectors)`.
 `sectors` is what VG actually pays on: it awards `breakaway_points` at four
 checkpoints (half distance, then 50/20/10 km to go), so a rider's km in the
 break converts to a sector count via `breakaway_sectors_from_km` against that
-race's distance. Every archived one-day slug has a distance, so this is measured
-rather than assumed — the previous code used a flat 2.0 for every rider in every
-race.
+race's distance.
 
-Rows for riders who were not in the break are kept deliberately: they are the
-denominator. A rate is breaks over *starts*, and without the starts there is
-nothing to divide by.
+Rows for riders who were not in the break are kept: they are the denominator,
+since a rate is breaks over starts.
 """
 function breakaway_observations(;
     archive_dir::String = archive_dir(),
@@ -516,19 +511,11 @@ end
 Per-rider breakaway probability and expected sector count, from the per-race
 archive rather than a season leaderboard.
 
-This replaces `compute_breakaway_rates`, which read four hand-saved `.mhtml`
-files of PCS's end-of-season "most kilometres in the break" table. Two things
-were wrong with that and both are fixed here.
-
-It scaled each rider's rate proportional to *kilometres*, so a rider with three
-200 km breaks and one with six 100 km breaks came out identical, when the second
-is twice as likely to be in tomorrow's move. A rate is breaks over starts, and
-the per-race data has both.
-
-And a season total cannot be reconstructed as of a past date, which is why
-`champion_oneday_evg` documents the breakaway channel as inert in backtesting.
-Every row here is dated by its race, so `as_of` gives a clean as-of-race-day
-view and the channel can finally be evaluated.
+Unlike `compute_breakaway_rates`, which scales by season kilometres, the rate is
+breaks over starts: a rider with six 100 km breaks rates twice one with three
+200 km breaks, being twice as likely to be in tomorrow's move. Every row is
+dated by its race, so `as_of` gives an as-of-race-day view that a season total
+cannot.
 
 # Keyword arguments
 - `as_of`: ignore races on or after this date. Required for temporal integrity;
@@ -537,18 +524,15 @@ view and the channel can finally be evaluated.
 - `prior_strength`: Beta prior pseudo-starts. Rates are sparse — the field mean
   is about 0.035 over ~23 starts a rider — so an unshrunk 2-in-8 reads as 0.25
   on almost no evidence. The prior mean is the field rate over the same window,
-  so this shrinks toward what a typical rider does. The September 2026 sweep
-  found team-points-captured monotone in this over 10 → 29 → 60 → 120 (+0.007,
-  +0.0146, +0.0158, +0.0168 against breakaway-off), so 120 is the largest value
-  tested rather than an optimum; the curve had not turned. Worth another probe
-  at 250 and 500.
+  so this shrinks toward what a typical rider does. Team-points-captured rose
+  monotonically over 10 → 29 → 60 → 120 (+0.007, +0.0146, +0.0158, +0.0168
+  against breakaway-off), so 120 is the largest value tested, not an optimum.
 - `km_weighted`: weight each break by its sector count rather than counting it
   as one. Distance is informative beyond the binary flag (ρ(km, VG score) ≈
-  0.41), so this is worth testing; it is off by default because it makes the
-  "rate" no longer a probability.
+  0.41); off by default because it makes the "rate" no longer a probability.
 - `decay_rate`: exponential recency decay in years, 0.0 for flat.
-- `max_rate`: hard cap, kept from the old implementation as a guard against a
-  rider with two starts and two breaks reading as certain.
+- `max_rate`: hard cap, a guard against a rider with two starts and two breaks
+  reading as certain.
 """
 function compute_breakaway_rates_archive(
     startlist_keys::AbstractVector{<:AbstractString};
@@ -586,7 +570,7 @@ function compute_breakaway_rates_archive(
     end
 
     # Field rates, used as the shrinkage target so a rider with no history lands
-    # on "what a typical rider does" rather than on zero.
+    # on the field rate, not zero.
     total_starts = sum(values(starts); init = 0.0)
     total_breaks = sum(values(breaks); init = 0.0)
     field_rate = total_starts > 0 ? total_breaks / total_starts : 0.0

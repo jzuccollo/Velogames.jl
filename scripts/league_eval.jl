@@ -10,7 +10,6 @@
 #     summed implied win probability), both under the same budget/size rules
 #
 # Fully offline: reads only the Dropbox archive.
-# Evidence base for docs/architecture-review.md (July 2026).
 #
 # Run:  julia --project scripts/league_eval.jl
 # ---------------------------------------------------------------------------
@@ -112,7 +111,7 @@ if nrow(ok) > 0
 end
 
 # ---------------------------------------------------------------------------
-# League standings — cumulative placement (WP0.1) + entered-vs-advised (WP0.2)
+# League standings — cumulative placement and entered-vs-advised
 #
 # Reads the archived league rosters (`league/rosters`, written by
 # scripts/ingest_league.jl from the vgleague scrape) via `load_league_standings`,
@@ -165,7 +164,7 @@ else
             racename_of_slug = Dict(v => k for (k, v) in slug_of_racename)
 
             # Resolve the "current race" pcs_slug for the manual entered_team override.
-            # Deliberately avoids `find_race`'s fuzzy fallback (its substring match
+            # Avoids `find_race`'s fuzzy fallback (its substring match
             # mis-resolves short GT aliases like "Tour" against "Paris-Tours Elite") —
             # exact pcs_slug matches, the explicit stage-race alias table, and
             # normalised classics display names are used, in that order.
@@ -257,7 +256,7 @@ else
                         ranked[1][2]
                     )
 
-                    # Entered-vs-advised (WP0.2): the user's own entered team for
+                    # Entered-vs-advised: the user's own entered team for
                     # this race, from the league standings. The manual
                     # [entered_team] override is handled in its own block below —
                     # it must not be gated on the race appearing in the classics
@@ -308,7 +307,7 @@ else
                 end
             end
 
-            # Manual [entered_team] override (WP0.2): scored directly against
+            # Manual [entered_team] override: scored directly against
             # archived results, independent of the league standings — reachable
             # for grand tours and races the vgleague cache hasn't scraped yet.
             if !isempty(current_slug) &&

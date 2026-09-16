@@ -1,23 +1,11 @@
 """
-Fetch-and-store as a phase of its own.
-
-Until Phase 2 nothing's job was ingest. `render_reports.jl` archived results
-while rendering, via `_ensure_results_archived`; `stage_race_report_html`
-archived a whole grand tour while drawing its first chart. That worked, and the
-design note is careful to say so — it was the unattended-ingest guarantee, not
-merely untidy — but it made two questions unanswerable. "Is this race's data
-complete?" could only be answered by rendering it, and a failed fetch was
-indistinguishable from a race that had not happened, because both produced no
-page.
-
-`ingest_race` is the same work with the side effect turned into the point. It
-reads the archive before and after, and reports the difference.
+Fetch-and-store as a phase of its own. `ingest_race` reads the archive before
+and after, and reports the difference.
 
 **The report is read off the archive, not off the writers.** The two archivers
 underneath warn-and-continue at roughly a dozen points each, so their own account
-of what they did would be a summary of their intentions. Comparing
-`race_completeness` before and against after says what actually landed, which is
-the only claim the caller can act on.
+of what they did would be unreliable. Comparing `race_completeness` before and
+after says what landed.
 """
 
 """
@@ -92,16 +80,10 @@ end
 """
 The one-day arm: PCS results always, Velogames results only if they are missing.
 
-**Velogames is not reachable from here.** Since August 2026 the site sits behind
-a Cloudflare challenge that a plain HTTP client does not pass: every
-`velogames.com` page returns 403 to this package, and a real browser is the only
-client that gets through. `vgleague ingest` is the phase that fetches them —
-Python drives Playwright, so it can — and it runs first, in the vgleague job that
-fires this one. That is the `ingest-vg → ingest-pcs` split the design note called
-for, arrived at by force rather than by design.
-
-So the Velogames half is attempted only when the archive lacks it, and its
-failure is reported as what it is rather than as a scrape that went wrong.
+**Velogames results come from vgleague.** `vgleague ingest` fetches them
+through a browser, and it runs first, in the vgleague job that fires this one.
+The Velogames half is attempted here only when the archive lacks it, and its
+failure is reported as a missing ingest, not as a scrape that went wrong.
 """
 function _ingest_oneday(
     slug::String,
@@ -111,9 +93,8 @@ function _ingest_oneday(
 )
     have_vg = load_race_snapshot("vg_results", slug, yr; archive_dir = archive_dir) !== nothing
     if have_vg
-        # PCS only. Nothing here touches velogames.com, which is the point: the
-        # season pool and race list are archive-first and already there, so
-        # asking for them would only produce a 403 we would then ignore.
+        # PCS only. The season pool and race list are archive-first and already
+        # there, so asking velogames.com for them would only produce a 403.
         archive_race_results(slug, yr; cache_config = cache_config)
         return nothing
     end
@@ -147,7 +128,7 @@ function _vg_race_number(slug::String, racelist::DataFrame)
 end
 
 """
-    pending_races(years; league_winners, archive_dir) -> Vector{Tuple{String,Int}}
+    pending_races(years; archive_dir) -> Vector{Tuple{String,Int}}
 
 Races the league has settled a winner for whose archive is short of a required
 type — the work list the publish path needs done before it renders.

@@ -2,19 +2,16 @@
 """
 Print a digest of every race's report field, as JSON, for `vgleague verify-field`.
 
-The field frame — who could have been picked for one race, at what price — is now
-built twice, once in each language, because the publication layer is moving to
-Python and the model is staying here. That duplication is deliberate and the
-failure mode is silent: a field short of a few riders yields a plausible team and
-a wrong number, never an error. The note measured the shape of it at Cyclassics
-Hamburg 2026, where the league-picked pool answers 60 credits against the real
-field's 42.
+The field frame — who could have been picked for one race, at what price — is
+built twice, once in each language, because publication is in Python and the
+model is here. The failure mode is silent: a field short of a few riders yields a
+plausible team and a wrong number, never an error. At Cyclassics Hamburg 2026 the
+league-picked pool answers 60 credits against the real field's 42.
 
 So it gets the treatment `riderkey` and race-name squashing already have: two
-implementations, checked against each other over every race the archive holds,
-rather than one implementation trusted. This is the Julia half — it emits, it
-does not compare. `vgleague verify-field` recomputes each row in Python and
-reports the differences.
+implementations, checked against each other over every race the archive holds.
+This is the Julia half — it emits, it does not compare. `vgleague verify-field`
+recomputes each row in Python and reports the differences.
 
 The digest is per race rather than per rider: the field is a set, so its size,
 the sum of what it costs, the sum of what it scored and a hash of its keys pin it
@@ -44,11 +41,10 @@ const WINNERS = Dict(
 """
 The two hindsight teams, as the digest sees them: keys, cost and score.
 
-Emitted alongside the field because they are what the field is *for*, and
-because both were under-determined until the tie-break landed — a single-
-objective knapsack leaves a tie set the solver resolves arbitrarily, so a team
-digest without the lexicographic fix would compare two arbitrary choices and
-report a difference that was nobody's fault.
+Emitted alongside the field because they are what the field is *for*. The
+comparison depends on the lexicographic tie-break: a single-objective knapsack
+leaves a tie set the solver resolves arbitrarily, and two arbitrary choices can
+differ through nobody's fault.
 """
 function team_facts(df, fmt::Symbol, target)
     optimal =
@@ -70,9 +66,9 @@ function digest_race(pcs_slug::String, year::Int, fmt::Symbol)
     c = race_completeness(pcs_slug, year)
     # The invariant `verify-field` asserts on both sides: every realised point
     # the race scored is carried by some rider in the field, except the points of
-    # riders nothing can price. It is emitted rather than assumed because the
-    # gate was blind to exactly this — `unpriced_scorers` said zero for 76 races
-    # that between them dropped 12,844 realised points on a `riderkey` mismatch.
+    # riders nothing can price. It is emitted, not assumed: `unpriced_scorers`
+    # once said zero for 76 races that between them dropped 12,844 realised
+    # points on a `riderkey` mismatch.
     missing_points = c.race_points - (df === nothing ? 0 : sum(df.score))
     target = get(WINNERS, (pcs_slug, year), nothing)
     teams =
@@ -104,8 +100,8 @@ function main()
     seen = Set{Tuple{String,Int}}()
     # The format is the race's, not the archive tree's. Itzulia and Romandie are
     # stage races that also carry a `vg_results` file, so keying off the tree
-    # read them through the one-day loader and compared a week's stage totals
-    # against a single race's field.
+    # would read them through the one-day loader and compare a week's stage
+    # totals against a single race's field.
     for data_type in ("vg_results", "vg_stage_totals")
         for pcs_slug in archive_races(data_type)
             for year in archive_years(data_type, pcs_slug)

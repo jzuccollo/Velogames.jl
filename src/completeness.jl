@@ -1,20 +1,11 @@
 """
-What a race's archive actually holds, and what that lets a page claim.
+What a race's archive holds, and what that lets a page claim.
 
-The publication path used to answer "is race X's data complete?" by rendering it
-and seeing what came out. Every archival step was a side effect of something
-else — `render_reports.jl` archived results while rendering, `_prepare_rider_data`
-archives odds while estimating — so completeness was not a question anything
-could be asked. Phase 2 makes ingest a phase; this is the question that phase
-exists to make answerable.
-
-**Computed, not written.** The design note asked for a marker file per race. A
-function that reads the archive is better on all three counts that motivated it:
-a half-synced Dropbox file fails the check because the check opens it, where a
-marker could sync ahead of its data; there is no second writer to race the first;
-and nothing can go stale. What a marker file would add — "we tried and the source
-had nothing", as against "we never tried" — is the run log's job, and `_runs/`
-answers it directly.
+**Computed, not written.** A function that reads the archive beats a marker file
+per race: a half-synced Dropbox file fails the check because the check opens it,
+where a marker could sync ahead of its data; there is no second writer to race
+the first; and nothing can go stale. "We tried and the source had nothing", as
+against "we never tried", is the run log's job (`_runs/`).
 """
 
 """
@@ -56,16 +47,15 @@ field-required stat can be trusted.
 - `:vg_rider_list` — a grand tour's rider pool, which *is* its field: `riders.php`
   carries no Start List column for a stage race, and none is needed;
 - `:pool_pcs_filtered` — the season pool filtered through the PCS finishers,
-  which is every race before August 2026 and drops both of those groups silently;
+  which drops both of those groups silently;
 - `:pool` — the season pool unfiltered, when even PCS results are missing;
 - `:none` — no field at all.
 
-`unpriced_scorers` is the one that bites. A rider who scored but appears in
-neither the startlist nor the season pool is dropped by `load_report_data`'s
-`leftjoin` without a word: the page's points total is short by their score, and
-the cheapest-winning-team stat is wrong in the direction that matters, because
-it lives on exactly the cheap scorers most likely to be missing. Sergio Serrano
-scored at Classique Dunkerque 2026 and is in no surviving pool snapshot.
+A rider counted in `unpriced_scorers` scored but appears in neither the
+startlist nor the season pool, so `load_report_data`'s `leftjoin` drops them
+without a word: the page's points total is short by their score, and the
+cheapest-winning-team stat is wrong, because it depends on exactly the cheap
+scorers most likely to be missing.
 """
 struct RaceCompleteness
     pcs_slug::String
@@ -94,12 +84,10 @@ end
 
 Read the archive and report what it holds for one race.
 
-**Archive-only, on purpose.** The obvious implementation reaches for
-`load_vg_classics_riders` and `load_vg_startlist`, and both of those scrape and
-archive on a miss — so the function whose job is to report what the archive holds
-would quietly change the answer by asking the question, and an ingest phase that
-bracketed its work with a before-and-after reading would find the "before" had
-already done half the work. Every read here goes through `load_race_snapshot`.
+**Archive-only.** `load_vg_classics_riders` and `load_vg_startlist` scrape and
+archive on a miss, so using them here would change the answer by asking the
+question, and `ingest_race`'s "before" reading would already have done half the
+work. Every read here goes through `load_race_snapshot`.
 """
 function race_completeness(
     pcs_slug::AbstractString,
@@ -225,8 +213,8 @@ This race's rows of the season's `vg_startlist`, read from the archive alone.
 
 `load_vg_startlist` does the same job but reaches `getvg_race_list`, which
 scrapes and archives `races.php` on a miss. Here the racelist is read straight
-from `vg_racelist`; a season with no archived racelist simply has no startlist to
-report, which is the honest answer for a completeness check.
+from `vg_racelist`; a season with no archived racelist has no startlist to
+report.
 """
 function _archived_startlist(
     slug::String,
@@ -260,9 +248,9 @@ unpriced_share(c::RaceCompleteness) =
 Whether the hindsight knapsacks can see every rider who scored. False when a
 scorer cannot be priced at any cost: the optimal and cheapest-winning teams are
 then optimising over a field missing exactly the riders they would most want, and
-both answers are bounds rather than answers.
+both answers are bounds.
 
-Deliberately not called "complete" — a race can pass this and still have a field
+Not called "complete": a race can pass this and still have a field
 reconstructed from the season pool, which is what `field_basis` reports and what
 `field_basis_note` puts on the page.
 """

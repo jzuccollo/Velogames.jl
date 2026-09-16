@@ -3,9 +3,8 @@ Shared data assembly functions used by both the production pipeline
 (`_prepare_rider_data` in race_solver.jl) and backtesting pipeline
 (`prefetch_race_data` in backtest.jl).
 
-Eliminates divergence by providing a single implementation of race
-history, VG history, PCS specialty join logic, and the shared `RaceData`
-container.
+One implementation of race history, VG history, PCS specialty join logic, and
+the shared `RaceData` container, so the two pipelines cannot diverge.
 """
 
 
@@ -19,8 +18,7 @@ const SIMILAR_RACE_VARIANCE_PENALTY = 1.0
 
 """Variance penalty for a grand-tour cross-history result (Giro/Vuelta → Tour,
 etc.). Larger than the classics penalty because GT GC form transfers more
-noisily; recency decay is applied per-edition on top of this. Tuning knob for
-the GT cross-history experiment."""
+noisily; recency decay is applied per-edition on top of this."""
 const GT_SIMILAR_VARIANCE_PENALTY = 3.0
 
 
@@ -55,7 +53,7 @@ standard data container between fetching and prediction.
     # Prior-edition classification history (stage races): points jersey + KOM standings
     points_history_df::Union{DataFrame,Nothing} = nothing
     kom_history_df::Union{DataFrame,Nothing} = nothing
-    # Prior-edition GT VG overall totals for THIS grand tour (Option A prototype)
+    # Prior-edition GT VG overall totals for THIS grand tour
     gt_vg_history_df::Union{DataFrame,Nothing} = nothing
 end
 
@@ -86,13 +84,12 @@ function join_pcs_specialty(riderdf::DataFrame, pcsriderpts::DataFrame)
             any(!ismissing(riderdf[i, col]) for col in specialty_cols) for
             i = 1:nrow(riderdf)
         ]
-        # `:hills` is deliberately absent from this list. The other five coalesce
-        # to zero because a rider with no sprint points genuinely is at the
-        # bottom of the field on sprinting. Hills is different: it is missing for
-        # every race before September 2026 and for any rider whose fetch was
-        # turned away, and zeroing that would tell the estimator those riders are
-        # bad at hills rather than unmeasured. `has_pcs_hills` reads the
-        # `missing` directly, so it has to survive to here.
+        # `:hills` is absent from this list. The other five coalesce to zero
+        # because a rider with no sprint points is at the bottom of the field on
+        # sprinting. Hills is missing for every race before September 2026 and
+        # for any rider whose fetch was turned away, and zeroing it would tell
+        # the estimator those riders are bad at hills when they are unmeasured.
+        # `has_pcs_hills` reads the `missing` directly.
         for col in [:oneday, :gc, :tt, :sprint, :climber]
             if col in propertynames(riderdf)
                 riderdf[!, col] = coalesce.(riderdf[!, col], 0)
@@ -115,19 +112,13 @@ end
 
 `getpcs_race_results` for one `(slug, year)`, but archive-first: both result
 types are `refetchable = true` and the archive typically already holds 2-3
-prior editions per race (and per similar-race slug) from an earlier render or
-from `archive_race_results`, so reading `load_race_snapshot` first restores the
-whole race-history signal with no live fetch at all. `force_refresh` bypasses
-the archive too, matching every other fetcher's escape hatch.
+prior editions per race (and per similar-race slug), so reading
+`load_race_snapshot` first usually needs no live fetch. `force_refresh`
+bypasses the archive too.
 
-`prefer_gc` picks the archive type as well as the URL. It used to steer only
-the live tail, so a caller asking for a grand tour's GC was handed whatever
-`pcs_results` held — a frame scraped from `/result`, which is the final
-stage's sprint. The two types exist precisely because they are not the same
-thing, and nothing in the shared schema records which page a row came from.
-Selecting the type also puts the GT signal back on the archive: the tree holds
-`pcs_gc_results` for every grand tour 2023-2026 but `pcs_results` for only two
-of them, so the old read missed and fell through to a blocked live fetch.
+`prefer_gc` picks the archive type as well as the URL. A grand tour's
+`pcs_results` frame is scraped from `/result`, which is the final stage, and
+nothing in the shared schema records which page a row came from.
 """
 function _pcs_results_archive_first(
     slug::String,
@@ -154,18 +145,13 @@ function _pcs_results_archive_first(
         )
     catch e
         e isa ScrapeBlockedError || rethrow()
-        # During a live render a block must propagate. A challenge quietly
-        # becoming "no history for that year" is the precise failure that let
-        # two races go out on VG-points-only predictions with a clean log, and
-        # `ScrapeBlockedError` exists to stop it.
+        # During a live render a block must propagate, not become "no history
+        # for that year".
         #
-        # Reconstruction is the other case, and the distinction is the
-        # transport switch rather than the exception. A backtest deliberately
-        # runs with the transport off (see `_TRANSPORT_ENABLED`), so "blocked"
-        # there means only "this edition is not in the archive" — expected, and
-        # not a reason to discard a race whose other three editions are present.
-        # Callers already drop empty years; hand them an empty frame and let
-        # them.
+        # A backtest runs with the transport off (see `_TRANSPORT_ENABLED`), so
+        # "blocked" there means only "this edition is not in the archive", which
+        # is no reason to discard a race whose other editions are present.
+        # Callers drop empty years.
         _TRANSPORT_ENABLED[] && rethrow()
         @debug "No archived results for $slug $year; reconstruction does not fetch"
         return DataFrame(
@@ -186,18 +172,12 @@ end
 `getpcs_race_history` across `years`, but archive-first per year via
 `_pcs_results_archive_first`. Matches `getpcs_race_history`'s output shape
 (adds `:year` to each edition's results); a year with no results anywhere
-(archive or live) is dropped, same as `getpcs_race_history`. Returns
-`nothing` — not a malformed empty frame — when no year contributed any rows,
-matching `getpcs_race_history`'s old behaviour of raising rather than handing
-back a result with none of the expected columns.
+(archive or live) is dropped. Returns `nothing` when no year contributed any
+rows, where `getpcs_race_history` raises.
 
-Each year is fetched in its own `try`/`catch`, so one bad year (a transient
-error on the one year requiring a live fetch, say) doesn't discard years
-already collected from the archive or from other live fetches — same as
-`getpcs_race_history`. `ScrapeBlockedError` is the one exception not swallowed
-here: a block found on one year will be found on every other year in this
-loop too, so it propagates to the caller rather than being folded into "no
-history for that year".
+Each year is fetched in its own `try`/`catch`, so one bad year doesn't discard
+the others. `ScrapeBlockedError` is the exception not swallowed: a block on
+one year will be found on every other year too.
 """
 function _pcs_race_history_archive_first(
     slug::String,
@@ -236,10 +216,7 @@ end
 
 Fetch PCS race history: prior-year primary results, prior-year similar-race
 results, and optionally within-year similar race results. Archive-first
-throughout (`_pcs_results_archive_first` / `_pcs_race_history_archive_first`):
-each `(slug, year)` pair is read from the `pcs_results` archive before any
-live fetch is attempted, which is typically enough on its own — the archive
-holds 2-3 prior editions for most races and their similar-race slugs.
+throughout (`_pcs_results_archive_first` / `_pcs_race_history_archive_first`).
 
 Returns a DataFrame with columns `riderkey`, `position`, `year`,
 `variance_penalty`, or `nothing` if no history could be fetched.
@@ -278,16 +255,12 @@ function assemble_pcs_race_history(
         end
         @info "Got $(race_history_df === nothing ? 0 : nrow(race_history_df)) primary race history results"
     catch e
-        # A block found while filling in the years the archive doesn't cover
-        # is worth stopping for, not folding into "this race has no history".
         e isa ScrapeBlockedError && rethrow()
         @warn "Failed to fetch race history for $pcs_slug: $e"
     end
 
-    # --- Similar-race history: terrain-matched classics (penalty 1.0) plus
-    #     grand-tour cross-history (larger penalty). GT GC form transfers more
-    #     noisily than a terrain-matched classic, so its observations carry more
-    #     variance; recency decay on top is applied per-edition downstream. ---
+    # --- Similar-race history: terrain-matched classics plus grand-tour
+    #     cross-history (penalties documented on the constants). ---
     gt_slugs = include_gt_history ? get(GT_SIMILAR_RACES, pcs_slug, String[]) : String[]
     similar_specs = vcat(
         [
@@ -586,7 +559,7 @@ end
 
 
 # ---------------------------------------------------------------------------
-# Grand-tour VG-history assembly (Option A prototype, July 2026)
+# Grand-tour VG-history assembly
 # ---------------------------------------------------------------------------
 
 """One edition's full-field GT totals: archive first, live page second, archived on the way past.
@@ -629,16 +602,12 @@ them long. Returns a DataFrame with `riderkey`, `score`, `year` (the shape
 `_assemble_signals` expects for the GT VG-history signal), or `nothing` if no
 edition returned data.
 
-Deliberately same-race (Tour→Tour), not cross-grand-tour: the flagged
-break-hunter failures are all Tour-history cases, same-race is the lowest-bias
-option (identical scoring/competition), and the memory note records that
-cross-GT jersey history transfers poorly. Cross-GT is a possible extension.
+Same-race (Tour→Tour), not cross-grand-tour: same-race has identical scoring
+and competition, and cross-GT jersey history transfers poorly.
 
 Pass `pcs_slug` to read each edition from the `vg_stage_totals` archive before
-reaching for the live page. Without it this silently loses editions Velogames
-has retired — `spain/2024/ridescore.php` 404s while 2023 and 2025 still serve,
-so the 2026 Vuelta was running this signal on two prior editions out of three
-with the third sitting in the archive unread.
+reaching for the live page. Without it this loses editions whose Velogames
+pages have been retired (e.g. `spain/2024/ridescore.php` 404s).
 """
 function assemble_gt_vg_history(
     vg_slug::String,
@@ -691,11 +660,10 @@ market, against 0.65 for the sum).
 
 Rounds VG has opened but nobody has scored in yet are skipped. `ridescore.php`
 serves the full roster at zero for a round that has not been ridden, and those
-rows would otherwise land in the denominator — deflating the mean of exactly the
-riders entered in the most upcoming rounds, which is the opposite of what the
-mean is here to avoid. The denominator is still rounds a rider was *rostered*
-for, not rounds ridden: a DNS is indistinguishable from a scoreless finish on
-this page, and both count as a zero-scoring round.
+rows would otherwise land in the denominator, deflating the mean of the riders
+entered in the most upcoming rounds. The denominator is still rounds a rider
+was *rostered* for, not rounds ridden: a DNS is indistinguishable from a
+scoreless finish on this page, and both count as a zero-scoring round.
 """
 function assemble_season_vg_points(
     year::Int,
@@ -810,21 +778,15 @@ end
 The Velogames classics rider pool for a season — name, team, cost, points —
 from the archive if it is there, otherwise scraped and archived on the way past.
 
-**Velogames retires a season's pages.** `sixes-classics/2025/riders.php` and its
-`sixes-superclasico` alias both 404 as of August 2026, and no other source has
-the full field: `vg_results` carries no cost, the published reports show a
-display slice (71% of rider-rows), and the vgleague snapshots record only what
-entrants picked (62%). So the pool has to be kept here or it is gone, and the
-2025 file was recovered from the Internet Archive.
+**Velogames retires a season's pages** (`sixes-classics/2025/riders.php` 404s),
+and no other source has the full field: `vg_results` carries no cost, the
+published reports show a display slice, and the vgleague snapshots record only
+what entrants picked. So the pool has to be kept here or it is gone.
 
-Reading the archive first is what `load_stage_race_report_data` has always done
-for grand tours via `vg_stage_riders`; the one-day path scraped unconditionally,
-which is the asymmetry that cost the 2025 back-catalogue.
-
-Costs are constant across a season — verified across all 40 races of 2025 — so a
+Costs are constant across a season (verified across all 40 races of 2025), so a
 pool frozen at archive time stays correct for reporting, which reads only rider,
-team and cost. The prediction path deliberately does not come through here: it
-needs live `points`.
+team and cost. The prediction path does not come through here: it needs live
+`points`.
 """
 function load_vg_classics_riders(
     year::Int;
@@ -852,14 +814,13 @@ end
     load_vg_startlist(pcs_slug, year; cache_config, archive_dir) -> Union{DataFrame, Nothing}
 
 The field that actually started one classic — rider, team, cost, points and
-class — from the `vg_startlist` archive vgleague writes (Phase 1c). `nothing`
-when that race has no archived startlist, which is every race before August
-2026 and any race the scrape missed.
+class — from the `vg_startlist` archive vgleague writes. `nothing` when that
+race has no archived startlist, which is every race before August 2026 and any
+race the scrape missed.
 
 `riders.php` shows the Start List column only for the race in progress, so this
-cannot be backfilled: whoever holds the page while the race is on is the only
-one who can record it. That is why the writer is on the Python side, which is
-the thing already sitting on that page every hour.
+cannot be backfilled. The writer is on the Python side, which already polls that
+page every hour.
 """
 function load_vg_startlist(
     pcs_slug::String,
@@ -897,10 +858,9 @@ computed rather than read: the Python writer omits it and the Julia one
 includes it, so neither can be assumed. `class`/`classraw` are present on some
 files only, and a file may carry the raw spelling without the normalised one —
 `build_model_stage`'s class constraints match on `allrounder`, not on the
-page's "All Rounder". And `:startlist` is left off entirely: `vg_stage_riders`
-records no start-list flag, the hash filter in `_prepare_rider_data` treats a
-missing column as "no filter", and `racehash` is empty for a stage race
-anyway. A synthesised value would only invite someone to trust it.
+page's "All Rounder". And `:startlist` is left off: `vg_stage_riders` records
+no start-list flag, the hash filter in `_prepare_rider_data` treats a missing
+column as "no filter", and `racehash` is empty for a stage race anyway.
 """
 function _shape_vg_stage_pool(stage_pool::DataFrame)
     pool = select(stage_pool, :rider, :team, :cost, :riderkey)
@@ -925,25 +885,18 @@ end
 The rider pool for one race in `getvg_riders`' own shape — archive first, live
 fetch second.
 
-Velogames answers `HTTP.jl` with a Cloudflare challenge on every page, so the
-live fetch is not a fallback that usually works: it is one that never does from
-this process, and the archived `vg_startlist` that `vgleague pool` writes is the
-only route a render has. It is kept as the tail anyway because the block is a
-posture that can lift, and because a race with no archived startlist (anything
-before August 2026) has nowhere else to go.
+The live fetch is the tail for a race with no archived startlist (anything
+before August 2026).
 
-Reading the archive is also the more correct of the two even when both work.
-`riders.php` shows its Start List column only for whichever race is open for
-entry, so a render started after the next race opens gets *that* race's field
-under this race's name — the season pool with the wrong 150 riders flagged. The
-archived startlist is stamped with the race number it was captured for.
+The archive is the more correct source even when both work. `riders.php` shows
+its Start List column only for whichever race is open for entry, so a render
+started after the next race opens gets *that* race's field under this race's
+name. The archived startlist is stamped with the race number it was captured
+for.
 
-Stage races take a different archive. `vg_startlist` is one file per season
-keyed by the classics game slug, so it holds no grand-tour rows at all, and a
-tour reaching for it got `nothing` and fell through to the blocked live fetch —
-the format an archive-first pool helps most was the one it did not serve.
-Their pools live in `vg_stage_riders`, one file per edition keyed by
-`pcs_slug`, which is what `race_format` routes to here.
+Stage races read `vg_stage_riders`, one file per edition keyed by `pcs_slug`;
+`vg_startlist` is one file per season keyed by the classics game slug and holds
+no grand-tour rows.
 
 `force_refresh` skips the archive, matching every other fetcher.
 """
@@ -1007,15 +960,14 @@ The field comes from the archived `vg_startlist` for that race where there is
 one, and otherwise from the season pool filtered through PCS finishers. The
 startlist is Velogames' own record of who was in the game that Sunday, so it
 keeps non-finishers and riders PCS never listed, both of which the PCS filter
-drops without saying so. Reporting is archive-only either way — the season pool
-is `load_vg_classics_riders`, which reads the archive first.
+drops without saying so. The season pool is `load_vg_classics_riders`, which
+reads the archive first.
 
-**Anyone in `vg_results` is in the field whatever the startlist says.** A
-startlist captured after the race is not a superset of it: Velogames revises
-the Start List column, and the copy taken three days after Cyclassics Hamburg
-2026 had lost two riders who scored, one of them an 8-credit rider on 228
-points. Dropping a scorer would understate every points total on the page and
-quietly break the cheapest-team stat, which lives on exactly those riders.
+**Anyone in `vg_results` is in the field whatever the startlist says.**
+Velogames revises the Start List column, so a copy captured after the race can
+lose riders who scored (two, in Cyclassics Hamburg 2026). Dropping a scorer
+would understate every points total on the page and break the cheapest-team
+stat.
 """
 function load_report_data(
     pcs_slug::String,
@@ -1042,15 +994,12 @@ function load_report_data(
     # `vg_startlist` accumulates down the season, is written by the Python side,
     # and `ARCHIVE_TYPES` puts no uniqueness constraint on it. A rider listed
     # twice survives the `leftjoin` below as two rows and is counted twice in
-    # `sum(df.score)` and in the cheapest-team stat — a plausible page with the
-    # wrong numbers on it, not an error.
+    # `sum(df.score)` and in the cheapest-team stat, with no error.
     #
-    # Keeping the first occurrence is a choice, not an accident of the `vcat`
-    # order: the startlist arm is first, so the price Velogames showed for that
-    # race beats the season pool's. Swapping the arms would silently swap which
-    # price survives. Applied to both arms because `load_vg_classics_riders`
-    # hands back the archived pool verbatim, and `backfill_archive.jl` already
-    # dedupes that same pool on riderkey.
+    # Keeping the first occurrence depends on the `vcat` order: the startlist
+    # arm is first, so the price Velogames showed for that race beats the
+    # season pool's. Applied to both arms because `load_vg_classics_riders`
+    # hands back the archived pool verbatim.
     unique!(field, :riderkey)
 
     df = leftjoin(field, vg_results[:, [:riderkey, :score]]; on = :riderkey)
@@ -1061,16 +1010,11 @@ function load_report_data(
         pcs_results = load_race_snapshot("pcs_results", pcs_slug, year)
         if pcs_results !== nothing && :riderkey in propertynames(pcs_results)
             starter_keys = Set(pcs_results.riderkey)
-            # A rider who scored was in the race, whatever PCS says — the same
-            # rule the startlist arm above applies, and it belongs here too.
-            # The two sources write names in different orders, so a rider can
-            # miss the PCS filter on a `riderkey` mismatch rather than on having
-            # abandoned: Velogames' "Thomas Pidcock" and PCS's "Pidcock Tom" key
-            # differently, and Liège-Bastogne-Liège 2023 lost its second-placed
-            # rider and his 540 points from the page. Across 2023-26 the filter
-            # was dropping realised points from 76 of 137 races, up to 9.7% of
-            # one, and `unpriced_scorers` reported none of it because those
-            # riders were priced perfectly well.
+            # A rider who scored was in the race, whatever PCS says, as in the
+            # startlist arm above. A rider can miss the PCS filter on a
+            # `riderkey` mismatch: Velogames' "Thomas Pidcock" and PCS's
+            # "Pidcock Tom" key differently. `unpriced_scorers` does not catch
+            # this, because those riders are priced.
             filter!(row -> row.riderkey in starter_keys || row.score > 0, df)
         end
     end
@@ -1094,11 +1038,9 @@ function load_stage_race_report_data(
     vg_slug = get(_STAGE_RACE_VG_SLUGS, pcs_slug, "")
     isempty(vg_slug) && return nothing
 
-    # Archive-only, as the one-day twin has been since WP1d. Reporting that can
-    # scrape is reporting whose output depends on whether Velogames was up when
-    # somebody pressed render, and Velogames retires a season's pages — so the
-    # fallback was not a safety net, it was the thing that stopped the 2025
-    # back-catalogue rebuilding. `scripts/ingest.jl` fills these.
+    # Archive-only, like the one-day twin: Velogames retires a season's pages,
+    # and a report should not depend on whether the site was up at render time.
+    # `scripts/ingest.jl` fills these.
     totals = load_race_snapshot("vg_stage_totals", pcs_slug, year)
     riders_df = load_race_snapshot("vg_stage_riders", pcs_slug, year)
     totals === nothing && return nothing
@@ -1142,9 +1084,8 @@ end
 
 Fetch every stage's Velogames scores for a grand tour, one request per stage.
 The ingest half of `load_stage_race_per_stage_data`, which reads only the
-archive. A stage that fails is warned about and left out rather than aborting the
-tour — a tour missing one stage is still worth archiving, and the next ingest
-retries it because the snapshot is only written once all of them are in.
+archive. A stage that fails is warned about and left out instead of aborting the
+tour.
 """
 function fetch_stage_race_per_stage_data(
     pcs_slug::String,
@@ -1325,9 +1266,9 @@ function archive_stage_race_results(
         end
     end
 
-    # Archive PCS stage profiles. Since WP3 the pre-race solver writes this same
-    # type, so this guard now usually skips and a mis-scraped pre-race profile is
-    # never corrected afterwards. Acceptable: profiles are static facts.
+    # Archive PCS stage profiles. The pre-race solver writes this same type, so
+    # this guard usually skips and a mis-scraped pre-race profile is never
+    # corrected afterwards. Acceptable: profiles are static facts.
     if load_race_snapshot("pcs_stage_profiles", pcs_slug, year) === nothing
         try
             profiles = suppress_output() do

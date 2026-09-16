@@ -30,11 +30,9 @@ struct StageRaceDiagnostics
     final_team_position_counts::Dict{String,Vector{Int}}  # team_name → positions
 end
 
-# Per-stage points-jersey allocation, intermediate-sprint banner points, and
-# per-event breakaway-noise scales now live in `StageSimConfig` (race_helpers.jl)
-# so they can be threaded and calibrated. `_breakaway_sd` blends a per-event,
-# per-dimension breakaway σ against `stage_dimension_weights`; `_aleatoric_sd`
-# does the same for the race-day scatter scale `a_type`.
+# `_breakaway_sd` blends a per-event, per-dimension breakaway σ against
+# `stage_dimension_weights`; `_aleatoric_sd` does the same for the race-day
+# scatter scale `a_type`.
 @inline function _breakaway_sd(event::Symbol, w::NamedTuple, breakaway_noise::NamedTuple)
     scale = getproperty(breakaway_noise, event)
     return w.flat * scale.flat +
@@ -268,20 +266,17 @@ end
 end
 
 # Daily mountains (KOM) classification. On climbing stages the top riders over
-# the day's climbs bank `daily_mountains_class` points — a real income stream
-# (up to 33/stage) that the sim previously omitted entirely, under-scoring pure
-# climbers / polka-dot contenders. Per-climb HC/Cat-1 points can't be modelled
-# (the PCS scraper leaves `n_hc_climbs`/`n_cat1_climbs` at 0), so we rank by
-# climbing ability plus the stage's realised luck (`noisy - strengths_blend`).
+# the day's climbs bank `daily_mountains_class` points (up to 33/stage).
+# Per-climb HC/Cat-1 points can't be modelled (the PCS scraper leaves
+# `n_hc_climbs`/`n_cat1_climbs` at 0), so we rank by climbing ability plus the
+# stage's realised luck (`noisy - strengths_blend`).
 # Note `noisy` already carries the stage-finish breakaway noise on mountain
 # stages, so the daily-KOM order is positively correlated with the day's stage
-# result — reasonable, since the rider animating a mountain stage typically
-# leads over its climbs.
+# result, since the rider animating a mountain stage typically leads over its
+# climbs.
 #
 # The same daily points also accrue into `kom_total`, the cumulative per-sim
-# KOM tally that decides the final mountains jersey (July 2026 fix: the final
-# jersey previously ranked on mountain-stage top-5 FINISHES, which never read
-# `kom_s` and ignored hilly stages).
+# KOM tally that decides the final mountains jersey.
 @inline function _score_daily_mountains!(
     stage_pts::Vector{Float64},
     kom_total::Vector{Float64},
@@ -317,10 +312,9 @@ Continuous weighting across `(flat, hilly, mountain, itt)` for a single stage,
 derived primarily from PCS ProfileScore + summit-finish flag. Used by
 `simulate_stage_race` to blend per-dimension rider strengths.
 
-Replaces a discrete `stage_type` lookup that incorrectly treated all "hilly"
-stages identically — a Giro Tipo B with 680m vert and PS=14 (essentially a
-sprint stage) drew the same per-dimension projection as a hard summit-finish
-hilly with PS=152.
+A discrete `stage_type` lookup would treat all "hilly" stages identically — a
+Giro Tipo B with 680m vert and PS=14 (essentially a sprint stage) would draw the
+same per-dimension projection as a hard summit-finish hilly with PS=152.
 
 Anchor points (linear interpolation between), tuned against the empirical PS
 distribution seen on a real grand tour where PCS-flat stages score PS≈7-28,
@@ -348,10 +342,9 @@ function stage_dimension_weights(stage::StageProfile)
                (flat = 0.0, hilly = 1.0, mountain = 0.0, itt = 0.0)
     end
     ps = Float64(stage.profile_score)
-    # Flat-to-hilly ramp starts at PS 40 (not 20): a rolling sprint stage with a
-    # modest ProfileScore (~50-60) is still won by sprinters in a bunch finish,
-    # so it should stay majority-flat rather than tipping puncheurs/GC riders
-    # onto the podium. PS 58 → ~64% flat / 36% hilly.
+    # Flat-to-hilly ramp starts at PS 40: a rolling sprint stage with a modest
+    # ProfileScore (~50-60) is still won by sprinters in a bunch finish, so it
+    # should stay majority-flat. PS 58 → ~64% flat / 36% hilly.
     if ps <= 40.0
         f, h, m = 1.0, 0.0, 0.0
     elseif ps <= 90.0
@@ -419,11 +412,10 @@ function simulate_stage_race(
     n_stages = length(stages)
     alpha = cross_stage_alpha
 
-    # If gc_strengths not supplied, fall back to per-rider mean across stage types.
-    # Production callers always supply gc_strengths via `compute_stage_strengths`;
-    # this fallback keeps synthetic test inputs working.
+    # Production callers always supply gc_strengths; this fallback keeps
+    # synthetic test inputs working.
     if isempty(gc_strengths)
-        # Average genuine stage types only: :kom is a jersey channel, not a
+        # Average stage types only: :kom is a jersey channel, not a
         # stage type, and :ttt duplicates :itt — including them skews the GC
         # proxy towards KOM specialists and double-weights the TT dimension.
         keys_present =
@@ -434,7 +426,7 @@ function simulate_stage_race(
 
     sim_vg_points = zeros(Float64, n_riders, n_sims)
 
-    # Diagnostic accumulators (always populated)
+    # Diagnostic accumulators
     diag_stage_finish = zeros(Int, n_stages, n_riders, 3)
     diag_stage_top10 = zeros(Int, n_stages, n_riders)
     diag_gc_top = length(scoring.final_gc_points)
@@ -457,7 +449,6 @@ function simulate_stage_race(
     team_scores = Vector{Float64}(undef, length(team_names))
     team_order = Vector{Int}(undef, length(team_names))
 
-    # Pre-allocate working arrays
     noisy = Vector{Float64}(undef, n_riders)
     strengths_blend = Vector{Float64}(undef, n_riders)
     positions = Vector{Int}(undef, n_riders)
@@ -506,23 +497,21 @@ function simulate_stage_race(
             #                correlated across all stages (a rider "secretly a
             #                bit better all tour"); scales with posterior σ.
             #   aleatoric  = a_stage·stage_noise_i — independent race-day scatter,
-            #                a FLAT per-stage-type scale (a_type, fitted by A1b),
-            #                NOT scaled by σ. This is what de-saturates the
-            #                stage-finish floor: even a low-uncertainty sprinter
-            #                gets real day-to-day placing variance.
+            #                a FLAT per-stage-type scale (a_type), NOT scaled by
+            #                σ, so even a low-uncertainty sprinter gets day-to-day
+            #                placing variance.
             # a_type is drawn fat-tailed (Student-t, `sim_config.aleatoric_df`,
             # default 5) to capture crashes / breakaways / echelons — a distinct
             # noise source from the Gaussian epistemic wobble, hence its own tail
-            # rather than the global `simulation_df`. SD contribution ≈ a_stage·√(df/(df-2)).
+            # and not the global `simulation_df`. SD ≈ a_stage·√(df/(df-2)).
             #
             # The aleatoric term feeds cumulative GC too ("a good day gains time"),
             # but ONLY in proportion to how much the stage separates GC. On a flat
             # bunch-sprint stage the whole peloton records the same GC time, so
-            # finishing 2nd vs 60th must not move GC — otherwise ~8 flat stages
-            # inject the largest source of spurious GC volatility from the days
-            # GC separates least. `gc_sep` = mountain + ITT weight (summit finishes
-            # already reallocate hilly→mountain), so flat/rolling days contribute
-            # ~no aleatoric GC time while mountains/ITTs contribute the full amount.
+            # finishing 2nd vs 60th must not move GC. `gc_sep` = mountain + ITT
+            # weight (summit finishes already reallocate hilly→mountain), so
+            # flat/rolling days contribute ~no aleatoric GC time while
+            # mountains/ITTs contribute the full amount.
             # The epistemic term (persistent ability) still feeds GC everywhere.
             a_stage = _aleatoric_sd(w, sim_config.aleatoric_noise)
             gc_sep = clamp(w.mountain + w.itt, 0.0, 1.0)
@@ -711,8 +700,6 @@ function simulate_stage_race(
 end
 
 
-# ---------------------------------------------------------------------------
-# Class-aware strength estimation for stage races
 # ---------------------------------------------------------------------------
 # Stage-race per-stage strength projection
 # ---------------------------------------------------------------------------

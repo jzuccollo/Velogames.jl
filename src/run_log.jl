@@ -2,21 +2,14 @@
 One record per pipeline phase run, so "why didn't Hamburg publish?" is a question
 the archive can answer.
 
-Before Phase 2 the only trace a publish left was launchd's log file, in a clone,
-on one machine, rotated by nobody. Archival was a side effect of rendering, so
-even that log could not distinguish "the ingest ran and Velogames had nothing"
-from "the ingest never ran" — the two look identical from the outside and have
-opposite remedies.
+It distinguishes "the ingest ran and Velogames had nothing" from "the ingest
+never ran", which look identical from the outside and have opposite remedies.
 
-**One file per run, not one appended file per month.** The design note asked for
-`_runs/{YYYY-MM}.arrow`. A single monthly file is read-modify-write, and the two
-writers are separate processes in separate clones holding different locks — the
-same shape WP6 named as the reason `append_league_winners` needed
-`.velogames-publish.lock`, except that here no lock is shared. Dropbox has no
-locking either, so a monthly file would also be the one file in the archive
-guaranteed to be edited from two machines on the same day. Unique filenames make
-the conflict unrepresentable, and a reader that wants the month concatenates the
-directory — which is how `league/raw` already works, for the same reason.
+**One file per run, not one appended file per month.** A monthly file is
+read-modify-write, the writers are separate processes in separate clones holding
+different locks, and Dropbox has no locking either. Unique filenames make the
+conflict unrepresentable; a reader that wants the month concatenates the
+directory, as with `league/raw`.
 """
 
 const RUN_LOG_TREE = "_runs"
@@ -41,10 +34,9 @@ end
 """
 A run identifier shared by every phase of one publish.
 
-`auto_publish.sh` exports `VELOGAMES_RUN_ID` so its five phases — three Julia
-processes, a shell step and a deploy — land in the log under one id and can be
-read back as one publish. Without it each process would invent its own, and
-"why didn't Hamburg publish?" would mean correlating on timestamps.
+`auto_publish.sh` exports `VELOGAMES_RUN_ID` so its Julia processes land in the
+log under one id and read back as one publish, instead of being correlated on
+timestamps.
 
 The `\\T` escapes the literal separator, which Dates would otherwise read as a
 format code.
@@ -66,7 +58,7 @@ run_log_dir(month::Date = Dates.today(); archive_dir::String = archive_dir()) =
 Append one run record to `_runs/{YYYY-MM}/`. Returns the path written.
 
 Failures here are warnings: a run log that cannot be written must not take down
-the publish it is describing. That is the whole point of it being a log.
+the publish it is describing.
 """
 function write_run_record(r::RunRecord; archive_dir::String = archive_dir())
     dir = run_log_dir(Date(r.started_at); archive_dir = archive_dir)

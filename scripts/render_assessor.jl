@@ -18,7 +18,7 @@ captured by closures there, and a reassigned captured variable would be boxed.
 
 The fresh branches go through the `RenderConfig` solver methods, so they receive
 the same odds, jersey markets and GT-history settings as the predictor and stage
-renderers. Hand-written kwarg lists here previously omitted them.
+renderers.
 """
 function _assessor_prediction(rc::RenderConfig)
     config = rc.race
@@ -154,8 +154,6 @@ function render_assessor(rc::RenderConfig)
                 catch
                     SCORING_GRAND_TOUR
                 end
-                # simulate_stage_race always returns (vg_points, diagnostics); we only
-                # need vg_points here.
                 first(
                     simulate_stage_race(
                         stages_from_archive,
@@ -451,15 +449,13 @@ function render_assessor(rc::RenderConfig)
         # what they say gets archived permanently, so the retrospective always
         # reads them fresh rather than off a cache filled before the finish —
         # unless `ingest.jl` has already archived a final snapshot, in which
-        # case that is the fresh read (VG blocks Julia's HTTP client outright,
-        # so a live fetch here can never do better than the archive anyway).
+        # case that is the fresh read.
         results_cache = CacheConfig(race_cache.cache_dir, 0)
 
         # Grand tours archive under "vg_stage_totals" (written by
         # `archive_stage_race_results`), not "vg_results" — reading the wrong
         # type here means the archive-first check never engages for stage
-        # races and always falls through to a live fetch against a blocked
-        # velogames.com.
+        # races and always falls through to a live fetch.
         results_archive_type = is_stage ? "vg_stage_totals" : "vg_results"
         local actual_results =
             !isempty(config.pcs_slug) ?
@@ -523,14 +519,13 @@ function render_assessor(rc::RenderConfig)
         end
 
         # Archive whatever of this race's results is still missing. This sits
-        # outside the branch above deliberately: `used_archived_results` is
-        # keyed on the VG half alone, so short-circuiting on it used to skip
-        # the PCS half too, and a race whose `vg_results` arrived from
-        # `vgleague ingest` while `pcs_results` did not could never be
-        # backfilled by re-rendering. Each half gates on its own absence, so
-        # this costs nothing when both are already there. A `vg_race_number`
-        # of 0 suppresses only the VG fetch, which is exactly the case where
-        # the archive already has it.
+        # outside the branch above: `used_archived_results` is keyed on the VG
+        # half alone, so short-circuiting on it would skip the PCS half too,
+        # and a race whose `vg_results` arrived from `vgleague ingest` while
+        # `pcs_results` did not could never be backfilled by re-rendering. Each
+        # half gates on its own absence, so this costs nothing when both are
+        # already there. A `vg_race_number` of 0 suppresses only the VG fetch,
+        # which is the case where the archive already has it.
         if !isempty(config.pcs_slug)
             try
                 suppress_output() do
@@ -559,9 +554,8 @@ function render_assessor(rc::RenderConfig)
             # there is one, the season pool otherwise, and in both cases
             # everyone who appears in `vg_results` whatever the startlist says.
             #
-            # That last rule is the one that matters here, and it is why the
-            # archived prediction cannot be the pool even though it carries all
-            # four columns. `filter_startlist` and `excluded_riders` trim the
+            # That last rule is why the archived prediction cannot be the pool
+            # even though it carries all four columns. `filter_startlist` and `excluded_riders` trim the
             # rider frame before the prediction is archived, so the prediction
             # pool is narrower than the VG field; `retro` is a left join *from*
             # the pool, so anyone missing from it is dropped along with their
@@ -571,10 +565,9 @@ function render_assessor(rc::RenderConfig)
             # hindsight-optimal benchmark, and understating the entrant's own
             # total whenever they picked one of them.
             #
-            # Velogames' live page is not an option either: it is Cloudflare-
-            # blocked to Julia, and its rider list is filtered to whichever race
-            # is next open for entry, so a day after the race it returns the
-            # *next* race's field entirely.
+            # Velogames' live page is not an option either: its rider list is
+            # filtered to whichever race is next open for entry, so a day after
+            # the race it returns the *next* race's field entirely.
             pool_cols = [:rider, :team, :cost, :riderkey]
             report_field =
                 isempty(config.pcs_slug) ? nothing :

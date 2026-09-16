@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# HTML page generation (replaces Quarto)
+# HTML page generation
 # ---------------------------------------------------------------------------
 
 """Slugify text for use as an HTML id attribute."""
@@ -57,18 +57,14 @@ function html_table(
     ridername = ridercol === nothing ? "" : cols[ridercol]
     render_cols = linking ? filter(!=(keyname), cols) : cols
 
-    # Numeric columns are right-aligned with tabular figures for clean place-value alignment.
     numeric =
         Dict(col => (eltype(display[!, col]) <: Union{Missing,Number}) for col in cols)
 
     io = IOBuffer()
-    # Wrap in a scroll container so wide tables (e.g. the 11-column stage profile)
-    # scroll horizontally rather than squeezing cell text onto multiple lines.
     write(io, "<div class=\"table-wrap\">\n")
     write(io, "<table class=\"table table-striped table-sm\">\n")
     !isempty(caption) && write(io, "<caption>$caption</caption>\n")
 
-    # Header
     write(io, "<thead><tr>")
     for col in render_cols
         cls = numeric[col] ? " class=\"num\"" : ""
@@ -76,7 +72,6 @@ function html_table(
     end
     write(io, "</tr></thead>\n<tbody>\n")
 
-    # Rows
     for row in eachrow(display)
         write(io, "<tr>")
         for col in render_cols
@@ -206,10 +201,6 @@ function plotly_html(
     return """<div id="$id" style="width:$(width); height:$(height);"></div>
 <script>Plotly.newPlot('$id', $json_str.data, $json_str.layout, {responsive: true, displayModeBar: false, displaylogo: false})</script>"""
 end
-
-# ---------------------------------------------------------------------------
-# Race report data assembly (used by site/race_report.qmd)
-# ---------------------------------------------------------------------------
 
 """
     write_report(page, dir, filename) -> String

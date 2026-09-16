@@ -154,7 +154,7 @@ end
 
 """
     expected_vg_points(sim_positions::Matrix{Int}, rider_teams::Vector{String},
-                       scoring::ScoringTable) -> Vector{Float64}
+                       scoring::ScoringTable) -> (mean_pts, downside_semi_dev)
 
 Compute expected Velogames points for each rider from Monte Carlo simulation results.
 
@@ -162,7 +162,8 @@ Includes:
 - **Finish points**: based on simulated finishing position (top 30 score)
 - **Assist points**: awarded when a teammate finishes top 3
 
-Returns a vector of expected VG points per rider.
+Returns per-rider mean VG points and the downside semi-deviation (below the
+mean) used for risk adjustment.
 """
 function expected_vg_points(
     sim_positions::Matrix{Int},

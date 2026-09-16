@@ -107,11 +107,8 @@ function _generate_synthetic_signals(
         Float64[], Int[]
     end
 
-    # Odds and oracle: bypass the production [0.001, 0.99] clamp.
-    # SBC tests the conjugate update math; the clamp pins extreme strengths
-    # to a fixed decoded value, breaking the encode/decode round-trip and
-    # producing spurious non-uniform CDF ranks. We allow tiny epsilons only
-    # for numerical safety in the log step.
+    # Odds and oracle: encode strength as an implied probability that the
+    # estimator decodes with `log`. The epsilons guard the log step.
     odds_implied_prob = if :odds in available_signals
         odds_strength = true_strength + randn(rng) * sqrt(odds_variance(config))
         clamp(
@@ -321,7 +318,6 @@ function sensitivity_sweep(
 )
     rows = []
     for v in values
-        # Build config with overridden parameter
         fields = Dict{Symbol,Any}()
         for f in fieldnames(BayesianConfig)
             fields[f] = getfield(config, f)
@@ -405,7 +401,6 @@ function simulation_based_calibration(
         push!(ranks, cdf_rank)
     end
 
-    # Build histogram
     histogram = zeros(Int, n_bins)
     for r in ranks
         bin = clamp(ceil(Int, r * n_bins), 1, n_bins)

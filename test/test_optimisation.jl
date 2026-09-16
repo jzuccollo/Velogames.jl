@@ -190,7 +190,7 @@ end
 
 # Both retrospective pairs are lexicographic: the first objective alone leaves a
 # tie set the solver resolves arbitrarily, so each test builds a frame with a
-# deliberate tie and asserts the pinned member is the one returned.
+# tie and asserts the pinned member is the one returned.
 @testset "Retrospective team tie-breaks" begin
     @testset "compute_optimal_team breaks score ties on cost" begin
         # cheap6 and dear6 score the same, so the 450-point team is only unique
@@ -269,9 +269,9 @@ end
 
     @testset "cheapest-winning respects the budget" begin
         # Beating 500 needs one of the two 60-credit riders, and no six-rider
-        # team containing one fits the budget. A fieldable team exists — it just
-        # loses — so `nothing` here is the budget constraint biting, not
-        # infeasibility of the roster.
+        # team containing one fits the budget. A fieldable team exists but loses,
+        # so `nothing` here is the budget constraint biting, not infeasibility
+        # of the roster.
         df = DataFrame(
             rider = ["a$i" for i = 1:8],
             riderkey = ["a$i" for i = 1:8],
@@ -459,9 +459,7 @@ _resample_fixture() = DataFrame(
     @test all(result_df.selection_frequency .>= 0.0)
     @test all(result_df.selection_frequency .<= 1.0)
     @test all(result_df.downside_semi_dev .>= 0.0)
-    # _final_pts working column should be cleaned up
     @test :_final_pts ∉ propertynames(result_df)
-    # sim_vg_points matrix has correct dimensions
     @test size(sim_vg_pts) == (nrow(result_df), 100)
     @test all(sim_vg_pts .>= 0.0)
 end
@@ -493,16 +491,15 @@ end
         probs = [0.1, 0.6, 0.0]
         b = blend_market_points(pts, probs, 0.5)
         @test sum(b) ≈ 1.0                   # both arms unit-normalised
-        # Each arm is scale-free: rescaling EVG must not shift the blend. This is
-        # the property that makes the mixture meaningful rather than dominated by
-        # whichever arm happens to carry bigger numbers.
+        # Each arm is scale-free: rescaling EVG must not shift the blend, or
+        # whichever arm carries bigger numbers would dominate the mixture.
         @test blend_market_points(1000 .* pts, probs, 0.5) ≈ b
         @test blend_market_points(pts, 100 .* probs, 0.5) ≈ b
         # Endpoints
         @test blend_market_points(pts, probs, 1.0) ≈ pts ./ sum(pts)
         @test blend_market_points(pts, probs, 0.0) ≈ probs ./ sum(probs)
-        # The market arm genuinely bites: rider 2 is second on EVG but the
-        # market's favourite, and the blend puts them top.
+        # The market arm bites: rider 2 is second on EVG but the market's
+        # favourite, and the blend puts them top.
         @test argmax(b) == 2
         # All-zero market (nobody priced) degrades to the simulator's ordering
         # for any w > 0; at w = 0 there is nothing left to order by, which is why

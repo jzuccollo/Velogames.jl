@@ -1,7 +1,6 @@
 @testset "Archive round-trips for all data types" begin
     test_archive = mktempdir()
 
-    # Parameterised round-trip tests
     archive_cases = [
         (
             "odds",
@@ -54,11 +53,9 @@
     loaded = load_race_snapshot("odds", "test-race", 2025; archive_dir = test_archive)
     @test nrow(loaded) == 1
 
-    # Missing snapshot returns nothing
     @test load_race_snapshot("odds", "nonexistent", 2025; archive_dir = test_archive) ===
           nothing
 
-    # archive_path produces expected structure
     p = archive_path("oracle", "milano-sanremo", 2024; archive_dir = test_archive)
     @test endswith(p, joinpath("oracle", "milano-sanremo", "2024.arrow"))
 end
@@ -78,7 +75,7 @@ end
         end
     end
 
-    # Salt the tree with everything the live archive actually carries: Finder
+    # Salt the tree with everything the live archive carries: Finder
     # droppings, a loose non-tabular input at type level, and a retired subtree.
     touch(joinpath(tree, "odds", ".DS_Store"))
     touch(joinpath(tree, "odds", "milano-sanremo", ".DS_Store"))
@@ -168,8 +165,7 @@ end
     end
 
     # `copycols = true` materialises the mmapped columns. Without it a loaded
-    # frame is read-only backing: `sort!` and element assignment throw, which is
-    # what the `rematch_riderkeys!` workaround in utilities.jl existed to dodge.
+    # frame is read-only backing: `sort!` and element assignment throw.
     @test loaded.riderkey isa Vector{String}
     @test sort!(loaded, :cost) isa DataFrame
     loaded.riderkey[1] = "z"
@@ -181,7 +177,7 @@ end
     again = load_race_snapshot("odds", "mixed-race", 2026; archive_dir = tree)
     @test nrow(again) == nrow(mixed)
 
-    # A planted Feather V1 file is not an archive file any more.
+    # A planted Feather V1 file is not an archive file.
     planted = joinpath(tree, "odds", "mixed-race", "2019.feather")
     touch(planted)
     @test load_race_snapshot("odds", "mixed-race", 2019; archive_dir = tree) === nothing
@@ -211,18 +207,16 @@ end
         @test getfield(a, f) == getfield(b, f)
     end
 
-    # The narrow `stage_profiles` type is gone, not merely unused: nothing
-    # writes it, so nothing should find it.
+    # Nothing writes the narrow `stage_profiles` type, so nothing should find it.
     @test load_race_snapshot("stage_profiles", "test-tour", 2026; archive_dir = tree) ===
           nothing
 end
 
 @testset "Grand tours are dated like classics" begin
-    # _race_has_happened used find_race, which searches CLASSICS_RACES_2026
-    # alone, so every stage race fell to its "unknown date — protect by
-    # default" branch and read as already run. That made a grand tour's
-    # prediction archive write-once: the season's first render kept its
-    # snapshot and every later pre-race re-run was declined.
+    # A stage race with no resolved date falls to `_race_has_happened`'s
+    # "unknown date — protect by default" branch and reads as already run, which
+    # makes a grand tour's prediction archive write-once: every pre-race re-run
+    # after the first is declined.
     stage_cfg(name, year) =
         suppress_output(() -> setup_race(name, year, :stage))
     oneday_cfg(name, year) =
@@ -230,7 +224,7 @@ end
 
     this_year = Dates.year(Dates.today())
 
-    # Every grand tour resolves to a date rather than to nothing.
+    # Every grand tour resolves to a date.
     for name in ("giro", "tdf", "vuelta")
         cfg = stage_cfg(name, this_year)
         @test Velogames.resolve_race_date(cfg.pcs_slug, this_year) !== nothing
@@ -242,8 +236,7 @@ end
     @test Velogames._race_has_happened(oneday_cfg("roubaix", this_year - 1))
     @test !Velogames._race_has_happened(oneday_cfg("roubaix", this_year + 1))
 
-    # Within the current year the answer tracks the resolved date, so a stage
-    # race is no longer protected simply for being a stage race.
+    # Within the current year the answer tracks the resolved date.
     for name in ("giro", "tdf", "vuelta")
         cfg = stage_cfg(name, this_year)
         date = Velogames.resolve_race_date(cfg.pcs_slug, this_year)
@@ -284,8 +277,8 @@ end
         0.0,
     )
 
-    # Missing a mandatory column (:chosen) errors loudly rather than silently
-    # writing an incomplete archive.
+    # Missing a mandatory column (:chosen) errors instead of writing an
+    # incomplete archive.
     incomplete = DataFrame(
         riderkey = ["a", "b"],
         rider = ["A", "B"],
@@ -296,8 +289,8 @@ end
     )
     @test_throws ErrorException Velogames._archive_predictions(incomplete, config)
 
-    # Synthetic archive round-trip: every mandatory column survives, and the
-    # version rides in the file metadata rather than in a column of its own.
+    # Every mandatory column survives the round-trip, and the schema version is
+    # file metadata, not a column.
     test_archive = mktempdir()
     complete = DataFrame(
         riderkey = ["a", "b"],
@@ -342,9 +335,8 @@ end
     )
     legacy_pcs_results =
         DataFrame(riderkey = ["a", "b", "c", "d", "e"], position = [1, 2, 3, 4, 5])
-    # Planted with Arrow directly: `save_race_snapshot` would refuse both frames
-    # now, which is the point — these are what the archive holds from before the
-    # guard, not what anything is allowed to write today.
+    # Planted with Arrow directly, since `save_race_snapshot` refuses both
+    # frames: they stand for files written before the guard existed.
     for (df, data_type) in
         ((legacy_predictions, "predictions"), (legacy_pcs_results, "pcs_results"))
         path = archive_path(data_type, "legacy-test-race", 2024; archive_dir = test_archive)
@@ -358,8 +350,7 @@ end
 
 @testset "Empty cache entries expire quickly" begin
     # A results page fetched before the race finishes caches as empty. Holding
-    # that for the full TTL hides the real results for days afterwards, and the
-    # failure is silent — the report just says results are unavailable.
+    # that for the full TTL silently hides the real results for days afterwards.
     cache_dir = mktempdir()
     cache = Velogames.CacheConfig(cache_dir, 168)
     url = "https://example.invalid/ridescore.php?ga=13&st=26"
@@ -376,7 +367,7 @@ end
     @test n_fetches[] == 1
 
     # Empty results stay out of the in-memory cache, so a long-lived process
-    # rechecks rather than serving the miss forever.
+    # rechecks.
     @test !haskey(Velogames._MEMORY_CACHE, Velogames.cache_key(url, Dict()))
 
     # Still within the empty-entry window → served from disk, no refetch.
@@ -406,9 +397,8 @@ end
 @testset "Archive type guard (WP5)" begin
     tree = mktempdir()
 
-    # An unknown type errors, and — the property actually being bought — leaves
-    # no directory behind. An empty `prediction/` sitting beside `predictions/`
-    # is what made a typo look like a data type for four months.
+    # An unknown type errors and leaves no directory behind: an empty
+    # `prediction/` beside `predictions/` makes a typo look like a data type.
     @test_throws ErrorException save_race_snapshot(
         DataFrame(riderkey = ["a"]),
         "predicton",
@@ -418,7 +408,7 @@ end
     )
     @test !isdir(joinpath(tree, "predicton"))
 
-    # The narrow `stage_profiles` and every retired tree are unknown names now.
+    # The narrow `stage_profiles` and every retired tree are unknown names.
     for name in ["stage_profiles"; [r.name for r in RETIRED_ARCHIVE_TYPES]]
         @test_throws ErrorException save_race_snapshot(
             DataFrame(riderkey = ["a"]),
@@ -456,10 +446,8 @@ end
     tree = mktempdir()
 
     # A mandatory column present in every row but carrying nothing in any of
-    # them — the failure that poisoned the gp-industria and coppa-sabatini
-    # pcs_specialty files in September 2026: riderkey and rider populated,
-    # every rating column all-`missing` because the fetch was blocked rather
-    # than erroring.
+    # them: what a blocked fetch that does not error writes, with riderkey and
+    # rider populated and a rating column all-`missing`.
     hollow = DataFrame(
         riderkey = ["a", "b"],
         rider = ["A", "B"],
@@ -479,7 +467,7 @@ end
     )
     @test !has_race_snapshot("pcs_specialty", "hollow-guard-race", 2026; archive_dir = tree)
 
-    # Zero stays a value: a column that is genuinely all zeros is real data,
+    # Zero stays a value: a column that is all zeros is real data,
     # not a blocked fetch, so it writes.
     zeroed = DataFrame(
         riderkey = ["a", "b"],
@@ -495,10 +483,10 @@ end
     @test has_race_snapshot("pcs_specialty", "hollow-guard-race", 2026; archive_dir = tree)
 
     # An all-empty-string column is not hollow: Julia writers use `missing`
-    # uniformly for "the fetch found nothing", so a real `""` is a real value —
-    # exactly `league/meta`'s `deadline`, which is blank in every row for every
+    # uniformly for "the fetch found nothing", so a real `""` is a real value,
+    # as in `league/meta`'s `deadline`, which is blank in every row for every
     # grand tour because Velogames locks a stage race's roster for the whole
-    # tour rather than publishing a per-stage deadline.
+    # tour.
     blank_strings = DataFrame(riderkey = ["a", "b"], rider = ["A", "B"], odds = [2.5, 5.0])
     blank_deadline = DataFrame(
         race_number = [1, 2],
@@ -532,7 +520,8 @@ end
     loaded = load_race_snapshot("odds", "prov-race", 2026; archive_dir = tree)
     @test names(loaded) == names(df)
 
-    # A file written before WP5 has none, and that is not an error on read.
+    # A file written before provenance stamping has none, and that is not an
+    # error on read.
     path = archive_path("odds", "legacy-race", 2026; archive_dir = tree)
     mkpath(dirname(path))
     Velogames.Arrow.write(path, df)
@@ -568,8 +557,8 @@ end
     good = DataFrame(riderkey = ["a"], rider = ["A"], odds = [3.5])
     save_race_snapshot(good, "odds", "clean-race", 2026; archive_dir = tree)
 
-    # One planted defect of each kind, all of them things the write guard would
-    # now refuse — which is exactly why the audit has to look for them on disk.
+    # One planted defect of each kind. The write guard refuses all of them, so
+    # the audit has to find them on disk.
     mkpath(joinpath(tree, "oddz", "typo-race"))
     Velogames.Arrow.write(
         joinpath(tree, "oddz", "typo-race", "2026.arrow"),
@@ -643,7 +632,7 @@ end
         year;
         archive_dir = tree,
     )
-    # PCS saw only the two finishers, so the old filter would lose C entirely.
+    # PCS saw only two finishers, A and C.
     save_race_snapshot(
         DataFrame(
             riderkey = createkey.(["A Rider", "C Rider"]),
@@ -660,20 +649,17 @@ end
     )
 
     withenv("VELOGAMES_ARCHIVE" => tree) do
-        # No startlist yet: the field is the season pool filtered through PCS —
+        # No startlist yet: the field is the season pool filtered through PCS,
         # but a rider who scored is in the race whatever PCS says. D scored 200
-        # and never reached PCS, so the filter must keep him. It did not until
-        # August 2026, and the two sources' name orderings meant that was not a
-        # rare case: "Thomas Pidcock" and "Pidcock Tom" key differently, which
-        # cost Liège-Bastogne-Liège 2023 its second-placed rider and dropped
-        # realised points from 76 of 137 archived races.
+        # and never reached PCS, so the filter must keep him. This is common:
+        # the two sources order names differently, and "Thomas Pidcock" and
+        # "Pidcock Tom" key differently.
         @test load_vg_startlist("milano-sanremo", year) === nothing
         pcs_filtered = load_report_data("milano-sanremo", year)
         @test Set(pcs_filtered.rider) == Set(["A Rider", "C Rider", "D Rider"])
         @test sum(pcs_filtered.score) == 700   # 500 when the filter drops D
 
-        # With one, the field is Velogames' own — D, who scored but never
-        # reached PCS, comes back, and the whole race's points are on the page.
+        # With a startlist, the field is Velogames' own.
         save_race_snapshot(
             DataFrame(
                 race_number = [7, 7, 7],
@@ -705,9 +691,9 @@ end
         # season, and carries no uniqueness constraint the column guard can see.
         # A re-capture that appends rather than replaces would double the rider
         # through the leftjoin — a plausible page with the wrong totals on it.
-        # The re-appended row is priced differently on purpose: the first
-        # occurrence has to win, because the startlist arm comes first and that
-        # is the price Velogames showed for the race.
+        # The re-appended row is priced differently. The first occurrence has to
+        # win, because the startlist arm comes first and that is the price
+        # Velogames showed for the race.
         save_race_snapshot(
             DataFrame(
                 race_number = [7, 7, 7, 7],
@@ -744,8 +730,8 @@ end
     path = Velogames.archive_path("odds", "atomic-race", 2026; archive_dir = tree)
     racedir = joinpath(tree, "odds", "atomic-race")
 
-    # The sharp one: a rename replaces the inode, so a reader holding the old
-    # file keeps a whole file. An in-place truncate cannot do this.
+    # A rename replaces the inode, so a reader holding the old file keeps a
+    # whole file. An in-place truncate cannot do this.
     ino = stat(path).inode
     save_race_snapshot(
         DataFrame(riderkey = ["a", "b"], rider = ["A", "B"], odds = [3.5, 9.0]),
@@ -807,7 +793,7 @@ end
     # The only assertion that tells the two orderings apart.
     @test mtime(data_file) <= mtime(meta_file)
 
-    # The state a crash now leaves: data on disk, metadata not yet written. A
+    # The state a crash leaves: data on disk, metadata not yet written. A
     # reader must refetch rather than serve an empty result.
     rm(meta_file)
     n = Ref(0)
@@ -832,7 +818,7 @@ end
 end
 
 # ---------------------------------------------------------------------------
-# Phase 2: ingest as a phase, completeness computed from the archive
+# Ingest, and completeness computed from the archive
 # ---------------------------------------------------------------------------
 
 """A temp archive holding one classic, with whichever pieces the test asks for."""
@@ -869,7 +855,7 @@ function _phase2_tree(; startlist::Bool, pcs::Bool, unpriced::Bool)
         archive_dir = tree,
     )
 
-    # "E Rider" is in no price list at all — the Sergio Serrano case.
+    # "E Rider" is in no price list at all.
     scorers = unpriced ? ["A Rider", "D Rider", "E Rider"] : ["A Rider", "D Rider"]
     scores = unpriced ? [500, 200, 60] : [500, 200]
     save_race_snapshot(
@@ -1023,9 +1009,9 @@ end
         before = sort(collect(walkdir(tree)))
         race_completeness("milano-sanremo", 2099; archive_dir = tree)
         race_completeness("giro-d-italia", 2099; archive_dir = tree)
-        # The naive implementation reaches `load_vg_classics_riders`, which
-        # scrapes and archives on a miss — so asking the question would change
-        # the answer, and an ingest's before-and-after reading would be nonsense.
+        # `load_vg_classics_riders` scrapes and archives on a miss, so reaching
+        # it would make asking the question change the answer, and an ingest's
+        # before-and-after reading would be nonsense.
         @test sort(collect(walkdir(tree))) == before
     end
 end
@@ -1186,7 +1172,7 @@ end
 
 @testset "PCS block detection" begin
     @testset "looks_blocked" begin
-        # A genuine 403/429, with or without the Cloudflare header, is a block.
+        # A 403/429, with or without the Cloudflare header, is a block.
         @test Velogames.looks_blocked(Velogames.HTTP.Response(403, []; body = ""))
         @test Velogames.looks_blocked(Velogames.HTTP.Response(429, []; body = ""))
         @test Velogames.looks_blocked(
@@ -1200,8 +1186,8 @@ end
             Velogames.HTTP.Response(200, []; body = "Sorry, you have been blocked"),
         )
 
-        # A genuine 404 (page doesn't exist) and an ordinary 200 are not blocks —
-        # these are what let a genuinely missing rider stay a missing-data row.
+        # A 404 and an ordinary 200 are not blocks, so a missing rider stays a
+        # missing-data row.
         @test !Velogames.looks_blocked(
             Velogames.HTTP.Response(404, []; body = "<h1>Page not found</h1>"),
         )
@@ -1211,9 +1197,8 @@ end
     end
 
     @testset "scrape_get raises ScrapeBlockedError against a simulated challenge" begin
-        # A tiny loopback server standing in for a Cloudflare-challenged PCS —
-        # exercises the real `scrape_get` catch logic with no dependency on
-        # PCS's actual state today, and no real network access.
+        # A loopback server standing in for a Cloudflare-challenged PCS, so the
+        # test does not depend on PCS or the network.
         server = Velogames.HTTP.serve!(8971; verbose = false) do req
             if occursin("blocked", req.target)
                 return Velogames.HTTP.Response(
@@ -1228,20 +1213,18 @@ end
             end
         end
         sleep(0.2)
-        # A block no longer raises on its own — it escalates to the browser
-        # transport, which is the whole point of the fix. To test the escalation
+        # A block escalates to the browser transport. To test the escalation
         # without waiting out a real browser launch and its block backoff, point
         # `VGLEAGUE_BIN` at something that cannot run: `prefetch!` fails
-        # immediately, and `scrape_get` is left with nothing to return, which is
-        # the one remaining route to `ScrapeBlockedError`.
+        # immediately, and `scrape_get` is left with nothing to return, the one
+        # remaining route to `ScrapeBlockedError`.
         saved_bin = get(ENV, "VGLEAGUE_BIN", nothing)
         ENV["VGLEAGUE_BIN"] = joinpath(mktempdir(), "no-such-vgleague")
         try
-            # A genuine 404 stays an ordinary StatusError, so a caller's
-            # existing `e.status in (400, 404)` → missing-data handling still
-            # applies unchanged. Asserted BEFORE the block below, because a
-            # block puts the host in `_BLOCKED_HOSTS` and every later request to
-            # it skips `HTTP.get` entirely.
+            # A 404 stays an ordinary StatusError, so a caller's
+            # `e.status in (400, 404)` → missing-data handling still applies.
+            # Asserted BEFORE the block below, because a block puts the host in
+            # `_BLOCKED_HOSTS` and every later request to it skips `HTTP.get`.
             @test_throws Velogames.HTTP.Exceptions.StatusError Velogames.scrape_get(
                 "http://127.0.0.1:8971/rider/notfound",
             )
@@ -1257,8 +1240,8 @@ end
             )
 
             # That refusal is remembered for the host, so the next request skips
-            # the doomed `HTTP.get` — including one that would have been a
-            # perfectly ordinary 200.
+            # the doomed `HTTP.get`, including one that would have been an
+            # ordinary 200.
             @test "127.0.0.1:8971" in Velogames._BLOCKED_HOSTS
             @test_throws Velogames.ScrapeBlockedError Velogames.scrape_get(
                 "http://127.0.0.1:8971/rider/ok",
@@ -1272,24 +1255,17 @@ end
     end
 
     @testset "looks_blocked/scrape_get do not consume response.body" begin
-        # `String(v::Vector{UInt8})` takes ownership of `v` and empties it as
-        # a side effect — a real Julia behaviour, not a hypothetical.
-        # `looks_blocked` used to decode `response.body` this way to peek for
-        # challenge markers, which meant every caller of `scrape_get` that went
-        # on to do `String(response.body)` (getpcs_race_results,
-        # getpcs_rider_seasons, getpcs_specialty_by_season,
-        # getpcs_stage_profiles, _fetch_stage_details, getpcs_stage_results,
-        # _extract_rider_slugs, fetch_rider_pts) saw "" instead of the real
-        # page — on every successful, non-blocked fetch too, not just blocked
-        # ones. This checks byte length before and after, not just "looks
-        # non-empty".
+        # `String(v::Vector{UInt8})` takes ownership of `v` and empties it. If
+        # `looks_blocked` decoded `response.body` that way to peek for challenge
+        # markers, every caller of `scrape_get` that goes on to
+        # `String(response.body)` would see "" on every fetch, blocked or not.
+        # This checks byte length before and after.
         page_body = "<html>" * "x"^500 * "<div class=\"xvalue\">1</div></html>"
 
-        # Unit test: looks_blocked alone must not touch the buffer. Must be a
-        # genuine `Vector{UInt8}`, not the bare `String` kwarg — `HTTP.Response`
-        # stores a String body as `Base.CodeUnits`, whose `String(...)` method
-        # is a no-op wrapper unwrap and would pass even with the bug present.
-        # A real fetched response's `.body` is always a `Vector{UInt8}`.
+        # looks_blocked alone must not touch the buffer. The body must be a
+        # `Vector{UInt8}`, as a fetched response's is: `HTTP.Response` stores a
+        # String body as `Base.CodeUnits`, whose `String(...)` method is a
+        # no-op unwrap and would pass even with the bug present.
         resp = Velogames.HTTP.Response(200, []; body = Vector{UInt8}(codeunits(page_body)))
         @test resp.body isa Vector{UInt8}
         before_len = length(resp.body)
@@ -1300,7 +1276,7 @@ end
         @test after_len == before_len  # not emptied by the peek
         @test String(copy(resp.body)) == page_body  # and the content survived intact
 
-        # End-to-end: a real scrape_get round trip through a loopback server must
+        # End-to-end: a scrape_get round trip through a loopback server must
         # leave response.body with its full original content, not "".
         server = Velogames.HTTP.serve!(8972; verbose = false) do req
             return Velogames.HTTP.Response(200, []; body = page_body)
@@ -1320,13 +1296,11 @@ end
 
 @testset "_load_pcs_specialty: archive-first, cross-race, then live fetch" begin
     tree = mktempdir()
-    # Real slugs, not synthetic ones. The cross-race tier orders donors by
-    # their resolved race date and refuses to read one dated after the target,
-    # so it is a no-op for a slug `resolve_race_date` does not know — which is
-    # the correct fail-closed behaviour (a later race's ratings leaking
-    # backwards is the thing the date bound exists to stop) but means a test
-    # on invented slugs would silently exercise nothing. Lombardia in October
-    # with two Milano-Sanremos before it gives real dates in a known order.
+    # Real slugs: the cross-race tier orders donors by their resolved race date
+    # and refuses to read one dated after the target, so it is a no-op for a
+    # slug `resolve_race_date` does not know, and a test on invented slugs
+    # would exercise nothing. Lombardia in October with two Milano-Sanremos
+    # before it gives real dates in a known order.
     target_slug, target_year = "il-lombardia", 2026
     donor_new, donor_new_year = "milano-sanremo", 2026   # March 2026, newest before the target
     donor_old, donor_old_year = "milano-sanremo", 2023   # March 2023
@@ -1411,9 +1385,8 @@ end
         )
 
         # `_load_pcs_specialty` matches on the riderkey a real fetch would
-        # produce (`createkey(rider)`), not an arbitrary label — rider C's
-        # entry has to carry that, or the live-fetched row never matches
-        # `wanted` and looks like a miss rather than a live-tier hit.
+        # produce (`createkey(rider)`). Rider C's entry has to carry that, or
+        # the live-fetched row never matches `wanted` and looks like a miss.
         riderkey_c = createkey(rider_c_name)
         riderdf = DataFrame(
             riderkey = ["a", "b", riderkey_c],
@@ -1445,8 +1418,8 @@ end
     # re-render with a tighter racehash or more exclusions produces a strict
     # subset of the archived rows. `pcs_specialty` is `refetchable = false`, so
     # writing that subset straight over the file destroys ratings nothing can
-    # fetch back. The merge in `_prepare_rider_data` is what stops it; this is
-    # that merge, on the shape the call site uses.
+    # fetch back. This is the merge `_prepare_rider_data` applies to stop it, on
+    # the shape the call site uses.
     tree = mktempdir()
     spec(keys, pts) = DataFrame(
         riderkey = keys,
@@ -1482,11 +1455,10 @@ end
 end
 
 @testset "load_vg_race_pool reads vg_stage_riders for a stage race" begin
-    # Stage-race pools live in `vg_stage_riders`, keyed by pcs_slug. They used
-    # to be unreachable from here: the only archive read went through
-    # `load_vg_startlist`, which is keyed by the classics game slug and holds
-    # no grand-tour rows, so every tour fell through to a live Velogames fetch
-    # that Cloudflare refuses.
+    # Stage-race pools live in `vg_stage_riders`, keyed by pcs_slug.
+    # `load_vg_startlist` is keyed by the classics game slug and holds no
+    # grand-tour rows, so a tour read through it alone falls through to a live
+    # Velogames fetch that Cloudflare refuses.
     tree = mktempdir()
     save_race_snapshot(
         DataFrame(
@@ -1518,8 +1490,9 @@ end
 @testset "hollow-column guard: pcs_results.breakaway_km is exempt, nothing else is" begin
     tree = mktempdir()
 
-    # breakaway_km is missing in EVERY row by design — the JS-rendered shield
-    # markup an HTTP scrape cannot see — so this must still write.
+    # breakaway_km can be missing in EVERY row (no titled breakaway shield, or a
+    # file written before fetches went through a browser), so this must still
+    # write.
     pcs_results_df = DataFrame(
         riderkey = ["a", "b"],
         rider = ["Rider A", "Rider B"],
@@ -1531,8 +1504,8 @@ end
     save_race_snapshot(pcs_results_df, "pcs_results", "test-race", 2026; archive_dir = tree)
     @test has_race_snapshot("pcs_results", "test-race", 2026; archive_dir = tree)
 
-    # A genuinely hollow mandatory column on the SAME data type is still
-    # refused — the exemption is scoped to breakaway_km alone.
+    # A hollow mandatory column on the SAME data type is still refused: the
+    # exemption is scoped to breakaway_km alone.
     poisoned = DataFrame(
         riderkey = ["a", "b"],
         rider = ["Rider A", "Rider B"],
@@ -1550,8 +1523,7 @@ end
     )
 
     # The exemption does not leak to a different data type: pcs_specialty has
-    # none, so an all-missing rating column is still refused — this is the
-    # September 2026 poisoned-archive failure mode the guard exists to stop.
+    # none, so an all-missing rating column is still refused.
     poisoned_specialty = DataFrame(
         riderkey = ["a"],
         rider = ["Rider A"],
@@ -1577,9 +1549,8 @@ end
 # getpcs_rider_pts / getpcs_rider_seasons build their URL from a hardcoded
 # procyclingstats.com prefix, so they are not network-injectable. Each
 # testset below stubs the single-rider fetcher for its duration and restores
-# the real implementation afterward by re-including the file it lives in —
-# both the stub and the real function share one file, so the re-include
-# restores every function that file defines to exactly what is on disk.
+# the real implementation afterward by re-including the file it lives in,
+# which restores every function that file defines to what is on disk.
 # ---------------------------------------------------------------------------
 
 @testset "getpcs_rider_pts_batch: sub-threshold blocked riders are left uncovered" begin
@@ -1618,9 +1589,9 @@ end
         riders = ["Found Rider", "Miss Rider", "Blocked One", "Blocked Two"]
         result = getpcs_rider_pts_batch(riders)
 
-        # Two riders blocked below the raise threshold: no row for either —
-        # not even a missing-value one, which is what made a block
-        # indistinguishable from a genuine miss downstream.
+        # Two riders blocked below the raise threshold: no row for either, not
+        # even a missing-value one, which downstream would be indistinguishable
+        # from a miss.
         @test nrow(result) == 2
         @test Set(String.(result.rider)) == Set(["Found Rider", "Miss Rider"])
         found_row = only(filter(:rider => ==("Found Rider"), result))
@@ -1689,19 +1660,15 @@ end
 end
 
 # ---------------------------------------------------------------------------
-# Code-review fixes on the PCS Cloudflare-block diff (September 2026): a
-# malformed empty history frame, an unguarded specialty fetch, cross-race
-# provenance leaking into an own-race archive write, a future-leak in the
-# cross-race date bound, hollow rows blocking fallback tiers, one bad year
-# discarding a whole race-history result, an unbound recency-loop catch, and
-# the classification-history sibling missing the same block guard.
+# PCS history and specialty loaders: empty history, blocks that must propagate,
+# hollow rows, the cross-race date bound, and own-race archive writes
 # ---------------------------------------------------------------------------
 
 @testset "_pcs_race_history_archive_first / assemble_pcs_race_history: no history anywhere returns nothing" begin
     tree = mktempdir()
     withenv("VELOGAMES_ARCHIVE" => tree) do
-        # A `pcs_results` archive file that itself holds zero rows — exactly
-        # what a fetch that found no results but did not error produces. The
+        # A `pcs_results` archive file that itself holds zero rows, as written
+        # by a fetch that found no results but did not error. The
         # archive-hit path in `_pcs_results_archive_first` hands this back
         # directly, with no live fetch needed, so this is fully network-free.
         save_race_snapshot(
@@ -1721,8 +1688,8 @@ end
 
         # Zero rows collected across every year requested must come back as
         # `nothing`, not a frame carrying only `:variance_penalty` and none of
-        # `riderkey`/`position`/`year` — the malformed shape that used to
-        # crash `_prepare_rider_data`'s `race_history_df.riderkey` access.
+        # `riderkey`/`position`/`year`, a shape that crashes
+        # `_prepare_rider_data`'s `race_history_df.riderkey` access.
         result = Velogames._pcs_race_history_archive_first("no-history-race", [2024])
         @test result === nothing
 
@@ -1757,12 +1724,11 @@ end
     )
 
     # 2025 has no archive entry for either slug below, so
-    # `_pcs_results_archive_first` falls through to a live fetch. PCS
-    # currently Cloudflare-blocks every live Julia request
-    # (docs/pcs-cloudflare-block.md), so there is no reliable way to provoke a
-    # genuine *non-block* transient failure against the real site from a test
-    # — stand one in at the `getpcs_race_results` boundary instead, alongside
-    # a simulated block for a second slug.
+    # `_pcs_results_archive_first` falls through to a live fetch. A *non-block*
+    # transient failure cannot be provoked reliably against the real site (see
+    # docs/pcs-fetch-architecture.md), so stand one in at the
+    # `getpcs_race_results` boundary, alongside a simulated block for a second
+    # slug.
     function Velogames.getpcs_race_results(slug::String, year::Int; kwargs...)
         slug == "blocked-year-race" &&
             throw(Velogames.ScrapeBlockedError("simulated block for $slug $year"))
@@ -1780,17 +1746,17 @@ end
         @test Set(result.riderkey) == Set(["ridera", "riderb"])
         @test all(==(2024), result.year)
 
-        # A block, by contrast, still propagates rather than being folded
-        # into "no history for that year" — that silent fold is what let two
-        # races render on VG-points-only signal with a clean log.
+        # A block still propagates rather than being folded into "no history
+        # for that year", which would render the race on VG points alone with a
+        # clean log.
         @test_throws Velogames.ScrapeBlockedError Velogames._pcs_race_history_archive_first(
             "blocked-year-race",
             [2025],
         )
 
-        # Except in reconstruction, where the transport is deliberately off and
-        # "blocked" means only "not archived". A backtest asks for three or four
-        # prior editions; one missing must not discard the race.
+        # Except in reconstruction, where the transport is off and "blocked"
+        # means only "not archived". A backtest asks for three or four prior
+        # editions; one missing must not discard the race.
         with_browser_transport(false) do
             @test Velogames._pcs_race_history_archive_first(
                 "blocked-year-race",
@@ -1849,10 +1815,10 @@ end
     donor_slug, donor_year = "milano-sanremo", 2023
     withenv("VELOGAMES_ARCHIVE" => tree) do
         # Own-race archive: "hollow" is present but every rating is missing —
-        # riderkey/rider populated, exactly what a blocked-but-not-erroring
-        # fetch used to produce — alongside a genuinely rated rider, so the
-        # file-level hollow-column guard (which checks whether a whole COLUMN
-        # is all-missing) doesn't catch this per-ROW hollowness.
+        # riderkey/rider populated, as a blocked fetch that does not error
+        # writes, alongside a rated rider, so the file-level hollow-column guard
+        # (which checks whether a whole COLUMN is all-missing) doesn't catch
+        # this per-ROW hollowness.
         save_race_snapshot(
             DataFrame(
                 riderkey = ["hollow", "rated"],
@@ -1916,9 +1882,8 @@ end
         # Target race: Omloop Het Nieuwsblad 2026 (2026-02-28 per
         # CLASSICS_RACES_2026).
 
-        # A genuinely PRIOR edition — a year before the target is always
-        # earlier regardless of month — should be picked up by the cross-race
-        # tier.
+        # A PRIOR edition (a year before the target is earlier regardless of
+        # month) should be picked up by the cross-race tier.
         save_race_snapshot(
             DataFrame(
                 riderkey = ["past"],
@@ -1935,10 +1900,9 @@ end
             archive_dir = tree,
         )
 
-        # Strade Bianche 2026 (2026-03-07) is dated AFTER Omloop 2026: this is
-        # the exact "backfill an earlier race after a later one is archived"
-        # scenario — re-rendering Omloop must not leak Strade's rating back
-        # into it.
+        # Strade Bianche 2026 (2026-03-07) is dated AFTER Omloop 2026, as when
+        # an earlier race is backfilled after a later one is archived:
+        # re-rendering Omloop must not leak Strade's rating back into it.
         save_race_snapshot(
             DataFrame(
                 riderkey = ["future"],
@@ -2059,10 +2023,9 @@ end
         @test :_source ∉ propertynames(archivable)
 
         # Writing the filtered frame under the race's own key, then reading it
-        # back, must not surface the cross-race-sourced rider — this is the
-        # exact corruption the fix stops: a cross-race blend persisted back
-        # into the own-race `pcs_specialty` file, which `pcs_specialty` being
-        # `refetchable = false` means could never be corrected later.
+        # back, must not surface the cross-race-sourced rider. A cross-race
+        # blend persisted into the own-race file could never be corrected,
+        # because `pcs_specialty` is `refetchable = false`.
         save_race_snapshot(archivable, "pcs_specialty", "own-race", 2026; archive_dir = tree)
         reloaded = load_race_snapshot("pcs_specialty", "own-race", 2026; archive_dir = tree)
         @test Set(reloaded.riderkey) == Set(["a"])
@@ -2070,14 +2033,13 @@ end
 end
 
 @testset "PCS Hills: an absent rating is no observation, not an average one" begin
-    # The trap this guards. `pcs_z` yields `zeros(n_riders)` for a column that
-    # is not in the frame, and a z-score of 0.0 is a perfectly good observation
-    # of "exactly average" — so routing it into `:hilly` would sharpen every
-    # rider's hilly posterior toward the prior mean in every race archived
-    # before PCS began publishing Hills in September 2026. That is most of the
-    # archive, and it can never be backfilled: the ratings are
-    # season-cumulative, so a re-fetch records today's value under a past
-    # race's key.
+    # `pcs_z` yields `zeros(n_riders)` for a column that is not in the frame,
+    # and a z-score of 0.0 is a valid observation of "exactly average", so
+    # routing it into `:hilly` would sharpen every rider's hilly posterior
+    # toward the prior mean in every race archived before PCS began publishing
+    # Hills in September 2026. That is most of the archive, and it can never be
+    # backfilled: the ratings are season-cumulative, so a re-fetch records
+    # today's value under a past race's key.
     base = (
         has_pcs = true,
         pcs_sprint_z = 0.4,
@@ -2108,7 +2070,7 @@ end
     )
     @test strong.mean[hilly] > without.mean[hilly] > weak.mean[hilly]
 
-    # Routed, not leaked: Hills carries no weight on :flat or :itt.
+    # Hills carries no weight on :flat or :itt.
     for dim in (:flat, :itt)
         d = Velogames._DIM_INDEX[dim]
         @test strong.mean[d] ≈ weak.mean[d] atol = 1e-9
@@ -2116,8 +2078,8 @@ end
 end
 
 @testset "PCS Hills: the parser and the archive tolerate its absence" begin
-    # `hills` is deliberately not mandatory: the 30 files written before
-    # September 2026 lack it and must stay readable and writable.
+    # `hills` is not mandatory: the 30 files written before September 2026 lack
+    # it and must stay readable and writable.
     @test :hills ∉ Velogames.ARCHIVE_TYPES["pcs_specialty"].mandatory
     @test Velogames.ARCHIVE_TYPES["pcs_specialty"].version == 2
 
@@ -2168,9 +2130,9 @@ end
     Velogames.breakaway_observations(; archive_dir = dir, force_rebuild = true)
 
     keys = ["breakaway", "sitsin", "neverseen"]
-    # Explicit rather than default: the shrinkage ordering below is about the
-    # three values relative to each other, and leaning on whatever the default
-    # happens to be makes the test fail when the default is retuned.
+    # An explicit prior_strength: the shrinkage ordering below is about the
+    # three values relative to each other, and relying on the default would
+    # make the test fail when the default is retuned.
     rates, sectors = Velogames.compute_breakaway_rates_archive(
         keys; as_of = Date(2026, 12, 1), history_years = 10,
         prior_strength = 29.0, archive_dir = dir,
@@ -2181,7 +2143,7 @@ end
     @test rates[1] > rates[2]
     @test rates[1] < 0.75
     @test rates[2] > 0.0
-    # An unseen rider gets the field rate, not zero — absence of evidence.
+    # An unseen rider gets the field rate, not zero.
     @test rates[3] > 0.0
     @test rates[3] ≈ rates[2] atol = 0.05
 

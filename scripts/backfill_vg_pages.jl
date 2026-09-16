@@ -1,6 +1,6 @@
 #!/usr/bin/env julia
 # ---------------------------------------------------------------------------
-# backfill_vg_pages.jl — capture the Velogames pages that retire (WP1d)
+# backfill_vg_pages.jl — capture the Velogames pages that retire
 #
 # Velogames takes a season's pages down. `sixes-classics/2025/riders.php`, its
 # `sixes-superclasico` alias, and `races.php` for both 2024 and 2025 all 404 as
@@ -12,8 +12,7 @@
 #     field (62%, and they start at 2026 anyway).
 #
 # Grand tours were never exposed — `vg_stage_riders` has archived their pools
-# since 2023 and `load_stage_race_report_data` reads it first. This is the
-# one-day path catching up.
+# since 2023 and `load_stage_race_report_data` reads it first.
 #
 # Live seasons come from Velogames. Retired ones come from the Internet Archive,
 # whose snapshots are pinned by timestamp below so a re-run fetches the same

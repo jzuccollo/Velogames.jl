@@ -20,11 +20,9 @@ under `archive_dir()`:
 This is the **only** thing in this package that reads the vgleague repo.
 Everything downstream — the report renderer, the assessor, `league_eval.jl`,
 `auto_publish.jl` — reads the archive, so the league's data survives the
-machine it was scraped on, which the gitignored, backed-up-by-nothing JSON
-directory did not.
+machine it was scraped on.
 
-Idempotent: run it as often as you like. `auto_publish.sh` runs it before every
-publish, which is the ETL-then-publish ordering Phase 2 will formalise.
+Idempotent: run it as often as you like. `auto_publish.sh` runs it first.
 
 `--force` rebuilds `league/rosters` and `league/meta` from the newest snapshot
 even where nothing changed. Run it after changing `league_rosters_frame` or
@@ -68,8 +66,7 @@ function main(args)
     isempty(league) && error("No [league] section in $config_path")
 
     dry_run && println("dry run: reporting what would be written, writing nothing")
-    # Logged as a phase so a publish reads back as five steps rather than as one
-    # launchd log entry. A dry run logs nothing: it did not ingest anything.
+    # Logged as a phase in `_runs/`. A dry run logs nothing.
     run = () -> begin
         fresh = 0
         for r in ingest_league_dir(

@@ -16,7 +16,7 @@ function ensure_classification_columns!(
     end
 
     # Always (re)build the boolean class columns from the source class string.
-    # We can't simply skip when a column of the same name exists: the PCS
+    # We can't skip when a column of the same name exists: the PCS
     # specialty join in `data_assembly.jl` creates a numeric `:climber` rating
     # column (0-1000+) that collides with the VG-class boolean target. Trusting
     # that pre-existing column would let `df[!, :climber]' * x >= 2` be
@@ -121,8 +121,7 @@ totalcost`, an optional per-team cap, no-good cuts (k-best) and forced in/out
 riders.
 
 Separate from the objective because the retrospective knapsacks optimise the
-same constraints twice with different objectives (see `_lexicographic_team`),
-and building the set was the one thing they were duplicating.
+same constraints twice with different objectives (see `_lexicographic_team`).
 """
 function _team_model(
     df::DataFrame,
@@ -318,9 +317,8 @@ blend". Shared by the production one-day market blend and the `:odds` backtest
 arm so both read the market identically.
 
 "No usable market" covers a missing frame, a frame without the odds/riderkey
-columns, and a frame that prices nobody on `riderkeys` — an all-zero vector is
-not a market, and returning one would hand the optimiser a flat objective and a
-meaningless team rather than telling the caller to skip.
+columns, and a frame that prices nobody on `riderkeys` — an all-zero vector
+would hand the optimiser a flat objective and a meaningless team.
 
 `riderkeys` must come from the frame the probabilities will be used against —
 `estimate_strengths` rematches odds riderkeys in place, so call this *after* it.
@@ -349,9 +347,8 @@ const DEFAULT_MARKET_BLEND_WEIGHT = 0.5
 `w * unitnorm(pts) + (1 - w) * unitnorm(market_probs)`, with
 `unitnorm(x) = x / sum(x)`.
 
-Normalising both arms to unit sum is not cosmetic. A knapsack's argmax is
-invariant to scaling *one* points column, so each arm is scale-free on its own —
-but a *mixture* is not. `pts` is in VG points (tens to hundreds) and
+A knapsack's argmax is invariant to scaling *one* points column, but a
+*mixture* is not. `pts` is in VG points (tens to hundreds) and
 `market_probs` is a probability in [0, 1]; mixed raw, the market arm would be
 swamped and the blend would silently reduce to the simulator.
 """
@@ -474,10 +471,10 @@ function _resample_core!(
     # Deterministic optimisation on risk-adjusted expected points. Per-resample
     # team-frequency tracking is too noisy (hundreds of unique compositions with ~150
     # riders), so we optimise on points that account for both Jensen's inequality
-    # and uncertainty bias. Rather than a single solve, enumerate the `n_alternatives`
-    # best distinct teams (k-best via no-good cuts): the near-optimal set sits within
-    # a whisker of the best in EVG, so surfacing it lets the report expose the
-    # interchangeable "filler" slots and the structural either/or decisions.
+    # and uncertainty bias. Enumerate the `n_alternatives` best distinct teams
+    # (k-best via no-good cuts): the near-optimal set sits within a whisker of the
+    # best in EVG, and the report uses it to show the interchangeable "filler"
+    # slots and the structural either/or decisions.
     df[!, :_final_pts] = final_pts
     key_lists = _kbest_team_keys(
         df,
@@ -588,7 +585,7 @@ end
 
 
 # ---------------------------------------------------------------------------
-# GT VG points-propensity layer (Option B prototype, July 2026)
+# GT VG points-propensity layer (Option B)
 # ---------------------------------------------------------------------------
 
 """
@@ -598,7 +595,7 @@ end
 Learn each rider's persistent **points-propensity** log-factor `f_i` from the
 residual between their REAL historical grand-tour VG totals and the model's
 role-blind, ability-implied prediction. Unlike Option A (a strength nudge), this
-operates at the VG-points level and is deliberately **two-sided**:
+operates at the VG-points level and is **two-sided**:
 
 - `r_{i,e}` — the rider's real VG total in past edition `e` (from
   `gt_vg_history_df`, one row per rider-edition).
@@ -625,7 +622,7 @@ as-of-date startlists/costs/odds for each past edition — largely unavailable).
 This assumes ability is roughly stable across editions (recency weighting
 down-weights old ones). It captures the PERSISTENT multiplicative role factor,
 which is the signal we want; edition-specific ability drift is the residual
-leakage. See roadmap.md "GT VG points-propensity layer (Option B prototype)".
+leakage.
 """
 function gt_propensity_factors(
     riderkeys::Vector{String},
@@ -701,9 +698,6 @@ function resample_optimise_stage!(
     uncertainties = Float64.(df.uncertainty)
     teams = String.(df.team)
 
-    # Run all simulations at once. simulate_stage_race always returns
-    # (vg_points, diagnostics); we surface diagnostics for per-stage podium
-    # and classification top-K probabilities in reports.
     sim_vg_points, diagnostics = simulate_stage_race(
         stages,
         stage_strengths,
@@ -736,13 +730,11 @@ end
 Optimise `col1` over `feasible_model`'s constraint set, then optimise `col2`
 among the teams that achieve it.
 
-The second stage is not decoration. A single-objective knapsack leaves every
-team tied on that objective equally optimal, so the solver returns whichever it
-happens to find — on Hamburg 2026 the cheapest team beating the league was a
-1,332-point one from HiGHS and a 1,273-point one from CBC, both costing 42, and
-the report displayed an arbitrary member of that tie set. Pinning the first
-objective and optimising the second picks the same team every time, whatever the
-solver.
+A single-objective knapsack leaves every team tied on that objective equally
+optimal, so the solver returns whichever it happens to find — on Hamburg 2026 the
+cheapest team beating the league was a 1,332-point one from HiGHS and a
+1,273-point one from CBC, both costing 42. The second stage picks the same team
+every time, whatever the solver.
 
 `feasible_model` is a zero-argument closure because the set is built twice: JuMP
 cannot re-solve a model against a constraint written from its own objective
@@ -965,8 +957,7 @@ Decompose a k-best near-optimal team set into its two decision layers:
   slots. Gains a `:frequency` column (in how many of the near-optimal teams the
   rider appears) and is sorted by frequency, then cost, then EVG.
 
-`n_teams` is `length(top_teams)`. This is the "menu" a fantasy manager actually
-chooses from once the optimiser has fixed the expensive core.
+`n_teams` is `length(top_teams)`.
 """
 function compute_filler_pool(top_teams::Vector{DataFrame})
     isempty(top_teams) && return (DataFrame(), DataFrame(), 0)
@@ -1039,7 +1030,7 @@ The pivotal picks (expensive leaders) dominate this ranking; `forks` is the top
 `delta` as a share of the team's total — the only readable unit when `points_col`
 is a unit-normalised blend rather than raw VG points.
 
-`shape` (when `:strength_gc` is present) is the genuinely structural fork: the two
+`shape` (when `:strength_gc` is present) is the structural fork between the two
 strongest-GC riders. It compares the best team forced to carry **both** leaders
 against the best team carrying **at most one** (`max(best-without-g1,
 best-without-g2)`), reporting which shape wins and by how much EVG. `nothing`

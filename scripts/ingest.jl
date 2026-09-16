@@ -7,20 +7,14 @@ Usage:
     julia --project scripts/ingest.jl --pending [--years=2025,2026]
     julia --project scripts/ingest.jl --status --race=PCS_SLUG --year=YYYY
 
-This is the ETL phase that used to be a side effect of rendering. Until Phase 2
-`render_reports.jl` called `_ensure_results_archived`, so a report could scrape
-PCS and Velogames, and a failed fetch and a race that had not happened produced
-the same thing: no page. As a phase it either ran or it did not, and `_runs/`
-records which.
+Runs as its own phase, so `_runs/` records whether it ran.
 
 `--pending` is what the publish path calls: every race the league has recorded a
 winner for whose archive is short of a required type. Nothing to do is the normal
 answer and exits 0.
 
-**Exits non-zero when a race it was asked for is still short afterwards.** That
-is the whole difference from the old arrangement — `auto_publish.sh` stops before
-rendering rather than deploying a site with a race-shaped hole in it, and the
-recorded winner stays in the archive for the retry.
+**Exits non-zero when a race it was asked for is still short afterwards.** The
+recorded winner stays in the archive, so the next run retries.
 
 `--status` fetches nothing and prints what the archive already holds.
 """

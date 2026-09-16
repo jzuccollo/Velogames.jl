@@ -2,29 +2,19 @@
 # Bring the archive up to date for every league race the vgleague scrape has
 # scored: the snapshots, the derived winners, and the ProCyclingStats results.
 #
-# **This no longer renders or deploys anything.** Since Phase 3b the whole site —
-# race reports, rider dossier, league pages — is built by `vgleague build` and
-# deployed once, from the job that calls this. So what is left here is the ETL,
-# and the ordering that matters is that it runs *before* that build:
+# It renders and deploys nothing: `vgleague build` builds and deploys the whole
+# site from the job that calls this, and this ETL has to run before that build:
 #
 #   ingest-league  scripts/ingest_league.jl   the vgleague scrape into the archive
 #   derive         scripts/auto_publish.jl    each race's winner, from the
 #                                             snapshot contemporaneous with it
 #   ingest-race    scripts/ingest.jl          that race's results into the archive
 #
-# `ingest-vg` — the Velogames half — is not here either. It runs on the vgleague
-# side, as `vgleague ingest-all` in the job that fires this hook, because since
-# August 2026 velogames.com answers 403 to anything that is not a browser and
-# Python is the half that drives one.
+# `ingest-vg`, the Velogames half, runs on the vgleague side as `vgleague
+# ingest-all` in the job that fires this hook.
 #
-# Three things went with the render step, and none of them is missed. The
-# publish lock is still taken, because `append_league_winners` is
-# read-modify-write and two runs would lose a winner silently — but it no longer
-# has to hold for the minutes a render took. The dance where a race's HTML was
-# deleted so the incremental build would replace a winner-less page is gone: the
-# Python build renders every page every time, from an archive that is a pure
-# function of what has been ingested. And a failure here no longer takes the
-# site offline; the build simply runs against the archive as it stood.
+# A failure here leaves the site up: the build runs against the archive as it
+# stood.
 #
 # Safe to run on every tick.
 #
@@ -32,9 +22,9 @@
 # dedicated deploy clone (not a dev working directory), so it only ever runs
 # committed, pushed code.
 #
-# The name is historical — it published, once. It is kept because the deploy
-# machine's POST_UPDATE_HOOK points at this path, and a rename that missed that
-# would stop the hook silently.
+# The name is historical. It is kept because the deploy machine's
+# POST_UPDATE_HOOK points at this path, and a rename that missed that would stop
+# the hook silently.
 #
 # Usage: auto_publish.sh [--dry-run] [--config=PATH] [--min-age-hours=N]
 #                        [--redrive=PCS_SLUG]
@@ -47,15 +37,12 @@ set -uo pipefail
 # halfway through, and bash reads a script lazily by byte offset. A pull that
 # rewrites this file underneath the running shell would otherwise resume at an
 # offset that means nothing in the new text and execute whatever it lands on.
-# Nearly demonstrated for real by the commit that moved deployment to Netlify,
-# which rewrote the whole second half of this file.
 main() {
     REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     cd "$REPO_ROOT" || exit 1
 
-    # Parsed rather than forwarded. `--config=` belongs to ingest_league.jl and
-    # nothing else; forwarding "$@" to auto_publish.jl meant it was accepted
-    # there, ignored, and never reached the step that reads it.
+    # Parsed, not forwarded: `--config=` belongs to ingest_league.jl alone, and
+    # auto_publish.jl would otherwise accept and ignore it.
     DRY_RUN=
     CONFIG_ARG=
     MIN_AGE_ARG=
@@ -83,9 +70,8 @@ main() {
     }
 
     # The caller logs a failure here as one line and carries on, so a hook that
-    # fails every run looks like a hook that works. From 22 August to 16 September
-    # 2026 every run died loading Arrow and nothing noticed for 50 runs. A
-    # notification lands on the screen instead of in a log nobody reads.
+    # fails every run looks like a hook that works. A notification lands on the
+    # screen instead.
     on_exit() {
         status=$?
         rmdir "$LOCK_DIR" 2>/dev/null
@@ -95,9 +81,9 @@ main() {
 
     # The pull brings a new Project.toml but never a Manifest.toml, which is
     # gitignored. A dependency added upstream is then missing from this clone's
-    # manifest and every script dies at `using Velogames` — how Arrow broke the
-    # hook for four weeks. A pull that changes Project.toml leaves it newer than
-    # the manifest, so the mtimes say when to resolve.
+    # manifest and every script dies at `using Velogames`. A pull that changes
+    # Project.toml leaves it newer than the manifest, so the mtimes say when to
+    # resolve.
     sync_manifest_if_project_changed() {
         [ "$REPO_ROOT/Project.toml" -nt "$REPO_ROOT/Manifest.toml" ] || return 0
         echo "--- Project.toml newer than Manifest.toml: resolving ---"
@@ -152,9 +138,8 @@ main() {
     fi
 
     # The only step that reads the vgleague repo; everything after it reads the
-    # archive. It ran before the dry-run exit below until August 2026, which made
-    # --dry-run write to the append-only raw tier, so it now takes the flag
-    # itself.
+    # archive. It runs before the dry-run exit below, so it takes --dry-run
+    # itself to keep a dry run out of the append-only raw tier.
     echo "--- ingesting league snapshots ---"
     if ! jl ingest_league.jl ${DRY_RUN:+--dry-run} ${CONFIG_ARG:+"$CONFIG_ARG"}; then
         echo "ingest_league.jl failed; aborting before anything is derived from it." >&2

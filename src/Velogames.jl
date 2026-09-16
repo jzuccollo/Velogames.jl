@@ -267,7 +267,7 @@ export html_page,
     line_chart
 
 # Includes. Julia resolves function calls at runtime, so most ordering is free.
-# The real constraints are eval-time: a file's structs/consts must be defined
+# The constraints are eval-time: a file's structs/consts must be defined
 # before another file references them at load time (hence bayesian_core precedes
 # the strength pipeline, and scoring/race_helpers precede everything using them).
 # pcs_scraper precedes get_data because get_data calls into it.

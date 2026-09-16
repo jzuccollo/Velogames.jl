@@ -146,7 +146,7 @@ write(
 write(io, html_heading("Per-signal SBC", 4))
 write(
     io,
-    "<p>Each signal tested individually with the block-correlation discount skipped, isolating the conjugate update. Signals disabled in production (PCS form, VG history) are excluded — the estimator no-ops them so SBC would test nothing. Note: the synthetic oracle/odds generators bypass the production [0.001, 0.99] clamp on implied probabilities — the clamp pins extreme strengths to a fixed decoded value, breaking the encode/decode round-trip and producing spurious non-uniform CDF ranks. The per-signal test exercises only the listed-rider Bayesian update path; the oracle floor path (used for riders absent from oracle) is not tested here.</p>\n",
+    "<p>Each signal tested individually with the block-correlation discount skipped, isolating the conjugate update. Signals disabled in production (VG history) are excluded — the estimator no-ops them so SBC would test nothing. The per-signal test exercises only the listed-rider Bayesian update path; the oracle floor path (used for riders absent from oracle) is not tested here.</p>\n",
 )
 
 per_signal_sbc_rows = NamedTuple{
@@ -455,11 +455,10 @@ end
 write(io, html_heading("Signal directional accuracy", 4))
 write(
     io,
-    "<p>For riders with a signal shift > 0.1, does the shift direction match the actual outcome? A <em>correct direction</em> means: signal shifted strength up and the rider finished higher than the prior predicted (or vice versa). Accuracy near 50% means the signal is no better than random for direction; above 60% suggests genuine information. Computed from the historical backtest using rider-level shift and rank data.</p>\n",
+    "<p>For riders with a signal shift > 0.1, does the shift direction match the actual outcome? A <em>correct direction</em> means: signal shifted strength up and the rider finished higher than the prior predicted (or vice versa). Accuracy near 50% means the signal is no better than random for direction; above 60% suggests real information. Computed from the historical backtest using rider-level shift and rank data.</p>\n",
 )
 
 begin
-    # Collect rider-level predictions with shift columns from the backtest
     bt_shift_cols = [:shift_pcs, :shift_vg, :shift_history, :shift_vg_history]
     dir_accuracy_rows =
         NamedTuple{(:Signal, :n_riders, :Directional_accuracy),Tuple{String,Int,String}}[]
@@ -470,19 +469,10 @@ begin
         :shift_vg_history => "VG race history",
     )
 
-    # We need rider-level shift data + actual rank. The backtest stores rider_details
-    # (predicted_rank, actual_rank) but not per-signal shifts. We can approximate directional
-    # accuracy using the aggregate mean_signal_shifts from BacktestResult — but that's per-race,
-    # not per-rider. For a proper per-rider analysis we'd need to store shifts in rider_details.
-    # For now, report a note that this requires rider-level shift data.
-    #
-    # Alternative: re-run estimate_strengths on rider_details to recover shifts. But that's
-    # expensive and duplicates the backtest. Instead, add shift columns to rider_details.
-
     write(
         io,
         html_callout(
-            "Per-rider signal directional accuracy requires storing per-rider shift columns in <code>BacktestResult.rider_details</code>. Currently only aggregate mean |shift| per race is stored. The prospective evaluation section below has per-rider directional accuracy for the 10 archived races.";
+            "Per-rider signal directional accuracy requires storing per-rider shift columns in <code>BacktestResult.rider_details</code>. Currently only aggregate mean |shift| per race is stored. The prospective evaluation section below has per-rider directional accuracy.";
             type = "info",
         ),
     )
@@ -969,7 +959,7 @@ if nrow(pit_df) > 0
     write(io, html_heading("Signal directional accuracy", 3))
     write(
         io,
-        "<p>Two measures of whether each signal shifts riders in the correct direction. <strong>VG scoring</strong>: when a signal shifts strength up by > 0.5, what fraction of those riders scored VG points? <strong>Rank-based</strong>: for all riders with a non-trivial shift (|shift| > 0.1), what fraction had the shift direction match their actual PCS finishing position relative to the field median? Rank-based accuracy near 50% means the signal is no better than random; above 60% suggests genuine information.</p>\n",
+        "<p>Two measures of whether each signal shifts riders in the correct direction. <strong>VG scoring</strong>: when a signal shifts strength up by > 0.5, what fraction of those riders scored VG points? <strong>Rank-based</strong>: for all riders with a non-trivial shift (|shift| > 0.1), what fraction had the shift direction match their actual PCS finishing position relative to the field median? Rank-based accuracy near 50% means the signal is no better than random; above 60% suggests real information.</p>\n",
     )
 
     if nrow(augmented_pit) > 0
@@ -1179,12 +1169,6 @@ if nrow(pit_df) > 0
         end
 
         # --- Oracle: listed vs floor split ---
-        # The Oracle signal fires via two paths: a listed-rider Bayesian update
-        # using the published implied probability, and a floor observation for
-        # riders absent from Oracle's prediction. The aggregate within-tier ρ
-        # mixes these. Split here to identify whether Oracle's signal value
-        # lives in the listed-rider predictions or is being polluted by the
-        # floor path (or vice versa).
         if :shift_oracle in propertynames(rank_combined) &&
            :has_oracle in propertynames(rank_combined)
             write(io, html_heading("Oracle: listed-rider vs floor-path discrimination", 5))
@@ -1781,7 +1765,7 @@ if nrow(pit_df) > 0
             tier_names = ["Bottom 25%", "Middle 50%", "Top 25%", "Overall"]
 
             # ============================================================
-            # Part 2: Market signal configurations (races with odds)
+            # Market signal configurations (races with odds)
             # ============================================================
 
             write(io, html_heading("Market signal configurations", 4))
@@ -1877,7 +1861,7 @@ if nrow(pit_df) > 0
             end
 
             # ============================================================
-            # Part 3: Per-race breakdown (best configs only)
+            # Per-race breakdown (best configs only)
             # ============================================================
 
             write(io, html_heading("Per-race ablation (best configs)", 4))
@@ -2058,7 +2042,7 @@ end
 write(io, html_heading("Stage-race harness", 2))
 write(
     io,
-    """<p>Grand-tour editions reconstructed as-of race day from the archive (<code>prefetch_stage_race_data</code>) and scored against actual VG totals. Each predictor's 9-rider team is optimised on its own EVG under the production budget/class constraints and the same <code>max_per_team</code> cap production races under (2); <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's, computed under the identical constraint set. <em>Capture levels here are not comparable with values recorded in <code>roadmap.md</code> before July 2026, which were measured with the cap off.</em> Predictors: <code>simulator</code> (the full production stack, <code>champion_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code>, i.e. the team <code>solve_stage</code> actually enters at its default <code>risk_aversion=0.5</code> — the other arms all build an EVG-max team, so this is the only row measuring production's real construction rule), <code>persistence</code> (most recent prior-edition VG total), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years). These are the standing comparators for the WP2.3 champion–challenger gate.</p>\n""",
+    """<p>Grand-tour editions reconstructed as-of race day from the archive (<code>prefetch_stage_race_data</code>) and scored against actual VG totals. Each predictor's 9-rider team is optimised on its own EVG under the production budget/class constraints and the same <code>max_per_team</code> cap production races under (2); <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's, computed under the identical constraint set. Predictors: <code>simulator</code> (the full production stack, <code>champion_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code>, i.e. the team <code>solve_stage</code> enters at its default <code>risk_aversion=0.5</code>; the other arms all build an EVG-max team), <code>persistence</code> (most recent prior-edition VG total), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years). These are the standing comparators for champion–challenger gates.</p>\n""",
 )
 
 gt_editions = vcat(
@@ -2093,7 +2077,7 @@ end
 write(io, html_heading("Option A/B do-no-harm cross-check", 3))
 write(
     io,
-    """<p>Drift alarm for the harness (WP2.1): the 2026 Tour is reconstructed as-of race day and the Option A/B validation is re-run inside the harness — EVG four ways with the GT VG-history signal restricted to editions ≤ 2024, Spearman-correlated against riders' real 2025 Tour totals. <code>pass</code> compares each ρ against the <em>pinned post-WP2.3 baseline</em> (<code>base_*</code> columns) within ±0.03 — a false row means something has shifted the seeded pipeline since the baseline was pinned and should be investigated (or the baseline consciously re-based). The <code>rec_*</code> columns are the historical values recorded in roadmap.md on pre-Phase-1 code; they are kept for the record, not as the pass criterion — WP1.1, WP1.4 and the WP2.3 layer deletions each legitimately moved the level (attribution in the <code>crosscheck_option_ab</code> docstring).</p>\n""",
+    """<p>Drift alarm for the harness: the 2026 Tour is reconstructed as-of race day and the Option A/B validation is re-run inside the harness — EVG four ways with the GT VG-history signal restricted to editions ≤ 2024, Spearman-correlated against riders' real 2025 Tour totals. <code>pass</code> compares each ρ against the <em>pinned baseline</em> (<code>base_*</code> columns) within ±0.03 — a false row means something has shifted the seeded pipeline since the baseline was pinned and should be investigated (or the baseline re-based). The <code>rec_*</code> columns are the original July 2026 validation values, kept for the record rather than as the pass criterion; later model changes legitimately moved the level (attribution in the <code>crosscheck_option_ab</code> docstring).</p>\n""",
 )
 
 ab_df = try
@@ -2111,11 +2095,11 @@ ab_df !== nothing && write(io, html_table(ab_df))
 write(io, html_heading("One-day harness", 2))
 write(
     io,
-    """<p>A curated set of major classics reconstructed as-of race day (<code>prefetch_oneday_backtest_data</code>) and scored against actual scraped VG totals — the true scoreboard, with assist and breakaway points, not the finish-only proxy the per-race calibration section uses. Each predictor's 6-rider team is optimised on its own EVG under the budget and the same <code>max_per_team</code> cap production races under; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production one-day stack, <code>champion_oneday_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code> — the team <code>solve_oneday</code> actually enters at its default <code>risk_aversion=0.5</code>), <code>simulator_market</code> (the SHIPPED one-day rule since July 2026 — the risk-adjusted column blended with the market at <code>market_blend_weight=0.5</code>, both arms unit-normalised; marketed editions only, and it runs the production code path rather than reimplementing it), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years), <code>maxcost</code> (the star-buying baseline). The blend's <strong>pre-registered revert trigger</strong> is computed in the paired table below. This is the one-day twin of the stage-race harness above. Scope is limited to the classics below to bound the champion's resampling cost; widen <code>oneday_slugs</code> to cover more.</p>\n""",
+    """<p>A curated set of major classics reconstructed as-of race day (<code>prefetch_oneday_backtest_data</code>) and scored against actual scraped VG totals — the true scoreboard, with assist and breakaway points, not the finish-only proxy the per-race calibration section uses. Each predictor's 6-rider team is optimised on its own EVG under the budget and the same <code>max_per_team</code> cap production races under; <strong>team-points-captured</strong> is that team's actual points as a fraction of the hindsight-optimal team's. Predictors: <code>simulator</code> (the full production one-day stack, <code>champion_oneday_evg</code>), <code>simulator_risk</code> (the same EVG divided by <code>1 + risk_aversion·cv_down</code> — the team <code>solve_oneday</code> enters at its default <code>risk_aversion=0.5</code>), <code>simulator_market</code> (the shipped one-day rule — the risk-adjusted column blended with the market at <code>market_blend_weight=0.5</code>, both arms unit-normalised; marketed editions only), <code>odds</code> (implied win probability; 2026 editions only — no odds archives exist for earlier years), <code>maxcost</code> (the star-buying baseline). The blend's <strong>pre-registered revert trigger</strong> is computed in the paired table below. This is the one-day twin of the stage-race harness above. Scope is limited to the classics below to bound the champion's resampling cost; widen <code>oneday_slugs</code> to cover more.</p>\n""",
 )
 
-# Curated major classics (the review §2.1 set + monuments) — bounded so the
-# champion's per-edition resampling stays tractable in a report render.
+# Curated major classics, bounded so the champion's per-edition resampling stays
+# tractable in a report render.
 oneday_slugs = [
     "omloop-het-nieuwsblad", "kuurne-brussel-kuurne", "strade-bianche",
     "milano-sanremo", "classic-brugge-de-panne", "e3-harelbeke",
@@ -2124,12 +2108,10 @@ oneday_slugs = [
     "liege-bastogne-liege", "il-lombardia",
 ]
 
-# NOT `backtest_years`: that is the historical-backtest window (2023–2025), and
-# using it here silently excluded the entire 2026 season — the only year with
-# archived odds, so the `:odds` arm never produced a single row. Editions with no
-# archived VG truth (Lombardia 2026, an October race) are skipped by the catch.
-# Runs to the current season so the market blend's pre-registered 2027 check
-# needs a render, not an edit to this line.
+# Not `backtest_years` (the historical-backtest window, 2023–2025): 2026 is the
+# first year with archived odds. Editions with no archived VG truth are skipped by
+# the catch. Runs to the current season so the market blend's pre-registered 2027
+# check needs a render, not an edit to this line.
 oneday_harness_years = collect(2023:Dates.year(Dates.today()))
 
 oneday_harness_rows = DataFrame[]
@@ -2179,10 +2161,10 @@ else
     # BOTH produced a row — subtracting the summary means above compares
     # `simulator_market` (marketed editions only) against a `simulator` averaged
     # over every year in the harness. `simulator_risk` is the like-for-like
-    # baseline: it is the team `solve_oneday` actually enters, and the blend is
+    # baseline: it is the team `solve_oneday` enters, and the blend is
     # applied on top of that same risk-adjusted column, so the difference
-    # isolates the blend. `simulator` is kept alongside because the roadmap's
-    # shipped figure quotes it.
+    # isolates the blend. `simulator` is kept alongside because the shipped
+    # +0.079 figure quotes it.
     blend_pairs = let
         cap = unstack(
             select(oneday_rows, [:race, :year, :predictor, :team_points_captured]),
@@ -2233,7 +2215,7 @@ else
                 "<code>simulator_risk</code>, not <code>simulator</code>: the blend is " *
                 "applied to the risk-adjusted column, so differencing against the " *
                 "unadjusted arm bundles the risk adjustment into the measured effect. " *
-                "See roadmap.md, \"SHIPPED: one-day market blend\".";
+                "See roadmap.md, \"Pre-registered triggers\".";
                 title = "Revert trigger",
             ),
         )

@@ -1,13 +1,8 @@
 # ---------------------------------------------------------------------------
-# The league tier of the archive (Phase 1b)
+# The league tier of the archive
 # ---------------------------------------------------------------------------
 #
-# Until August 2026 the league lived in `~/code/vgleague-deploy/data/*.json`:
-# gitignored, machine-local, overwritten in place on every scrape and backed up
-# by nothing — while `league_winners.toml` sat in the archive as a five-field
-# summary of it, existing only because the source of truth was unreliable.
-#
-# Three tiers replace that, all under `archive_dir()`:
+# All under `archive_dir()`:
 #
 #   league/raw/{game_slug}_{year}_{league_id}/{YYYY-MM-DD}.json
 #   league/rosters/{game_slug}_{league_id}/{year}.arrow
@@ -15,9 +10,8 @@
 #   league/winners/{game_slug}_{league_id}/{year}.arrow
 #
 # The raw tier is dated and never overwritten because **names mutate at
-# source**: the Paris-Roubaix 2026 winner has been called three different things
-# in the three copies of the league that survive, so the only honest record is
-# what the site said on a given date. The derived tiers are a current-best view
+# source** (entrants rename their teams), so the only honest record is what the
+# site said on a given date. The derived tiers are a current-best view
 # rebuilt from the newest snapshot on every ingest; winners are the exception
 # and are append-only, because a winner is a fact about a particular Sunday.
 
@@ -110,11 +104,10 @@ end
 Write one raw league snapshot, dated, and return the date written — or
 `nothing` when the content matches the newest snapshot already held.
 
-Deduping on content rather than on the calendar is what keeps this tier to
-roughly one file per genuine state change (~40 a year) rather than one per
-scrape (~700), and means every file present marks something actually
-happening. A second write on the same day overwrites that day's file, so an
-intra-day revision replaces rather than accumulates.
+Deduping on content keeps this tier to roughly one file per state change (~40 a
+year) instead of one per scrape (~700). A second write on the same day
+overwrites that day's file, so an intra-day revision replaces rather than
+accumulates.
 
 `dry_run` returns what a real call would return and writes nothing.
 """
@@ -182,9 +175,8 @@ end
 The entrant × race × rider panel: `username, teamname, teamid, race_number,
 race_name, rider, cost, score, race_score`.
 
-One row per rider actually picked, so `race_score` (the entrant's total for
-that race) repeats down the rider rows — the join key every league stat starts
-from, and the thing the old five-field winners record was a summary of.
+One row per rider picked, so `race_score` (the entrant's total for that race)
+repeats down the rider rows.
 """
 function league_rosters_frame(snapshot)
     rows = NamedTuple[]
@@ -417,12 +409,9 @@ Full league standings from the archive: one row per
 `(username, teamname, race_name, race_number, score)`, every entrant's score in
 every race the league has scored.
 
-Aggregated from `league/rosters`, so the per-rider panel and the standings can
-no longer disagree — they were two readings of the same JSON before, and the
-scores that decide the league now come from the same rows the rider stats do.
-That has one cost: an entrant who picked nobody for a race has no rows in the
-panel and so no standings row, where reading the JSON gave them one on zero. It
-has not happened in any snapshot held (0 of 2,077 entrant-races).
+Aggregated from `league/rosters`, so the per-rider panel and the standings
+cannot disagree. The cost: an entrant who picked nobody for a race has no rows
+in the panel and so no standings row.
 
 If `toml_path` is given and exists, manually-recorded standings
 (`data/league_standings.toml`) override any race whose name matches one in the
@@ -476,7 +465,7 @@ end
 The riders `username` actually entered for the race identified by `pcs_slug`.
 Returns `String[]` when the league, the entrant or that race is absent —
 Velogames hides every team roster until the entry deadline passes, so a lookup
-run before the race legitimately comes back empty and the caller should fall
+run before the race comes back empty and the caller should fall
 back to a hand-entered team.
 
 League race names are matched to `pcs_slug` through `CLASSICS_RACES_2026`,
@@ -592,10 +581,6 @@ end
 
 Every recorded league winner, across every archived league-season, sorted by
 race then year. Empty when nothing has been recorded.
-
-Replaces the hand-maintained `league_winners.toml`, which existed only because
-the league snapshots lived somewhere nothing backed up. Same return shape, so
-the renderers and `league_eval.jl` read it unchanged.
 """
 function load_league_winners(; archive_dir::String = archive_dir())
     out = NamedTuple[]
@@ -617,10 +602,9 @@ function load_league_winners(; archive_dir::String = archive_dir())
         end
     end
 
-    # Readers key on `(pcs_slug, year)` — `render_reports.jl` builds a Dict
-    # comprehension off it — so a race recorded by two league-seasons does not
-    # collide, it silently keeps whichever was walked last. Nothing downstream
-    # can notice, so say it here.
+    # Readers key on `(pcs_slug, year)`, so a race recorded by two
+    # league-seasons silently keeps whichever was walked last. Nothing
+    # downstream can notice, so say it here.
     counts = Dict{Tuple{String,Int},Int}()
     for w in out
         counts[(w.pcs_slug, w.year)] = get(counts, (w.pcs_slug, w.year), 0) + 1
@@ -666,12 +650,10 @@ end
 
 Add rows to a league-season's winners table.
 
-Append-only, and the reason is the same one that made the raw tier dated: a
-winner is a fact about a particular Sunday, and entrants rename their teams.
-Re-deriving Paris-Roubaix 2026 today gives a name the winner adopted months
-later, and re-deriving it from the oldest snapshot still on disk gives a third
-name; only the entry written the week of the race is right. Use
-`remove_league_winner` to unpick one that went in wrong.
+Append-only, for the reason the raw tier is dated: a winner is a fact about a
+particular Sunday, and entrants rename their teams, so only the entry written
+the week of the race is right. Use `remove_league_winner` to unpick one that
+went in wrong.
 
 Read-modify-write, and `save_race_snapshot`'s atomic rename does not make it
 safe against a concurrent writer: two runs that each read the same table and
@@ -707,17 +689,14 @@ end
 Drop a race's recorded winner so it can be derived again. Returns how many rows
 went.
 
-A winner is recorded once and never re-derived, which is right — but it means
-one that went in wrong is wrong for ever, and the alternative repair is editing
-an Arrow file by hand, which no text editor does. Pair it with
+A winner is recorded once and never re-derived, so one that went in wrong stays
+wrong unless removed. Pair it with
 `auto_publish.jl --redrive=<slug>`, which removes the row and re-derives it in
 the same run.
 
-**Seeded rows are refused.** The 29 winners carried across when the league moved
-into the archive have an empty `snapshot_date` because no snapshot on disk
-predates them; four of them are reproducible from nothing else at all. Removing
-one destroys the only record there is, so the caller has to go and do that
-deliberately.
+**Seeded rows are refused.** Winners carried across when the league moved into
+the archive have an empty `snapshot_date` because no snapshot on disk predates
+them. Removing one destroys the only record there is.
 """
 function remove_league_winner(
     pcs_slug::AbstractString,
@@ -762,10 +741,9 @@ _top_entrant(df, score_col) = sort(df, [order(score_col, rev = true), :teamname]
 Winners the archive can now record for one league-season but hasn't yet, each
 read from **the earliest raw snapshot that satisfies the publishing gate** —
 the snapshot a run on the day would have used, not the newest one. Deriving
-from the newest would rewrite history every time an entrant renamed their team,
-which is the whole reason the raw tier is dated.
+from the newest would rewrite history every time an entrant renamed their team.
 
-The gates are the ones `auto_publish.jl` has always applied:
+The gates:
 
   * a classic waits `min_age_hours` (24 by default) past its pick deadline,
     because Velogames revises scores for about a day afterwards;
@@ -868,8 +846,7 @@ function _derive_classics_winners(
     rows = NamedTuple[]
     seen = copy(have)
     # Accumulated oldest-first so the diagnostic pass below can date a race the
-    # newest catalogue has since dropped — the live classics catalogue has
-    # already shrunk once, from 44 entries to 43.
+    # newest catalogue has since dropped.
     all_deadlines = Dict{Int,DateTime}()
     load(d) = load_league_snapshot(
         game_slug,
@@ -923,24 +900,19 @@ end
 
 """Say, once per race, why a scored classic has no winner recorded.
 
-Nothing here publishes anything — the gates above are deliberately strict, and a
-race they hold back stays held back. What this closes is that they held it back
-in silence.
+Nothing here publishes anything: a race the gates hold back stays held back,
+but not in silence.
 
 The reporting lives outside the loop above because that loop runs once per
-snapshot date: an `@info` in there prints one line per snapshot per race, which
-for a permanent defect is forty identical lines a run and is how a real warning
-stops being read.
+snapshot date, and an `@info` there would print one line per snapshot per race.
 
-The case worth knowing about is the season's last classic. `save_league_snapshot`
-dedupes on content, so a snapshot exists only where something changed; once the
-final race's scores settle nothing changes again, and no snapshot dated a full
-settling window past its deadline is ever written. The gate can then never be
-satisfied and `render_reports.jl` renders only a race that has a winner, so that
-report would never appear. The remedy is a one-off run at a lower threshold, and
-the message works out which threshold, because the obvious guess is wrong: a
-snapshot dated the race day is *negative* hours from an 11:00 deadline, so
-`--min-age-hours=0` does not rescue it.
+The case that matters is the season's last classic. `save_league_snapshot`
+dedupes on content, so once the final race's scores settle nothing changes
+again, and no snapshot dated a full settling window past its deadline is ever
+written. The gate can then never be satisfied and the race never gets a winner.
+The remedy is a one-off run at a lower threshold, and the message works out
+which: a snapshot dated the race day is *negative* hours from an 11:00
+deadline, so `--min-age-hours=0` does not rescue it.
 """
 function _report_unsettled_classics(
     newest,
@@ -1018,10 +990,8 @@ function _derive_grand_tour_winner(
     # The catalogue itself grows: End-of-Tour is added when the tour finishes,
     # so a snapshot taken between the last stage being scored and that entry
     # appearing lists every race it knows about as scored. Testing each snapshot
-    # against its own catalogue therefore passes on a partial total. On the 2026
-    # Giro that is 1,680 points, 20% of the winning total, on a race decided by
-    # 33 — and it reorders second through fifth. So gate on the newest
-    # catalogue. Newest rather than the union of every catalogue: a cancelled
+    # against its own catalogue therefore passes on a partial total (on the
+    # 2026 Giro, 20% of the winning total). So gate on the newest catalogue. Newest rather than the union of every catalogue: a cancelled
     # stage dropped from the list would otherwise be required for ever and the
     # tour would never publish at all.
     #
@@ -1029,9 +999,9 @@ function _derive_grand_tour_winner(
     # runs on every vgleague tick, so a run landing inside that window sees the
     # partial catalogue as the newest one and the first test cannot help. Content
     # dedupe means the newest snapshot's date is the last day anything moved, so
-    # requiring a full settling window since then is what makes the window
-    # unreachable rather than merely unlikely. Wall-clock age always grows, so
-    # unlike the classics gate this one cannot deadlock.
+    # requiring a full settling window since then makes the window unreachable.
+    # Wall-clock age always grows, so unlike the classics gate this one cannot
+    # deadlock.
     (now - DateTime(dates[end])) / Hour(1) < min_age_hours && return DataFrame()
     catalogue = _catalogue_numbers(newest)
 
@@ -1068,9 +1038,9 @@ end
 
 """Per-entrant, per-race scores straight out of one raw snapshot.
 
-Winner derivation reads the JSON rather than `league/rosters` because the
-derived table is rebuilt from the newest snapshot; the point of the exercise is
-to read an old one.
+Winner derivation reads the JSON instead of `league/rosters` because the
+derived table is rebuilt from the newest snapshot, and derivation needs an old
+one.
 """
 function _snapshot_standings(snapshot)
     rows = NamedTuple[]
