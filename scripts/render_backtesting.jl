@@ -1777,6 +1777,9 @@ if nrow(pit_df) > 0
                 result
             end
 
+            _format_rho(v) = v isa String ? v : (v isa Number && isnan(v)) ? "—" : "$v"
+            tier_names = ["Bottom 25%", "Middle 50%", "Top 25%", "Overall"]
+
             # ============================================================
             # Part 2: Market signal configurations (races with odds)
             # ============================================================
