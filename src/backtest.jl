@@ -216,43 +216,6 @@ function _build_pcs_slug_map(
     return slug_map
 end
 
-function _supplement_missing_pcs!(
-    archived_pcs::DataFrame,
-    riderdf::DataFrame,
-    slug_map::Dict{String,String};
-    cache_config::CacheConfig = DEFAULT_CACHE,
-    force_refresh::Bool = false,
-)
-    specialty_cols = [
-        c for
-        c in [:gc, :tt, :sprint, :climber, :oneday] if c in propertynames(archived_pcs)
-    ]
-    isempty(specialty_cols) && return
-
-    race_keys = Set(riderdf.riderkey)
-    missing_keys = Set{String}()
-    for row in eachrow(archived_pcs)
-        if row.riderkey in race_keys && all(ismissing(row[c]) for c in specialty_cols)
-            push!(missing_keys, row.riderkey)
-        end
-    end
-    isempty(missing_keys) && return
-
-    missing_names =
-        String.([r.rider for r in eachrow(riderdf) if r.riderkey in missing_keys])
-    isempty(missing_names) && return
-
-    @debug "Supplementing $(length(missing_names)) riders with missing archived PCS data"
-    fresh = getpcs_rider_pts_batch(missing_names; slug_map, cache_config, force_refresh)
-    for frow in eachrow(fresh)
-        idx = findfirst(==(frow.riderkey), archived_pcs.riderkey)
-        idx === nothing && continue
-        for c in propertynames(fresh)
-            c in propertynames(archived_pcs) && (archived_pcs[idx, c] = frow[c])
-        end
-    end
-end
-
 function prefetch_race_data(
     race::BacktestRace;
     vg_racelists::Union{Dict{Int,DataFrame},Nothing} = nothing,

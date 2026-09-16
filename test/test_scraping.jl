@@ -60,25 +60,6 @@ end
     end
 end
 
-@testset "getpcs_race_results schema" begin
-    # getpcs_race_results uses scrape_pcs_table (static HTML table parsing).
-    # div.svg_shield breakaway indicators are JavaScript-rendered and not
-    # present in raw HTTP responses, so in_breakaway is always false.
-    result_cols = [:position, :rider, :team, :riderkey, :in_breakaway, :breakaway_km]
-    mock_df = DataFrame(
-        position = [1, 2, 999],
-        rider = ["Rider A", "Rider B", "Rider C"],
-        team = ["Team X", "Team Y", "Team Z"],
-        riderkey = ["ridera", "riderb", "riderc"],
-        in_breakaway = [false, false, false],
-        breakaway_km = Union{Float64,Missing}[missing, missing, missing],
-    )
-    @test all(c in propertynames(mock_df) for c in result_cols)
-    # in_breakaway is always false (JS-rendered shields not available via HTTP.get)
-    @test all(.!mock_df.in_breakaway)
-    @test all(ismissing.(mock_df.breakaway_km))
-end
-
 @testset "_vg_scoring_field assist headings" begin
     # Every VG assist heading contains "Team" — either "Teammate" or "Overall
     # Team". The bare "team" test used to run ahead of the "stage" test and
