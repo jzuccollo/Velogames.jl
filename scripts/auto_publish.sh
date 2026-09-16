@@ -90,7 +90,7 @@ main() {
         status=$?
         rmdir "$LOCK_DIR" 2>/dev/null
         [ $status -eq 0 ] && return
-        osascript -e "display notification \"auto_publish.sh exited $status — see ~/Library/Logs/vgleague-update.log\" with title \"Velogames ETL failed\"" 2>/dev/null
+        osascript -e "display notification \"auto_publish.sh exited $status — see ~/Library/Logs/vgleague-update.log or vgleague-check.log\" with title \"Velogames ETL failed\"" 2>/dev/null
     }
 
     # The pull brings a new Project.toml but never a Manifest.toml, which is
