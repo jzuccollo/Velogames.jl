@@ -82,6 +82,32 @@ main() {
         julia --project="$REPO_ROOT" "$REPO_ROOT/scripts/$script" "$@"
     }
 
+    # The caller logs a failure here as one line and carries on, so a hook that
+    # fails every run looks like a hook that works. From 22 August to 16 September
+    # 2026 every run died loading Arrow and nothing noticed for 50 runs. A
+    # notification lands on the screen instead of in a log nobody reads.
+    on_exit() {
+        status=$?
+        rmdir "$LOCK_DIR" 2>/dev/null
+        [ $status -eq 0 ] && return
+        osascript -e "display notification \"auto_publish.sh exited $status — see ~/Library/Logs/vgleague-update.log\" with title \"Velogames ETL failed\"" 2>/dev/null
+    }
+
+    # The pull brings a new Project.toml but never a Manifest.toml, which is
+    # gitignored. A dependency added upstream is then missing from this clone's
+    # manifest and every script dies at `using Velogames` — how Arrow broke the
+    # hook for four weeks. A pull that changes Project.toml leaves it newer than
+    # the manifest, so the mtimes say when to resolve.
+    sync_manifest_if_project_changed() {
+        [ "$REPO_ROOT/Project.toml" -nt "$REPO_ROOT/Manifest.toml" ] || return 0
+        echo "--- Project.toml newer than Manifest.toml: resolving ---"
+        if ! julia --project="$REPO_ROOT" -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'; then
+            echo "manifest sync failed; aborting rather than running against a stale environment." >&2
+            exit 1
+        fi
+        touch "$REPO_ROOT/Manifest.toml"
+    }
+
     # One run at a time. `append_league_winners` is read-modify-write, so two
     # concurrent runs lose a winner silently — and the hook can fire from either
     # vgleague job. mkdir is atomic; macOS ships no flock.
@@ -103,7 +129,7 @@ main() {
             exit 0
         fi
     fi
-    trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+    trap on_exit EXIT
 
     # One id across every phase, so the three Julia processes and this shell read
     # back from `_runs/` as one run rather than as four to be correlated on their
@@ -122,6 +148,7 @@ main() {
             echo "git pull failed (clone diverged from origin/main?); aborting." >&2
             exit 1
         fi
+        sync_manifest_if_project_changed
     fi
 
     # The only step that reads the vgleague repo; everything after it reads the
