@@ -238,7 +238,7 @@ const CLASSICS_RACES_2026 = [
         "2026-06-10",
         3,
         "circuit-franco-belge",
-        ["kuurne-brussel-kuurne", "gp-de-wallonie", "super-8-classic"],
+        ["kuurne-brussel-kuurne", "gp-de-wallonie", "gp-impanis-van-petegem"],
         185.0,
     ),
     RaceInfo(
@@ -332,7 +332,7 @@ const CLASSICS_RACES_2026 = [
         "SUPER 8 Classic",
         "2026-09-19",
         3,
-        "super-8-classic",
+        "gp-impanis-van-petegem",
         ["brussels-cycling-classic", "dwars-door-het-hageland"],
         181.0,
     ),
@@ -341,7 +341,7 @@ const CLASSICS_RACES_2026 = [
         "2026-09-27",
         1,
         "world-championship",
-        String[],
+        ["gp-montreal"],
         270.0,
     ),
     # Italian/European autumn classics
