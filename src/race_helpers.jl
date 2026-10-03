@@ -329,7 +329,7 @@ const CLASSICS_RACES_2026 = [
         199.0,
     ),
     RaceInfo(
-        "SUPER 8 Classic",
+        "Flandrien 0.0 Classic",
         "2026-09-19",
         3,
         "gp-impanis-van-petegem",
