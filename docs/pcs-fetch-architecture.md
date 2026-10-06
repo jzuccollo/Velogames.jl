@@ -64,7 +64,7 @@ live page on its second request.
 
 Playwright returns the post-JavaScript DOM where `HTTP.jl` returned the raw
 response. Every parser was checked against real pages: `.xvalue` specialty
-elements, the profile season table, `div.resTab` active-tab scoping, startlist
+elements, the profile season table, `div.resultCont` active-tab scoping (`div.resTab` before Oct 2026), startlist
 `rider/<slug>` hrefs and the `h1` not-found guard all parse.
 
 The rendered DOM also carries `div.svg_shield` breakaway markers, with the
@@ -124,7 +124,7 @@ history".
   `vg_stage_results` writers are archive-on-miss backfill, gated on
   `load_race_snapshot(...) === nothing` and validated against the same manifest
   as Python, so they never overwrite and cannot drift on schema.
-- **The five `career-points-<spec>` pages per rider** feeding
+- **The five specialty-breakdown pages per rider** feeding
   `pcs_specialty_seasons` are not prefetched: ~800 page loads, read only by the
   stage-race path. Add a `_prefetch_pages` call in `_apply_pcs_recency!` before
   the next grand tour.

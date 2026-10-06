@@ -96,3 +96,51 @@ end
     # A TTT heading that is not the stage-result table stays unmodelled.
     @test Velogames._vg_scoring_field("Team time trial overall leader bonus") === nothing
 end
+
+# PCS page layouts as of Oct 2026, served through the prefetch store so the
+# parsers run on fixed HTML with no network.
+function _with_page(f, url, html)
+    Velogames._PREFETCHED[url] = Vector{UInt8}(html)
+    try
+        return f(Velogames.CacheConfig(mktempdir(), 0))
+    finally
+        delete!(Velogames._PREFETCHED, url)
+    end
+end
+
+@testset "getpcs_race_startlist reads the team-grouped startlist" begin
+    url = "https://www.procyclingstats.com/race/test-race/2026/startlist"
+    html = """<ul class="startlist_v4">
+      <li><div class="ridersCont"><div><span class="confirmed ok"></span>
+        <a class="team" href="team/lidl-trek-2026">Lidl - Trek (WT)</a></div>
+        <ul><li><a href="rider/mads-pedersen">PEDERSEN Mads</a></li>
+            <li><a href="rider/tom-pidcock">PIDCOCK Tom</a></li></ul>
+        <a href="team-in-race/lidl-trek-2026//overview">team statistics</a></div></li>
+      <li><div class="ridersCont"><div><span class="confirmed "></span>
+        <a class="team" href="team/movistar-team-2026">Movistar Team (WT)</a></div>
+        <ul></ul></div></li>
+    </ul>"""
+    df = _with_page(url, html) do cc
+        getpcs_race_startlist("test-race", 2026; cache_config = cc, force_refresh = true)
+    end
+    @test df.rider == ["PEDERSEN Mads", "PIDCOCK Tom"]
+    @test df.pcs_slug == ["mads-pedersen", "tom-pidcock"]
+    @test df.team == ["Lidl - Trek", "Lidl - Trek"]
+    @test all(df.team_confirmed)
+    @test df.riderkey == createkey.(["Mads Pedersen", "Tom Pidcock"])
+end
+
+@testset "getpcs_race_results reads the visible resultCont" begin
+    # On /gc the hidden final-stage result comes first; the GC is the visible one.
+    url = "https://www.procyclingstats.com/race/test-tour/2026/gc"
+    row(pos, slug, name) = "<tr><td>$pos</td><td><a href=\"rider/$slug\">$name</a></td><td><a href=\"team/x\">Team</a></td></tr>"
+    table(rows...) = "<table><tr><th>Rnk</th><th>Rider</th><th>Team</th></tr>$(join(rows))</table>"
+    html = """
+      <div class="resultCont hide" data-navid="1">$(table(row(1, "wout-van-aert", "VAN AERT Wout")))</div>
+      <div class="resultCont " data-navid="2">$(table(row(1, "tadej-pogacar", "POGAČAR Tadej"), row(2, "jonas-vingegaard", "VINGEGAARD Jonas")))</div>"""
+    df = _with_page(url, html) do cc
+        getpcs_race_results("test-tour", 2026; prefer_gc = true, cache_config = cc, force_refresh = true)
+    end
+    @test df.riderkey == createkey.(["Tadej Pogacar", "Jonas Vingegaard"])
+    @test df.position == [1, 2]
+end

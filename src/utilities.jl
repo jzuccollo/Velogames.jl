@@ -280,7 +280,7 @@ The fallback `scrape_get` takes when `HTTP.jl` is turned away: fetch the one
 page through `vgleague fetch` and carry on as though the request had worked.
 
 One page means one browser launch, which takes seconds. That suits a one-off
-such as `_extract_rider_slugs` loading a single startlist; a field of riders
+such as `getpcs_race_startlist` loading a single startlist; a field of riders
 goes through `prefetch!`.
 """
 function _scrape_get_via_browser(url::String; reuse::Bool = false)

@@ -95,24 +95,21 @@ function getpcs_race_results(
         end
         page === nothing && return _empty_results()
 
-        # PCS renders every classification (stage result, GC, points, KOM, …) as a tab on
-        # the same page, but only the active tab's div.resTab lacks the `hide` class. On
-        # /result that active tab is the finish; on /gc it is the general classification.
-        # The first <table> can be a hidden tab (e.g. the latest-stage result shown above the
-        # GC), so scope to the visible resTab and fall back to the first table only if the
-        # layout is missing.
+        # PCS renders every classification (stage result, GC, points, KOM, …) as a
+        # div.resultCont on the same page, and only the active one lacks the `hide`
+        # class. On /result that is the finish; on /gc the general classification.
+        # The first <table> on /gc is the hidden final-stage result, so there is no
+        # safe fallback: a page without a visible resultCont has changed layout again
+        # (it was div.resTab until Oct 2026) and must say so.
         active_tabs = filter(
             t -> !occursin("hide", getattr(t, "class", "")),
-            collect(eachmatch(sel"div.resTab", page.root)),
+            collect(eachmatch(sel"div.resultCont", page.root)),
         )
-        result_table = nothing
-        if !isempty(active_tabs)
-            inner = collect(eachmatch(sel"table", active_tabs[1]))
-            isempty(inner) || (result_table = inner[1])
-        end
-        if result_table === nothing
-            result_table = first(collect(eachmatch(sel"table", page.root)))
-        end
+        inner = isempty(active_tabs) ? [] : collect(eachmatch(sel"table", active_tabs[1]))
+        isempty(inner) && error(
+            "No visible div.resultCont table on $url: PCS has changed the results layout",
+        )
+        result_table = inner[1]
         rows = collect(eachmatch(sel"tr", result_table))[2:end]  # skip header
 
         positions = Int[]
@@ -202,94 +199,61 @@ function _row_breakaway(row)
     return true, missing
 end
 
-function _extract_rider_slugs(pageurl::String)::Dict{String,String}
-    slug_map = Dict{String,String}()
-    response = scrape_get(pageurl)
-    pagehtml = Gumbo.parsehtml(String(response.body))
-    for link in eachmatch(Selector("a"), pagehtml.root)
-        href = get(link.attributes, "href", "")
-        m = match(r"(?:^|/)rider/([a-z0-9-]+)", href)
-        m === nothing && continue
-        rider_name = String(strip(nodeText(link)))
-        isempty(rider_name) && continue
-        key = createkey(rider_name)
-        isempty(key) && continue
-        slug_map[key] = m.captures[1]
-    end
-    return slug_map
-end
+"""
+    getpcs_race_startlist(pcs_race_slug, year; force_refresh, cache_config) -> DataFrame
 
+The PCS startlist for one edition, read from `/race/{slug}/{year}/startlist`:
+one row per rider with `rider` (as PCS prints it, "PIDCOCK Tom"), `team`,
+`team_confirmed`, `riderkey` and `pcs_slug`.
+
+The page is a `ul.startlist_v4` with one `li` per team, each holding the team
+link and its riders. A team PCS has not yet filled in appears with no riders,
+so early in the week this is a partial field; callers that filter on it must
+check its coverage. `team_confirmed` is PCS's green "roster confirmed" mark.
+
+Until Oct 2026 this read the `startlist-quality` table, which also gave PCS
+ranking and points. That page no longer carries a table, and nothing used
+those columns.
+"""
 function getpcs_race_startlist(
     pcs_race_slug::String,
     year::Int;
     force_refresh::Bool = false,
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
-
-    pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/startlist/startlist-quality"
+    pageurl = "https://www.procyclingstats.com/race/$(pcs_race_slug)/$(year)/startlist"
 
     function fetch_startlist(url, params)
-        df = scrape_pcs_table(url)
+        page = parsehtml(String(scrape_get(url).body))
+        teams = collect(eachmatch(sel"ul.startlist_v4 > li", page.root))
+        isempty(teams) &&
+            error("No ul.startlist_v4 on $url: PCS has changed the startlist layout")
 
-        rider_col = find_column(df, PCS_RIDER_ALIASES)
-        points_col = find_column(df, PCS_POINTS_ALIASES)
-        rank_col =
-            find_column(df, ["pcs-ranking", "pcsranking", "pcsrank", PCS_RANK_ALIASES...])
-        team_col = find_column(df, PCS_TEAM_ALIASES)
-
-        rider_col === nothing && error(
-            "No rider column found in startlist from $url. " *
-            "Columns: $(names(df)). " *
-            "Add the new column name to PCS_RIDER_ALIASES in src/pcs_scraper.jl",
+        result = DataFrame(
+            rider = String[],
+            team = String[],
+            team_confirmed = Bool[],
+            riderkey = String[],
+            pcs_slug = String[],
         )
-
-        # Build standardized result DataFrame
-        result = DataFrame()
-        result.rider = String.(df[!, rider_col])
-
-        # PCS ranking (may be "pcs-ranking", "rank", "#", etc.)
-        result.pcsrank = if rank_col !== nothing
-            map(df[!, rank_col]) do val
-                s = strip(string(val))
-                parsed = tryparse(Int, s)
-                parsed !== nothing ? parsed : UNRANKED_POSITION
+        for team in teams
+            team_links = collect(eachmatch(sel"a.team", team))
+            team_name = isempty(team_links) ? "" :
+                        replace(strip(nodeText(team_links[1])), r"\s*\([A-Z]+\)$" => "")
+            confirmed = any(
+                span -> occursin(r"\bok\b", getattr(span, "class", "")),
+                eachmatch(sel"span.confirmed", team),
+            )
+            for link in eachmatch(sel"a", team)
+                m = match(r"(?:^|/)rider/([a-z0-9-]+)", getattr(link, "href", ""))
+                m === nothing && continue
+                name = String(strip(nodeText(link)))
+                key = createkey(name)
+                isempty(key) && continue
+                push!(result, (name, String(team_name), confirmed, key, String(m.captures[1])))
             end
-        else
-            @warn "No PCS ranking column found in startlist from $url; pcsrank will be $UNRANKED_POSITION"
-            fill(UNRANKED_POSITION, nrow(df))
         end
-
-        # PCS points
-        result.pcspoints = if points_col !== nothing
-            map(df[!, points_col]) do val
-                val isa Float64 && return val
-                s = strip(string(val))
-                parsed = tryparse(Float64, s)
-                parsed !== nothing ? parsed : 0.0
-            end
-        else
-            @warn "No PCS points column found in startlist from $url; pcspoints will be 0.0"
-            fill(0.0, nrow(df))
-        end
-
-        result.team = team_col !== nothing ? String.(df[!, team_col]) : fill("", nrow(df))
-        result.riderkey = createkey.(result.rider)
-
-        # Extract actual PCS profile slugs from rider links on the page
-        result.pcs_slug = try
-            slug_map = _extract_rider_slugs(url)
-            [get(slug_map, key, "") for key in result.riderkey]
-        catch e
-            e isa HTTP.Exceptions.StatusError || rethrow()
-            @warn "Could not extract PCS slugs from startlist ($url): HTTP $(e.status)"
-            fill("", nrow(result))
-        end
-
-        # Drop rows with empty riderkey
-        result = filter(row -> !isempty(row.riderkey), result)
-        result = unique(result, :riderkey)
-
-        return result[:, [:rider, :team, :pcsrank, :pcspoints, :riderkey, :pcs_slug]]
+        return unique(result, :riderkey)
     end
 
     params = Dict("slug" => pcs_race_slug, "year" => string(year))
@@ -301,7 +265,6 @@ function getpcs_race_startlist(
         force_refresh = force_refresh,
     )
 end
-
 
 
 """
@@ -472,22 +435,28 @@ function getpcs_rider_seasons_batch(
 end
 
 
-# PCS specialty → results-page slug. These filterable results pages list every
-# result that earned points in that specialty, dated, so points can be aggregated
-# per season (unlike the profile page's career-cumulative `.xvalue` totals).
+# PCS specialty → specialty-breakdown slug. These pages list every result that
+# earned points in that specialty, dated, so points can be aggregated per season
+# (unlike the profile page's career-cumulative `.xvalue` totals).
+const PCS_BREAKDOWN_ROW_CAP = 100
+
 const PCS_SPECIALTY_SLUG = Dict(
-    :climber => "climbers",
+    :climber => "climber",
     :gc => "gc",
-    :tt => "time-trial",
-    :sprint => "sprint",
-    :oneday => "one-day-races",
+    :tt => "tt",
+    :sprint => "sprinter",
+    :oneday => "oneday",
 )
 
 """
 ## `getpcs_specialty_by_season`
 
-Fetch a rider's per-season points in a single specialty from the PCS filterable
-results page (`/rider/{slug}/results/career-points-{specialty}`). Unlike the
+Fetch a rider's per-season points in a single specialty from the PCS specialty
+breakdown (`rider.php?id={slug}&p=specialties&s=breakdown&type={specialty}`).
+Until Oct 2026 this was `/rider/{slug}/results/career-points-{specialty}`, a URL
+PCS now answers with the rider's profile. The tidy
+`/rider/{slug}/specialties/breakdown` path ignores the type and always serves
+the climber list. Unlike the
 profile page's lifetime `.xvalue` totals, this dated result list lets us
 recency-weight a specialty — so current form outweighs stale palmarès.
 
@@ -503,37 +472,56 @@ function getpcs_specialty_by_season(
     cache_config::CacheConfig = DEFAULT_CACHE,
 )
     spec_slug = PCS_SPECIALTY_SLUG[specialty]
-    pageurl = "https://www.procyclingstats.com/rider/$(pcs_slug)/results/career-points-$(spec_slug)"
+    pageurl = "https://www.procyclingstats.com/rider.php?id=$(pcs_slug)&p=specialties&s=breakdown&type=$(spec_slug)"
 
-    function fetch_specialty(url, params)
+    # Points per year on one breakdown page, and how many result rows it had.
+    function page_points(url)
         response = try
             scrape_get(url)
         catch e
             if e isa HTTP.Exceptions.StatusError && e.status in (400, 404)
-                return DataFrame(year = Int[], points = Float64[])
+                return Dict{Int,Float64}(), 0
             end
             rethrow()
         end
 
         page = parsehtml(String(response.body))
         tables = collect(eachmatch(sel"table", page.root))
-        isempty(tables) && return DataFrame(year = Int[], points = Float64[])
-
-        header = [strip(nodeText(c)) for c in eachmatch(sel"th", tables[1])]
+        header =
+            isempty(tables) ? String[] :
+            [strip(nodeText(c)) for c in eachmatch(sel"th", tables[1])]
         date_idx = findfirst(==("Date"), header)
         pts_idx = findfirst(==("Points"), header)
+        # A moved page comes back as the rider's profile, whose results table
+        # has neither column; caching that as "no points" hid the Oct 2026 move.
         (date_idx === nothing || pts_idx === nothing) &&
-            return DataFrame(year = Int[], points = Float64[])
+            error("No Date/Points table on $url: PCS has changed the specialty breakdown")
 
         by_year = Dict{Int,Float64}()
+        n_rows = 0
         for row in collect(eachmatch(sel"tr", tables[1]))[2:end]
             cells = [strip(nodeText(c)) for c in eachmatch(sel"td", row)]
             length(cells) >= max(date_idx, pts_idx) || continue
             yr = tryparse(Int, first(split(cells[date_idx], "-")))
             yr === nothing && continue
+            n_rows += 1
             pts = tryparse(Float64, cells[pts_idx])
             pts === nothing && continue
             by_year[yr] = get(by_year, yr, 0.0) + pts
+        end
+        return by_year, n_rows
+    end
+
+    function fetch_specialty(url, params)
+        by_year, n_rows = page_points(url)
+        # The unfiltered page keeps a rider's best 100 results and drops the
+        # rest, which cost Pogačar a third of his climber points. One season
+        # never comes near 100, so a capped page is re-read a season at a time.
+        if n_rows >= PCS_BREAKDOWN_ROW_CAP
+            for yr = minimum(keys(by_year)):year(today())
+                by_year[yr] = sum(values(first(page_points("$url&season=$yr"))); init = 0.0)
+            end
+            filter!(kv -> kv.second > 0, by_year)
         end
 
         years = sort(collect(keys(by_year)))
