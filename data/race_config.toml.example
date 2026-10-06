@@ -47,6 +47,8 @@ max_per_team = 2             # Diversification cap, not a game rule: max riders 
                              # backtest harness defaults to 2 so its metric matches.
 simulation_df = 5            # Student's t degrees of freedom ("" = Gaussian)
 excluded_riders = []
+filter_startlist = true      # Drop VG riders missing from the PCS startlist (skipped
+                             # automatically while PCS lists under 80% of the VG startlist)
 
 # --- one-day races only ---
 # Weight on the simulator when blending its (risk-adjusted, unit-normalised) EVG

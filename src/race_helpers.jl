@@ -587,6 +587,7 @@ struct RenderConfig
     max_per_team::Int
     simulation_df::Union{Int,Nothing}
     excluded_riders::Vector{String}
+    filter_startlist::Bool
     market_blend_weight::Float64
     n_alternatives::Int
     cross_stage_alpha::Float64
@@ -695,6 +696,7 @@ function RenderConfig(cfg::AbstractDict; repo_root::String, fresh::Bool = false)
         get(opt, "max_per_team", 2),
         sim_df,
         String[x for x in opt["excluded_riders"]],
+        get(opt, "filter_startlist", true),
         Float64(get(opt, "market_blend_weight", DEFAULT_MARKET_BLEND_WEIGHT)),
         get(opt, "n_alternatives", 20),
         get(opt, "cross_stage_alpha", 0.7),

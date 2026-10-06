@@ -690,6 +690,11 @@ function _archivable_pcs_seasons(seasons_df::DataFrame)
     return archivable
 end
 
+# Share of the VG pool the PCS startlist must name before it is used as a
+# filter. A full list matches ~97% (VG keeps a few reserves); a partial one is
+# usually near half.
+const STARTLIST_MIN_COVERAGE = 0.8
+
 """
     _prepare_rider_data(config, racehash, excluded_riders, history_years,
                         oracle_url, min_riders, cache_config,
@@ -739,14 +744,19 @@ function _prepare_rider_data(
         force_refresh = force_refresh,
     )
 
-    # Filter by startlist hash if provided
+    # Filter by startlist hash if provided. Case-insensitive: Velogames retyped
+    # "#TrevalliVaresine" as "#TreValliVaresine" on race day 2026.
+    hash_applied = false
     if !isempty(racehash)
         filtered = filter(
-            row -> hasproperty(row, :startlist) ? row.startlist == racehash : true,
+            row ->
+                hasproperty(row, :startlist) ?
+                lowercase(row.startlist) == lowercase(racehash) : true,
             riderdf,
         )
         if nrow(filtered) > 0
             riderdf = filtered
+            hash_applied = true
             @info "Filtered to $(nrow(riderdf)) riders for startlist: $racehash"
         else
             @warn "No riders matched startlist hash '$racehash' — ignoring hash filter"
@@ -777,8 +787,18 @@ function _prepare_rider_data(
                 # also fixes the pcs_slug map built from the same frame below.
                 rematch_riderkeys!(startlist_df, riderdf)
                 before = nrow(riderdf)
-                riderdf = semijoin(riderdf, startlist_df[:, [:riderkey]], on = :riderkey)
-                @info "Filtered to $(nrow(riderdf)) riders confirmed on PCS startlist (removed $(before - nrow(riderdf)))"
+                # Early in race week PCS lists only some teams (93 of 169 riders
+                # for Coppa Bernocchi on 4 Oct 2026), and filtering on that
+                # deletes whole teams of contenders. Without a VG startlist the
+                # pool is the season roster, the PCS list is the only field
+                # there is, and coverage means nothing.
+                n_listed = count(in(Set(startlist_df.riderkey)), riderdf.riderkey)
+                if hash_applied && n_listed < STARTLIST_MIN_COVERAGE * before
+                    @warn "PCS startlist covers $n_listed of $before VG riders — partial, skipping startlist filter"
+                else
+                    riderdf = semijoin(riderdf, startlist_df[:, [:riderkey]], on = :riderkey)
+                    @info "Filtered to $(nrow(riderdf)) riders confirmed on PCS startlist (removed $(before - nrow(riderdf)))"
+                end
 
                 # Build riderkey → PCS slug mapping from startlist
                 if :pcs_slug in propertynames(startlist_df)
@@ -1339,6 +1359,7 @@ function solve_oneday(rc::RenderConfig)
         breakaway_dir = rc.breakaway_dir,
         simulation_df = rc.simulation_df,
         market_blend_weight = rc.market_blend_weight,
+        filter_startlist = rc.filter_startlist,
     )
 end
 
@@ -1729,5 +1750,6 @@ function solve_stage(
         use_gt_vg_propensity = rc.use_gt_vg_propensity,
         gt_vg_propensity_mode = rc.gt_vg_propensity_mode,
         season_round_slugs = rc.season_round_slugs,
+        filter_startlist = rc.filter_startlist,
     )
 end
