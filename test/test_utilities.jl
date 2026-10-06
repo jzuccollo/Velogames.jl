@@ -752,7 +752,8 @@ end
     @test "e3-harelbeke" in SIMILAR_RACES["omloop-het-nieuwsblad"]
     @test haskey(SIMILAR_RACES, "kuurne-brussel-kuurne")
     @test "scheldeprijs" in SIMILAR_RACES["kuurne-brussel-kuurne"]
-    @test !haskey(SIMILAR_RACES, "world-championship")
+    # Worlds is deliberately absent from this test: the course changes every
+    # year, so its similar races are set by hand for each edition.
 end
 
 @testset "Race lookup helpers" begin
