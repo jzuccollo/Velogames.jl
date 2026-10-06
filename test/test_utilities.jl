@@ -855,4 +855,17 @@ end
     ext2 = DataFrame(rider = ["Tom Pidcock"], riderkey = [createkey("Tom Pidcock")])
     Velogames.rematch_riderkeys!(ext2, ref2)
     @test ext2.riderkey[1] == createkey("Thomas Pidcock")
+
+    # PCS adds a middle name: "Finn" is also Fisher-Black's given name and
+    # "Mark" Donovan's, so the surname rule alone picks the wrong rider.
+    ref3 = DataFrame(
+        rider = ["Lorenzo Finn", "Finn Fisher-Black", "Mark Donovan", "Taco van der Hoorn"],
+    )
+    ref3.riderkey = createkey.(ref3.rider)
+    ext3 = DataFrame(rider = ["FINN Lorenzo Mark", "VAN DER POEL Mathieu"])
+    ext3.riderkey = createkey.(ext3.rider)
+    Velogames.rematch_riderkeys!(ext3, ref3)
+    @test ext3.riderkey[1] == createkey("Lorenzo Finn")
+    # Sharing "van der" is not a match
+    @test ext3.riderkey[2] == createkey("VAN DER POEL Mathieu")
 end

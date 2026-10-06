@@ -357,8 +357,10 @@ end
     rematch_riderkeys!(external_df, reference_df)
 
 For riders in `external_df` whose `riderkey` doesn't match any in `reference_df`,
-try the punctuation-stripped key first, then fall back to surname-only matching.
-Either way the match must be unique to be applied. Handles common name
+try the punctuation-stripped key first, then a reference rider whose name parts
+are a subset of the external name's (or the reverse), then surname-only
+matching. Each way the match must be unique to be
+applied. Handles common name
 variations like "Tom Pidcock" (Oddschecker) vs "Thomas Pidcock" (VG), and
 compound surnames hyphenated in one source and spaced in the other
 ("Ferrand-Prévot" vs "Ferrand Prevot").
@@ -386,10 +388,13 @@ function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
     isempty(parts) ? String[] :
     unique([normalisename(String(first(parts)), true),
         normalisename(String(last(parts)), true)]))
+    tokens(name) = Set(normalisename(String(t), true) for t in split(strip(name)))
     ref_depunct = Dict{String,Vector{String}}()
     ref_surname = Dict{String,Vector{String}}()
+    ref_tokens = Dict{String,Set{String}}()
     for row in eachrow(reference_df)
         push!(get!(ref_depunct, depunct(row.riderkey), String[]), row.riderkey)
+        ref_tokens[row.riderkey] = tokens(row.rider)
         for token in ends(row.rider)
             push!(get!(ref_surname, token, String[]), row.riderkey)
         end
@@ -399,6 +404,18 @@ function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
     for row in eachrow(external_df)
         row.riderkey in ref_keys && continue
         candidates = get(ref_depunct, depunct(row.riderkey), String[])
+        # One source adding a middle name ("FINN Lorenzo Mark" for Lorenzo Finn)
+        # is matched when one name's parts all appear in the other. This runs
+        # before the single-part surname match, which would pair that name with
+        # Mark Donovan. Subset, not overlap: two shared parts would pair any two
+        # "van der" riders.
+        if length(candidates) != 1
+            toks = tokens(row.rider)
+            candidates = [
+                k for (k, ref) in ref_tokens if
+                min(length(toks), length(ref)) >= 2 && (issubset(ref, toks) || issubset(toks, ref))
+            ]
+        end
         if length(candidates) != 1
             for token in ends(row.rider)
                 candidates = get(ref_surname, token, String[])
@@ -410,7 +427,7 @@ function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
             n_fixed += 1
         end
     end
-    n_fixed > 0 && @info "Re-matched $n_fixed riders by punctuation-stripped key or surname"
+    n_fixed > 0 && @info "Re-matched $n_fixed riders by punctuation-stripped key, name parts or surname"
     return external_df
 end
 
