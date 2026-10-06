@@ -58,6 +58,12 @@ function process_vg_table!(riderdf::DataFrame)
         rename!(riderdf, :score => :points)
     end
 
+    # The browser-rendered page carries the startlist filter widget as a table
+    # row: every team name, race tag and cost bracket concatenated, no rider.
+    # Drop it before the casts, which would otherwise warn on its "cost" and put
+    # a `missing` into the knapsack. vgleague's parser drops it on `if r["rider"]`.
+    riderdf = filter(row -> !isempty(createkey(string(row.rider))), riderdf)
+
     for col in [:cost, :rank]
         if hasproperty(riderdf, col)
             riderdf[!, col] = [
@@ -200,14 +206,6 @@ function getvg_riders(
 
         if hasproperty(riderdf, :team)
             riderdf.team = unpipe.(riderdf.team)
-        end
-
-        # The browser-rendered page carries the startlist filter widget as a
-        # table row: every team name and race tag concatenated, no rider and no
-        # parseable cost, which would put a `missing` cost into the knapsack.
-        # vgleague's parser drops it the same way, on `if r["rider"]`.
-        if hasproperty(riderdf, :riderkey)
-            riderdf = filter(row -> !isempty(row.riderkey), riderdf)
         end
 
         riderdf.value = riderdf.points ./ riderdf.cost
