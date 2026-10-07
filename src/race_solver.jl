@@ -800,6 +800,16 @@ function _prepare_rider_data(
                     @info "Filtered to $(nrow(riderdf)) riders confirmed on PCS startlist (removed $(before - nrow(riderdf)))"
                 end
 
+                # Trade teams come from PCS. After the 2026 Euros the VG classics
+                # pool showed national teams for the Euros starters and a blank
+                # team for everyone else, which made 136 riders one "team" at
+                # Coppa Bernocchi for the domestique discount and max_per_team.
+                pcs_team = Dict(
+                    r.riderkey => r.team for r in eachrow(startlist_df) if !isempty(r.team)
+                )
+                riderdf.team = [get(pcs_team, k, t) for (k, t) in zip(riderdf.riderkey, riderdf.team)]
+                @info "Took trade teams from PCS for $(count(in(keys(pcs_team)), riderdf.riderkey))/$(nrow(riderdf)) riders"
+
                 # Build riderkey → PCS slug mapping from startlist
                 if :pcs_slug in propertynames(startlist_df)
                     for row in eachrow(startlist_df)
@@ -822,6 +832,15 @@ function _prepare_rider_data(
         @warn "Not enough riders ($(nrow(riderdf))) for a $(min_riders)-rider team"
         return nothing
     end
+
+    # A blank team would group every unattributed rider as teammates. Give each
+    # its own, and say so when the share means the team column is not trusted.
+    riderdf.team = String.(coalesce.(riderdf.team, ""))
+    blank = isempty.(strip.(riderdf.team))
+    if count(blank) > 0.1 * nrow(riderdf)
+        @warn "$(count(blank))/$(nrow(riderdf)) riders have no team — domestique discount and max_per_team cannot see them"
+    end
+    riderdf.team[blank] .= "unattributed: " .* riderdf.riderkey[blank]
 
     # Single-race VG games (the Femmes/GT format) open with `points` at zero for
     # the whole field, which z-scores to a constant and switches the VG-season
