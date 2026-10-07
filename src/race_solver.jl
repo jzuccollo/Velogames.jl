@@ -156,6 +156,51 @@ function _archive_predictions(predicted::DataFrame, config::RaceConfig)
     end
 end
 
+const DEFAULT_ABANDON_FACTOR = 0.5
+const DEFAULT_ABANDON_WINDOW_DAYS = 10
+
+"""
+    recent_abandon_multiplier(rider_df, race_date; window_days, factor) -> Vector{Float64}
+
+`factor` for each rider whose most recent archived one-day start in the
+`window_days` before `race_date` ended in an abandon, 1.0 for everyone else.
+
+Among each 2026 race's top 25 by EVG, riders who abandoned their last start
+inside 10 days scored 0.45 of their EVG against 0.81 for finishers; the gap held
+from 7 to 120 days. Illness, injury and training rides are what it picks up, and
+markets miss it too. Shipped directionally: on team points it ties (see
+`roadmap.md`). Only one-day races in the archive count as starts, so a stage
+race ridden since then goes unseen; the window bounds that.
+"""
+function recent_abandon_multiplier(
+    rider_df::DataFrame,
+    race_date::Date;
+    window_days::Int = DEFAULT_ABANDON_WINDOW_DAYS,
+    factor::Float64 = DEFAULT_ABANDON_FACTOR,
+    archive_dir::String = archive_dir(),
+)
+    mult = ones(nrow(rider_df))
+    factor == 1.0 && return mult
+    last_start = Dict{String,Tuple{Date,Bool}}()
+    for ri in CLASSICS_RACES_2026
+        d = _race_date_for_year(ri, year(race_date))
+        race_date - Day(window_days) <= d < race_date || continue
+        res = load_race_snapshot("pcs_results", ri.pcs_slug, year(race_date); archive_dir)
+        res === nothing && continue
+        res = copy(res)
+        rematch_riderkeys!(res, rider_df)
+        for r in eachrow(res)
+            prev = get(last_start, r.riderkey, nothing)
+            (prev === nothing || prev[1] < d) && (last_start[r.riderkey] = (d, r.position >= 900))
+        end
+    end
+    flagged = [get(last_start, k, (race_date, false))[2] for k in rider_df.riderkey]
+    mult[flagged] .= factor
+    @info "Recent-abandon multiplier ($factor, $window_days days): $(count(flagged)) riders" riders =
+        join(rider_df.rider[flagged], ", ")
+    return mult
+end
+
 """
     _load_breakaway_rates(breakaway_dir, riderkeys; as_of, spec) -> (rates, sectors)
 
@@ -1297,6 +1342,8 @@ function solve_oneday(
     breakaway_spec::NamedTuple = NamedTuple(),
     simulation_df::Union{Int,Nothing} = nothing,
     market_blend_weight::Float64 = 1.0,
+    abandon_factor::Float64 = DEFAULT_ABANDON_FACTOR,
+    abandon_window_days::Int = DEFAULT_ABANDON_WINDOW_DAYS,
 )
     data = _prepare_rider_data(
         config,
@@ -1322,12 +1369,21 @@ function solve_oneday(
     # Breakaway rates (I/O) — loaded here and passed into the fetch-free core.
     # Keyed on data.rider_df.riderkey; estimate_strengths preserves row order,
     # so the rate vector aligns with the resampled `predicted` frame.
+    race_date = resolve_race_date(config.pcs_slug, config.year)
     b_rates, b_sectors = _load_breakaway_rates(
         breakaway_dir,
         data.rider_df.riderkey;
-        as_of = resolve_race_date(config.pcs_slug, config.year),
+        as_of = race_date,
         spec = breakaway_spec,
     )
+    vg_multiplier =
+        race_date === nothing ? Float64[] :
+        recent_abandon_multiplier(
+            data.rider_df,
+            race_date;
+            window_days = abandon_window_days,
+            factor = abandon_factor,
+        )
 
     @info "Estimating rider strengths (Cat $(config.category))..."
     predicted, top_teams, sim_vg_points = _oneday_prediction_core(
@@ -1344,6 +1400,7 @@ function solve_oneday(
         breakaway_mean_sectors = b_sectors,
         simulation_df = simulation_df,
         market_blend_weight = market_blend_weight,
+        vg_multiplier = vg_multiplier,
     )
 
     predicted, chosenteam = _extract_chosen_team!(predicted, top_teams)
@@ -1379,6 +1436,8 @@ function solve_oneday(rc::RenderConfig)
         simulation_df = rc.simulation_df,
         market_blend_weight = rc.market_blend_weight,
         filter_startlist = rc.filter_startlist,
+        abandon_factor = rc.abandon_factor,
+        abandon_window_days = rc.abandon_window_days,
     )
 end
 
@@ -1527,6 +1586,7 @@ function _oneday_prediction_core(
     breakaway_mean_sectors::Vector{Float64} = Float64[],
     simulation_df::Union{Int,Nothing} = nothing,
     market_blend_weight::Float64 = 1.0,
+    vg_multiplier::Vector{Float64} = Float64[],
     config::BayesianConfig = DEFAULT_BAYESIAN_CONFIG,
     rng::AbstractRNG = Random.default_rng(),
 )
@@ -1558,6 +1618,7 @@ function _oneday_prediction_core(
         simulation_df = simulation_df,
         market_probs = market_probs,
         market_blend_weight = market_blend_weight,
+        vg_multiplier = vg_multiplier,
     )
 
     return predicted, top_teams, sim_vg_points

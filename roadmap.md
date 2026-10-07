@@ -51,6 +51,7 @@ Ship one change at a time, for attribution.
 | One-day market blend (July 2026) | Paired `simulator_market` − `simulator_risk` capture below +0.02 on the 2027 classics (render_backtesting.jl "Market blend — paired comparison" table) | Revert. If the blend still fails to beat odds alone, ask why we simulate marketed classics at all |
 | Multidim block correlation (`multidim_block_correlation`) | Vuelta 2026 top-20 ρ degrades v Giro/Tour 2026, or GC win% moves further from the market | Flip the flag off and investigate |
 | Stage aleatoric noise (`aleatoric_noise`) | Next 2 GTs show top sprinters under-predicting, or top-20 ρ drops materially | Revisit the per-type scale, flat first |
+| Recent-abandon multiplier (Oct 2026, `abandon_factor = 0.5`, `abandon_window_days = 10`) | Over the first 20 one-day races of 2027, paired team-points-captured against `abandon_factor = 1.0` is negative, or flagged riders' actual/EVG ratio rises above 0.7 | Set the factor to 1.0 and delete the helper |
 | GT VG-history signal and propensity layer (`gt_vg_history`, `gt_propensity_factors`) | Next 2 GTs show a rider over-moved by a single fluke edition, or top-20 ρ drops | Revisit `κ` / `c` / `gt_vg_hist_base_variance` |
 
 **Due now: Vuelta 2026 out-of-sample check.** Run `backtest_stage_race` with
@@ -88,6 +89,44 @@ comparison is on v off; the change actually made (leaderboard → archive) canno
 be backtested because the old source cannot be reconstructed as-of. Mean sectors
 is 1.3, not the old hardcoded 2.0, which had inflated the channel by ~54 per
 cent.
+
+### Recent-abandon multiplier: shipped directionally, not validated (October 2026)
+
+Prompted by Coppa Bernocchi 2026, where four of the six riders the model picked
+abandoned or did not start (Pedersen, Schmid, Aranburu; Lapeira absent from the
+results) and the team scored 15. Probe over the 20–21 archived 2026 one-day
+predictions with EVG, as-of (results strictly before the race date), on each
+race's top 25 riders by EVG. The window is the look-back for the rider's last
+archived one-day start:
+
+| Window | Abandoned last start: n, actual/EVG | Finished: n, actual/EVG | Gap, race-clustered 90% CI |
+| --- | --- | --- | --- |
+| 7 d | 12, 0.22 | 178, 0.85 | −0.62 [−0.84, −0.40] |
+| 10 d | 16, 0.45 | 203, 0.81 | −0.39 [−0.73, +0.07] |
+| 14 d | 26, 0.45 | 237, 0.81 | −0.37 [−0.66, −0.10] |
+| 28 d | 46, 0.48 | 306, 0.80 | −0.32 [−0.59, −0.06] |
+| 60 d | 52, 0.48 | 349, 0.78 | −0.30 [−0.51, −0.08] |
+| 120 d | 58, 0.47 | 387, 0.76 | −0.30 [−0.49, −0.10] |
+
+The effect appears in marketed races too (top-25 ratio 0.27–0.43), so the
+bookmakers do not price it either.
+
+Selection impact: re-optimising each archived prediction with and without the
+multiplier (same strengths, same seed, 34 races, in-sample because the factor
+was read off the same races) gives a tie at every setting:
+
+| Setting | Teams changed | Better / worse | Net VG points | Mean Δ capture, 90% CI |
+| --- | --- | --- | --- | --- |
+| 28 d, 0.6 | 13 | 8 / 5 | −24 | −0.0025 [−0.0097, +0.0043] |
+| 14 d, 0.5 | — | — | +66 | −0.0018 [−0.0086, +0.0043] |
+| 10 d, 0.5 | 9 | 6 / 3 | +252 | −0.0004 [−0.0069, +0.0052] |
+| 7 d, 0.3 | 6 | 4 / 2 | +417 | +0.0012 [−0.0021, +0.0046] |
+
+It corrects EVG for the flagged riders but rarely changes the team. Shipped at
+10 d / 0.5 on mechanism, with a directionally positive (6/3) selection check.
+Starts outside the archive (stage races, races not in this game) are invisible.
+The multiplier scales simulated points after ranking, so the points it removes
+from flagged riders are not redistributed to the rest of the field.
 
 ### VG points distributions underestimate scoring riders
 
@@ -183,6 +222,14 @@ existing `(pcs_slug, year)` check already prefers the record.
 
 ### Other
 
+- **VG team column is not a trade team (October 2026).** After the Euros the
+  classics riders page showed a national team for Euros starters and a blank for
+  everyone else (1,053 of 1,333). The domestique discount (1.0) and
+  `max_per_team` then treated 136 Bernocchi riders as one team; Widar, the Tre
+  Valli winner, went from ~0 to −2.4. Teams now come from the PCS startlist.
+  Re-optimising with true teams left Bernocchi unchanged (0) and lifted Tre
+  Valli from 364 to 598, so the bug was real but did not decide either race.
+
 - The `crosscheck_option_ab` baseline (`base_*`) predates the August 2026
   stage-assist archive patch; expect its drift alarm to trip once and re-base it.
 - The estimators (`estimate_rider_strength`, `estimate_rider_strength_multidim`)
@@ -236,6 +283,13 @@ Do not re-run these without new evidence.
   harness defaults to production's 2.
 - **VG race history is live in the stage-race estimator only.** The April 2026
   ablation removed it from the one-day path; a test pins both halves.
+- **Recent-points form adds nothing, with or without a market.** Rebuilding
+  form as-of from archived VG points in the 21 or 42 days before each 2026
+  race gives a within-race ρ with the residual (actual − EVG) of −0.04 to −0.11
+  on races with no market, and −0.05 to −0.07 on marketed ones. VG season points
+  already carry recent results. This confirms the April 2026 drop for the
+  autumn, no-market case. Do not re-propose it; the abandon flag is the part of
+  recent racing that carries information.
 - **Ownership-adjusted optimisation does not apply.** VG is cumulative points
   across ~40 races, so other players' picks do not affect your score (Haugh &
   Singal 2021 gains are for single-contest GPPs).
@@ -248,7 +302,8 @@ Do not re-run these without new evidence.
    Gate on the harness and on the cumulative-season objective.
 2. **Correlated position simulation.** `simulate_race` has no shared race-day or
    team-block factor, so its team-score distributions are too narrow (two teams
-   both at the 0th/1st percentile of their own sims).
+   both at the 0th/1st percentile of their own sims). It recurred at Coppa
+   Bernocchi and Tre Valli 2026 (0th and 1st percentile).
 3. **Drop the oracle signal.** May 2026 analysis: listed oracle riders show
    middle-tier ρ ≈ 0.004. Re-evaluate after 20+ races with odds.
 4. **Position-dependent market discount** (full discount only for the top PCS

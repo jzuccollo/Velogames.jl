@@ -64,7 +64,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 **Monte Carlo:** `simulate_race()` adds t-distributed noise (df=5) scaled by uncertainty, ranks to positions. Gaussian also supported via `simulation_df=nothing`.
 
-**One-day:** 6 riders, single-race simulation, one PCS specialty per rider, market blend when odds present (0.5 weight). Stage race: 9 riders, per-stage simulation, cross-stage correlated noise (α=0.7), multi-dim strength estimates (PCS per specialty routed via `SIGNAL_DIMENSION_WEIGHTS`).
+**One-day:** 6 riders, single-race simulation, one PCS specialty per rider, market blend when odds present (0.5 weight). Riders who abandoned their last archived one-day start within 10 days have simulated points × 0.5 (`recent_abandon_multiplier`; directional ship, see `roadmap.md`). Trade teams come from the PCS startlist, not VG. Stage race: 9 riders, per-stage simulation, cross-stage correlated noise (α=0.7), multi-dim strength estimates (PCS per specialty routed via `SIGNAL_DIMENSION_WEIGHTS`).
 
 **Season-round VG points:** When `[data_sources] season_round_slugs` set and field is all zeros, use mean VG points per scored round across those rounds. Uncovered riders get field mean; `:vg_points_observed` flag stops variance inflation.
 

@@ -49,6 +49,8 @@ simulation_df = 5            # Student's t degrees of freedom ("" = Gaussian)
 excluded_riders = []
 filter_startlist = true      # Drop VG riders missing from the PCS startlist (skipped
                              # automatically while PCS lists under 80% of the VG startlist)
+abandon_factor = 0.5         # VG-points multiplier for a rider who abandoned their last
+abandon_window_days = 10     # archived one-day start within this many days (1.0 = off)
 
 # --- one-day races only ---
 # Weight on the simulator when blending its (risk-adjusted, unit-normalised) EVG

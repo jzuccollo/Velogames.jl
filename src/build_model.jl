@@ -529,6 +529,7 @@ function resample_optimise!(
     simulation_df::Union{Int,Nothing} = nothing,
     market_probs::Vector{Float64} = Float64[],
     market_blend_weight::Float64 = 1.0,
+    vg_multiplier::Vector{Float64} = Float64[],
 )
     n_riders = nrow(df)
     strengths = Float64.(df.strength)
@@ -568,6 +569,8 @@ function resample_optimise!(
         )
         sim_vg_points[:, r] = sim_pts
     end
+    # Per-rider haircut on points the ranking cannot see (`recent_abandon_multiplier`).
+    isempty(vg_multiplier) || (sim_vg_points .*= vg_multiplier)
 
     df, top_teams = _resample_core!(
         df,

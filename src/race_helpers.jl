@@ -588,6 +588,8 @@ struct RenderConfig
     simulation_df::Union{Int,Nothing}
     excluded_riders::Vector{String}
     filter_startlist::Bool
+    abandon_factor::Float64
+    abandon_window_days::Int
     market_blend_weight::Float64
     n_alternatives::Int
     cross_stage_alpha::Float64
@@ -697,6 +699,8 @@ function RenderConfig(cfg::AbstractDict; repo_root::String, fresh::Bool = false)
         sim_df,
         String[x for x in opt["excluded_riders"]],
         get(opt, "filter_startlist", true),
+        Float64(get(opt, "abandon_factor", DEFAULT_ABANDON_FACTOR)),
+        get(opt, "abandon_window_days", DEFAULT_ABANDON_WINDOW_DAYS),
         Float64(get(opt, "market_blend_weight", DEFAULT_MARKET_BLEND_WEIGHT)),
         get(opt, "n_alternatives", 20),
         get(opt, "cross_stage_alpha", 0.7),

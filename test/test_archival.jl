@@ -2199,3 +2199,50 @@ end
     @test flag2
     @test ismissing(km2)
 end
+
+@testset "Recent abandon: last archived start inside the window, never after the race" begin
+    dir = mktempdir()
+    res(riders, positions) = DataFrame(
+        position = positions,
+        rider = riders,
+        team = fill("T", length(riders)),
+        riderkey = createkey.(riders),
+        in_breakaway = falses(length(riders)),
+        breakaway_km = Vector{Union{Float64,Missing}}(missing, length(riders)),
+    )
+    # Emilia 3 Oct, Bernocchi 5 Oct, Tre Valli 6 Oct, Lombardia 10 Oct; the race is Gran Piemonte, 8 Oct.
+    save_race_snapshot(res(["Old Quit"], [999]), "pcs_results", "giro-dell-emilia", 2026; archive_dir = dir)
+    save_race_snapshot(res(["Re Covered"], [999]), "pcs_results", "coppa-bernocchi", 2026; archive_dir = dir)
+    save_race_snapshot(
+        res(["Just Quit", "Re Covered", "PIDCOCK Tom"], [999, 4, 999]),
+        "pcs_results", "tre-valli-varesine", 2026; archive_dir = dir,
+    )
+    save_race_snapshot(res(["Fut Ure"], [999]), "pcs_results", "il-lombardia", 2026; archive_dir = dir)
+
+    names = ["Just Quit", "Re Covered", "Old Quit", "Fut Ure", "Thomas Pidcock", "Never Raced"]
+    riders = DataFrame(rider = names, riderkey = createkey.(names))
+    race = Date(2026, 10, 8)
+
+    m = Velogames.recent_abandon_multiplier(riders, race; window_days = 28, factor = 0.6, archive_dir = dir)
+    @test m == [0.6, 1.0, 0.6, 1.0, 0.6, 1.0]
+    # Emilia falls outside a four-day window.
+    m4 = Velogames.recent_abandon_multiplier(riders, race; window_days = 4, factor = 0.6, archive_dir = dir)
+    @test m4 == [0.6, 1.0, 1.0, 1.0, 0.6, 1.0]
+    @test all(==(1.0), Velogames.recent_abandon_multiplier(riders, race; factor = 1.0, archive_dir = dir))
+end
+
+@testset "resample_optimise!: vg_multiplier scales a rider's simulated points" begin
+    df() = DataFrame(
+        rider = ["A", "B", "C", "D", "E", "F", "G", "H"],
+        team = ["t$i" for i = 1:8],
+        cost = fill(10, 8),
+        riderkey = ["a", "b", "c", "d", "e", "f", "g", "h"],
+        strength = [3.0, 2.5, 2.0, 1.5, 1.0, 0.5, 0.0, -0.5],
+        uncertainty = fill(0.5, 8),
+    )
+    base, _, _ = resample_optimise!(df(), get_scoring(3), build_model_oneday; n_resamples = 50, rng = MersenneTwister(1))
+    mult = [0.5; ones(7)]
+    cut, _, _ = resample_optimise!(df(), get_scoring(3), build_model_oneday; n_resamples = 50, rng = MersenneTwister(1), vg_multiplier = mult)
+    @test cut.expected_vg_points[1] ≈ 0.5 * base.expected_vg_points[1]
+    @test cut.expected_vg_points[2:end] ≈ base.expected_vg_points[2:end]
+end
