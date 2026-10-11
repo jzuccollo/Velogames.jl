@@ -835,6 +835,38 @@ end
     @test Velogames._compute_cumulative_vg_points(race_no_date) === nothing
 end
 
+@testset "resolve_rider golden corpus" begin
+    # Every printed name that failed to match its reference set by key in a
+    # measured join across the 2023-26 archive, with the result the resolver
+    # must return. vgleague's scripts/check_rider_matching.py runs the same
+    # file against its port, so the two languages cannot drift apart.
+    corpus = Velogames.JSON3.read(
+        read(joinpath(@__DIR__, "fixtures", "rider_matching.json"), String),
+    )
+    prepared = Dict{String,Any}()
+    failures = String[]
+    for case in corpus.cases
+        fid = String(case.field)
+        refs, ref_keys, name_of = get!(prepared, fid) do
+            names = String.(corpus.fields[Symbol(fid)])
+            keys = createkey.(names)
+            r, k = Velogames._reference_riders(names, keys)
+            (r, k, Dict(zip(keys, names)))
+        end
+        rider = String(case.rider)
+        method, key, cands = Velogames.resolve_rider(rider, createkey(rider), refs, ref_keys)
+        got_name = key === nothing ? nothing : name_of[key]
+        got_cands = method == :ambiguous ? sort([name_of[c] for c in cands]) : String[]
+        want_name = case.expected === nothing ? nothing : String(case.expected)
+        want = (String(case.method), want_name, String.(collect(case.candidates)))
+        got = (String(method), got_name, got_cands)
+        got == want || push!(failures, "$(case.source) $(case.race): $rider expected $want, got $got")
+    end
+    foreach(println, failures)
+    @test isempty(failures)
+    @test length(corpus.cases) > 1000
+end
+
 @testset "rematch_riderkeys! compound surnames" begin
     # VG hyphenates compound surnames; bookmakers usually space them. That
     # changes the riderkey (which keeps the hyphen) AND the whitespace-split

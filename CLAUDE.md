@@ -74,7 +74,7 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 
 - **Config:** Read `data/race_config.toml` **only** via `load_render_config()`. No renderer parses TOML directly.
 - **Renderers:** Standalone scripts (`render_*.jl`) with `render_<name>(rc::RenderConfig)` signature, guarded by `abspath(PROGRAM_FILE) == @__FILE__`. `serve.jl` includes once and re-calls per request.
-- **Rider matching:** `riderkey` from `createkey()` normalisation. Used for joins across PCS/VG/odds.
+- **Rider matching:** `riderkey` from `createkey()` normalisation of the printed name; the archive stores it unrewritten (`riderkey == createkey(rider)`, checked by `vgleague verify-keys`). Spellings that differ across sources are matched at read time by `resolve_rider` / `rematch_riderkeys!` (`utilities.jl`) against the race's field. Each step must find exactly one rider or the name stays unresolved (`:ambiguous` lists the candidates); there is deliberately no first-name-only step, which gave 192 archived names to the wrong rider. `test/fixtures/rider_matching.json` is the golden corpus, run by `test_utilities.jl` here and by vgleague's port (`matching.py`, `scripts/check_rider_matching.py`); regenerate and review it when changing the resolver or `NICKNAME_GROUPS`. Market lookups keep an exact-key row over a rematched one (`_priced_rows`).
 - **Caching:** All data functions use `cached_fetch()` with `CacheConfig` and `force_refresh` kwarg.
 - **Optimisation:** JuMP + HiGHS, lexicographic tiebreaking. Knapsack constraint: cost ≤ 100, max 2 per team (both formats), + class constraints for stage races.
 - **Shared infra:** One-day and stage-race code shares `_build_team_model`, `_score_team_points_captured`, `format_rankings_and_alternatives`, `format_near_optimal_section`. Separate: `_oneday_prediction_core` vs `_stage_prediction_core`.
@@ -98,12 +98,12 @@ Fantasy cycling team optimisation for velogames.com. Scrapes rider data from Vel
 - `julia --project scripts/ingest_league.jl [--force] [--dry-run]` — take league snapshot into archive
 
 **Cross-language checks (from vgleague clone):**
-- `vgleague verify-keys <league>`, `verify-races`, `verify-results`, `verify-field`, `verify-report`, `verify-dossier`
+- `vgleague verify-keys`, `verify-races`, `verify-results`, `verify-field`, `verify-report`, `verify-dossier`, `verify-odds-keys`
 
 **Archival & evaluation:**
 - `julia --project scripts/archive_audit.jl [--write-manifest] [--check]` — audit & export archive manifest
 - `julia --project scripts/league_eval.jl` — offline league evaluation vs archive (point `vgleague_data_dir` at deploy clone)
-- `julia --project scripts/field_digest.jl`, `report_dump.jl` — cross-language check halves
+- `julia --project scripts/field_digest.jl`, `report_dump.jl`, `odds_keys_digest.jl` — cross-language check halves
 
 **Tests:** `julia --project -e "using Pkg; Pkg.test()"`
 

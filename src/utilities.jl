@@ -353,81 +353,245 @@ function createkey(ridername::String)
     return newkey
 end
 
+const NAME_PARTICLES = Set([
+    "van", "der", "den", "de", "da", "di", "du", "del", "della", "von",
+    "ten", "ter", "la", "le", "dos", "das", "do", "vanden", "vander", "st",
+])
+
+# Given names that are the same name. Keep in step with `NICKNAME_GROUPS` in
+# vgleague's `src/vgleague/matching.py`; the golden corpus
+# (test/fixtures/rider_matching.json) catches a drift where a measured name
+# depends on it.
+const NICKNAME_GROUPS = [
+    ["tom", "thomas", "tommy"],
+    ["fred", "frederick", "frederik", "freddy"],
+    ["will", "william", "bill"],
+    ["alex", "alexander", "aleksandr", "alexandre", "alexandr", "oleksandr", "sasha"],
+    ["alexey", "aleksey", "alexei", "aleksei"],
+    ["matt", "matthew", "mathew"],
+    ["mike", "michael", "michal", "mikkel"],
+    ["ben", "benjamin"],
+    ["chris", "christopher"],
+    ["nick", "nicholas", "nicolas", "niklas", "nikolas"],
+    ["dan", "daniel", "danny"],
+    ["sam", "samuel"],
+    ["jon", "jonathan", "john", "johnny"],
+    ["joe", "joseph", "josef"],
+    ["rob", "robert", "bob", "robbie"],
+    ["ed", "edward", "eddie"],
+    ["jake", "jacob", "jakob"],
+    ["max", "maximilian", "maxim"],
+    ["andy", "andrew", "andreas"],
+    ["pat", "patrick"],
+    ["stan", "stanislaw"],
+    ["steve", "steven", "stephen"],
+    ["jim", "james", "jimmy"],
+    ["magnus", "mangus"],
+    ["juanpe", "juan", "pedro"],
+    ["jan", "johannes", "johan"],
+    ["oier", "oyer"],
+    ["fran", "francisco", "francesco"],
+    ["josh", "joshua"],
+    ["harry", "harold"],
+    ["tim", "timothy", "timo"],
+    ["mads", "mats"],
+    ["lenny", "leonard"],
+    ["rich", "richard", "ricardo", "riccardo"],
+    ["isaac", "isaak"],
+    ["zak", "zachary"],
+    ["kasia", "katarzyna"],
+    ["luke", "lucas", "lukas"],
+    ["kim", "kimberley", "kimberly"],
+    ["dave", "davide", "david"],
+]
+
+const _NICKNAMES = let d = Dict{String,Set{String}}()
+    for group in NICKNAME_GROUPS, name in group
+        union!(get!(d, name, Set{String}()), group)
+    end
+    d
+end
+
+_depunct(key::AbstractString) = replace(key, r"[-.]" => "")
+
+"""
+    name_parts(name) -> Vector{String}
+
+A printed name's parts in printed order: hyphens split, normalised as
+`normalisename` does, anything but letters and digits dropped.
+"""
+function name_parts(name::AbstractString)
+    s = normalisename(replace(String(name), "-" => " "))
+    parts = (replace(p, r"[^a-z0-9]" => "") for p in split(s, "-"))
+    return [String(p) for p in parts if !isempty(p)]
+end
+
+function levenshtein(a::AbstractString, b::AbstractString)
+    a == b && return 0
+    ca, cb = collect(a), collect(b)
+    prev = collect(0:length(cb))
+    for (i, x) in enumerate(ca)
+        cur = [i]
+        for (j, y) in enumerate(cb)
+            push!(cur, min(prev[j+1] + 1, cur[j] + 1, prev[j] + (x != y)))
+        end
+        prev = cur
+    end
+    return prev[end]
+end
+
+"""
+    given_compatible(a, b) -> Bool
+
+Whether two normalised given names can be one rider's: equal, in one
+`NICKNAME_GROUPS` group, an initial, a prefix of three letters or more, or one
+edit apart (two when both are longer than five letters).
+"""
+function given_compatible(a::AbstractString, b::AbstractString)
+    (a == b || b in get(_NICKNAMES, a, ())) && return true
+    la, lb = length(a), length(b)
+    (la == 1 || lb == 1) && return first(a) == first(b)
+    min(la, lb) >= 3 && (startswith(a, b) || startswith(b, a)) && return true
+    return levenshtein(a, b) <= (min(la, lb) <= 5 ? 1 : 2)
+end
+
+struct _RefRider
+    key::String
+    depunct::String
+    core::Set{String}
+    sorted_join::String
+    join::String
+    given::Union{String,Nothing}
+    surname::Union{String,Nothing}
+end
+
+function _reference_riders(names, keys)
+    refs = _RefRider[]
+    seen = Set{String}()
+    for (name, key) in zip(names, keys)
+        key = String(key)
+        key in seen && continue
+        push!(seen, key)
+        parts = name_parts(name)
+        core = [p for p in parts if !(p in NAME_PARTICLES)]
+        two = length(core) >= 2
+        push!(
+            refs,
+            _RefRider(
+                key,
+                _depunct(key),
+                Set(core),
+                join(sort(parts)),
+                join(parts),
+                two ? first(core) : nothing,
+                two ? last(core) : nothing,
+            ),
+        )
+    end
+    return refs, seen
+end
+
+"""
+    resolve_rider(name, key, refs, ref_keys) -> (method, key, candidates)
+
+Resolve one printed name against a reference set prepared by
+`_reference_riders`. `key` is `nothing` unless exactly one reference rider
+fits. Steps, in order, each applied only when it finds exactly one rider:
+
+1. `:exact` — the key itself.
+2. `:depunct` — the key with hyphens and full stops stripped.
+3. `:compound` — the same name parts run together differently.
+4. `:subset` — one name's parts (particles aside) all among the other's, two
+   parts at least.
+5. `:surname_given` — the reference rider's surname among the printed parts
+   and a `given_compatible` given name.
+6. `:surname_typo` — the same given name, a surname of five letters or more
+   within two edits.
+
+Two or more candidates at steps 2, 4, 5 or 6 give `:ambiguous` with the
+candidates listed; nothing is guessed. There is no step matching a first name
+alone: it sent Tim Merlier to Tim Marsman and Jasper Philipsen's price to
+Albert Withen Philipsen. vgleague's `matching.py` is a port, held to this by
+the golden corpus in `test/fixtures/rider_matching.json`.
+"""
+function resolve_rider(name::AbstractString, key::AbstractString, refs, ref_keys)
+    key in ref_keys && return (:exact, String(key), [String(key)])
+    dk = _depunct(key)
+    found = [r.key for r in refs if r.depunct == dk]
+    length(found) == 1 && return (:depunct, found[1], found)
+    length(found) > 1 && return (:ambiguous, nothing, found)
+
+    parts = name_parts(name)
+    core = Set(p for p in parts if !(p in NAME_PARTICLES))
+    sj, jn = join(sort(parts)), join(parts)
+    found = [r.key for r in refs if r.sorted_join == sj || r.join == jn]
+    length(found) == 1 && return (:compound, found[1], found)
+
+    found = [
+        r.key for r in refs if min(length(r.core), length(core)) >= 2 &&
+        (issubset(r.core, core) || issubset(core, r.core))
+    ]
+    length(found) == 1 && return (:subset, found[1], found)
+    length(found) > 1 && return (:ambiguous, nothing, found)
+
+    found = [
+        r.key for r in refs if r.surname !== nothing && r.surname in core &&
+        any(x -> given_compatible(r.given, x), setdiff(core, (r.surname,)))
+    ]
+    length(found) == 1 && return (:surname_given, found[1], found)
+    length(found) > 1 && return (:ambiguous, nothing, found)
+
+    found = [
+        r.key for r in refs if r.given !== nothing && r.given in core &&
+        length(r.surname) >= 5 &&
+        any(x -> 0 < levenshtein(r.surname, x) <= 2, setdiff(core, (r.given,)))
+    ]
+    length(found) == 1 && return (:surname_typo, found[1], found)
+    length(found) > 1 && return (:ambiguous, nothing, found)
+    return (:none, nothing, String[])
+end
+
+"""
+    resolve_riders(external_df, reference_df) -> Vector of (method, key, candidates)
+
+`resolve_rider` for every row of `external_df` (columns `rider`, `riderkey`)
+against `reference_df`, normally the race's field.
+"""
+function resolve_riders(external_df::DataFrame, reference_df::DataFrame)
+    refs, ref_keys = _reference_riders(reference_df.rider, reference_df.riderkey)
+    return [
+        resolve_rider(String(row.rider), String(row.riderkey), refs, ref_keys) for
+        row in eachrow(external_df)
+    ]
+end
+
 """
     rematch_riderkeys!(external_df, reference_df)
 
-For riders in `external_df` whose `riderkey` doesn't match any in `reference_df`,
-try the punctuation-stripped key first, then a reference rider whose name parts
-are a subset of the external name's (or the reverse), then surname-only
-matching. Each way the match must be unique to be
-applied. Handles common name
-variations like "Tom Pidcock" (Oddschecker) vs "Thomas Pidcock" (VG), and
-compound surnames hyphenated in one source and spaced in the other
-("Ferrand-Prévot" vs "Ferrand Prevot").
+Rekey each row of `external_df` that `resolve_rider` resolves to one rider of
+`reference_df`, normally the race's field. An unresolved or ambiguous row keeps
+its printed key and so joins nothing. Handles "Tom Pidcock" (Oddschecker) and
+"PIDCOCK Tom" (PCS) against "Thomas Pidcock" (VG), PCS's added middle names,
+and compound surnames hyphenated in one source and spaced in the other.
+
+Stripping hyphens in `createkey` instead would be the cleaner layer, but the
+permanent archives hold ~112 hyphenated riderkeys that readers join against
+freshly computed ones, and prediction archives cannot be re-created, so the
+matching lives at read time.
 """
 function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
-    ref_keys = Set(reference_df.riderkey)
-    # Compound surnames get hyphenated in one source and spaced in the other
-    # ("Ferrand-Prévot" on VG, "Ferrand Prevot" from the bookmaker). That shifts
-    # both the riderkey (which keeps the hyphen) and the whitespace-split
-    # surname ("prevot" vs "ferrandprevot"), so surname matching alone misses
-    # them. Try the punctuation-stripped key first. `normalisename` already
-    # eats apostrophes, so hyphens and stops are what survive into a key.
-    #
-    # Stripping these in `createkey` instead would be the cleaner layer, but the
-    # permanent archives hold ~112 hyphenated riderkeys that readers join against
-    # freshly computed ones, and prediction archives cannot be re-created — so
-    # the fix has to live at match time.
-    depunct(k) = replace(k, r"[-.]" => "")
-    # PCS startlists render the name surname-first ("PIDCOCK Tom"), everything
-    # else surname-last, and the riderkey is order-insensitive so nothing upstream
-    # notices. Index both ends of the name and try both ends of the external one;
-    # the uniqueness requirement below is what keeps a first name that doubles as
-    # someone else's surname from matching the wrong rider.
-    ends(name) = (parts = split(strip(name));
-    isempty(parts) ? String[] :
-    unique([normalisename(String(first(parts)), true),
-        normalisename(String(last(parts)), true)]))
-    tokens(name) = Set(normalisename(String(t), true) for t in split(strip(name)))
-    ref_depunct = Dict{String,Vector{String}}()
-    ref_surname = Dict{String,Vector{String}}()
-    ref_tokens = Dict{String,Set{String}}()
-    for row in eachrow(reference_df)
-        push!(get!(ref_depunct, depunct(row.riderkey), String[]), row.riderkey)
-        ref_tokens[row.riderkey] = tokens(row.rider)
-        for token in ends(row.rider)
-            push!(get!(ref_surname, token, String[]), row.riderkey)
-        end
-    end
-
+    results = resolve_riders(external_df, reference_df)
     n_fixed = 0
-    for row in eachrow(external_df)
-        row.riderkey in ref_keys && continue
-        candidates = get(ref_depunct, depunct(row.riderkey), String[])
-        # One source adding a middle name ("FINN Lorenzo Mark" for Lorenzo Finn)
-        # is matched when one name's parts all appear in the other. This runs
-        # before the single-part surname match, which would pair that name with
-        # Mark Donovan. Subset, not overlap: two shared parts would pair any two
-        # "van der" riders.
-        if length(candidates) != 1
-            toks = tokens(row.rider)
-            candidates = [
-                k for (k, ref) in ref_tokens if
-                min(length(toks), length(ref)) >= 2 && (issubset(ref, toks) || issubset(toks, ref))
-            ]
-        end
-        if length(candidates) != 1
-            for token in ends(row.rider)
-                candidates = get(ref_surname, token, String[])
-                length(candidates) == 1 && break
-            end
-        end
-        if length(candidates) == 1
-            row.riderkey = candidates[1]
+    n_ambiguous = 0
+    for (i, (method, key, _)) in enumerate(results)
+        if key !== nothing && method != :exact
+            external_df.riderkey[i] = key
             n_fixed += 1
         end
+        n_ambiguous += method == :ambiguous
     end
-    n_fixed > 0 && @info "Re-matched $n_fixed riders by punctuation-stripped key, name parts or surname"
+    n_fixed > 0 && @info "Re-matched $n_fixed riders by name"
+    n_ambiguous > 0 && @info "$n_ambiguous riders matched more than one reference rider and were left unmatched"
     return external_df
 end
 

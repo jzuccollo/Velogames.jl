@@ -1021,6 +1021,26 @@ function _assemble_signals(
     rider_currency = Float64[get(currency_factors, df.riderkey[i], 1.0) for i = 1:n_riders]
 
     # --- Market-source lookup helper ---
+    # Which rows of a market frame carry their price once rematched. A row
+    # whose printed name matched its rider exactly always does. A rematched row
+    # landing on a rider who already has an exact row is dropped, and so is a
+    # rider claimed by two rematched rows and no exact one, since there is no
+    # telling which price is his. Without this the book's order decided: books
+    # are sorted shortest first, so a non-starter rematched onto a starter
+    # overwrote the starter's own price (Jasper Philipsen's 13.0 at
+    # Milano-Sanremo became Albert Withen Philipsen's 251.0).
+    function _priced_rows(raw_keys, matched_keys)
+        exact = raw_keys .== matched_keys
+        has_exact = Set(matched_keys[exact])
+        rematched_count = Dict{String,Int}()
+        for (k, e) in zip(matched_keys, exact)
+            e || (rematched_count[k] = get(rematched_count, k, 0) + 1)
+        end
+        return [
+            e || (!(k in has_exact) && rematched_count[k] == 1) for
+            (k, e) in zip(matched_keys, exact)
+        ]
+    end
     function _market_lookup(
         src_df,
         prob_col::Symbol,
@@ -1034,9 +1054,11 @@ function _assemble_signals(
            !(prob_col in propertynames(src_df))
             return lookup, floor_strength
         end
+        raw_keys = String.(src_df.riderkey)
         :rider in propertynames(src_df) && rematch_riderkeys!(src_df, df)
-        for row in eachrow(src_df)
-            lookup[row.riderkey] = Float64(row[prob_col])
+        keep = _priced_rows(raw_keys, String.(src_df.riderkey))
+        for (i, row) in enumerate(eachrow(src_df))
+            keep[i] && (lookup[row.riderkey] = Float64(row[prob_col]))
         end
         if apply_floor && !isempty(lookup)
             listed_prob = sum(values(lookup))
@@ -1063,11 +1085,13 @@ function _assemble_signals(
     if odds_df !== nothing &&
        :riderkey in propertynames(odds_df) &&
        :odds in propertynames(odds_df)
+        raw_keys = String.(odds_df.riderkey)
         :rider in propertynames(odds_df) && rematch_riderkeys!(odds_df, df)
+        keep = _priced_rows(raw_keys, String.(odds_df.riderkey))
         raw_probs = 1.0 ./ Float64.(odds_df.odds)
         overround = sum(raw_probs)
         for (i, row) in enumerate(eachrow(odds_df))
-            odds_lookup[row.riderkey] = raw_probs[i] / overround
+            keep[i] && (odds_lookup[row.riderkey] = raw_probs[i] / overround)
         end
         if :odds in config.floor_signals && !isempty(odds_lookup)
             listed_prob = sum(values(odds_lookup))
@@ -1111,11 +1135,13 @@ function _assemble_signals(
         odds_input_df === nothing && return lookup
         :riderkey in propertynames(odds_input_df) || return lookup
         :odds in propertynames(odds_input_df) || return lookup
+        raw_keys = String.(odds_input_df.riderkey)
         :rider in propertynames(odds_input_df) && rematch_riderkeys!(odds_input_df, df)
+        keep = _priced_rows(raw_keys, String.(odds_input_df.riderkey))
         raw_probs = 1.0 ./ Float64.(odds_input_df.odds)
         overround = sum(raw_probs)
         for (i, row) in enumerate(eachrow(odds_input_df))
-            lookup[row.riderkey] = raw_probs[i] / overround
+            keep[i] && (lookup[row.riderkey] = raw_probs[i] / overround)
         end
         n_listed = length(intersect(keys(lookup), Set(df.riderkey)))
         @info "$label: $n_listed listed (no floor for absent riders)"
