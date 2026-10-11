@@ -950,6 +950,21 @@ function load_vg_race_pool(
 end
 
 """
+    _pcs_starter_keys(pcs_results, pool) -> Set{String}
+
+The keys of PCS's starters, each resolved against the Velogames pool by
+`rematch_riderkeys!`, for filtering the pool to the race's field. vgleague's
+`field.py` does the same and `verify-field` holds the two together.
+"""
+function _pcs_starter_keys(pcs_results::DataFrame, pool::DataFrame)
+    pcs = DataFrame(
+        rider = String.(pcs_results.rider),
+        riderkey = String.(pcs_results.riderkey),
+    )
+    return Set{String}(rematch_riderkeys!(pcs, pool).riderkey)
+end
+
+"""
     load_report_data(pcs_slug, year) -> Union{DataFrame, Nothing}
 
 Load VG race results and rider costs, join them, and compute value.
@@ -1009,12 +1024,14 @@ function load_report_data(
     if startlist === nothing
         pcs_results = load_race_snapshot("pcs_results", pcs_slug, year)
         if pcs_results !== nothing && :riderkey in propertynames(pcs_results)
-            starter_keys = Set(pcs_results.riderkey)
-            # A rider who scored was in the race, whatever PCS says, as in the
-            # startlist arm above. A rider can miss the PCS filter on a
-            # `riderkey` mismatch: Velogames' "Thomas Pidcock" and PCS's
-            # "Pidcock Tom" key differently. `unpriced_scorers` does not catch
-            # this, because those riders are priced.
+            # PCS prints names its own way ("PIDCOCK Tom" for Velogames'
+            # "Thomas Pidcock", "DVERSNES LAVIK Fredrik" with a middle name), so
+            # its keys are resolved against the pool before filtering. On a raw
+            # key match 207 starters who scored nothing fell out of 109 fields,
+            # and `unpriced_scorers` does not catch that, because those riders
+            # are priced. A rider who scored was in the race whatever PCS says,
+            # as in the startlist arm above.
+            starter_keys = _pcs_starter_keys(pcs_results, field)
             filter!(row -> row.riderkey in starter_keys || row.score > 0, df)
         end
     end
