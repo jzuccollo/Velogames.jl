@@ -632,6 +632,53 @@ function backtest_race(
     )
 end
 
+"""
+    given_first_names(pcs_names, pcs_keys, pool; race, year) -> Vector{String}
+
+PCS's surname-first names turned given name first, for a frame used as a
+reference by `resolve_rider`, whose surname and given-name steps assume the
+given name first (against "Johannessen Anders Halland" the surname step took
+Johannessen for a given name and gave Tobias's results to Anders, and
+"Pidcock Tom" never met "Thomas"). In order, for each name:
+
+1. the Velogames spelling, where the name resolves to a rider of `pool` (the
+   season's archived `vg_riders`, given name first; `nothing` skips this);
+2. `_flip_pcs_name`, where the name carries PCS's all-caps surname marker
+   ("PIDCOCK Tom" becomes "Tom Pidcock");
+3. the name unchanged: a mixed-case "Pidcock Tom" says nowhere which parts
+   are the surname, so it is not guessed at.
+
+The keys are not changed: a row keeps its PCS key, and only the name it
+offers the rule steps is turned round.
+"""
+function given_first_names(
+    pcs_names::AbstractVector{<:AbstractString},
+    pcs_keys::AbstractVector{<:AbstractString},
+    pool;
+    race = nothing,
+    year = nothing,
+)
+    resolved = fill(nothing, length(pcs_names)) |> Vector{Union{Nothing,String}}
+    if pool !== nothing && nrow(pool) > 0
+        ref = unique(dropmissing(DataFrame(pool)[:, [:rider, :riderkey]]), :riderkey)
+        name_of = Dict(String(k) => String(n) for (n, k) in zip(ref.rider, ref.riderkey))
+        results = resolve_riders(
+            DataFrame(rider = String.(pcs_names), riderkey = String.(pcs_keys)),
+            ref;
+            source = "pcs_results",
+            race = race,
+            year = year,
+        )
+        for (i, (_, key, _)) in enumerate(results)
+            key === nothing || (resolved[i] = name_of[key])
+        end
+    end
+    return [
+        something(resolved[i], _flip_pcs_name(String(pcs_names[i]))) for
+        i in eachindex(pcs_names)
+    ]
+end
+
 """Build a rider DataFrame for backtesting, preferring VG data when available."""
 function _build_rider_df(
     race::BacktestRace,
@@ -658,10 +705,21 @@ function _build_rider_df(
         @debug "VG data unavailable for $(race.year): $e"
     end
 
-    # Fallback: synthetic riders from PCS results
+    # Fallback: synthetic riders from PCS results. PCS prints the surname first
+    # ("Pidcock Tom"), and this frame is the reference every market and history
+    # frame is resolved against, which assumes the given name first; so the
+    # names are turned round here (`given_first_names`). The keys stay PCS's,
+    # which is what `actual_df` and the history join on.
     @debug "Building synthetic rider DataFrame from PCS results"
+    pool = load_race_snapshot("vg_riders", vg_classics_slug(race.year), race.year)
     return DataFrame(
-        rider = actual_df.rider,
+        rider = given_first_names(
+            String.(actual_df.rider),
+            String.(actual_df.riderkey),
+            pool;
+            race = race.pcs_slug,
+            year = race.year,
+        ),
         team = hasproperty(actual_df, :team) ? actual_df.team :
                fill("Unknown", nrow(actual_df)),
         riderkey = actual_df.riderkey,

@@ -926,3 +926,45 @@ end
     # Sharing "van der" is not a match
     @test ext3.riderkey[2] == createkey("VAN DER POEL Mathieu")
 end
+
+@testset "given-name-first reference names" begin
+    # PCS prints the surname first; a frame used as a reference must offer the
+    # given name first. The all-caps surname marker turns a name round; a
+    # mixed-case name with no pool rider is left alone rather than guessed at.
+    @test Velogames._flip_pcs_name("PIDCOCK Tom") == "Tom Pidcock"
+    @test Velogames._flip_pcs_name("VAN DER POEL Mathieu") == "Mathieu Van Der Poel"
+    @test Velogames._flip_pcs_name("RACCAGNI NOVIERO Andrea") == "Andrea Raccagni Noviero"
+    @test Velogames._flip_pcs_name("JOHANNESSEN Tobias Halland") == "Tobias Halland Johannessen"
+    @test Velogames._flip_pcs_name("PARET-PEINTRE Aurélien") == "Aurélien Paret-Peintre"
+    @test Velogames._flip_pcs_name("Pidcock Tom") == "Pidcock Tom"
+    @test Velogames._flip_pcs_name("POGAČAR TADEJ") == "POGAČAR TADEJ"
+
+    pool = DataFrame(
+        rider = ["Thomas Pidcock", "Anders Halland Johannessen", "Tobias Halland Johannessen"],
+    )
+    pool.riderkey = createkey.(pool.rider)
+    pcs = ["Pidcock Tom", "Johannessen Tobias Halland", "MAS Enric", "Kron Andreas"]
+    names = Velogames.given_first_names(pcs, createkey.(pcs), pool; year = 2025)
+    # A pool rider gives the Velogames spelling; the caps marker turns the
+    # rest round; a mixed-case name outside the pool stays as printed.
+    @test names == ["Thomas Pidcock", "Tobias Halland Johannessen", "Enric Mas", "Kron Andreas"]
+    @test Velogames.given_first_names(pcs, createkey.(pcs), nothing) ==
+          ["Pidcock Tom", "Johannessen Tobias Halland", "Enric Mas", "Kron Andreas"]
+
+    # Against the turned-round reference the rules find given-name variants and
+    # keep the twins apart; against the surname-first one they did neither.
+    for (refnames, want_tom, want_tobias) in (
+        (pcs, nothing, nothing),
+        (names, createkey("Pidcock Tom"), createkey("Johannessen Tobias Halland")),
+    )
+        refs, keys = Velogames._reference_riders(refnames, createkey.(pcs))
+        @test Velogames.resolve_rider("Thomas Pidcock", createkey("Thomas Pidcock"), refs, keys)[2] ==
+              want_tom
+        @test Velogames.resolve_rider(
+            "Tobias H Johannessen",
+            createkey("Tobias H Johannessen"),
+            refs,
+            keys,
+        )[2] == want_tobias
+    end
+end
