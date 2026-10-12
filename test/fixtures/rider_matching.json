@@ -12847,6 +12847,21 @@
 "Enric Mas",
 "Tadej Pogačar",
 "Wout van Aert"
+],
+"hand-37":[
+"Johannessen Anders Halland",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-38":[
+"Johannessen Tobias Halland",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-39":[
+"Anders Halland Johannessen",
+"Tadej Pogačar",
+"Wout van Aert"
 ]
 },
 "cases":[
@@ -32224,6 +32239,70 @@
 }
 ]
 }
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"old_ladder":"",
+"old_match":"",
+"field":"hand-37",
+"rider":"Johannessen Tobias Halland",
+"method":"surname_given",
+"expected":"Johannessen Anders Halland",
+"candidates":[],
+"verdict":"a reference printed surname first makes the twins' shared Johannessen its given name, so the surname step takes Tobias for Anders (2024 Brussels and Franco-Belge backtests)"
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"old_ladder":"",
+"old_match":"",
+"field":"hand-37",
+"rider":"Johannessen Tobias Halland",
+"method":"override_refused",
+"expected":null,
+"candidates":[
+"Johannessen Anders Halland"
+],
+"verdict":"the real overrides file refuses Tobias Halland Johannessen as his brother Anders",
+"overrides":"file",
+"scope":{
+"source":"pcs_results"
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"old_ladder":"",
+"old_match":"",
+"field":"hand-38",
+"rider":"Johannessen Anders Halland",
+"method":"override_refused",
+"expected":null,
+"candidates":[
+"Johannessen Tobias Halland"
+],
+"verdict":"and Anders as Tobias, the mirror of the same rule",
+"overrides":"file",
+"scope":{
+"source":"pcs_results"
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"old_ladder":"",
+"old_match":"",
+"field":"hand-39",
+"rider":"Johannessen Tobias Halland",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"against a reference printed given name first the rules do not take Tobias for Anders"
 }
 ]
 }

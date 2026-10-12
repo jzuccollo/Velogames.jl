@@ -207,3 +207,25 @@ printed = "José Antonio Escarcega"
 rider = "José Antonio Prieto"
 reason = "Different riders. Confirmed by owner."
 reviewed = 2026-10-12
+
+# Brothers. Siblings share family names, and a reference printed surname first
+# (PCS's "JOHANNESSEN Anders Halland") can hand one brother's printed name to
+# the other: the surname step reads the shared Johannessen as the given name
+# and Halland as the surname. The Johannessen twins are refused both ways.
+# Checked across every archived frame and the backtest traces: Paret-Peintre
+# (Aurélien, Valentin), Raccagni (Gabriele; Andrea Raccagni Noviero) and Dries
+# De Bondt / Dries De Pooter are never matched to each other, so carry no entry.
+
+[[refuse]]
+printed = "Johannessen Tobias Halland"
+rider = "Anders Halland Johannessen"
+source = "pcs_results"
+reason = "Twin brothers, both Uno-X: PCS tobias-halland-johannessen and anders-halland-johannessen. The 2024 Brussels Cycling Classic and Circuit Franco-Belge backtests gave Tobias's Paris-Tours 2023 3rd and Franco-Belge 2023 4th to Anders (surname_given against the field's 'Johannessen Anders Halland')."
+reviewed = 2026-10-12
+
+[[refuse]]
+printed = "Johannessen Anders Halland"
+rider = "Tobias Halland Johannessen"
+source = "pcs_results"
+reason = "The mirror of the entry above: the same rule hands Anders's PCS results to Tobias against a field printing 'Johannessen Tobias Halland' without Anders. Not yet seen in the archive."
+reviewed = 2026-10-12
