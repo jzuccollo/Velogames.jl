@@ -49,11 +49,34 @@ function clear_memory_cache!()
 end
 
 """
-Generate a cache key from URL and parameters
+    cache_key(url, params) -> String
+
+First 16 hex digits of the SHA-256 of `url` and a canonical rendering of
+`params`.
+
+The key used to hash `url * string(params)`, which follows `Dict` iteration
+order, and that order changed in Julia 1.13: `Dict("slug" => s, "year" => y)`
+iterates `year, slug` under 1.12 and `slug, year` under 1.13, so every
+race-page entry written under 1.12 missed under 1.13. `_canonical_params`
+fixes the order.
+
+It sorts keys in *descending* order because that is the order Julia 1.12
+produced for both two-key `params` in use (`year, slug` and
+`specialty, slug`), and the rendering otherwise matches `string(::Dict)`: an
+empty `Dict` keeps its `Dict{Any, Any}()` text and a one-key `Dict` is
+unchanged. Of the 3,168 entries in `~/.velogames_cache` on 12 October 2026,
+3,167 keep their key. The exception is one `stage_profiles` entry, whose three
+keys 1.12 iterated as `year, slug, type`; it is refetched once.
 """
-function cache_key(url::String, params::Dict = Dict())::String
-    content = url * string(params)
+function cache_key(url::String, params::AbstractDict = Dict())::String
+    content = url * _canonical_params(params)
     return bytes2hex(sha256(content))[1:16]
+end
+
+function _canonical_params(params::AbstractDict)::String
+    isempty(params) && return "Dict{Any, Any}()"
+    pairs = sort!([string(k) => string(v) for (k, v) in params]; by = first, rev = true)
+    return "Dict(" * join(("$(repr(k)) => $(repr(v))" for (k, v) in pairs), ", ") * ")"
 end
 
 struct CacheMetadata

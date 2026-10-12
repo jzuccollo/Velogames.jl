@@ -10,6 +10,7 @@ using Gumbo
 using Cascadia
 
 include("test_utilities.jl")
+include("test_cache_key.jl")
 include("test_scoring.jl")
 include("test_simulation.jl")
 include("test_optimisation.jl")
