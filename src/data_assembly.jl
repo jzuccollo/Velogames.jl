@@ -950,18 +950,20 @@ function load_vg_race_pool(
 end
 
 """
-    _pcs_starter_keys(pcs_results, pool) -> Set{String}
+    _pcs_starter_keys(pcs_results, pool, pcs_slug, year) -> Set{String}
 
 The keys of PCS's starters, each resolved against the Velogames pool by
 `rematch_riderkeys!`, for filtering the pool to the race's field. vgleague's
 `field.py` does the same and `verify-field` holds the two together.
 """
-function _pcs_starter_keys(pcs_results::DataFrame, pool::DataFrame)
-    pcs = DataFrame(
-        rider = String.(pcs_results.rider),
-        riderkey = String.(pcs_results.riderkey),
-    )
-    return Set{String}(rematch_riderkeys!(pcs, pool).riderkey)
+function _pcs_starter_keys(pcs_results::DataFrame, pool::DataFrame, pcs_slug, year)
+    rows = [
+        (String(r), String(k)) for (r, k) in zip(pcs_results.rider, pcs_results.riderkey) if
+        !ismissing(r) && !ismissing(k)
+    ]
+    pcs = DataFrame(rider = first.(rows), riderkey = last.(rows))
+    rematch_riderkeys!(pcs, pool; source = "pcs_results", race = pcs_slug, year = year)
+    return Set{String}(pcs.riderkey)
 end
 
 """
@@ -1031,7 +1033,7 @@ function load_report_data(
             # and `unpriced_scorers` does not catch that, because those riders
             # are priced. A rider who scored was in the race whatever PCS says,
             # as in the startlist arm above.
-            starter_keys = _pcs_starter_keys(pcs_results, field)
+            starter_keys = _pcs_starter_keys(pcs_results, field, pcs_slug, year)
             filter!(row -> row.riderkey in starter_keys || row.score > 0, df)
         end
     end

@@ -1,5 +1,5 @@
 {
-"about":"Golden corpus for rider name matching (resolve_rider in Velogames.jl, vgleague.matching in vgleague). Each case is a printed name that did not match its reference set by key, from a measured join across the 2023-26 archive; 'field' names the reference set, stored as printed names whose keys are createkey(name). 'method' and 'expected' are what the resolver must return ('expected' is the reference rider's printed name, null when unresolved; 'candidates' lists an ambiguous case's riders). 'verdict' is the review label and 'old_ladder' what the pre-v2 ladder did (right, wrong or none), kept for the record and not checked.",
+"about":"Golden corpus for rider name matching (resolve_rider in Velogames.jl, vgleague.matching in vgleague). Each case is a printed name that did not match its reference set by key, from a measured join across the 2023-26 archive; 'field' names the reference set, stored as printed names whose keys are createkey(name). 'method' and 'expected' are what the resolver must return ('expected' is the reference rider's printed name, null when unresolved; 'candidates' lists an ambiguous case's riders). 'verdict' is the review label and 'old_ladder' what the pre-v2 ladder did (right, wrong or none), kept for the record and not checked. A case with 'frame' is resolved together with those other printed names of its source: a rematch may not take a rider another row of the frame matches exactly ('collides_exact', with that rider as the candidate).",
 "fields":{
 "07683ce69ac0":[
 "Alastair MacKellar",
@@ -12528,6 +12528,325 @@
 "Lorenzo Finn",
 "Mark Donovan",
 "Taco van der Hoorn"
+],
+"hand-10":[
+"Mathias Jensen",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-11":[
+"Rasmus Petersen",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-12":[
+"Juan Lopez",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-13":[
+"Michal Kwiatkowski",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-14":[
+"Tadej Pogačar",
+"Tim Declercq",
+"Wout van Aert"
+],
+"hand-15":[
+"Ben Swift",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-16":[
+"Jan Christen",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-17":[
+"Alexis Renard",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-18":[
+"Lorena Wiebes",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-19":[
+"Simona Consonni",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-20":[
+"Jefferson Alexander Cepeda",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"39f547954051":[
+"Aaron Gate",
+"Aimé De Gendt",
+"Albert Torres",
+"Alberto Bettiol",
+"Alec Segaert",
+"Alessandro Borgo",
+"Alessandro Romele",
+"Alexis Renard",
+"Alexys Brunel",
+"Anthony Turgis",
+"António Morgado",
+"Arjen Livyns",
+"Artem Shmidt",
+"Arthur Kluckers",
+"Axel Huens",
+"Axel Zingle",
+"Benoît Cosnefroy",
+"Biniam Girmay",
+"Brem Deman",
+"Brent Van Moer",
+"Carlos Canal",
+"Cedric Beullens",
+"Cees Bol",
+"Christophe Laporte",
+"Clément Alleno",
+"Clément Russo",
+"Colby Simmons",
+"Connor Swift",
+"Cyril Barthe",
+"César Macías",
+"Daan Hoole",
+"Daniel Cavia",
+"Davide Ballerini",
+"Dillon Corkery",
+"Dion Smith",
+"Dries De Bondt",
+"Dries De Pooter",
+"Dries Van Gestel",
+"Dylan Teuns",
+"Dylan Van Baarle",
+"Dylan Vandenstorme",
+"Edoardo Affini",
+"Edoardo Zamperini",
+"Edward Planckaert",
+"Edward Theuns",
+"Emīls Liepiņš",
+"Eric Antonio Fagúndez",
+"Erik Nordsæter Resell",
+"Fabian Lienhard",
+"Fabio Van Den Bossche",
+"Filip Maciejuk",
+"Florian Dauphin",
+"Florian Sénéchal",
+"Florian Vermeersch",
+"Floris Van Tricht",
+"Fred Wright",
+"Frederik Frison",
+"Georgios Bouglas",
+"Gianni Vermeersch",
+"Hartthijs De Vries",
+"Henri-François Renard-Haquin",
+"Hugo De La Calle",
+"Hugo Page",
+"Iván García Cortina",
+"Jambaljamts Sainbayar",
+"Jan Tratnik",
+"Jarrad Drizners",
+"Jasha Sütterlin",
+"Jasper Stuyven",
+"Jenno Berckmoes",
+"Jenthe Biermans",
+"Johan Jacobs",
+"Jon Barrenetxea",
+"Jonas Abrahamsen",
+"Jonas Geens",
+"Jonas Rutsch",
+"Jonathan Vervenne",
+"Joren Bloem",
+"Joshua Tarling",
+"Julius Van Den Berg",
+"Kamil Gradek",
+"Kamil Małecki",
+"Kasper Asgreen",
+"Kelland O'Brien",
+"Kim Heiduk",
+"Laurence Pithie",
+"Lewis Askey",
+"Lorenzo Milesi",
+"Luca Mozzato",
+"Luca Van Boven",
+"Luka Mezgec",
+"Luke Durbridge",
+"Luke Lamperti",
+"Lukáš Kubiš",
+"Mads Pedersen",
+"Magnus Sheffield",
+"Marco Haller",
+"Martijn Rasenberg",
+"Matej Mohorič",
+"Matevž Govekar",
+"Mathias Norsgaard",
+"Mathias Vacek",
+"Mathieu Van Der Poel",
+"Matis Louvel",
+"Matteo Trentin",
+"Matthew Brennan",
+"Matthias Schwarzbacher",
+"Matyáš Kopecký",
+"Max Walker",
+"Max Walscheid",
+"Michael Gogl",
+"Michael Valgren",
+"Michiel Lambrecht",
+"Mick Van Dijke",
+"Mike Teunissen",
+"Mikkel Bjerg",
+"Mikkel Frølich Honoré",
+"Milan Lanhove",
+"Nickolas Zukowsky",
+"Niklas Larsen",
+"Niklas Märkl",
+"Nils Politt",
+"Oliver Naesen",
+"Oliver Peace",
+"Orluis Aular",
+"Oscar Riesebeek",
+"Owain Doull",
+"Pau Miquel",
+"Paul Magnier",
+"Pepijn Reinderink",
+"Per Strand Hagenes",
+"Piet Allegaert",
+"Rasmus Søjberg Pedersen",
+"Rasmus Tiller",
+"Rayan Boulahoite",
+"Remco Evenepoel",
+"Rick Pluimers",
+"Riley Sheehan",
+"Robert Donaldson",
+"Robin Froidevaux",
+"Romain Grégoire",
+"Rui Oliveira",
+"Sam Welsford",
+"Samuel Leroux",
+"Samuel Watson",
+"Sander De Pestel",
+"Sandy Dujardin",
+"Sean Flynn",
+"Silvan Dillier",
+"Stan Dewulf",
+"Stanisław Aniołkowski",
+"Stefan Bissegger",
+"Storm Ingebrigtsen",
+"Sven Erik Bystrøm",
+"Sébastien Grignard",
+"Søren Kragh Andersen",
+"Søren Wærenskjold",
+"Tadej Pogačar",
+"Thibaud Gruel",
+"Thomas Gachignard",
+"Tim Naberman",
+"Tim Torn Teutenberg",
+"Tim Van Dijke",
+"Tom Van Asbroeck",
+"Tomáš Kopecký",
+"Toon Aerts",
+"Valentin Madouas",
+"Victor Vercouillie",
+"Vincent Van Hemelen",
+"Vito Braet",
+"Ward Vanhoof",
+"William Blume Levy",
+"Wout Van Aert",
+"Yevgeniy Fedorov",
+"Žak Eržen"
+],
+"hand-21":[
+"Enric Mas",
+"Joel Nicolau",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-22":[
+"Enric Mas",
+"Joel Nicolau",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-23":[
+"Enric Mas",
+"Joel Nicolau",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-24":[
+"Joel Nicolau",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-25":[
+"Enric Mas",
+"Joel Nicolau",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-26":[
+"Enric Mas",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-27":[
+"Enric Mas",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-28":[
+"Enric Mas",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-29":[
+"Enric Mas",
+"Joel Nicolau",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-30":[
+"Joe Pidcock",
+"Tadej Pogačar",
+"Thomas Pidcock",
+"Wout van Aert"
+],
+"hand-31":[
+"Tadej Pogačar",
+"Thomas Pidcock",
+"Wout van Aert"
+],
+"hand-32":[
+"Tadej Pogačar",
+"Thomas Pidcock",
+"Wout van Aert"
+],
+"hand-33":[
+"Andrea Peron",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-34":[
+"Jefferson Alexander Cepeda",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-35":[
+"Enric Mas",
+"Joel Nicolau",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-36":[
+"Enric Mas",
+"Tadej Pogačar",
+"Wout van Aert"
 ]
 },
 "cases":[
@@ -12706,7 +13025,7 @@
 "year":2026,
 "field":"328208a9f623",
 "rider":"Andrea Raccagni",
-"method":"subset",
+"method":"override",
 "expected":"Andrea Raccagni Noviero",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -12758,7 +13077,7 @@
 "year":2026,
 "field":"d88d92959a75",
 "rider":"Andrea Raccagni",
-"method":"subset",
+"method":"override",
 "expected":"Andrea Raccagni Noviero",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -13122,7 +13441,7 @@
 "year":2026,
 "field":"d81acba1841e",
 "rider":"Victor Vercouille",
-"method":"surname_typo",
+"method":"override",
 "expected":"Victor Vercouillie",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -13538,7 +13857,7 @@
 "year":2026,
 "field":"be16b8250c57",
 "rider":"Victor Vercouille",
-"method":"surname_typo",
+"method":"override",
 "expected":"Victor Vercouillie",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -13616,11 +13935,11 @@
 "year":2026,
 "field":"fa90ade70842",
 "rider":"Derek Gee",
-"method":"subset",
+"method":"override",
 "expected":"Derek Gee-West",
 "candidates":[],
-"verdict":"REVIEW",
-"old_ladder":"wrong",
+"verdict":"match: same rider (Gee-West); confirmed by owner",
+"old_ladder":"right",
 "old_match":"Derek Gee-West"
 },
 {
@@ -13824,10 +14143,10 @@
 "year":2026,
 "field":"fa90ade70842",
 "rider":"Nicholas Zukowski",
-"method":"none",
-"expected":null,
+"method":"override",
+"expected":"Nickolas Zukowsky",
 "candidates":[],
-"verdict":"absent",
+"verdict":"match: reviewed override (owner-approved)",
 "old_ladder":"none",
 "old_match":""
 },
@@ -13863,7 +14182,7 @@
 "year":2026,
 "field":"8cf1195632b6",
 "rider":"Andrea Raccagni",
-"method":"subset",
+"method":"override",
 "expected":"Andrea Raccagni Noviero",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -13967,7 +14286,7 @@
 "year":2026,
 "field":"305588953ec1",
 "rider":"Andrea Raccagni",
-"method":"subset",
+"method":"override",
 "expected":"Andrea Raccagni Noviero",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -14084,11 +14403,11 @@
 "year":2026,
 "field":"b3b737922893",
 "rider":"Enric M Nicolau",
-"method":"none",
-"expected":null,
+"method":"override",
+"expected":"Enric Mas",
 "candidates":[],
-"verdict":"absent",
-"old_ladder":"wrong",
+"verdict":"match: Enric Mas Nicolau, first surname cut to an initial; confirmed by owner",
+"old_ladder":"right",
 "old_match":"Enric Mas"
 },
 {
@@ -14227,7 +14546,7 @@
 "year":2026,
 "field":"2d9470a4ed3d",
 "rider":"Daniel Martinez",
-"method":"subset",
+"method":"override",
 "expected":"Daniel Felipe Martínez",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -14721,7 +15040,7 @@
 "year":2026,
 "field":"5434916e2494",
 "rider":"Andrea Raccagni",
-"method":"none",
+"method":"override_absent",
 "expected":null,
 "candidates":[],
 "verdict":"absent",
@@ -14799,7 +15118,7 @@
 "year":2026,
 "field":"5434916e2494",
 "rider":"Daniel Martinez",
-"method":"subset",
+"method":"override",
 "expected":"Daniel Felipe Martínez",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -14942,7 +15261,7 @@
 "year":2026,
 "field":"5434916e2494",
 "rider":"Matz Wenzel",
-"method":"surname_given",
+"method":"override",
 "expected":"Mats Wenzel",
 "candidates":[],
 "verdict":"match:given-name spelling/transliteration",
@@ -15254,7 +15573,7 @@
 "year":2026,
 "field":"24cfb2386722",
 "rider":"Andrea Raccagni",
-"method":"none",
+"method":"override_absent",
 "expected":null,
 "candidates":[],
 "verdict":"absent",
@@ -15267,10 +15586,10 @@
 "year":2026,
 "field":"24cfb2386722",
 "rider":"Andreas Kron",
-"method":"none",
+"method":"override_refused",
 "expected":null,
 "candidates":[],
-"verdict":"missed:surname typo/transliteration:Andrea Peron",
+"verdict":"not a match: confirmed by owner",
 "old_ladder":"none",
 "old_match":""
 },
@@ -17334,12 +17653,17 @@
 "year":2026,
 "field":"575c1f5ebecd",
 "rider":"Maximilian Walscheid",
-"method":"surname_given",
-"expected":"Max Walscheid",
-"candidates":[],
-"verdict":"match:given-name variant",
+"method":"collides_exact",
+"expected":null,
+"candidates":[
+"Max Walscheid"
+],
+"verdict":"the book lists the rider twice; the exact row carries him",
 "old_ladder":"right",
-"old_match":"Max Walscheid"
+"old_match":"Max Walscheid",
+"frame":[
+"Max Walscheid"
+]
 },
 {
 "source":"odds",
@@ -18450,14 +18774,17 @@
 "source":"odds",
 "race":"ronde-van-vlaanderen",
 "year":2026,
-"field":"bffa48aa2ea1",
+"field":"39f547954051",
 "rider":"Mathias N Jorgensen",
 "method":"none",
 "expected":null,
 "candidates":[],
-"verdict":"absent",
+"verdict":"the book lists Mathias Norsgaard (Jørgensen) twice at 751; the exact row carries him (reference set: the field after PCS starters were resolved, which restored Norsgaard)",
 "old_ladder":"wrong",
-"old_match":"Mathias Vacek"
+"old_match":"Mathias Vacek",
+"frame":[
+"Mathias Norsgaard"
+]
 },
 {
 "source":"odds",
@@ -18946,7 +19273,7 @@
 "year":2026,
 "field":"bffa48aa2ea1",
 "rider":"Victor Vercouille",
-"method":"surname_typo",
+"method":"override",
 "expected":"Victor Vercouillie",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -19063,7 +19390,7 @@
 "year":2026,
 "field":"e30573bbf814",
 "rider":"Andrea Raccagni",
-"method":"none",
+"method":"override_absent",
 "expected":null,
 "candidates":[],
 "verdict":"absent",
@@ -19115,7 +19442,7 @@
 "year":2026,
 "field":"e30573bbf814",
 "rider":"Daniel Martinez",
-"method":"subset",
+"method":"override",
 "expected":"Daniel Felipe Martínez",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -19596,7 +19923,7 @@
 "year":2026,
 "field":"f32878cbc58c",
 "rider":"Andrea Raccagni",
-"method":"none",
+"method":"override_absent",
 "expected":null,
 "candidates":[],
 "verdict":"absent",
@@ -21117,12 +21444,17 @@
 "year":2026,
 "field":"b3b737922893",
 "rider":"Joao Pedro Goncalves Almeida",
-"method":"subset",
-"expected":"João Almeida",
-"candidates":[],
-"verdict":"match:middle name added/dropped",
+"method":"collides_exact",
+"expected":null,
+"candidates":[
+"João Almeida"
+],
+"verdict":"the book lists the rider twice; the exact row carries him",
 "old_ladder":"right",
-"old_match":"João Almeida"
+"old_match":"João Almeida",
+"frame":[
+"Joao Almeida"
+]
 },
 {
 "source":"odds",
@@ -21247,10 +21579,10 @@
 "year":2026,
 "field":"b3b737922893",
 "rider":"Nicholas Zukowski",
-"method":"none",
-"expected":null,
+"method":"override",
+"expected":"Nickolas Zukowsky",
 "candidates":[],
-"verdict":"absent",
+"verdict":"match: reviewed override (owner-approved)",
 "old_ladder":"wrong",
 "old_match":"Nicholas Travella"
 },
@@ -21325,7 +21657,7 @@
 "year":2026,
 "field":"fa90ade70842",
 "rider":"Andrea Raccagni",
-"method":"subset",
+"method":"override",
 "expected":"Andrea Raccagni Noviero",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -21494,7 +21826,7 @@
 "year":2026,
 "field":"50792d6fa960",
 "rider":"Raul Garcia",
-"method":"subset",
+"method":"override",
 "expected":"Raúl García Pierna",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -21611,12 +21943,17 @@
 "year":2026,
 "field":"07683ce69ac0",
 "rider":"Ibon Ruiz Sedano",
-"method":"subset",
-"expected":"Ibon Ruiz",
-"candidates":[],
-"verdict":"match:middle name added/dropped",
+"method":"collides_exact",
+"expected":null,
+"candidates":[
+"Ibon Ruiz"
+],
+"verdict":"the book lists the rider twice; the exact row carries him",
 "old_ladder":"right",
-"old_match":"Ibon Ruiz"
+"old_match":"Ibon Ruiz",
+"frame":[
+"Ibon Ruiz"
+]
 },
 {
 "source":"odds_kom",
@@ -21689,12 +22026,17 @@
 "year":2026,
 "field":"fa90ade70842",
 "rider":"Dave Ballerini",
-"method":"surname_given",
-"expected":"Davide Ballerini",
-"candidates":[],
-"verdict":"match:given-name variant",
+"method":"collides_exact",
+"expected":null,
+"candidates":[
+"Davide Ballerini"
+],
+"verdict":"the book lists the rider twice; the exact row carries him",
 "old_ladder":"right",
-"old_match":"Davide Ballerini"
+"old_match":"Davide Ballerini",
+"frame":[
+"Davide Ballerini"
+]
 },
 {
 "source":"odds_points",
@@ -21702,12 +22044,17 @@
 "year":2026,
 "field":"fa90ade70842",
 "rider":"Jonthan Milan",
-"method":"surname_given",
-"expected":"Jonathan Milan",
-"candidates":[],
-"verdict":"match:given-name spelling/transliteration",
+"method":"collides_exact",
+"expected":null,
+"candidates":[
+"Jonathan Milan"
+],
+"verdict":"the book lists the rider twice; the exact row carries him",
 "old_ladder":"none",
-"old_match":""
+"old_match":"",
+"frame":[
+"Jonathan Milan"
+]
 },
 {
 "source":"odds_points",
@@ -23834,7 +24181,7 @@
 "year":2026,
 "field":"657b82729e96",
 "rider":"Sebastian Molano",
-"method":"subset",
+"method":"override",
 "expected":"Juan Sebastián Molano",
 "candidates":[],
 "verdict":"match:middle name added/dropped",
@@ -23873,7 +24220,7 @@
 "year":2026,
 "field":"1e52c4d8a69d",
 "rider":"Sebastian Molano",
-"method":"subset",
+"method":"override",
 "expected":"Juan Sebastián Molano",
 "candidates":[],
 "verdict":"match:middle name added/dropped",
@@ -23899,7 +24246,7 @@
 "year":2026,
 "field":"fa90ade70842",
 "rider":"Martin López",
-"method":"subset",
+"method":"override",
 "expected":"Harold Martín López",
 "candidates":[],
 "verdict":"match:middle name added/dropped",
@@ -23990,7 +24337,7 @@
 "year":2024,
 "field":"698755f1bdcf",
 "rider":"van den Broek Frank",
-"method":"surname_typo",
+"method":"override",
 "expected":"Frank Van Den Broeck",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -24081,7 +24428,7 @@
 "year":2023,
 "field":"3f018eca54d2",
 "rider":"Hvideberg Jonas Hem",
-"method":"surname_given",
+"method":"override",
 "expected":"Jonas Iversby Hvideberg",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -24315,7 +24662,7 @@
 "year":2023,
 "field":"3f018eca54d2",
 "rider":"Mancipe Andrés Libardo",
-"method":"surname_given",
+"method":"override",
 "expected":"Andrés Liber Mancipe",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -24328,7 +24675,7 @@
 "year":2023,
 "field":"3f018eca54d2",
 "rider":"Oliosi Marco",
-"method":"surname_typo",
+"method":"override",
 "expected":"Marco Olioso",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -24354,7 +24701,7 @@
 "year":2024,
 "field":"698755f1bdcf",
 "rider":"Donati Davide",
-"method":"surname_typo",
+"method":"override",
 "expected":"Davide Donate",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -24367,7 +24714,7 @@
 "year":2024,
 "field":"698755f1bdcf",
 "rider":"Lorenzen Gustav",
-"method":"surname_typo",
+"method":"override",
 "expected":"Gustav Lorenzon",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -24705,7 +25052,7 @@
 "year":2024,
 "field":"698755f1bdcf",
 "rider":"Garavaglia Giacomo",
-"method":"surname_typo",
+"method":"override",
 "expected":"Giacomo Garaviglia",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -24718,7 +25065,7 @@
 "year":2024,
 "field":"698755f1bdcf",
 "rider":"Gioia Jacopo",
-"method":"surname_typo",
+"method":"override",
 "expected":"Jacopo Gioja",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -25056,7 +25403,7 @@
 "year":2025,
 "field":"ed146d9dc0a8",
 "rider":"Brown Jenson Duggy",
-"method":"subset",
+"method":"override",
 "expected":"Jenson Brown",
 "candidates":[],
 "verdict":"match:middle name added/dropped",
@@ -25121,7 +25468,7 @@
 "year":2024,
 "field":"698755f1bdcf",
 "rider":"Hvideberg Jonas Hem",
-"method":"surname_given",
+"method":"override",
 "expected":"Jonas Iversby Hvideberg",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -25940,10 +26287,10 @@
 "year":2026,
 "field":"b3b737922893",
 "rider":"Louis Marx",
-"method":"none",
+"method":"override_refused",
 "expected":null,
 "candidates":[],
-"verdict":"missed:surname typo/transliteration:Louis-Marie Posnic",
+"verdict":"not a match: confirmed by owner",
 "old_ladder":"none",
 "old_match":""
 },
@@ -29151,10 +29498,10 @@
 "year":2026,
 "field":"bdf75510f173",
 "rider":"Pedro Silva",
-"method":"none",
+"method":"override_refused",
 "expected":null,
 "candidates":[],
-"verdict":"missed:surname typo/transliteration:Juan Pedro López",
+"verdict":"not a match: confirmed by owner",
 "old_ladder":"none",
 "old_match":""
 },
@@ -29398,10 +29745,10 @@
 "year":2026,
 "field":"b3b737922893",
 "rider":"Carlos Alfonso García",
-"method":"none",
+"method":"override_refused",
 "expected":null,
 "candidates":[],
-"verdict":"missed:surname typo/transliteration:Carlos García Pierna",
+"verdict":"not a match: confirmed by owner",
 "old_ladder":"wrong",
 "old_match":"Pablo García"
 },
@@ -29554,10 +29901,10 @@
 "year":2026,
 "field":"b3b737922893",
 "rider":"José Antonio Escarcega",
-"method":"none",
+"method":"override_refused",
 "expected":null,
 "candidates":[],
-"verdict":"missed:surname typo/transliteration:José Antonio Prieto",
+"verdict":"not a match: confirmed by owner",
 "old_ladder":"none",
 "old_match":""
 },
@@ -29775,7 +30122,7 @@
 "year":2023,
 "field":"d4c0c985a2e7",
 "rider":"Hvideberg Jonas Hem",
-"method":"surname_given",
+"method":"override",
 "expected":"Jonas Iversby Hvideberg",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -29905,7 +30252,7 @@
 "year":2024,
 "field":"56ee0c283e03",
 "rider":"van den Broek Frank",
-"method":"surname_typo",
+"method":"override",
 "expected":"Frank Van Den Broeck",
 "candidates":[],
 "verdict":"match:surname typo/transliteration",
@@ -30269,12 +30616,17 @@
 "year":2026,
 "field":"e4d17ceb4297",
 "rider":"Jefferson Alveiro Cepeda",
-"method":"surname_given",
-"expected":"Jefferson Alexander Cepeda",
-"candidates":[],
-"verdict":"match:surname typo/transliteration",
-"old_ladder":"right",
-"old_match":"Jefferson Alexander Cepeda"
+"method":"override_refused",
+"expected":null,
+"candidates":[
+"Jefferson Alexander Cepeda"
+],
+"verdict":"two riders: PCS jefferson-cepeda-hernandez (b.1996) and jefferson-alexander-cepeda (b.1998); the exact row is Alexander",
+"old_ladder":"wrong",
+"old_match":"Jefferson Alexander Cepeda",
+"frame":[
+"Jefferson Alexander Cepeda"
+]
 },
 {
 "source":"predictions~field",
@@ -31331,6 +31683,547 @@
 "verdict":"sharing particles is not a match",
 "old_ladder":"",
 "old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-10",
+"rider":"Mathias Hansen",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"surname a consonant apart is a different surname",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-11",
+"rider":"Rasmus Pedersen",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"Pedersen and Petersen are different surnames",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-12",
+"rider":"Pedro Lopez",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"juan and pedro are each a variant of juanpe, not of each other",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-13",
+"rider":"Mikkel Kwiatkowski",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"Mikkel is not Michal",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-14",
+"rider":"Tom Declercq",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"one edit on a short given name is a different name",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-15",
+"rider":"Ken Swift",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"one edit on a short given name is a different name",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-16",
+"rider":"Jannik Christen",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"a given-name prefix is a different name",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-17",
+"rider":"Alex Renard",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"a given-name prefix is a different name",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-18",
+"rider":"Lorenzo Wiebes",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"men's and women's forms of a name",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-19",
+"rider":"Simone Consonni",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"a changed last vowel changes sex",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-20",
+"rider":"Jefferson Alveiro Cepeda",
+"frame":[
+"Jefferson Alexander Cepeda"
+],
+"method":"collides_exact",
+"expected":null,
+"candidates":[
+"Jefferson Alexander Cepeda"
+],
+"verdict":"another row of the frame matches the rider exactly: two riders, not one",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-20",
+"rider":"Jefferson Alveiro Cepeda",
+"method":"surname_given",
+"expected":"Jefferson Alexander Cepeda",
+"candidates":[],
+"verdict":"residual risk: alone, the middle name is taken for a respelling",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-21",
+"rider":"Enric M Nicolau",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"without an override the rules leave a cut first surname unresolved",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-22",
+"rider":"Enric M Nicolau",
+"method":"override",
+"expected":"Enric Mas",
+"candidates":[],
+"verdict":"an override names the rider",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric M Nicolau",
+"rider":"Enric Mas",
+"reason":"test",
+"reviewed":"2026-10-12"
+}
+]
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-23",
+"rider":"NICOLAU Enric M",
+"method":"override",
+"expected":"Enric Mas",
+"candidates":[],
+"verdict":"override printed names match by key: case and order do not matter",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric M Nicolau",
+"rider":"Enric Mas",
+"reason":"test",
+"reviewed":"2026-10-12"
+}
+]
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-24",
+"rider":"Enric M Nicolau",
+"method":"override_absent",
+"expected":null,
+"candidates":[],
+"verdict":"the override's rider is not in this field: unresolved, rules not consulted",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric M Nicolau",
+"rider":"Enric Mas",
+"reason":"test",
+"reviewed":"2026-10-12"
+}
+]
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-25",
+"rider":"Enric M Nicolau",
+"method":"collides_exact",
+"expected":null,
+"candidates":[
+"Enric Mas"
+],
+"verdict":"an override may not take a rider another row of the frame matches exactly",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric M Nicolau",
+"rider":"Enric Mas",
+"reason":"test",
+"reviewed":"2026-10-12"
+}
+]
+},
+"frame":[
+"Enric Mas"
+]
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-26",
+"rider":"Enric M Nicolau",
+"method":"override",
+"expected":"Enric Mas",
+"candidates":[],
+"verdict":"an override scoped to a source applies in that source",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric M Nicolau",
+"rider":"Enric Mas",
+"reason":"test",
+"reviewed":"2026-10-12",
+"source":"odds"
+}
+]
+},
+"scope":{
+"source":"odds"
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-27",
+"rider":"Enric M Nicolau",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"an override scoped to another source does not apply",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric M Nicolau",
+"rider":"Enric Mas",
+"reason":"test",
+"reviewed":"2026-10-12",
+"source":"odds"
+}
+]
+},
+"scope":{
+"source":"predictions"
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-28",
+"rider":"Enric M Nicolau",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"an override scoped to a year does not apply in another",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric M Nicolau",
+"rider":"Enric Mas",
+"reason":"test",
+"reviewed":"2026-10-12",
+"year":2024
+}
+]
+},
+"scope":{
+"source":"odds",
+"year":2025
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-29",
+"rider":"Enric M Nicolau",
+"method":"override",
+"expected":"Joel Nicolau",
+"candidates":[],
+"verdict":"a scoped match beats a global one in its scope",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric M Nicolau",
+"rider":"Enric Mas",
+"reason":"t",
+"reviewed":"2026-10-12"
+},
+{
+"printed":"Enric M Nicolau",
+"rider":"Joel Nicolau",
+"race":"il-lombardia",
+"reason":"t",
+"reviewed":"2026-10-12"
+}
+]
+},
+"scope":{
+"source":"odds",
+"race":"il-lombardia",
+"year":2026
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-30",
+"rider":"PIDCOCK Tom",
+"method":"override_refused",
+"expected":null,
+"candidates":[
+"Thomas Pidcock"
+],
+"verdict":"a refusal beats the rule that would match its rider",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"refuse":[
+{
+"printed":"PIDCOCK Tom",
+"reason":"test",
+"reviewed":"2026-10-12",
+"rider":"Thomas Pidcock"
+}
+]
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-31",
+"rider":"PIDCOCK Tom",
+"method":"surname_given",
+"expected":"Thomas Pidcock",
+"candidates":[],
+"verdict":"a refusal naming another rider leaves the rules' answer standing",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"refuse":[
+{
+"printed":"PIDCOCK Tom",
+"reason":"test",
+"reviewed":"2026-10-12",
+"rider":"Joe Pidcock"
+}
+]
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-32",
+"rider":"PIDCOCK Tom",
+"method":"override_refused",
+"expected":null,
+"candidates":[
+"Thomas Pidcock"
+],
+"verdict":"a refusal naming no rider refuses every rule match",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"refuse":[
+{
+"printed":"PIDCOCK Tom",
+"reason":"test",
+"reviewed":"2026-10-12"
+}
+]
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-33",
+"rider":"Andreas Kron",
+"method":"override_refused",
+"expected":null,
+"candidates":[],
+"verdict":"a refused name the rules did not match is reported as refused",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"refuse":[
+{
+"printed":"Andreas Kron",
+"reason":"test",
+"reviewed":"2026-10-12",
+"rider":"Andrea Peron"
+}
+]
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-34",
+"rider":"Jefferson Alveiro Cepeda",
+"method":"override_refused",
+"expected":null,
+"candidates":[
+"Jefferson Alexander Cepeda"
+],
+"verdict":"the real overrides file refuses Alveiro as Alexander, closing the lone-row risk",
+"old_ladder":"",
+"old_match":"",
+"overrides":"file"
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-35",
+"rider":"Enric M Nicolau",
+"method":"override",
+"expected":"Enric Mas",
+"candidates":[],
+"verdict":"the real overrides file names Enric Mas",
+"old_ladder":"",
+"old_match":"",
+"overrides":"file",
+"scope":{
+"source":"odds",
+"race":"il-lombardia",
+"year":2026
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-36",
+"rider":"Enric Mas",
+"method":"exact",
+"expected":"Enric Mas",
+"candidates":[],
+"verdict":"the key comes before any override",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"match":[
+{
+"printed":"Enric Mas",
+"rider":"Wout van Aert",
+"reason":"test",
+"reviewed":"2026-10-12"
+}
+]
+}
 }
 ]
 }

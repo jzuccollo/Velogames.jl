@@ -172,7 +172,7 @@ function _oneday_field_facts(slug::String, yr::Int; archive_dir::String)
         listed_count = length(listed)
         listed_count + count(k -> !(k in listed) && k in priced, unique(results.riderkey))
     elseif basis == :pool_pcs_filtered
-        starters = _pcs_starter_keys(pcs, unique(pool, :riderkey))
+        starters = _pcs_starter_keys(pcs, unique(pool, :riderkey), slug, yr)
         count(k -> k in starters, unique(pool.riderkey))
     else
         length(Set{String}(pool.riderkey))

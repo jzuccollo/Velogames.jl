@@ -838,11 +838,18 @@ end
 @testset "resolve_rider golden corpus" begin
     # Every printed name that failed to match its reference set by key in a
     # measured join across the 2023-26 archive, with the result the resolver
-    # must return. vgleague's scripts/check_rider_matching.py runs the same
-    # file against its port, so the two languages cannot drift apart.
+    # must return, plus hand-written cases. Archive cases use the real
+    # config/rider_overrides.toml in the case's scope; hand cases carry their
+    # own `overrides` (or "file", or none). vgleague's
+    # scripts/check_rider_matching.py runs the same file against its port, so
+    # the two languages cannot drift apart.
     corpus = Velogames.JSON3.read(
         read(joinpath(@__DIR__, "fixtures", "rider_matching.json"), String),
     )
+    file_entries = Velogames.load_rider_overrides()
+    todict(x) = x isa Velogames.JSON3.Object ? Dict{String,Any}(String(k) => todict(v) for (k, v) in pairs(x)) :
+                x isa Velogames.JSON3.Array ? [todict(v) for v in x] : x
+    with_candidates = (:ambiguous, :collides_exact, :override_refused)
     prepared = Dict{String,Any}()
     failures = String[]
     for case in corpus.cases
@@ -853,10 +860,27 @@ end
             r, k = Velogames._reference_riders(names, keys)
             (r, k, Dict(zip(keys, names)))
         end
+        spec = get(case, :overrides, nothing)
+        entries = if spec == "file" || (spec === nothing && case.source != "hand")
+            file_entries
+        else
+            Velogames.parse_rider_overrides(spec === nothing ? Dict{String,Any}() : todict(spec))
+        end
+        scope = todict(get(case, :scope, Dict{String,Any}()))
+        source = get(scope, "source", String(first(split(String(case.source), "~"))))
+        race = get(scope, "race", isempty(case.race) ? nothing : String(case.race))
+        year = get(scope, "year", case.year == 0 ? nothing : case.year)
+        scoped = Velogames.scoped_overrides(entries, source, race, year)
         rider = String(case.rider)
-        method, key, cands = Velogames.resolve_rider(rider, createkey(rider), refs, ref_keys)
+        # A case may carry the other printed names of its source's frame, for
+        # the rule that a rematch never takes a rider another row matches exactly.
+        frame = vcat(String.(collect(get(case, :frame, String[]))), [rider])
+        method, key, cands = last(
+            Velogames.resolve_frame(frame, createkey.(frame), refs, ref_keys; overrides = scoped),
+        )
         got_name = key === nothing ? nothing : name_of[key]
-        got_cands = method == :ambiguous ? sort([name_of[c] for c in cands]) : String[]
+        got_cands =
+            method in with_candidates ? sort([name_of[c] for c in cands]) : String[]
         want_name = case.expected === nothing ? nothing : String(case.expected)
         want = (String(case.method), want_name, String.(collect(case.candidates)))
         got = (String(method), got_name, got_cands)

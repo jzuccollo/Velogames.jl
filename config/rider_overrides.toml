@@ -1,0 +1,209 @@
+# Rider name overrides, reviewed by hand.
+#
+# Read by Velogames.jl (`src/utilities.jl`, `load_rider_overrides`) and by
+# vgleague (`src/vgleague/matching.py`, through $VELOGAMES_JL). This copy is
+# the only one. Resolution order for a printed name against a race's field:
+#
+#   1. the printed name's key is a field rider's key   -> exact
+#   2. a [[match]] entry for the printed name          -> override, or
+#                                                         override_absent when
+#                                                         the rider is not in
+#                                                         that field
+#   3. the rule steps (depunct ... surname_typo)
+#   4. a [[refuse]] entry for the printed name         -> override_refused
+#
+# A [[match]] is still subject to the frame rule: it may not take a rider whom
+# another row of the same frame matches exactly (collides_exact).
+#
+# A [[refuse]] with `rider` refuses only that rider: the rules' answer stands
+# if it is someone else. Without `rider` it refuses every rule match. Either
+# way a refused name the rules did not match at all is reported as
+# override_refused, so the unresolved-names report shows it was reviewed.
+#
+# Fields (all strings unless stated):
+#   printed   the name as a source printed it. Matched by createkey, so case,
+#             accents and word order do not matter.
+#   rider     match: the rider's name as Velogames prints it in the field
+#             (matched by createkey against the field's keys).
+#             refuse: optional, the rider the printed name must not match.
+#   source    optional scope: an archive type (odds, odds_kom, odds_points,
+#             odds_stagewin, oracle, oracle_kom, oracle_points, pcs_results,
+#             pcs_stage_results, pcs_gc_results, pcs_abandons, pcs_specialty,
+#             predictions, vg_results, ...).
+#   race      optional scope: a PCS race slug.
+#   year      optional scope: an integer season.
+#   reason    required: short and factual, with the evidence.
+#   reviewed  required: the date of the review (a TOML date).
+#
+# An entry with a scope applies only where the caller states that scope. The
+# model's market lookups in Velogames.jl state the source and year but not the
+# race, and its race history the source only, so a race-scoped entry reaches
+# the publication, the backtest and the cross-language digests but not
+# production estimation.
+# Where a scoped and a global entry both apply, the one with more scope wins.
+#
+# Workflow: `vgleague unresolved-names` (or `julia --project
+# scripts/unresolved_names.jl`) lists every printed name nothing resolved;
+# review the ones that are not non-starters, add a line here, and run
+# `python scripts/check_rider_matching.py` in vgleague and the golden corpus
+# testset here.
+
+# --- Matches ---------------------------------------------------------------
+
+[[match]]
+printed = "Enric M Nicolau"
+rider = "Enric Mas"
+reason = "Enric Mas Nicolau with the first surname cut to an initial; Il Lombardia 2026 book. Confirmed by owner."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Derek Gee"
+rider = "Derek Gee-West"
+reason = "Same rider; Velogames renamed him Gee-West in 2026. Confirmed by owner."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Hvideberg Jonas Hem"
+rider = "Jonas Iversby Hvideberg"
+reason = "PCS jonas-iversby-hvideberg prints Hem as the middle name; same teams (DSM, Uno-X Mobility)."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Mancipe Andrés Libardo"
+rider = "Andrés Liber Mancipe"
+reason = "PCS andres-libardo-mancipe; Velogames 2023 truncates Libardo. Both GW Shimano-Sidermec."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Martin López"
+rider = "Harold Martín López"
+reason = "PCS harold-martin-lopez; the Giro 2026 KOM oracle drops the given name. XDS Astana."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Raul Garcia"
+rider = "Raúl García Pierna"
+reason = "PCS raul-garcia-pierna (Movistar 2026, Tour 2026 GC); the Tour 2026 KOM book drops Pierna."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Daniel Martinez"
+rider = "Daniel Felipe Martínez"
+reason = "PCS daniel-felipe-martinez (Red Bull - BORA - hansgrohe); books drop Felipe."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Brown Jenson Duggy"
+rider = "Jenson Brown"
+reason = "PCS adds Duggy; both Mg.K Vis Costruzioni e Ambiente, 2025."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Andrea Raccagni"
+rider = "Andrea Raccagni Noviero"
+reason = "PCS andrea-raccagni-noviero (Soudal Quick-Step); not his brother Gabriele Raccagni (Polti VisitMalta)."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Sebastian Molano"
+rider = "Juan Sebastián Molano"
+reason = "PCS juan-sebastian-molano (UAE Team Emirates - XRG); the 2026 oracle drops Juan."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Donati Davide"
+rider = "Davide Donate"
+year = 2024
+reason = "Velogames 2024 misspells Donati; both Biesse - Carrera."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Garavaglia Giacomo"
+rider = "Giacomo Garaviglia"
+year = 2024
+reason = "Velogames 2024 misspells Garavaglia; both Work Service - Vitalcare - Dynatek."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Gioia Jacopo"
+rider = "Jacopo Gioja"
+year = 2024
+reason = "Velogames 2024 spells Gioia with a j; both Work Service - Vitalcare - Dynatek."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Lorenzen Gustav"
+rider = "Gustav Lorenzon"
+year = 2024
+reason = "Velogames 2024 misspells Lorenzen; both Biesse - Carrera."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Oliosi Marco"
+rider = "Marco Olioso"
+year = 2023
+reason = "Velogames 2023 misspells Oliosi (corrected in 2024); both Biesse - Carrera."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "van den Broek Frank"
+rider = "Frank Van Den Broeck"
+year = 2024
+reason = "Velogames 2024 misspells Van Den Broek; both Team dsm-firmenich PostNL."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Victor Vercouille"
+rider = "Victor Vercouillie"
+reason = "Books drop an i; PCS victor-vercouillie (Team Flanders - Baloise)."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Matz Wenzel"
+rider = "Mats Wenzel"
+reason = "Liège 2026 book spells Mats with a z; PCS mats-wenzel (Equipo Kern Pharma)."
+reviewed = 2026-10-12
+
+[[match]]
+printed = "Nicholas Zukowski"
+rider = "Nickolas Zukowsky"
+reason = "Giro and Worlds 2026 odds books misspell Nickolas Zukowsky; the archive holds no other Zukowsky or Zukowski (pcs_results 2023-26, 45 odds and specialty files under Zukowsky)."
+reviewed = 2026-10-12
+
+# --- Refusals --------------------------------------------------------------
+
+[[refuse]]
+printed = "Jefferson Alveiro Cepeda"
+rider = "Jefferson Alexander Cepeda"
+reason = "Two riders: PCS jefferson-cepeda-hernandez (b. 1996, Movistar) and jefferson-alexander-cepeda (b. 1998, EF)."
+reviewed = 2026-10-12
+
+[[refuse]]
+printed = "Andreas Kron"
+rider = "Andrea Peron"
+reason = "Different riders. Confirmed by owner."
+reviewed = 2026-10-12
+
+[[refuse]]
+printed = "Louis Marx"
+rider = "Louis-Marie Posnic"
+reason = "Different riders. Confirmed by owner."
+reviewed = 2026-10-12
+
+[[refuse]]
+printed = "Pedro Silva"
+rider = "Juan Pedro López"
+reason = "Different riders. Confirmed by owner."
+reviewed = 2026-10-12
+
+[[refuse]]
+printed = "Carlos Alfonso García"
+rider = "Carlos García Pierna"
+reason = "Different riders (Mexico at the 2026 Worlds; García Pierna rides for Burgos Burpellet BH). Confirmed by owner."
+reviewed = 2026-10-12
+
+[[refuse]]
+printed = "José Antonio Escarcega"
+rider = "José Antonio Prieto"
+reason = "Different riders. Confirmed by owner."
+reviewed = 2026-10-12

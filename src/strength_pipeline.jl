@@ -1022,30 +1022,27 @@ function _assemble_signals(
 
     # --- Market-source lookup helper ---
     # Which rows of a market frame carry their price once rematched. A row
-    # whose printed name matched its rider exactly always does. A rematched row
-    # landing on a rider who already has an exact row is dropped, and so is a
-    # rider claimed by two rematched rows and no exact one, since there is no
-    # telling which price is his. Without this the book's order decided: books
-    # are sorted shortest first, so a non-starter rematched onto a starter
-    # overwrote the starter's own price (Jasper Philipsen's 13.0 at
+    # whose printed name matched its rider exactly always does, and the
+    # resolver never gives his key to another row (`:collides_exact`). A rider
+    # claimed by two rematched rows and no exact one is left unpriced, since
+    # there is no telling which price is his. Without this the book's order
+    # decided: books are sorted shortest first, so a non-starter rematched onto
+    # a starter overwrote the starter's own price (Jasper Philipsen's 13.0 at
     # Milano-Sanremo became Albert Withen Philipsen's 251.0).
     function _priced_rows(raw_keys, matched_keys)
         exact = raw_keys .== matched_keys
-        has_exact = Set(matched_keys[exact])
         rematched_count = Dict{String,Int}()
         for (k, e) in zip(matched_keys, exact)
             e || (rematched_count[k] = get(rematched_count, k, 0) + 1)
         end
-        return [
-            e || (!(k in has_exact) && rematched_count[k] == 1) for
-            (k, e) in zip(matched_keys, exact)
-        ]
+        return [e || rematched_count[k] == 1 for (k, e) in zip(matched_keys, exact)]
     end
     function _market_lookup(
         src_df,
         prob_col::Symbol,
         label::String;
         apply_floor::Bool = true,
+        source::String = "oracle",
     )
         lookup = Dict{String,Float64}()
         floor_strength = 0.0
@@ -1055,7 +1052,8 @@ function _assemble_signals(
             return lookup, floor_strength
         end
         raw_keys = String.(src_df.riderkey)
-        :rider in propertynames(src_df) && rematch_riderkeys!(src_df, df)
+        :rider in propertynames(src_df) &&
+            rematch_riderkeys!(src_df, df; source = source, year = current_year)
         keep = _priced_rows(raw_keys, String.(src_df.riderkey))
         for (i, row) in enumerate(eachrow(src_df))
             keep[i] && (lookup[row.riderkey] = Float64(row[prob_col]))
@@ -1086,7 +1084,8 @@ function _assemble_signals(
        :riderkey in propertynames(odds_df) &&
        :odds in propertynames(odds_df)
         raw_keys = String.(odds_df.riderkey)
-        :rider in propertynames(odds_df) && rematch_riderkeys!(odds_df, df)
+        :rider in propertynames(odds_df) &&
+            rematch_riderkeys!(odds_df, df; source = "odds", year = current_year)
         keep = _priced_rows(raw_keys, String.(odds_df.riderkey))
         raw_probs = 1.0 ./ Float64.(odds_df.odds)
         overround = sum(raw_probs)
@@ -1123,20 +1122,21 @@ function _assemble_signals(
     # --- Points / KOM oracles: always build lookup, always apply floor.
     # Listed-rider absence is itself informative for jersey predictions.
     points_oracle_lookup, points_oracle_floor =
-        _market_lookup(points_oracle_df, :win_prob, "Oracle points floor")
+        _market_lookup(points_oracle_df, :win_prob, "Oracle points floor"; source = "oracle_points")
     kom_oracle_lookup, kom_oracle_floor =
-        _market_lookup(kom_oracle_df, :win_prob, "Oracle KOM floor")
+        _market_lookup(kom_oracle_df, :win_prob, "Oracle KOM floor"; source = "oracle_kom")
 
     # --- Bookmaker secondary markets (Points / KOM / stage-win).
     # Overround-corrected probabilities; no floor for absent riders (jersey
     # absence is uninformative — see oracle Points / KOM blocks).
-    function _bookmaker_lookup(odds_input_df, label)
+    function _bookmaker_lookup(odds_input_df, label, source)
         lookup = Dict{String,Float64}()
         odds_input_df === nothing && return lookup
         :riderkey in propertynames(odds_input_df) || return lookup
         :odds in propertynames(odds_input_df) || return lookup
         raw_keys = String.(odds_input_df.riderkey)
-        :rider in propertynames(odds_input_df) && rematch_riderkeys!(odds_input_df, df)
+        :rider in propertynames(odds_input_df) &&
+            rematch_riderkeys!(odds_input_df, df; source = source, year = current_year)
         keep = _priced_rows(raw_keys, String.(odds_input_df.riderkey))
         raw_probs = 1.0 ./ Float64.(odds_input_df.odds)
         overround = sum(raw_probs)
@@ -1147,9 +1147,9 @@ function _assemble_signals(
         @info "$label: $n_listed listed (no floor for absent riders)"
         return lookup
     end
-    points_odds_lookup = _bookmaker_lookup(points_odds_df, "Odds points")
-    kom_odds_lookup = _bookmaker_lookup(kom_odds_df, "Odds KOM")
-    stagewin_odds_lookup = _bookmaker_lookup(stagewin_odds_df, "Odds stage-win")
+    points_odds_lookup = _bookmaker_lookup(points_odds_df, "Odds points", "odds_points")
+    kom_odds_lookup = _bookmaker_lookup(kom_odds_df, "Odds KOM", "odds_kom")
+    stagewin_odds_lookup = _bookmaker_lookup(stagewin_odds_df, "Odds stage-win", "odds_stagewin")
 
     # --- Race history lookup ---
     history_lookup = Dict{String,Vector{Tuple{Float64,Int,Float64}}}()
@@ -1162,7 +1162,7 @@ function _assemble_signals(
         # silently absent — no warning, just a strength estimate built on the
         # market alone.
         :rider in propertynames(race_history_df) &&
-            rematch_riderkeys!(race_history_df, df)
+            rematch_riderkeys!(race_history_df, df; source = "pcs_results")
         has_penalty = :variance_penalty in propertynames(race_history_df)
         for row in eachrow(race_history_df)
             key = row.riderkey

@@ -188,7 +188,13 @@ function recent_abandon_multiplier(
         res = load_race_snapshot("pcs_results", ri.pcs_slug, year(race_date); archive_dir)
         res === nothing && continue
         res = copy(res)
-        rematch_riderkeys!(res, rider_df)
+        rematch_riderkeys!(
+            res,
+            rider_df;
+            source = "pcs_results",
+            race = ri.pcs_slug,
+            year = year(race_date),
+        )
         for r in eachrow(res)
             prev = get(last_start, r.riderkey, nothing)
             (prev === nothing || prev[1] < d) && (last_start[r.riderkey] = (d, r.position >= 900))

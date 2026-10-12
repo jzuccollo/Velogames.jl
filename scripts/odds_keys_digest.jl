@@ -36,7 +36,13 @@ function digest_book(pcs_slug::String, year::Int)
         return (pcs_slug = pcs_slug, year = year, field = field !== nothing, rows = [])
     end
     raw = copy(odds.riderkey)
-    matched = Velogames.rematch_riderkeys!(copy(odds), field)
+    matched = Velogames.rematch_riderkeys!(
+        copy(odds),
+        field;
+        source = "odds",
+        race = pcs_slug,
+        year = year,
+    )
     rows = [
         (rider = String(r), raw = String(k0), matched = String(k1)) for
         (r, k0, k1) in zip(odds.rider, raw, matched.riderkey)

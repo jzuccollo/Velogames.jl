@@ -358,21 +358,24 @@ const NAME_PARTICLES = Set([
     "ten", "ter", "la", "le", "dos", "das", "do", "vanden", "vander", "st",
 ])
 
-# Given names that are the same name. Keep in step with `NICKNAME_GROUPS` in
-# vgleague's `src/vgleague/matching.py`; the golden corpus
-# (test/fixtures/rider_matching.json) catches a drift where a measured name
-# depends on it.
+# Given names that are the same name. Every pair within one group is a variant
+# of the other; groups are not chained, so a name in two groups (Max) does not
+# make its two partners variants of each other (Maximilian, Maxim). Keep in
+# step with `NICKNAME_GROUPS` in vgleague's `src/vgleague/matching.py`; the
+# golden corpus (test/fixtures/rider_matching.json) catches a drift where a
+# measured name depends on it.
 const NICKNAME_GROUPS = [
     ["tom", "thomas", "tommy"],
+    ["tom", "toms"],
     ["fred", "frederick", "frederik", "freddy"],
     ["will", "william", "bill"],
     ["alex", "alexander", "aleksandr", "alexandre", "alexandr", "oleksandr", "sasha"],
     ["alexey", "aleksey", "alexei", "aleksei"],
     ["matt", "matthew", "mathew"],
-    ["mike", "michael", "michal", "mikkel"],
+    ["mike", "michael", "michal"],
     ["ben", "benjamin"],
     ["chris", "christopher"],
-    ["nick", "nicholas", "nicolas", "niklas", "nikolas"],
+    ["nick", "nicholas", "nicolas", "nikolas"],
     ["dan", "daniel", "danny"],
     ["sam", "samuel"],
     ["jon", "jonathan", "john", "johnny"],
@@ -380,29 +383,34 @@ const NICKNAME_GROUPS = [
     ["rob", "robert", "bob", "robbie"],
     ["ed", "edward", "eddie"],
     ["jake", "jacob", "jakob"],
-    ["max", "maximilian", "maxim"],
-    ["andy", "andrew", "andreas"],
+    ["max", "maximilian"],
+    ["max", "maxim"],
+    ["andy", "andrew"],
+    ["andy", "andreas"],
     ["pat", "patrick"],
     ["stan", "stanislaw"],
     ["steve", "steven", "stephen"],
     ["jim", "james", "jimmy"],
     ["magnus", "mangus"],
-    ["juanpe", "juan", "pedro"],
-    ["jan", "johannes", "johan"],
+    ["juanpe", "juan"],
+    ["juanpe", "pedro"],
+    ["johannes", "johan"],
+    ["jan", "johannes"],
     ["oier", "oyer"],
     ["fran", "francisco", "francesco"],
     ["josh", "joshua"],
     ["harry", "harold"],
-    ["tim", "timothy", "timo"],
-    ["mads", "mats"],
+    ["tim", "timothy"],
     ["lenny", "leonard"],
-    ["rich", "richard", "ricardo", "riccardo"],
+    ["rich", "richard"],
+    ["ricardo", "riccardo"],
     ["isaac", "isaak"],
     ["zak", "zachary"],
     ["kasia", "katarzyna"],
     ["luke", "lucas", "lukas"],
     ["kim", "kimberley", "kimberly"],
     ["dave", "davide", "david"],
+    ["guy", "gay"],
 ]
 
 const _NICKNAMES = let d = Dict{String,Set{String}}()
@@ -426,33 +434,74 @@ function name_parts(name::AbstractString)
     return [String(p) for p in parts if !isempty(p)]
 end
 
-function levenshtein(a::AbstractString, b::AbstractString)
-    a == b && return 0
+const _VOWELS = Set("aeiouy")
+
+"""
+    transliterate(s) -> String
+
+A normalised name part with spelling-only differences folded away: `oe` and
+`aa` (ø and å written out) become `o` and `a`; `ph` becomes `f`; an `h` after a
+consonant goes (Christian, Thomas); a `j` between vowels is an `i` (Gioja);
+`z`, `y`, `w` and `k` become `s`, `i`, `v` and `c`; doubled letters are single
+(Matthias, Großschartner).
+"""
+function transliterate(s::AbstractString)
+    s = replace(String(s), "oe" => "o", "aa" => "a", "ph" => "f")
+    s = replace(s, r"(?<=[b-df-hj-np-tv-z])h" => "")
+    s = replace(s, r"(?<=[aeiou])j(?=[aeiou])" => "i")
+    s = map(c -> c == 'z' ? 's' : c == 'y' ? 'i' : c == 'w' ? 'v' : c == 'k' ? 'c' : c, s)
+    return replace(s, r"(.)\1+" => s"\1")
+end
+
+"""
+    vowel_edit(a, b; final) -> Bool
+
+Whether `a` and `b` differ by one vowel added, dropped or changed. `final =
+false` refuses an edit at the last letter, where Italian and Spanish given
+names change sex (Simone and Simona).
+"""
+function vowel_edit(a::AbstractString, b::AbstractString; final::Bool)
     ca, cb = collect(a), collect(b)
-    prev = collect(0:length(cb))
-    for (i, x) in enumerate(ca)
-        cur = [i]
-        for (j, y) in enumerate(cb)
-            push!(cur, min(prev[j+1] + 1, cur[j] + 1, prev[j] + (x != y)))
-        end
-        prev = cur
+    if length(ca) == length(cb)
+        diff = [i for i in eachindex(ca) if ca[i] != cb[i]]
+        return length(diff) == 1 && ca[diff[1]] in _VOWELS && cb[diff[1]] in _VOWELS &&
+               (final || diff[1] != length(ca))
     end
-    return prev[end]
+    abs(length(ca) - length(cb)) == 1 || return false
+    longer, shorter = length(ca) > length(cb) ? (ca, cb) : (cb, ca)
+    return any(
+        longer[i] in _VOWELS && (final || i != length(longer)) &&
+        vcat(longer[1:i-1], longer[i+1:end]) == shorter for i in eachindex(longer)
+    )
 end
 
 """
     given_compatible(a, b) -> Bool
 
 Whether two normalised given names can be one rider's: equal, in one
-`NICKNAME_GROUPS` group, an initial, a prefix of three letters or more, or one
-edit apart (two when both are longer than five letters).
+`NICKNAME_GROUPS` group, an initial, the same spelling transliterated, or, for
+names of six letters or more, one vowel different short of the last letter
+(Eleonara, Fredrik, Sebastien). Nothing looser: one edit makes Tom of Tim and
+Ken of Ben, and a prefix Jan of Jannik and Alex of Alexis.
 """
 function given_compatible(a::AbstractString, b::AbstractString)
     (a == b || b in get(_NICKNAMES, a, ())) && return true
-    la, lb = length(a), length(b)
-    (la == 1 || lb == 1) && return first(a) == first(b)
-    min(la, lb) >= 3 && (startswith(a, b) || startswith(b, a)) && return true
-    return levenshtein(a, b) <= (min(la, lb) <= 5 ? 1 : 2)
+    (length(a) == 1 || length(b) == 1) && return first(a) == first(b)
+    transliterate(a) == transliterate(b) && return true
+    return min(length(a), length(b)) >= 6 && vowel_edit(a, b; final = false)
+end
+
+"""
+    surname_respelt(a, b) -> Bool
+
+Whether two different surnames of five letters or more are one spelling:
+transliterated alike, or one vowel apart anywhere (Olioso and Oliosi, Fedorov
+and Federov). A consonant apart is a different name: Pedersen and Petersen,
+Hansen and Jensen.
+"""
+function surname_respelt(a::AbstractString, b::AbstractString)
+    (a == b || min(length(a), length(b)) < 5) && return false
+    return transliterate(a) == transliterate(b) || vowel_edit(a, b; final = true)
 end
 
 struct _RefRider
@@ -469,6 +518,7 @@ function _reference_riders(names, keys)
     refs = _RefRider[]
     seen = Set{String}()
     for (name, key) in zip(names, keys)
+        (ismissing(name) || ismissing(key)) && continue
         key = String(key)
         key in seen && continue
         push!(seen, key)
@@ -492,30 +542,56 @@ function _reference_riders(names, keys)
 end
 
 """
-    resolve_rider(name, key, refs, ref_keys) -> (method, key, candidates)
+    resolve_rider(name, key, refs, ref_keys; overrides = nothing) -> (method, key, candidates)
 
 Resolve one printed name against a reference set prepared by
 `_reference_riders`. `key` is `nothing` unless exactly one reference rider
-fits. Steps, in order, each applied only when it finds exactly one rider:
+fits. In order:
 
 1. `:exact` — the key itself.
-2. `:depunct` — the key with hyphens and full stops stripped.
-3. `:compound` — the same name parts run together differently.
-4. `:subset` — one name's parts (particles aside) all among the other's, two
-   parts at least.
-5. `:surname_given` — the reference rider's surname among the printed parts
-   and a `given_compatible` given name.
-6. `:surname_typo` — the same given name, a surname of five letters or more
-   within two edits.
+2. `overrides` (a `ScopedOverrides`): a `[[match]]` entry gives `:override`,
+   or `:override_absent` when its rider is not in the reference set.
+3. The rule steps, each applied only when it finds exactly one rider:
+   `:depunct` (the key with hyphens and full stops stripped), `:compound`
+   (the same name parts run together differently), `:subset` (one name's parts,
+   particles aside, all among the other's, two at least), `:surname_given` (the
+   reference surname among the printed parts and a `given_compatible` given
+   name), `:surname_typo` (the same given name and a `surname_respelt`
+   surname).
+4. A `[[refuse]]` entry turns a rule match on its rider, or no match at all,
+   into `:override_refused`.
 
-Two or more candidates at steps 2, 4, 5 or 6 give `:ambiguous` with the
-candidates listed; nothing is guessed. There is no step matching a first name
-alone: it sent Tim Merlier to Tim Marsman and Jasper Philipsen's price to
-Albert Withen Philipsen. vgleague's `matching.py` is a port, held to this by
-the golden corpus in `test/fixtures/rider_matching.json`.
+Two or more candidates at a rule step give `:ambiguous` with the candidates
+listed, except at `:compound`, where they fall through; nothing is guessed.
+There is no step matching a first name alone: it sent Tim Merlier to Tim
+Marsman and Jasper Philipsen's price to Albert Withen Philipsen. vgleague's
+`matching.py` is a port, held to this by the golden corpus in
+`test/fixtures/rider_matching.json`.
 """
-function resolve_rider(name::AbstractString, key::AbstractString, refs, ref_keys)
+function resolve_rider(
+    name::AbstractString,
+    key::AbstractString,
+    refs,
+    ref_keys;
+    overrides = nothing,
+)
     key in ref_keys && return (:exact, String(key), [String(key)])
+    if overrides !== nothing && haskey(overrides.match, key)
+        rider = overrides.match[key]
+        rider in ref_keys && return (:override, rider, [rider])
+        return (:override_absent, nothing, [rider])
+    end
+    found = _rule_steps(name, key, refs)
+    if overrides !== nothing && haskey(overrides.refuse, key)
+        refused = overrides.refuse[key]
+        if nothing in refused || found[2] === nothing || found[2] in refused
+            return (:override_refused, nothing, found[2] === nothing ? String[] : [found[2]])
+        end
+    end
+    return found
+end
+
+function _rule_steps(name::AbstractString, key::AbstractString, refs)
     dk = _depunct(key)
     found = [r.key for r in refs if r.depunct == dk]
     length(found) == 1 && return (:depunct, found[1], found)
@@ -543,8 +619,7 @@ function resolve_rider(name::AbstractString, key::AbstractString, refs, ref_keys
 
     found = [
         r.key for r in refs if r.given !== nothing && r.given in core &&
-        length(r.surname) >= 5 &&
-        any(x -> 0 < levenshtein(r.surname, x) <= 2, setdiff(core, (r.given,)))
+        any(x -> surname_respelt(r.surname, x), setdiff(core, (r.given,)))
     ]
     length(found) == 1 && return (:surname_typo, found[1], found)
     length(found) > 1 && return (:ambiguous, nothing, found)
@@ -552,47 +627,209 @@ function resolve_rider(name::AbstractString, key::AbstractString, refs, ref_keys
 end
 
 """
-    resolve_riders(external_df, reference_df) -> Vector of (method, key, candidates)
+    resolve_frame(names, keys, refs, ref_keys; overrides = nothing) -> Vector of (method, key, candidates)
 
-`resolve_rider` for every row of `external_df` (columns `rider`, `riderkey`)
-against `reference_df`, normally the race's field.
+`resolve_rider` for every printed name of one source's frame. A name resolved
+by anything but its key, an override included, may not take a rider another
+row of the same frame matches exactly: that row is the rider, and this one is
+someone the reference set does not hold. It is left unresolved as
+`:collides_exact`. The predictions for Coppa Sabatini 2026 carry both
+Jefferson Alexander Cepeda and Jefferson Alveiro Cepeda, two riders; the first
+matches exactly, and the second would otherwise take his key. vgleague's
+`resolve_frame` applies the same rule.
 """
-function resolve_riders(external_df::DataFrame, reference_df::DataFrame)
-    refs, ref_keys = _reference_riders(reference_df.rider, reference_df.riderkey)
+function resolve_frame(names, keys, refs, ref_keys; overrides = nothing)
+    results = [
+        ismissing(n) || ismissing(k) ? (:none, nothing, String[]) :
+        resolve_rider(String(n), String(k), refs, ref_keys; overrides = overrides) for
+        (n, k) in zip(names, keys)
+    ]
+    exact = Set(r[2] for r in results if r[1] == :exact)
     return [
-        resolve_rider(String(row.rider), String(row.riderkey), refs, ref_keys) for
-        row in eachrow(external_df)
+        r[1] != :exact && r[2] !== nothing && r[2] in exact ?
+        (:collides_exact, nothing, [r[2]]) : r for r in results
     ]
 end
 
 """
-    rematch_riderkeys!(external_df, reference_df)
+    resolve_riders(external_df, reference_df; source, race, year) -> Vector of (method, key, candidates)
 
-Rekey each row of `external_df` that `resolve_rider` resolves to one rider of
-`reference_df`, normally the race's field. An unresolved or ambiguous row keeps
-its printed key and so joins nothing. Handles "Tom Pidcock" (Oddschecker) and
-"PIDCOCK Tom" (PCS) against "Thomas Pidcock" (VG), PCS's added middle names,
-and compound surnames hyphenated in one source and spaced in the other.
+`resolve_frame` for `external_df` (columns `rider`, `riderkey`) against
+`reference_df`, normally the race's field. `source` (an archive type), `race`
+(a PCS slug) and `year` say which scoped overrides apply; global ones always
+do.
+"""
+function resolve_riders(
+    external_df::DataFrame,
+    reference_df::DataFrame;
+    source = nothing,
+    race = nothing,
+    year = nothing,
+)
+    refs, ref_keys = _reference_riders(reference_df.rider, reference_df.riderkey)
+    scoped = scoped_overrides(load_rider_overrides(), source, race, year)
+    return resolve_frame(
+        external_df.rider,
+        external_df.riderkey,
+        refs,
+        ref_keys;
+        overrides = scoped,
+    )
+end
+
+"""
+    rematch_riderkeys!(external_df, reference_df; source, race, year)
+
+Rekey each row of `external_df` that `resolve_riders` resolves to one rider of
+`reference_df`, normally the race's field. A row left unresolved for any
+reason keeps its printed key and so joins nothing. Handles "Tom Pidcock"
+(Oddschecker) and "PIDCOCK Tom" (PCS) against "Thomas Pidcock" (VG), PCS's
+added middle names, compound surnames hyphenated in one source and spaced in
+the other, and whatever `config/rider_overrides.toml` names.
 
 Stripping hyphens in `createkey` instead would be the cleaner layer, but the
 permanent archives hold ~112 hyphenated riderkeys that readers join against
 freshly computed ones, and prediction archives cannot be re-created, so the
 matching lives at read time.
 """
-function rematch_riderkeys!(external_df::DataFrame, reference_df::DataFrame)
-    results = resolve_riders(external_df, reference_df)
+function rematch_riderkeys!(
+    external_df::DataFrame,
+    reference_df::DataFrame;
+    source = nothing,
+    race = nothing,
+    year = nothing,
+)
+    results = resolve_riders(external_df, reference_df; source, race, year)
     n_fixed = 0
-    n_ambiguous = 0
+    n_unmatched = 0
     for (i, (method, key, _)) in enumerate(results)
         if key !== nothing && method != :exact
             external_df.riderkey[i] = key
             n_fixed += 1
         end
-        n_ambiguous += method == :ambiguous
+        n_unmatched += method in (:ambiguous, :collides_exact, :override_refused, :override_absent)
     end
     n_fixed > 0 && @info "Re-matched $n_fixed riders by name"
-    n_ambiguous > 0 && @info "$n_ambiguous riders matched more than one reference rider and were left unmatched"
+    n_unmatched > 0 && @info "$n_unmatched riders left unmatched: ambiguous, matched exactly by another row, or settled by an override"
     return external_df
+end
+
+# --- Rider overrides ---------------------------------------------------------
+
+"""
+    RiderOverride
+
+One entry of `config/rider_overrides.toml`. `kind` is `:match` or `:refuse`;
+`rider` is `nothing` for a refusal that names no rider.
+"""
+struct RiderOverride
+    kind::Symbol
+    printed::String
+    rider::Union{String,Nothing}
+    source::Union{String,Nothing}
+    race::Union{String,Nothing}
+    year::Union{Int,Nothing}
+    reason::String
+    reviewed::Any
+end
+
+"""
+    ScopedOverrides
+
+The overrides that apply in one scope: `match` maps a printed key to the
+rider's key, `refuse` a printed key to the rider keys it must not take
+(`nothing` meaning any).
+"""
+struct ScopedOverrides
+    match::Dict{String,String}
+    refuse::Dict{String,Set{Union{String,Nothing}}}
+end
+
+const RIDER_OVERRIDES_PATH = joinpath(dirname(@__DIR__), "config", "rider_overrides.toml")
+const _RIDER_OVERRIDES = Dict{String,Vector{RiderOverride}}()
+
+"""
+    load_rider_overrides(path = RIDER_OVERRIDES_PATH) -> Vector{RiderOverride}
+
+The overrides file, read once per session. Missing or malformed is an error;
+vgleague's `matching.parse_overrides` applies the same checks.
+"""
+function load_rider_overrides(path::AbstractString = RIDER_OVERRIDES_PATH)
+    get!(_RIDER_OVERRIDES, path) do
+        isfile(path) || error("No rider overrides at $path")
+        parse_rider_overrides(TOML.parsefile(path))
+    end
+end
+
+function parse_rider_overrides(data::AbstractDict)
+    unknown = setdiff(keys(data), ["match", "refuse"])
+    isempty(unknown) || error("rider overrides: unknown table(s) $(sort(collect(unknown)))")
+    allowed = Set(["printed", "rider", "reason", "reviewed", "source", "race", "year"])
+    entries = RiderOverride[]
+    for kind in ("match", "refuse"), (i, raw) in enumerate(get(data, kind, []))
+        where_ = "[[$kind]] #$i"
+        extra = setdiff(keys(raw), allowed)
+        isempty(extra) || error("rider overrides $where_: unknown field(s) $(sort(collect(extra)))")
+        for f in ("printed", "reason", "reviewed", (kind == "match" ? ("rider",) : ())...)
+            haskey(raw, f) || error("rider overrides $where_: missing $f")
+        end
+        year = get(raw, "year", nothing)
+        year === nothing || year isa Integer || error("rider overrides $where_: year must be an integer")
+        push!(
+            entries,
+            RiderOverride(
+                Symbol(kind),
+                raw["printed"],
+                get(raw, "rider", nothing),
+                get(raw, "source", nothing),
+                get(raw, "race", nothing),
+                year,
+                raw["reason"],
+                raw["reviewed"],
+            ),
+        )
+    end
+    seen = Set{Any}()
+    for e in entries
+        ident = (e.kind, createkey(e.printed), e.source, e.race, e.year,
+            e.kind == :refuse && e.rider !== nothing ? createkey(e.rider) : nothing)
+        ident in seen && error("rider overrides: duplicate entry $(repr(e.printed)) ($(e.kind)) in one scope")
+        push!(seen, ident)
+    end
+    return entries
+end
+
+_applies(e::RiderOverride, source, race, year) =
+    (e.source === nothing || e.source == source) &&
+    (e.race === nothing || e.race == race) &&
+    (e.year === nothing || e.year == year)
+
+_specificity(e::RiderOverride) = count(!isnothing, (e.source, e.race, e.year))
+
+"""
+    scoped_overrides(entries, source, race, year) -> ScopedOverrides
+
+The entries that apply where a caller states `source`, `race` and `year`
+(any may be `nothing`, which an entry scoped on that field does not match).
+Where two `[[match]]` entries apply to one printed name the more specific wins.
+"""
+function scoped_overrides(entries, source, race, year)
+    match = Dict{String,Tuple{Int,String}}()
+    refuse = Dict{String,Set{Union{String,Nothing}}}()
+    for e in entries
+        _applies(e, source, race, year) || continue
+        pk = createkey(e.printed)
+        if e.kind == :match
+            best = get(match, pk, nothing)
+            if best === nothing || _specificity(e) > best[1]
+                match[pk] = (_specificity(e), createkey(e.rider))
+            end
+        else
+            push!(get!(refuse, pk, Set{Union{String,Nothing}}()),
+                e.rider === nothing ? nothing : createkey(e.rider))
+        end
+    end
+    return ScopedOverrides(Dict(k => v[2] for (k, v) in match), refuse)
 end
 
 """

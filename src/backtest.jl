@@ -1229,16 +1229,17 @@ function prefetch_stage_race_data(
     # `_assemble_signals` rematches these frames IN PLACE at estimation time,
     # which would otherwise make a challenger's market coverage depend on
     # whether the champion ran first on the same struct.
-    for mdf in (
-        odds_df,
-        oracle_df,
-        points_odds_df,
-        kom_odds_df,
-        stagewin_odds_df,
-        points_oracle_df,
-        kom_oracle_df,
+    for (source, mdf) in (
+        ("odds", odds_df),
+        ("oracle", oracle_df),
+        ("odds_points", points_odds_df),
+        ("odds_kom", kom_odds_df),
+        ("odds_stagewin", stagewin_odds_df),
+        ("oracle_points", points_oracle_df),
+        ("oracle_kom", kom_oracle_df),
     )
-        mdf !== nothing && :rider in propertynames(mdf) && rematch_riderkeys!(mdf, riders)
+        mdf !== nothing && :rider in propertynames(mdf) &&
+            rematch_riderkeys!(mdf, riders; source, race = pcs_slug, year)
     end
 
     # --- Stage profiles + scoring table ---
@@ -1871,8 +1872,14 @@ function prefetch_oneday_backtest_data(
 
     # Surname-rematch market frames once, as `prefetch_stage_race_data` does
     # (see the note there on call-order dependence).
-    for mdf in (rd.odds_df, rd.oracle_df)
-        mdf !== nothing && :rider in propertynames(mdf) && rematch_riderkeys!(mdf, riders)
+    for (source, mdf) in (("odds", rd.odds_df), ("oracle", rd.oracle_df))
+        mdf !== nothing && :rider in propertynames(mdf) && rematch_riderkeys!(
+            mdf,
+            riders;
+            source,
+            race = race.pcs_slug,
+            year = race.year,
+        )
     end
 
     totals = _oneday_vg_totals_asof(race.pcs_slug, race.year; cache_config, archive_dir)
