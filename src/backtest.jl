@@ -208,6 +208,10 @@ Fetch all data for a historical race (PCS results, VG roster, PCS specialty
 scores, race history, archived odds and oracle) and return a reusable
 `RaceData` struct. This is the I/O-heavy step; subsequent `backtest_race` calls
 with this data are pure compute. Signal selection happens later.
+
+Reads the archive and the HTTP cache only: it runs in offline mode (see
+`with_offline`) unless called inside `with_reconstruction_fetch`, so an input
+that is in neither degrades or, for the ground-truth results, fails the race.
 """
 function prefetch_race_data(
     race::BacktestRace;
@@ -215,6 +219,10 @@ function prefetch_race_data(
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
 )
+    # Offline unless the caller opted in: see `_needs_offline_scope`.
+    _needs_offline_scope() && return with_offline() do
+        prefetch_race_data(race; vg_racelists, cache_config, force_refresh)
+    end
     # --- 1. Fetch actual PCS results (ground truth) ---
     actual_df = getpcs_race_results(
         race.pcs_slug,
@@ -261,9 +269,10 @@ function prefetch_race_data(
 
     # The same three-tier resolution production uses: this race's own archived
     # snapshot, then the union across every earlier archived race, then live.
-    # With the transport off (see `_TRANSPORT_ENABLED`) the live tier can hit
-    # `getpcs_rider_pts_batch`'s block threshold; `_load_pcs_specialty` catches
-    # that and returns what tiers 1 and 2 found, so the edition degrades.
+    # Offline (see `with_offline`) the live tier serves cached riders and
+    # refuses the rest; past `getpcs_rider_pts_batch`'s block threshold it
+    # raises, and `_load_pcs_specialty` catches that and returns what tiers 1
+    # and 2 found, so the edition degrades.
     # Tier 2 is date-bounded by this race's own date, so it cannot reach a
     # later edition.
     pcspts, pcs_provenance = _load_pcs_specialty(
@@ -355,6 +364,10 @@ function prefetch_all_races(
     cache_config::CacheConfig = DEFAULT_CACHE,
     force_refresh::Bool = false,
 )
+    # Offline unless the caller opted in: see `_needs_offline_scope`.
+    _needs_offline_scope() && return with_offline() do
+        prefetch_all_races(races; cache_config, force_refresh)
+    end
     # Pre-fetch VG race lists for all years involved
     all_years = unique(
         vcat(
@@ -1045,9 +1058,10 @@ struct StageRaceBacktestData
 end
 
 """Per-season specialty points for every rider in `riders`, long format
-(`riderkey, specialty, year, points`) — the live-fetch fallback for editions
-without an archived `pcs_specialty_seasons` frame. Long-TTL cached, so the
-harness is offline after the first run."""
+(`riderkey, specialty, year, points`) — the cache fallback for editions
+without an archived `pcs_specialty_seasons` frame. Offline, a rider whose
+pages are not cached contributes nothing; only `with_reconstruction_fetch`
+lets this fetch."""
 function _fetch_specialty_seasons(
     riders::DataFrame,
     slug_map::Dict{String,String};
@@ -1143,8 +1157,10 @@ Reconstruct everything needed to re-predict and score an archived grand tour
 as-of race day. Archived inputs (VG roster/totals/scoring, stage profiles,
 odds/oracle, GC results) come from `archive_dir`; historical-fact PCS inputs
 (race history, classification history and standings, per-season specialty,
-startlist) are fetched through the long-TTL `cache_config` so subsequent runs
-are offline. See `StageRaceBacktestData` for the temporal-integrity notes.
+startlist) are read through the long-TTL `cache_config`. Runs offline (see
+`with_offline`): a cache miss degrades that input, and only a caller inside
+`with_reconstruction_fetch` reaches the network. See `StageRaceBacktestData`
+for the temporal-integrity notes.
 """
 function prefetch_stage_race_data(
     pcs_slug::String,
@@ -1153,6 +1169,10 @@ function prefetch_stage_race_data(
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = archive_dir(),
 )
+    # Offline unless the caller opted in: see `_needs_offline_scope`.
+    _needs_offline_scope() && return with_offline() do
+        prefetch_stage_race_data(pcs_slug, year; history_years, cache_config, archive_dir)
+    end
     race_date = resolve_race_date(pcs_slug, year)
 
     # --- Rider universe (archived VG roster) + actual totals ---
@@ -1684,10 +1704,11 @@ function backtest_stage_race(
     cache_config::CacheConfig = CacheConfig(DEFAULT_CACHE_DIR, 9999),
     archive_dir::String = archive_dir(),
 )
-    # Archive only. A reconstruction that reaches the network fetches *today's*
-    # page to rebuild a race from two years ago (the leak `refetchable = false`
-    # exists to prevent), and launches a browser per miss. See
-    # `_TRANSPORT_ENABLED`.
+    # Archive and cache only. A reconstruction that reaches the network fetches
+    # *today's* page to rebuild a race from two years ago (the leak
+    # `refetchable = false` exists to prevent). `prefetch_stage_race_data` goes
+    # offline itself; the transport switch additionally keeps an explicit
+    # `with_reconstruction_fetch` warm-up from launching a browser per miss.
     data = with_browser_transport(false) do
         prefetch_stage_race_data(pcs_slug, year; history_years, cache_config, archive_dir)
     end
@@ -1920,6 +1941,16 @@ function prefetch_oneday_backtest_data(
     archive_dir::String = archive_dir(),
     force_refresh::Bool = false,
 )
+    # Offline unless the caller opted in: see `_needs_offline_scope`.
+    _needs_offline_scope() && return with_offline() do
+        prefetch_oneday_backtest_data(
+            race;
+            vg_racelists,
+            cache_config,
+            archive_dir,
+            force_refresh,
+        )
+    end
     rd = prefetch_race_data(
         race;
         vg_racelists = vg_racelists,
@@ -2178,7 +2209,7 @@ function backtest_oneday_race(
         history_years,
         date,
     )
-    # Archive only — see the note on the stage twin and `_TRANSPORT_ENABLED`.
+    # Offline and browser-free — see the note on the stage twin.
     return with_browser_transport(false) do
         data = prefetch_oneday_backtest_data(race; cache_config, archive_dir)
         backtest_oneday_race(data; predictors, max_per_team)

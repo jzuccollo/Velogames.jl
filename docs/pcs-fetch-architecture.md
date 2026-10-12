@@ -108,15 +108,36 @@ Python validates against a stale contract.
 
 Evaluation can only be prospective: there is no historical Hills data.
 
-## Reconstruction never fetches
+## Reconstruction runs offline
 
-`with_browser_transport(false)` wraps both backtest entry points. A backtest that
-reaches the network rebuilds a past race from today's pages. So
+Every backtest entry point reaches its data through `prefetch_race_data`,
+`prefetch_all_races`, `prefetch_stage_race_data` or
+`prefetch_oneday_backtest_data`, and each of those enters `with_offline` unless
+the caller is already inside `with_offline` or `with_reconstruction_fetch`.
+Offline, `scrape_get` throws `ScrapeBlockedError` with `offline = true` before
+`HTTP.get` and before the in-process page stores, and `prefetch!` returns every
+URL as blocked without launching `vgleague fetch`. The policy is a
+`ScopedValue`, so tasks spawned inside the scope inherit it and other tasks in
+the process are unaffected.
+
+`with_browser_transport(false)` is not sufficient on its own. It closes only the
+browser fallback; `scrape_get` still made its `HTTP.get` on every cache miss,
+which is how an unsandboxed historical backtest attempted 17,134 requests. A
+backtest that reaches the network rebuilds a past race from today's pages, so
 `prefetch_race_data` uses the same three-tier `_load_pcs_specialty` as
-production, and `_pcs_results_archive_first` returns an empty frame for a missing
-prior edition only when the transport is disabled. During a live render a block
-still raises `ScrapeBlockedError`, so a challenge never quietly becomes "no
-history".
+production, and `_pcs_results_archive_first` and the points/KOM classification
+history return nothing for a missing prior edition, with a warning for the
+latter, when offline or with the transport disabled. During a live render a
+block still raises `ScrapeBlockedError`, so a challenge never quietly becomes
+"no history".
+
+Offline, an on-disk cache entry with data is served whatever its age
+(`_cache_max_age`): there is no refetch to wait for, and an expired page for a
+past race is the best record the machine holds.
+
+`with_reconstruction_fetch(f)` is the opt-in for warming the cache on purpose.
+It logs a warning on entry, and `render_backtesting.jl` uses it only under
+`--fresh`.
 
 ## Not done
 

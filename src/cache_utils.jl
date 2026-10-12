@@ -165,6 +165,26 @@ function load_from_cache(key::String, cache_dir::String)::Union{DataFrame,Nothin
 end
 
 """
+    _cache_max_age(data_file, cache_config) -> Int
+
+How old an on-disk entry may be and still be served.
+
+An empty entry (metadata, no data file) means the page had nothing on it yet
+(results fetched before the race finished), so it expires quickly; at the full
+TTL the results would stay invisible for a week.
+
+In offline mode (`with_offline`) an entry with data never expires. A TTL exists
+so the next request refetches; offline there is no next request, and an expired
+entry for a past race is still the best record this machine holds. Without
+this, a backtest run with a one-week TTL (as `render_backtesting.jl` uses)
+would lose every race cached more than a week ago.
+"""
+function _cache_max_age(data_file::AbstractString, cache_config::CacheConfig)
+    isfile(data_file) || return min(cache_config.max_age_hours, EMPTY_CACHE_MAX_AGE_HOURS)
+    return is_offline() ? typemax(Int) : cache_config.max_age_hours
+end
+
+"""
     is_cached(url, params; cache_config) -> Bool
 
 Whether `cached_fetch(_, url, params; cache_config)` would answer without a
@@ -183,9 +203,7 @@ function is_cached(
     key = cache_key(url, params)
     haskey(_MEMORY_CACHE, key) && return true
     data_file, _ = cache_paths(key, cache_config.cache_dir)
-    max_age =
-        isfile(data_file) ? cache_config.max_age_hours :
-        min(cache_config.max_age_hours, EMPTY_CACHE_MAX_AGE_HOURS)
+    max_age = _cache_max_age(data_file, cache_config)
     return is_cache_valid(key, max_age, cache_config.cache_dir)
 end
 
@@ -211,13 +229,9 @@ function cached_fetch(
         return _MEMORY_CACHE[key]
     end
 
-    # 2. Check on-disk cache. An empty entry means the page had nothing on it
-    # yet (results fetched before the race finished), so it expires quickly;
-    # at the full TTL the results would stay invisible for a week.
+    # 2. Check on-disk cache (see `_cache_max_age` for how long an entry lasts).
     data_file, _ = cache_paths(key, cache_config.cache_dir)
-    max_age =
-        isfile(data_file) ? cache_config.max_age_hours :
-        min(cache_config.max_age_hours, EMPTY_CACHE_MAX_AGE_HOURS)
+    max_age = _cache_max_age(data_file, cache_config)
     if !force_refresh && is_cache_valid(key, max_age, cache_config.cache_dir)
         cached_data = load_from_cache(key, cache_config.cache_dir)
         if cached_data !== nothing

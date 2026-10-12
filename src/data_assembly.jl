@@ -148,11 +148,11 @@ function _pcs_results_archive_first(
         # During a live render a block must propagate, not become "no history
         # for that year".
         #
-        # A backtest runs with the transport off (see `_TRANSPORT_ENABLED`), so
-        # "blocked" there means only "this edition is not in the archive", which
-        # is no reason to discard a race whose other editions are present.
-        # Callers drop empty years.
-        _TRANSPORT_ENABLED[] && rethrow()
+        # A backtest runs offline or with the transport off (see
+        # `_reconstructing`), so "blocked" there means only "this edition is
+        # not in the archive", which is no reason to discard a race whose other
+        # editions are present. Callers drop empty years.
+        _reconstructing() || rethrow()
         @debug "No archived results for $slug $year; reconstruction does not fetch"
         return DataFrame(
             position = Int[],
@@ -375,8 +375,16 @@ function assemble_pcs_classification_history(
                 df[!, :variance_penalty] .= penalty
                 result = result === nothing ? df : vcat(result, df; cols = :union)
             catch e
-                e isa ScrapeBlockedError && rethrow()
-                @debug "Skipping unavailable edition $slug $y" exception = e
+                # Live, a block propagates (see `_pcs_results_archive_first`).
+                # In a reconstruction it means this edition is not cached, and
+                # losing one prior edition's standings must not cost the race.
+                if e isa ScrapeBlockedError
+                    _reconstructing() || rethrow()
+                    @warn "No cached $classification standings for $slug $y; " *
+                          "reconstruction does not fetch, skipping the edition"
+                else
+                    @debug "Skipping unavailable edition $slug $y" exception = e
+                end
             end
         end
     end

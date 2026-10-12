@@ -6,7 +6,9 @@ Usage:
     julia --project scripts/render_backtesting.jl [--fresh]
 
 Options:
-    --fresh   Bypass cache, fetch all data fresh from the web
+    --fresh   Bypass cache, fetch all data fresh from the web. Without it the
+              backtests run offline: they read the archive and the HTTP cache
+              and nothing else (see `with_offline`).
 """
 
 using Velogames, DataFrames, Statistics, Dates, Random
@@ -21,6 +23,10 @@ backtest_years = [2023, 2024, 2025]
 n_sims = 1000
 history_years = 5
 bt_cache = CacheConfig(DEFAULT_CACHE_DIR, FRESH ? 0 : 168)
+
+# Reconstruction is offline unless `--fresh` asks to refetch, which is the one
+# case that should reach the network (and says so loudly).
+reconstruct(f) = FRESH ? with_reconstruction_fetch(f) : with_offline(f)
 
 # ---------------------------------------------------------------------------
 # Build page content
@@ -204,7 +210,7 @@ write(
 write(io, html_table(cat_counts))
 
 @info "Prefetching race data..."
-race_data = prefetch_all_races(races; cache_config = bt_cache)
+race_data = reconstruct(() -> prefetch_all_races(races; cache_config = bt_cache))
 
 # --- Data availability ---
 
@@ -1543,14 +1549,17 @@ if nrow(pit_df) > 0
             @info "Running signal ablation on $(length(ablation_races)) prospective races..."
 
             # Prefetch data (uses cache)
-            vg_racelists = Velogames.prefetch_vg_racelists(unique([current_year]))
+            vg_racelists =
+                reconstruct(() -> Velogames.prefetch_vg_racelists(unique([current_year])))
             ablation_data = Dict{BacktestRace,RaceData}()
             for race in ablation_races
                 try
-                    ablation_data[race] = prefetch_race_data(
-                        race;
-                        vg_racelists = vg_racelists,
-                        cache_config = bt_cache,
+                    ablation_data[race] = reconstruct(
+                        () -> prefetch_race_data(
+                            race;
+                            vg_racelists = vg_racelists,
+                            cache_config = bt_cache,
+                        ),
                     )
                 catch e
                     @warn "Ablation prefetch failed for $(race.name): $e"
@@ -2054,8 +2063,10 @@ gt_editions = vcat(
 harness_rows = DataFrame[]
 for (slug, yr) in gt_editions
     try
-        edition_df = suppress_output() do
-            backtest_stage_race(slug, yr)
+        edition_df = reconstruct() do
+            suppress_output() do
+                backtest_stage_race(slug, yr)
+            end
         end
         push!(harness_rows, edition_df)
     catch e
@@ -2117,8 +2128,10 @@ oneday_harness_years = collect(2023:Dates.year(Dates.today()))
 oneday_harness_rows = DataFrame[]
 for slug in oneday_slugs, yr in oneday_harness_years
     try
-        edition_df = suppress_output() do
-            backtest_oneday_race(slug, yr; cache_config = bt_cache)
+        edition_df = reconstruct() do
+            suppress_output() do
+                backtest_oneday_race(slug, yr; cache_config = bt_cache)
+            end
         end
         push!(oneday_harness_rows, edition_df)
     catch e

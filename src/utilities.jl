@@ -23,11 +23,19 @@ Its own type, mirroring `BlockedError` in vgleague's `scraper.py`. A challenge
 page parses as valid HTML with none of the elements a scraper looks for, so an
 undifferentiated failure reads as a site redesign or a rider with no profile
 and gets folded into a missing-data row. See `docs/pcs-fetch-architecture.md`.
+
+`offline` is `true` when the request was refused before it left the process,
+because offline mode was on (see `with_offline`). It is the same type so that
+every handler that already degrades on a block degrades on offline too, and
+every handler that propagates a block propagates this.
 """
 struct ScrapeBlockedError <: Exception
     msg::String
+    offline::Bool
 end
-Base.showerror(io::IO, e::ScrapeBlockedError) = print(io, "ScrapeBlockedError: ", e.msg)
+ScrapeBlockedError(msg::AbstractString) = ScrapeBlockedError(String(msg), false)
+Base.showerror(io::IO, e::ScrapeBlockedError) =
+    print(io, e.offline ? "ScrapeBlockedError (offline): " : "ScrapeBlockedError: ", e.msg)
 
 """
     looks_blocked(response) -> Bool
@@ -85,8 +93,12 @@ const _PREFETCHED = Dict{String,Vector{UInt8}}()
 # Off during reconstruction (backtests and prospective evaluation). There a
 # browser fetch would reconstruct a 2024 race from *today's* page, the leak
 # `pcs_specialty`'s `refetchable = false` exists to prevent, and would turn
-# every archive miss into a browser launch. Reconstruction reads the archive
-# only, so it gets a `ScrapeBlockedError` and degrades.
+# every archive miss into a browser launch.
+#
+# This switch closes the browser fallback only: `scrape_get` still makes its
+# `HTTP.get` on every cache miss, and on an unblocked host that request
+# succeeds. Keeping reconstruction off the network is offline mode's job (see
+# `with_offline`).
 const _TRANSPORT_ENABLED = Ref(true)
 
 """
@@ -104,6 +116,81 @@ function with_browser_transport(f, enabled::Bool)
         _TRANSPORT_ENABLED[] = old
     end
 end
+
+# Network policy for the current task: `:default` (production: fetch as
+# usual), `:offline` (`scrape_get` and `prefetch!` refuse before any request)
+# or `:allowed` (an explicit opt-in that reconstruction entry points respect).
+#
+# A `ScopedValue` rather than a global `Ref` like `_TRANSPORT_ENABLED`: it is
+# inherited by tasks spawned inside the scope, cannot leak out of it if `f`
+# throws, and does not affect other tasks running concurrently, such as a
+# `serve.jl` render alongside a backtest in the same process.
+const _NETWORK_POLICY = Base.ScopedValues.ScopedValue(:default)
+
+"""
+    is_offline() -> Bool
+
+Whether the current task is in offline mode (see `with_offline`).
+"""
+is_offline() = _NETWORK_POLICY[] === :offline
+
+"""
+    with_offline(f)
+
+Run `f()` with every network path closed. `scrape_get` throws
+`ScrapeBlockedError` with `offline = true` before touching `HTTP.get` or any
+in-process page store, and `prefetch!` returns every URL as blocked without
+launching `vgleague fetch`. Cache and archive reads are unaffected.
+
+Callers see the same exception as a Cloudflare block, so they degrade exactly
+where a block degrades. Backtest entry points enter this mode themselves (see
+`_needs_offline_scope`); `with_reconstruction_fetch` is the opt-out.
+"""
+with_offline(f) = Base.ScopedValues.with(f, _NETWORK_POLICY => :offline)
+
+"""
+    with_reconstruction_fetch(f)
+
+Run `f()` with backtest reconstruction **allowed to fetch** on a cache or
+archive miss. For a deliberate cache warm-up only.
+
+Pages fetched now are today's pages, cached under a long TTL and then read as
+the historical record — the leak `refetchable = false` exists to prevent — and
+a run that misses heavily makes thousands of requests from a machine whose IP
+also runs the live capture job. Logs a warning on entry for that reason.
+"""
+function with_reconstruction_fetch(f)
+    @warn "Reconstruction is ALLOWED TO FETCH: cache/archive misses will hit " *
+          "procyclingstats.com and velogames.com, and today's pages will be " *
+          "cached as historical data. Use only to warm the cache deliberately."
+    return Base.ScopedValues.with(f, _NETWORK_POLICY => :allowed)
+end
+
+"""
+    _needs_offline_scope() -> Bool
+
+True when neither `with_offline` nor `with_reconstruction_fetch` is in scope.
+Each backtest entry point that reads data starts by re-calling itself inside
+`with_offline` when this holds, so reconstruction is offline unless the caller
+opted in, and an outer opt-in is not overridden by an inner entry point.
+"""
+_needs_offline_scope() = _NETWORK_POLICY[] === :default
+
+"""
+    _reconstructing() -> Bool
+
+Whether a block means "not in the archive" rather than "the site is refusing
+us": true in offline mode and with the browser transport off. Handlers use it
+to degrade a missing prior edition instead of aborting the race; during a live
+render it is false and a block still propagates.
+"""
+_reconstructing() = is_offline() || !_TRANSPORT_ENABLED[]
+
+_offline_error(url::AbstractString) = ScrapeBlockedError(
+    "Offline: refused to fetch $url. Reconstruction reads the cache and archive " *
+    "only; wrap the call in `with_reconstruction_fetch` to warm the cache deliberately.",
+    true,
+)
 
 """
     prefetch!(urls; headless = false) -> NamedTuple
@@ -129,7 +216,7 @@ desktop-Chrome context, so this needs a GUI session rather than a bare launchd
 job. Velogames tolerates headless, hence the keyword.
 """
 function prefetch!(urls::Vector{String}; headless::Bool = false)
-    _TRANSPORT_ENABLED[] || return (
+    (_TRANSPORT_ENABLED[] && !is_offline()) || return (
         requested = length(urls),
         fetched = 0,
         blocked = length(urls),
@@ -188,7 +275,8 @@ vgleague_executable() = get(ENV, "VGLEAGUE_BIN", "vgleague")
 
 Get `url`, by whatever means the site will accept, and hand back a response
 the caller's parser can read. Every PCS and Velogames scrape goes through
-here. Resolution order:
+here. In offline mode (`with_offline`) it throws `ScrapeBlockedError` with
+`offline = true` before any of the steps below. Resolution order:
 
 1. a page `prefetch!` already fetched for this URL, consumed on the way out;
 2. a page held from an earlier `reuse` fetch in this process;
@@ -221,6 +309,9 @@ function scrape_get(
     headers = ["User-Agent" => SCRAPE_USER_AGENT],
     reuse::Bool = false,
 )
+    # Before the in-process stores too: a page held there was fetched today,
+    # which is as much a leak into a reconstruction as a fresh request.
+    is_offline() && throw(_offline_error(url))
     if haskey(_PREFETCHED, url)
         body = pop!(_PREFETCHED, url)
         reuse && (_PAGE_CACHE[url] = copy(body))
@@ -287,8 +378,7 @@ function _scrape_get_via_browser(url::String; reuse::Bool = false)
     _TRANSPORT_ENABLED[] || throw(
         ScrapeBlockedError(
             "Blocked fetching $url, and the browser transport is disabled for " *
-            "this call (see `with_browser_transport`). Reconstruction reads the " *
-            "archive and nothing else.",
+            "this call (see `with_browser_transport`).",
         ),
     )
     prefetch!([url])
