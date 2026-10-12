@@ -12862,6 +12862,96 @@
 "Anders Halland Johannessen",
 "Tadej Pogačar",
 "Wout van Aert"
+],
+"hand-40":[
+"Jonathan Milan",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-41":[
+"Sébastien Grignard",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-42":[
+"Johannessen Anders Halland",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-43":[
+"Anders Halland Johannessen",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-44":[
+"Cepeda Jefferson Alexander",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-45":[
+"Jefferson Alexander Cepeda",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-46":[
+"Paret-Peintre Valentin",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-47":[
+"Tadej Pogačar",
+"Valentin Paret-Peintre",
+"Wout van Aert"
+],
+"hand-48":[
+"De Bondt Dries",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-49":[
+"Dries De Bondt",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-50":[
+"Raccagni Noviero Andrea",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-51":[
+"Andrea Raccagni Noviero",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-52":[
+"Raccagni Gabriele",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-53":[
+"Gabriele Raccagni",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-54":[
+"Raccagni Gabriele",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-55":[
+"Gabriele Raccagni",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-56":[
+"Pidcock Thomas",
+"Tadej Pogačar",
+"Wout van Aert"
+],
+"hand-57":[
+"Tadej Pogačar",
+"Thomas Pidcock",
+"Wout van Aert"
 ]
 },
 "cases":[
@@ -30633,10 +30723,8 @@
 "rider":"Jefferson Alveiro Cepeda",
 "method":"override_refused",
 "expected":null,
-"candidates":[
-"Jefferson Alexander Cepeda"
-],
-"verdict":"two riders: PCS jefferson-cepeda-hernandez (b.1996) and jefferson-alexander-cepeda (b.1998); the exact row is Alexander",
+"candidates":[],
+"verdict":"two riders: PCS jefferson-cepeda-hernandez (b.1996) and jefferson-alexander-cepeda (b.1998); the exact row is Alexander; the rules no longer match him (differing parts Alveiro/Alexander), so the refusal names no candidate",
 "old_ladder":"wrong",
 "old_match":"Jefferson Alexander Cepeda",
 "frame":[
@@ -31833,17 +31921,17 @@
 "source":"hand",
 "race":"",
 "year":0,
-"field":"hand-20",
-"rider":"Jefferson Alveiro Cepeda",
+"field":"hand-40",
+"rider":"Jonthan Milan",
 "frame":[
-"Jefferson Alexander Cepeda"
+"Jonathan Milan"
 ],
 "method":"collides_exact",
 "expected":null,
 "candidates":[
-"Jefferson Alexander Cepeda"
+"Jonathan Milan"
 ],
-"verdict":"another row of the frame matches the rider exactly: two riders, not one",
+"verdict":"the book lists Milan twice (Giro 2026 points market): the rule matches the misspelt row, and the exact row takes precedence",
 "old_ladder":"",
 "old_match":""
 },
@@ -31853,10 +31941,10 @@
 "year":0,
 "field":"hand-20",
 "rider":"Jefferson Alveiro Cepeda",
-"method":"surname_given",
-"expected":"Jefferson Alexander Cepeda",
+"method":"none",
+"expected":null,
 "candidates":[],
-"verdict":"residual risk: alone, the middle name is taken for a respelling",
+"verdict":"alone against Alexander, Alveiro is refused by the rules too: each name has a part the other lacks (Alveiro, Alexander) and neither pair is compatible",
 "old_ladder":"",
 "old_match":""
 },
@@ -32190,10 +32278,8 @@
 "rider":"Jefferson Alveiro Cepeda",
 "method":"override_refused",
 "expected":null,
-"candidates":[
-"Jefferson Alexander Cepeda"
-],
-"verdict":"the real overrides file refuses Alveiro as Alexander, closing the lone-row risk",
+"candidates":[],
+"verdict":"the real overrides file refuses Alveiro as Alexander; the rules no longer match him either, so no candidate is named",
 "old_ladder":"",
 "old_match":"",
 "overrides":"file"
@@ -32248,10 +32334,10 @@
 "old_match":"",
 "field":"hand-37",
 "rider":"Johannessen Tobias Halland",
-"method":"surname_given",
-"expected":"Johannessen Anders Halland",
+"method":"none",
+"expected":null,
 "candidates":[],
-"verdict":"a reference printed surname first makes the twins' shared Johannessen its given name, so the surname step takes Tobias for Anders (2024 Brussels and Franco-Belge backtests)"
+"verdict":"against a reference printed surname first the surname step reads Johannessen as the given name; the differing parts Tobias and Anders are not compatible, so no match"
 },
 {
 "source":"hand",
@@ -32263,10 +32349,8 @@
 "rider":"Johannessen Tobias Halland",
 "method":"override_refused",
 "expected":null,
-"candidates":[
-"Johannessen Anders Halland"
-],
-"verdict":"the real overrides file refuses Tobias Halland Johannessen as his brother Anders",
+"candidates":[],
+"verdict":"the real overrides file refuses Tobias Halland Johannessen as his brother Anders (kept as a guard; the rules no longer match either way)",
 "overrides":"file",
 "scope":{
 "source":"pcs_results"
@@ -32282,10 +32366,8 @@
 "rider":"Johannessen Anders Halland",
 "method":"override_refused",
 "expected":null,
-"candidates":[
-"Johannessen Tobias Halland"
-],
-"verdict":"and Anders as Tobias, the mirror of the same rule",
+"candidates":[],
+"verdict":"and Anders as Tobias, the mirror of the same rule (kept as a guard; the rules no longer match either way)",
 "overrides":"file",
 "scope":{
 "source":"pcs_results"
@@ -32303,6 +32385,239 @@
 "expected":null,
 "candidates":[],
 "verdict":"against a reference printed given name first the rules do not take Tobias for Anders"
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-41",
+"rider":"Sebastian Grignard",
+"method":"override_refused",
+"expected":null,
+"candidates":[
+"Sébastien Grignard"
+],
+"verdict":"a refusal naming the rider beats the rule that matches him (surname_given, one vowel)",
+"old_ladder":"",
+"old_match":"",
+"overrides":{
+"refuse":[
+{
+"printed":"Sebastian Grignard",
+"rider":"Sébastien Grignard",
+"reason":"test",
+"reviewed":"2026-10-12"
+}
+]
+}
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-42",
+"rider":"Johannessen Tobias Halland",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"surname-first reference: Johannessen Tobias Halland is not Johannessen Anders Halland",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-43",
+"rider":"Johannessen Tobias Halland",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"given-name-first reference: Johannessen Tobias Halland is not Anders Halland Johannessen",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-44",
+"rider":"Cepeda Jefferson Alveiro",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"surname-first reference: Cepeda Jefferson Alveiro is not Cepeda Jefferson Alexander",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-45",
+"rider":"Cepeda Jefferson Alveiro",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"given-name-first reference: Cepeda Jefferson Alveiro is not Jefferson Alexander Cepeda",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-46",
+"rider":"Paret-Peintre Aurélien",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"surname-first reference: Paret-Peintre Aurélien is not Paret-Peintre Valentin",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-47",
+"rider":"Paret-Peintre Aurélien",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"given-name-first reference: Paret-Peintre Aurélien is not Valentin Paret-Peintre",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-48",
+"rider":"De Pooter Dries",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"surname-first reference: De Pooter Dries is not De Bondt Dries",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-49",
+"rider":"De Pooter Dries",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"given-name-first reference: De Pooter Dries is not Dries De Bondt",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-50",
+"rider":"Raccagni Gabriele",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"surname-first reference: Raccagni Gabriele is not Raccagni Noviero Andrea",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-51",
+"rider":"Raccagni Gabriele",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"given-name-first reference: Raccagni Gabriele is not Andrea Raccagni Noviero",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-52",
+"rider":"Raccagni Noviero Andrea",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"surname-first reference: Raccagni Noviero Andrea is not Raccagni Gabriele",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-53",
+"rider":"Raccagni Noviero Andrea",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"given-name-first reference: Raccagni Noviero Andrea is not Gabriele Raccagni",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-54",
+"rider":"Gabriela Raccagni",
+"method":"surname_typo",
+"expected":"Raccagni Gabriele",
+"candidates":[],
+"verdict":"KNOWN HOLE, pinned: against a surname-first reference the typo step reads Raccagni as the given name and Gabriele/Gabriela as a respelt surname; a fix of the reference ordering should flip this to none",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-55",
+"rider":"Gabriela Raccagni",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"given-name-first reference: Gabriela Raccagni is not Gabriele Raccagni",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-56",
+"rider":"Pidcock Tom",
+"method":"none",
+"expected":null,
+"candidates":[],
+"verdict":"ordering fragility, pinned: a surname-first reference loses given-name variants (Tom/Thomas); the given-first reference finds him",
+"old_ladder":"",
+"old_match":""
+},
+{
+"source":"hand",
+"race":"",
+"year":0,
+"field":"hand-57",
+"rider":"Pidcock Tom",
+"method":"surname_given",
+"expected":"Thomas Pidcock",
+"candidates":[],
+"verdict":"given-name-first reference: Pidcock Tom is Thomas Pidcock",
+"old_ladder":"",
+"old_match":""
 }
 ]
 }

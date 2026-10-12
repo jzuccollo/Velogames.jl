@@ -556,8 +556,9 @@ fits. In order:
    (the same name parts run together differently), `:subset` (one name's parts,
    particles aside, all among the other's, two at least), `:surname_given` (the
    reference surname among the printed parts and a `given_compatible` given
-   name), `:surname_typo` (the same given name and a `surname_respelt`
-   surname).
+   name; when each name has a part the other lacks, one such pair must be
+   compatible too, `_differing_parts_compatible`), `:surname_typo` (the same
+   given name and a `surname_respelt` surname).
 4. A `[[refuse]]` entry turns a rule match on its rider, or no match at all,
    into `:override_refused`.
 
@@ -591,6 +592,24 @@ function resolve_rider(
     return found
 end
 
+"""
+    _differing_parts_compatible(ref_core, core) -> Bool
+
+Whether names that each have a part the other lacks agree on one such pair.
+The surname step takes a reference's first part as its given name, which is
+wrong for a reference printed surname first: against "Johannessen Anders
+Halland" it read the twins' shared Johannessen as the given name and gave
+"Johannessen Tobias Halland" to Anders, never comparing Anders with Tobias. So
+when each name has a part the other lacks, one of those pairs must be
+`given_compatible`. A part missing from one side only (a middle name, an
+initial) is no evidence either way. vgleague's `matching.py` applies the same.
+"""
+function _differing_parts_compatible(ref_core, core)
+    mine, theirs = setdiff(core, ref_core), setdiff(ref_core, core)
+    (isempty(mine) || isempty(theirs)) && return true
+    return any(given_compatible(a, b) for a in theirs for b in mine)
+end
+
 function _rule_steps(name::AbstractString, key::AbstractString, refs)
     dk = _depunct(key)
     found = [r.key for r in refs if r.depunct == dk]
@@ -612,7 +631,8 @@ function _rule_steps(name::AbstractString, key::AbstractString, refs)
 
     found = [
         r.key for r in refs if r.surname !== nothing && r.surname in core &&
-        any(x -> given_compatible(r.given, x), setdiff(core, (r.surname,)))
+        any(x -> given_compatible(r.given, x), setdiff(core, (r.surname,))) &&
+        _differing_parts_compatible(r.core, core)
     ]
     length(found) == 1 && return (:surname_given, found[1], found)
     length(found) > 1 && return (:ambiguous, nothing, found)
